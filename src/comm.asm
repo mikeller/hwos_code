@@ -892,18 +892,18 @@ comm_send_dive:
 
 comm_send_dive1:
 	; Send header
-	clrf	hi							; Counter	
-	rcall	comm_rs232_wait_tx				; Wait for UART
+	clrf	hi				; Counter	
+	rcall	comm_rs232_wait_tx		; Wait for UART
 	call	ext_flash_read_block_start	; 1st byte
 	movwf	TXREG1
-	bra		comm_send_dive_header
+	bra	comm_send_dive_header
 comm_send_dive_header2:
 	call	ext_flash_read_block		; Read one byte
-	movwf	TXREG1						; Start new transmit
+	movwf	TXREG1				; Start new transmit
 comm_send_dive_header:
-	rcall	comm_rs232_wait_tx				; Wait for UART
+	rcall	comm_rs232_wait_tx		; Wait for UART
 	decfsz	hi,F
-	bra		comm_send_dive_header2
+	bra	comm_send_dive_header2
 	call	ext_flash_read_block_stop
 
 	; Set address for profile
@@ -911,27 +911,29 @@ comm_send_dive_header:
 	movff	ext_flash_log_pointer+1,ext_flash_address+1
 	movff	ext_flash_log_pointer+2,ext_flash_address+2
 
-	movlw	.6								; Skip 6byte short header in profile - only for internal use
+	movlw	.6				; Skip 6byte short header in profile - only for internal use
 	call	incf_ext_flash_address0_0x20	; increases bytes in ext_flash_address:3 with 0x200000 bank switching
 
+	; Set address for short header/compact header, Byte 0
+	
 comm_send_dive_profile:
 	call	ext_flash_byte_read_plus_0x20	; Read one byte into temp1, takes care of banking at 0x200000
-	rcall	comm_rs232_wait_tx					; Wait for UART
-	movff	temp1,TXREG1						; Send a byte
+	rcall	comm_rs232_wait_tx		; Wait for UART
+	movff	temp1,TXREG1			; Send a byte
 	
 	; 24bit compare with end address
 	movff	convert_value_temp+0,WREG
 	cpfseq	ext_flash_address+0
-	bra		comm_send_dive_profile
+	bra	comm_send_dive_profile
 	movff	convert_value_temp+1,WREG
 	cpfseq	ext_flash_address+1
-	bra		comm_send_dive_profile
+	bra	comm_send_dive_profile
 	movff	convert_value_temp+2,WREG
 	cpfseq	ext_flash_address+2
-	bra		comm_send_dive_profile
+	bra	comm_send_dive_profile
 	
 	rcall   comm_read_setting_wait          ; Wait for UART
-	bra		comm_download_mode0		; Done. Loop with timeout reset
+	bra	comm_download_mode0		; Done. Loop with timeout reset
 
 ;-----------------------------------------------------------------------------
 
