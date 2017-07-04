@@ -189,8 +189,8 @@ do_lost_gas:
     movlw   .1
     movwf   menupos                 ; Set to first option in divemode menu
 do_lost_gas0:
-    bcf     ccr_diluent_setup       ; use OC gases
-    bsf     is_bailout_menu         ; =1: Bailout
+;    bcf     ccr_diluent_setup       ; use OC gases
+;    bsf     is_bailout_menu         ; =1: Bailout
     bsf     short_gas_decriptions
     MENU_BEGIN  tDivemenu_LostGas, .6
         MENU_DYNAMIC    gaslist_strcat_gas_mod, do_toggle_active    ; Toggle the gas (in)active
@@ -202,6 +202,10 @@ do_lost_gas0:
     MENU_END
 
 do_toggle_active:
+    movlw   .5
+    btfsc   ccr_diluent_setup       ; use OC gases
+    addwf   menupos,F		    ; -> 6-10 for Diluents
+    
     decf    menupos,W               ; 1-5 -> 0-4
     lfsr    FSR1,opt_gas_type+0
     movff   PLUSW1,lo
@@ -224,6 +228,10 @@ do_toggle_active:
     lfsr    FSR1,opt_OC_bail_gas_change+0
     movff   lo,PLUSW1
 
+    movlw   .5
+    btfsc   ccr_diluent_setup       ; use OC gases?
+    subwf   menupos,F		    ; Back to 1-5 
+
     bra     do_lost_gas0            ; Return to list and show updated result
 
 do_toggle_active2:
@@ -233,6 +241,10 @@ do_toggle_active2:
     lfsr    FSR1,opt_OC_bail_gas_change+0
     clrf    PLUSW1
 
+    movlw   .5
+    btfsc   ccr_diluent_setup       ; use OC gases?
+    subwf   menupos,F		    ; Back to 1-5 
+    
     bra     do_lost_gas0            ; Return to list and show updated result
 
 do_dive_pO2:

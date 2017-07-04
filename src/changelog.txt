@@ -1,5 +1,6 @@
 [2.20]
 - Stable Version -
+BUGFIX: Lost Diluent now possible in CCR and PSCR mode
 
 [2.18]
 - Beta Version -
