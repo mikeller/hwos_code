@@ -84,7 +84,7 @@ diveloop_loop1b:
 ; Tasks only for Apnoe mode
 	rcall	divemode_apnoe_tasks			; 1 sec. Apnoe tasks
     call	customview_second				; Do every-second tasks for the custom view area
- 	bra		diveloop_loop1x					; Common Tasks
+ ;	bra		diveloop_loop1x					; Common Tasks
 
 diveloop_loop1x:
 ; Common 1sec. tasks for all modes
@@ -945,10 +945,6 @@ test_switches_divemode1:
 	bra		divemode_option7			; Store heading
     return
 
-;test_switches_divemode2:
-;    goto    menuview_toggle         ; Menu or Simulator tasks; and return...
-;    return
-
 gas_switched_common:
     bcf     divemode_gaschange      ; Clear flag
 
@@ -1483,8 +1479,10 @@ dive_boot_cc:
     ; Setup first SP for Fixed or Auto mode
     movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
     sublw   .1                              ; opt_ccr_mode = 1 (Sensor)?
+    bnz     dive_boot_cc2		    ; No, Skip
     movff   char_I_setpoint_cbar+0,char_I_const_ppO2    ; No, setup fixed Setpoint (Always start with SP1)
     movff   char_I_const_ppO2,WREG
+dive_boot_cc2:
     call    transmit_setpoint           ; Transmit current setpoint from WREG (in cbar) to external electronics
     bsf     setpoint_changed                ; Set flag (For profile)
     bcf     sp2_switched                    ; =1: This setpoint has been autoselected already
@@ -1560,7 +1558,6 @@ diveloop_boot:
     movff   opt_OC_bail_gas_change+3,opt_OC_bail_gas_change_backup+3 ; Gas change depths OC/Bailout
     movff   opt_OC_bail_gas_change+4,opt_OC_bail_gas_change_backup+4 ; Gas change depths OC/Bailout
 
-	bcf		better_gas_available        ;=1: A better gas is available and a gas change is advised in divemode
 	clrf	better_gas_number           ; Clear better gas register
 
 	bcf		show_safety_stop			;=1: Show the safety stop
@@ -1733,9 +1730,8 @@ check_warn_battery:
     return                      ; Yes, do not show twice (in custom view and in warning area)
 check_warn_battery2:
     incf	warning_counter,F		    ; increase counter
-    call	TFT_update_batt_percent_divemode    ; Show percent
-    return
-    
+    goto	TFT_update_batt_percent_divemode    ; Show percent (And return)
+
 check_divetimeout:
     btfsc		divemode2				
     return                              ; displayed divetime is not running
