@@ -506,9 +506,6 @@ customview_init_view9:                      ; ppO2, Ceiling and current GF
     call    TFT_display_ppo2_val
 
     ; current GF value
-    extern  char_I_deco_model
-    TSTOSS  char_I_deco_model               ; 0 = ZH-L16, 1 = ZH-L16-GF
-    bra     customview_toggle_exit          ; No GF info for non-GF modes
     call    TFT_gf_mask_cGF                 ; Setup Mask - current GF only
     call    TFT_gf_info                     ; Show GF informations
     bra		customview_toggle_exit

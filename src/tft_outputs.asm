@@ -3399,8 +3399,6 @@ TFT_gf_info:
     ; Show current GF
 	movff	char_O_gradient_factor,lo			; gradient factor absolute (Non-GF model)
 	movff	char_I_deco_model,hi
-	decfsz	hi,F		; jump over next line if char_I_deco_model == 1
-	movff	char_O_relative_gradient_GF,lo		; gradient factor relative (GF model)
     WIN_STD   dm_custom_currentgf_column, dm_custom_currentgf_row
     output_8
     STRCAT_PRINT   "%"

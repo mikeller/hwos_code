@@ -2,6 +2,7 @@
 - Stable Version -
 BUGFIX: Lost Diluent now possible in CCR and PSCR mode
 NEW: ppO2 blinks in sensor mode when min/max boundaries are hit
+CHANGE: Show actual GF (Not relative) in custom views in dive mode
 
 [2.18]
 - Beta Version -
