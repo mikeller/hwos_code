@@ -560,7 +560,8 @@ old_velocity        res 4   ; Stores the last 4 speeds (8 seconds) in m/min
 opt_gas_type_backup res 5   ; 0=Disabled, 1=First, 2=Travel, 3=Deco
 opt_dil_type_backup res 5   ; 0=Disabled, 1=First, 2=Normal
 opt_OC_bail_gas_change_backup  res 5   ; Gas change depths OC/Bailout
-
+opt_dil_change_backup  res 5; Gas change depths Diluents
+  
 internal_battery_capacity	res 2	; For internal battery gauging
 battery_capacity		res 2	; For battery gauge IC
 battery_offset			res 2	; For battery gauge IC

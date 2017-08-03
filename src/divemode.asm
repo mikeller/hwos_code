@@ -1552,6 +1552,12 @@ diveloop_boot:
     movff   opt_gas_type+3,opt_gas_type_backup+3    ; 0=Disabled, 1=First, 2=Travel, 3=Deco
     movff   opt_gas_type+4,opt_gas_type_backup+4    ; 0=Disabled, 1=First, 2=Travel, 3=Deco
     ; Also copy change depths into backup (For "lost gas" feature)
+    movff   char_I_dil_change+0,opt_dil_change_backup+0	; Gas change depths Diluents
+    movff   char_I_dil_change+1,opt_dil_change_backup+1	; Gas change depths Diluents
+    movff   char_I_dil_change+2,opt_dil_change_backup+2	; Gas change depths Diluents
+    movff   char_I_dil_change+3,opt_dil_change_backup+3	; Gas change depths Diluents
+    movff   char_I_dil_change+4,opt_dil_change_backup+4	; Gas change depths Diluents
+    ; Also copy change depths into backup (For "lost gas" feature)
     movff   opt_OC_bail_gas_change+0,opt_OC_bail_gas_change_backup+0 ; Gas change depths OC/Bailout
     movff   opt_OC_bail_gas_change+1,opt_OC_bail_gas_change_backup+1 ; Gas change depths OC/Bailout
     movff   opt_OC_bail_gas_change+2,opt_OC_bail_gas_change_backup+2 ; Gas change depths OC/Bailout

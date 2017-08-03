@@ -1863,15 +1863,39 @@ TFT_active_setpoint:         ; Show setpoint
     bra     TFT_active_setpoint_bail    ; Show "Bailout" instead of Setpoint
 
     rcall   TFT_active_setpoint2        ; show setpoint (Non-Inverted in all cases)
-
-    btfss	setpoint_fallback           ; =1: Fallback to SP1 due to external O2 sensor failure
-    bra     TFT_active_setpoint_diluent ; Done.
-	btg		blinking_setpoint           ; Toggle blink bit...
-	btfss	blinking_setpoint           ; blink now?
-	bra     TFT_active_setpoint_diluent ; Done.
-
-	movlw	color_yellow                ; Blink in yellow
-    call	TFT_set_color
+    
+    ; ****** new from R.L.******
+    btg	    blinking_setpoint		; Toggle blink bit...
+    
+    btfss   blinking_setpoint		; blink now?
+    bra	    TFT_active_setpoint_diluent ; no - Done. If no blink now, no need to do all checks
+    
+    btfsc   setpoint_fallback ; =1: Fallback to SP1 due to external O2 sensor failure
+    bra	    TFT_active_setpoint_b ; not clear, so process fallback case
+    
+    movff   char_I_const_ppO2, lo	; get current ppO2
+    movff   opt_ppO2_max, WREG		; PPO2 Max for MOD calculation and color coding 
+    cpfsgt  lo				; lo > opt_ppO2_max? 
+    Bra	    TFT_active_setpoint_d	; No ? continue with checking for low ppO2 condition 
+    Bra	    TFT_active_setpoint_e	; Yes ? set up blinking for ppO2 problem case
+    
+TFT_active_setpoint_d: 
+    movff   opt_ppO2_min, WREG		; PPO2 min for Sensors and color coding 
+    cpfslt  lo				; lo < opt_ppO2_min? 
+    bra	    TFT_active_setpoint_diluent ; No ? ppO2 is ok, continue with displaying diluent 
+    ;bra    TFT_active_setpoint_e	; Yes ? set up blinking for ppO2 problem case
+    
+TFT_active_setpoint_e:			; set up blinking for ppO2 problem case 
+    movlw   color_red			; blink in red 
+    call    TFT_set_color 
+    bra	    TFT_active_setpoint_c	; continue with blinking common part
+TFT_active_setpoint_b:			; set up blinking for fallback case 
+    movlw   color_yellow		; blink in yellow 
+    call    TFT_set_color 
+    ; bra TFT_active_setpoint_c ; just for clarity in the code
+TFT_active_setpoint_c: ; blinking common part    
+    ; ****** new from R.L.******
+    
     bsf     win_invert              ; Set invert flag
     WIN_STD dm_active_gas_column, dm_active_gas_row
 	movff	char_I_const_ppO2,lo
