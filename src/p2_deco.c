@@ -115,7 +115,7 @@
 #define TEST_MAIN
 #include "shared_definitions.h"
 
-// Water vapour partial pressure in the lumb.
+// Water vapour partial pressure in the lungs
 #define ppWater        0.0627
 #define METER_TO_BAR   0.09985
 #define BAR_TO_METER   10.0150      // (1.0/METER_TO_BAR)
