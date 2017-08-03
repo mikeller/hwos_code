@@ -211,9 +211,8 @@ gaslist_gastitle3:                          ; Short version
         movf    PLUSW1,W
         bnz     gaslist_strcat_3
         call    TFT_disabled_color
+	bra	gaslist_strcat_4	; NEW ; No MOD-check and red color for disabled gases
 gaslist_strcat_3:
-        rcall   gaslist_strcat_gas_0
-		PUTC	" "
         ; Read switch depth
         lfsr    FSR1,char_I_dil_change-.5   ; Setup Diluents-5
         movlw   .4
@@ -227,8 +226,11 @@ gaslist_strcat_3:
         bra		gaslist_strcat_4
         call    TFT_warnings_color      ; Turn red if bigger
 gaslist_strcat_4:
-		TSTOSS	opt_units               ; 0=Meters, 1=Feets
-		bra		gaslist_strcat_3_metric
+	rcall   gaslist_strcat_gas_0
+	PUTC	" "
+
+	TSTOSS	opt_units               ; 0=Meters, 1=Feets
+	bra		gaslist_strcat_3_metric
 ;gaslist_strcat_3_imperial:
         btfsc   ccr_diluent_setup       ; =1: Setting up Diluents ("Gas6-10")
         bra     gaslist_imperial_non_travel
