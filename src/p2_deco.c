@@ -963,8 +963,6 @@ static void sim_alveolar_presures(void)
         deco_diluent -= const_ppO2;
         deco_diluent /= calc_N2_ratio + calc_He_ratio;
 
-        if (deco_diluent > temp_deco)
-            deco_diluent = temp_deco;
     }
 
     if( deco_diluent > ppWater )
@@ -1183,8 +1181,6 @@ void calc_hauptroutine_update_tissues(void)
         pres_diluent /= N2_ratio + He_ratio;
         if( pres_diluent < 0.0 )
             pres_diluent = 0.0;
-        if( pres_diluent > pres_respiration )
-            pres_diluent = pres_respiration;
 
         char_O_diluent = (unsigned char)(pres_diluent/pres_respiration*100.0 + 0.5);
 
