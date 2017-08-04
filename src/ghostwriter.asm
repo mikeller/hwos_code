@@ -623,7 +623,7 @@ end_dive_oc_cc_common:
     ; Gradient factor
     movff	GF_start,WREG
     rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
-    movff   char_O_relative_gradient_GF,WREG
+    movff	char_O_gradient_factor,WREG
     rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
 
     ; Logbook offset

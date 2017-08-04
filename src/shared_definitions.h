@@ -106,7 +106,6 @@ VAR_UCHAR (char_O_diluent);                // new in v.101
 VAR_UCHAR (char_O_flush_ppO2);             // 2011-05-01: ppO2 from diluant (CCR mode).
 VAR_UCHAR (char_O_EAD);                    // 2011-05-01: Added EAD/END in deco model.
 VAR_UCHAR (char_O_END);                    // 2011-05-01: Added EAD/END in deco model.
-VAR_UCHAR (char_O_relative_gradient_GF);   // new in v.102
 
 VAR_UCHAR (char_O_first_deco_depth);        // Depth of first stop.
 VAR_UCHAR (char_O_first_deco_time) ;        // Duration of first stop.

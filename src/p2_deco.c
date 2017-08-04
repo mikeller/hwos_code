@@ -89,6 +89,7 @@
 // 2014/06/16: [jDG] Fix Helium diluant. Fix volumes with many travel mix.
 // 2014/06/29: [mH]  Compute int_O_ceiling
 // 2015/06/12: [jDG] Fix NDL prediction while desaturating with the Buhlmann model.
+// 2017/08/04: [mH] Switch to absolute GF everywhere and apply safety margin parameters to both models (GF and non-GF), fixes from Ralph Lembcke
 //
 // TODO:
 //
@@ -258,7 +259,115 @@ float  sim_pres_tissue_He[NUM_COMP];             // 16 floats = 64 bytes.
 #   pragma romdata buhlmann_tables = 0x1DD00  // Needs to be in UPPER bank.
 #endif
 
-#include "p2_tables.romdata" 		        // new table for deco_main_v.101 (var_N2_a modified)
+rom const float buhlmann_ab[4*16] = {
+// Data ZH-L16C, from Bühlmann Tauchmedizin 2002, option 1a (4mn)
+// a for N2    b for N2     a of He     b for He
+	1.2599,     0.5050,     1.7424,     0.4245,
+	1.0000,     0.6514,     1.3830,     0.5747,
+	0.8618,     0.7222,     1.1919,     0.6527,
+	0.7562,     0.7825,     1.0458,     0.7223,
+	0.6200,     0.8126,     0.9220,     0.7582,
+	0.5043,     0.8434,     0.8205,     0.7957,
+	0.4410,     0.8693,     0.7305,     0.8279,
+	0.4000,     0.8910,     0.6502,     0.8553,
+	0.3750,     0.9092,     0.5950,     0.8757,
+	0.3500,     0.9222,     0.5545,     0.8903,
+	0.3295,     0.9319,     0.5333,     0.8997,
+	0.3065,     0.9403,     0.5189,     0.9073,
+	0.2835,     0.9477,     0.5181,     0.9122,
+	0.2610,     0.9544,     0.5176,     0.9171,
+	0.2480,     0.9602,     0.5172,     0.9217,
+	0.2327,     0.9653,     0.5119,     0.9267
+};
+
+rom const float buhlmann_ht[2*16] = {
+// Compartiment half-life, in minute
+//-- N2 ---- He ---------------------------------------------------------------------
+	  4.0,    1.51,
+	  8.0,    3.02,
+	 12.5,    4.72,
+	 18.5,    6.99,
+	 27.0,   10.21,
+	 38.3,   14.48,
+	 54.3,   20.53,
+	 77.0,   29.11,
+	109.0,   41.20,
+	146.0,   55.19,
+	187.0,   70.69,
+	239.0,   90.34,
+	305.0,  115.29,
+	390.0,  147.42,
+	498.0,  188.24,
+	635.0,  240.03
+};
+
+rom const float e2secs[2*16] = {
+// result of  1 - 2^(-1/(30sec*HT))
+//---- N2 ------------- He ------------
+	5.75958E-03,    1.51848E-02,  
+	2.88395E-03,    7.62144E-03,
+	1.84669E-03,    4.88315E-03,
+    1.24813E-03,    3.29997E-03,
+    8.55371E-04,    2.26041E-03,
+    6.03079E-04,    1.59437E-03,
+    4.25414E-04,    1.12479E-03,
+    3.00019E-04,    7.93395E-04,
+    2.11949E-04,    5.60641E-04,
+    1.58240E-04,    4.18555E-04,
+    1.23548E-04,    3.26795E-04,
+    9.66686E-05,    2.55722E-04,
+    7.57509E-05,    2.00387E-04,
+    5.92416E-05,    1.56716E-04,
+    4.63943E-05,    1.22734E-04,
+    3.63850E-05,    9.62538E-05
+//-------------------------------------
+};
+
+rom const float e1min[2*16] = {
+// Integration constant for 1 minute,
+// Ie. 1- 2^(-1/HT)
+//----- N2 --------- e 1min He --------
+	1.59104E-01,    3.68109E-01,  	
+    8.29960E-02,   	2.05084E-01,     
+    5.39424E-02,    1.36579E-01,
+    3.67742E-02,    9.44046E-02,
+    2.53454E-02,    6.56359E-02,
+    1.79351E-02,    4.67416E-02,
+    1.26840E-02,    3.31991E-02,
+    8.96152E-03,    2.35301E-02,
+    6.33897E-03,    1.66832E-02,
+    4.73633E-03,    1.24808E-02,
+    3.69981E-03,    9.75753E-03,
+    2.89600E-03,    7.64329E-03,
+    2.27003E-03,    5.99417E-03,
+    1.77572E-03,    4.69082E-03,
+    1.39089E-03,    3.67548E-03,
+    1.09097E-03,    2.88359E-03
+//-------------------------------------
+};
+
+rom const float e10min[2*16] = {
+// The 10 min Value in float notation:
+//  result of 1 - 2^(-10/ht)
+//---- N2 -------------- He -----------
+	8.23223E-01,    9.89851E-01,  
+	5.79552E-01,  	8.99258E-01,
+    4.25651E-01,    7.69737E-01,
+    3.12487E-01,    6.29027E-01,
+    2.26416E-01,    4.92821E-01,
+    1.65547E-01,    3.80407E-01,
+    1.19840E-01,    2.86538E-01,
+    8.60863E-02,    2.11886E-01,
+    6.16117E-02,    1.54849E-01,
+    4.63665E-02,    1.18026E-01,
+    3.63881E-02,    9.34005E-02,
+    2.85855E-02,    7.38569E-02,
+    2.24698E-02,    5.83504E-02,
+    1.76160E-02,    4.59303E-02,
+    1.38222E-02,    3.61528E-02,
+    1.08563E-02,    2.84646E-02
+//-------------------------------------
+};
 
 //////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
@@ -644,20 +753,17 @@ static void copy_deco_table(void)
 //
 // outsourced in v.102
 //
-// Apply safety factors for brand ZH-L16 model.
+// Apply safety factors for both ZH-L16 models.
 //
 static void temp_tissue_safety(void)
 {
     assert( 0.0 <  float_desaturation_multiplier && float_desaturation_multiplier <= 1.0 );
     assert( 1.0 <= float_saturation_multiplier   && float_saturation_multiplier   <= 2.0 );
 
-    if( char_I_deco_model == 0 )
-    {
         if( temp_tissue < 0.0 )
             temp_tissue *= float_desaturation_multiplier;
         else
             temp_tissue *= float_saturation_multiplier;
-    }
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -796,7 +902,6 @@ static unsigned char gas_switch_deepest(void)
 
         sim_gas_last_depth = switch_deco;
         sim_gas_last_used  = switch_last;
-        return 0;
     }
     return 0;
 }
@@ -907,7 +1012,6 @@ static void clear_tissue(void)
     char_O_nullzeit = 0;
     int_O_ascenttime = 0;
     char_O_gradient_factor = 0;
-    char_O_relative_gradient_GF = 0;
 
     calc_lead_tissue_limit = 0.0;
     char_O_gtissue_no = 0;
@@ -1414,9 +1518,7 @@ static void calc_nullzeit(void)
             overlay float dTN2 = (ppN2 - tN2) * var_N2_e;
             overlay float dTHe = (ppHe - tHe) * var_He_e;
 
-            //---- Apply security margin when using the non-GF model
-            if( char_I_deco_model == 0 )
-            {
+            //---- Apply security margin for both models
                 // NDL can be computed while ascending... SO we have
                 // to check wether we are saturating or desaturating.
                 if( dTN2 > 0.0 ) dTN2 *= float_saturation_multiplier;
@@ -1424,8 +1526,8 @@ static void calc_nullzeit(void)
 
                 if( dTHe > 0.0 ) dTHe *= float_saturation_multiplier;
                 else             dTHe *= float_saturation_multiplier;
-            }
-            else // Or GF-based model
+            
+            if (char_I_deco_model != 0 )
                 M0 = GF_high * (M0 - pres_surface) + pres_surface;
 
             //---- Simulate off-gasing while going to surface
@@ -1700,35 +1802,6 @@ static void calc_gradient_factor(void)
     }
     char_O_gradient_factor = (unsigned char)(gf+0.5f);
 
-    if( char_I_deco_model != 0 )        // calculate relative gradient factor
-    {
-        overlay float rgf;
-
-        if( low_depth < 3 )
-            rgf = GF_high;
-        else
-        {
-            overlay float temp1 = low_depth * METER_TO_BAR;
-            overlay float temp2 = pres_respiration - pres_surface;
-
-            if (temp2 <= 0)
-                rgf = GF_high;
-            else if (temp2 >= temp1)
-                rgf = GF_low;
-            else
-                rgf = GF_low + (temp1 - temp2)/temp1*GF_delta;
-        }
-
-        rgf = gf / rgf; // gf is already in percent
-        if( rgf <   0.0 ) rgf =   0.0;
-        if( rgf > 254.5 ) rgf = 255.0;
-        char_O_relative_gradient_GF  = (unsigned char)(rgf+0.5f);
-    }
-    else
-    {
-        // calc relative gradient factor
-        char_O_relative_gradient_GF = char_O_gradient_factor;
-    }
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -1883,8 +1956,7 @@ static void calc_wo_deco_step_1_min(void)
 static void calc_dive_interval(void)
 {
     overlay unsigned char t;
-    overlay unsigned char backup_model;
-
+    
     //---- Initialize simulation parameters ----------------------------------
     N2_ratio = 0.7902; // FIXED, sum lt. buehlmann
     pres_respiration = pres_surface = int_I_pres_surface * 0.001;
@@ -1892,10 +1964,6 @@ static void calc_dive_interval(void)
     ppHe = 0.0;
     float_desaturation_multiplier = char_I_desaturation_multiplier * (0.01 * SURFACE_DESAT_FACTOR);
     float_saturation_multiplier   = char_I_saturation_multiplier   * 0.01;
-
-    // Make sure SURFACE_DESAT_FACTOR is applied:
-    backup_model = char_I_deco_model;
-    char_I_deco_model = 0;
 
     //---- Perform simulation ------------------------------------------------
     for(t=0; t<char_I_dive_interval; ++t)
@@ -1906,8 +1974,6 @@ static void calc_dive_interval(void)
     assert( 0.0 <= CNS_fraction && CNS_fraction <= 9.99 ); // 999 %
     int_O_CNS_fraction = (unsigned short)(CNS_fraction * 100.0 + 0.5);
 
-    //---- Restore model -----------------------------------------------------
-    char_I_deco_model = backup_model;
 }
 
 //////////////////////////////////////////////////////////////////////////////

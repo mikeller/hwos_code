@@ -153,7 +153,7 @@ gaslist_strcat_setpoint5:
         movf    gaslist_gas,W
         lfsr    FSR1,char_I_setpoint_change
         movff   PLUSW1,lo
-        bra     gaslist_strcat_4        ; And return...
+        bra     gaslist_strcat_5        ; And return...
 
 ;----------------------------------------------------------------------------
 ; Append gas description to current string.
@@ -213,6 +213,8 @@ gaslist_gastitle3:                          ; Short version
         call    TFT_disabled_color
 	bra	gaslist_strcat_4	; NEW ; No MOD-check and red color for disabled gases
 gaslist_strcat_3:
+        rcall   gaslist_strcat_gas_0
+	PUTC	" "
         ; Read switch depth
         lfsr    FSR1,char_I_dil_change-.5   ; Setup Diluents-5
         movlw   .4
@@ -223,12 +225,25 @@ gaslist_strcat_3:
         movff   PLUSW1,lo
         rcall   gaslist_calc_mod        ; Compute MOD into WREG
         cpfsgt  lo
-        bra		gaslist_strcat_4
+        bra	gaslist_strcat_5
         call    TFT_warnings_color      ; Turn red if bigger
+	bra	gaslist_strcat_5	; skip gaslist_strcat_gas_0 here
 gaslist_strcat_4:
-	rcall   gaslist_strcat_gas_0
+        rcall   gaslist_strcat_gas_0
 	PUTC	" "
+	
+	; Dummy code, needs some cleanup somedays...
+        ; Read switch depth
+        lfsr    FSR1,char_I_dil_change-.5   ; Setup Diluents-5
+        movlw   .4
+	cpfsgt  gaslist_gas                 ; >4? (-> Diluents)
+        lfsr    FSR1,opt_OC_bail_gas_change ; Setup OC Gases
 
+        movf    gaslist_gas,W           ; (0-4 for OC/Bailout, 5-9 for Diluents)
+        movff   PLUSW1,lo
+        ;rcall   gaslist_calc_mod        ; Compute MOD into WREG
+
+gaslist_strcat_5:
 	TSTOSS	opt_units               ; 0=Meters, 1=Feets
 	bra		gaslist_strcat_3_metric
 ;gaslist_strcat_3_imperial:
@@ -706,9 +721,9 @@ gaslist_reset_mod_title2:
         lfsr    FSR1,opt_OC_bail_gas_change ; No, setup OC Gases
         movf   	PLUSW1,W
         cpfslt  lo
-        bra     gaslist_strcat_4        ; And return...
+        bra     gaslist_strcat_5        ; And return...
         call    TFT_warnings_color      ; Turn red if bigger !
-        bra     gaslist_strcat_4        ; And return...
+        bra     gaslist_strcat_5        ; And return...
 
 ;----------------------------------------------------------------------------
         global  gaslist_reset_mod

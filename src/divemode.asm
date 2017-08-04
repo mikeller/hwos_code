@@ -1651,7 +1651,7 @@ divemode_boot2:
 
 	movff	int_O_CNS_fraction+0,CNS_start+0
     movff	int_O_CNS_fraction+1,CNS_start+1        ; Save CNS value at beginning of dive
-    movff   char_O_relative_gradient_GF,GF_start    ; Save GF value at  beginning of dive
+    movff	char_O_gradient_factor,GF_start    ; Save GF value at  beginning of dive
 	return								; Done with divemode boot
 
 divemode_check_for_warnings:
@@ -1905,9 +1905,6 @@ display_cns_violation2:
     global  check_and_store_gf_violation
 check_and_store_gf_violation:
 	movff	char_O_gradient_factor,lo			; gradient factor absolute (Non-GF model)
-	movff	char_I_deco_model,hi
-	decfsz	hi,F		; jump over next line if char_I_deco_model == 1
-	movff	char_O_relative_gradient_GF,lo		; gradient factor relative (GF model)
 
 	movlw	gf_warning_high
 	cpfsgt	lo
