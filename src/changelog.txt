@@ -1,5 +1,5 @@
 [2.20]
-- Stable Version -
+- Beta Version -
 BUGFIX: Lost Diluent now possible in CCR and PSCR mode
 NEW: ppO2 blinks in sensor mode when min/max boundaries are hit
 CHANGE: Show actual GF (Not relative) in custom views in dive mode
@@ -7,6 +7,7 @@ BUGFIX: Do not check ppO2 for disabled gases
 CHANGE: Apply safety margin parameters to both models (GF and non-GF)
 BUGFIX: Impossible fixed-ppO2 (e.g. 1,6bar in 3m) used for tissue calculations
 BUGFIX: Menu tree cleaned up (Exited to CCR menu from simulator settings)
+BUGFIX: Do not show GF in divemode for non-GF deco mode
 
 [2.18]
 - Beta Version -
