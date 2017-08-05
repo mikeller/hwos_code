@@ -1476,10 +1476,10 @@ dive_boot_cc:
     bsf     voting_logic_sensor3
     call   divemode_setup_sensor_values     ; setup sensor values
 
-    ; Setup first SP for Fixed or Auto mode
-    movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
-    sublw   .1                              ; opt_ccr_mode = 1 (Sensor)?
-    bnz     dive_boot_cc2		    ; No, Skip
+    ; Setup first SP for Fixed or Auto mode (Skipped here, because value is overwritten in sensor mode immediately anyway)
+;    movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
+;    sublw   .1                              ; opt_ccr_mode = 1 (Sensor)?
+;    bnz     dive_boot_cc2		    ; No, Skip
     movff   char_I_setpoint_cbar+0,char_I_const_ppO2    ; No, setup fixed Setpoint (Always start with SP1)
     movff   char_I_const_ppO2,WREG
 dive_boot_cc2:

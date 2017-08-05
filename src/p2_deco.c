@@ -961,8 +961,9 @@ static void sim_alveolar_presures(void)
         // Note: PPO2 and ratios are known outside the lumbs, so there is no
         //       ppWater in the equations below:
         deco_diluent -= const_ppO2;
-        deco_diluent /= calc_N2_ratio + calc_He_ratio;
-
+        deco_diluent /= calc_N2_ratio + calc_He_ratio;// potential DIV/0 issue when O2 is used as diluent!
+        
+        if(calc_N2_ratio==0&calc_He_ratio==0) deco_diluent = 0.0; // workaround for potential DIV/0 issue
     }
 
     if( deco_diluent > ppWater )
@@ -1178,9 +1179,10 @@ void calc_hauptroutine_update_tissues(void)
         overlay float flush_ppO2 = pres_respiration * (1.0 - N2_ratio - He_ratio);
 
         pres_diluent -= const_ppO2;
-        pres_diluent /= N2_ratio + He_ratio;
+        pres_diluent /= N2_ratio + He_ratio;            // potential DIV/0 issue when O2 is used as diluent!
         if( pres_diluent < 0.0 )
             pres_diluent = 0.0;
+        if(N2_ratio==0&He_ratio==0) pres_diluent = 0.0; // workaround for potential DIV/0 issue
 
         char_O_diluent = (unsigned char)(pres_diluent/pres_respiration*100.0 + 0.5);
 
