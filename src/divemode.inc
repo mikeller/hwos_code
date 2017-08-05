@@ -271,11 +271,11 @@
 ; Title
 #DEFINE    dm_custom_s_check_text_row       dm_customview_row+.1        ; 102
 #DEFINE    dm_custom_s_check_text_column    .50                         ; 50
-#DEFINE    dm_custom_ppO2_text_column       .2                          ; 2
-#DEFINE    dm_custom_ppDil_text_column      .115                        ; 115
+#DEFINE    dm_custom_ppO2_text_column       .115                        ; 115
+#DEFINE    dm_custom_ppDil_text_column      .2				; 2
 ; Value
-#DEFINE    dm_custom_s_check_ppo2_o2_column .8                          ; 8
-#DEFINE    dm_custom_s_check_ppo2_dil_col   .108                        ; 108
+#DEFINE    dm_custom_s_check_ppo2_o2_column .108                        ; 108
+#DEFINE    dm_custom_s_check_ppo2_dil_col   .8				; 8
 #DEFINE    dm_custom_s_check_value_row      dm_customview_row+.18       ; 119
     
 ;******* Custom content / #12 - PSCR Info   *******

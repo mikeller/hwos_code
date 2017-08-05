@@ -1272,7 +1272,7 @@ check_gas_common2:
 	movlw	better_gas_window_neg
 	subwf	lo,W                    ; Change depth-better_gas_window_neg
 	cpfslt	xC+0					; current depth<Change depth-better_gas_window_neg?
-	bsf		better_gas_available	;=1: A better gas is available and a gas change is advised in divemode
+    bra     check_gas_common4       ; Ok, now check the better gas ppO2<opt_ppO2_max
     return
 
 check_gas_common3:
@@ -1314,29 +1314,29 @@ check_gas_common4:
 	btfsc   xC+1,7
 	return                      ; Done.
 
-;    ; Check for low ppo2
-;    movff	xC+0,sub_b+0
-;	movff	xC+1,sub_b+1
-;    movff   opt_ppO2_min,WREG
-;	mullw	d'100'				; opt_ppO2_min*100
-;	movff	PRODL,sub_a+0
-;	movff	PRODH,sub_a+1
-;	call	subU16
-;	btfss	neg_flag
-;    return                      ; Done (Too low).
-
-;check if we are within our warning thresholds!
+    ; Check for low ppo2
 	movff	xC+0,sub_b+0
 	movff	xC+1,sub_b+1
-	movff	opt_ppO2_max_deco,WREG	; PPO2 Max for MOD calculation and color coding in divemode
-    addlw   .1                  ; e.g. >1.60
-	mullw	d'100'				; opt_ppO2_max*100
+	movff   opt_ppO2_min,WREG
+	mullw	d'100'		    ; opt_ppO2_min*100
 	movff	PRODL,sub_a+0
 	movff	PRODH,sub_a+1
-	call	subU16
+	call	subU16		    ; sub_c = sub_a - sub_b
 	btfss	neg_flag
+	return                      ; Done (Too low).
+
+;check if we are within our warning thresholds!
+	movff	xC+0,sub_a+0
+	movff	xC+1,sub_a+1
+	movff	opt_ppO2_max_deco,WREG	; PPO2 Max for MOD calculation and color coding in divemode
+	addlw   .1                  ; e.g. >1.60
+	mullw	d'100'		    ; opt_ppO2_max*100
+	movff	PRODL,sub_b+0
+	movff	PRODH,sub_b+1
+	call	subU16		    ; sub_c = sub_a - sub_b
+	btfsc	neg_flag
 	bsf		better_gas_available	;=1: A better gas is available and a gas change is advised in divemode
-    return                      ; Done.
+	return                      ; Done.
 
 check_dil_common:                   ; With Dil 0-4 in WREG
     btfsc   better_gas_available	; Better Diluent already found?
@@ -1685,7 +1685,6 @@ divemode_check_for_warnings1:
     ; Warnings only in deco modes
     btfss   FLAG_ccr_mode                       ; Don't check in CCR mode
 	rcall	check_ppO2							; check ppO2 and displays warning, if required
-	; mH: PSCR handling missing here (Not critical but should be done...)
 	
     btfsc   is_bailout                          ; But check in Bailout case...
 	rcall	check_ppO2							; check ppO2 and displays warning, if required

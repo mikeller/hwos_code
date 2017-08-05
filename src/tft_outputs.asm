@@ -139,7 +139,7 @@ TFT_color_code_gaslist:				; %O2 in hi
 	movff		xC+1,xA+1
 	movff		hi,xB+0
 	clrf		xB+1
-	call		mult16x16                   ; lo * p_amb/10
+	call		mult16x16                   ; hi * p_amb/10
 ; Check if ppO2>6,55bar
 	tstfsz		xC+2						; char_I_O2_ratio * p_amb/10 > 65536, ppO2>6,55bar?
 	bra			TFT_warnings_color       	; Yes, warn in warning color
@@ -168,14 +168,16 @@ TFT_color_code_gaslist:				; %O2 in hi
 	cpfseq	xA+0			; Deco?
 	movff   opt_ppO2_max,xB+1	; No, overwrite with travel/bottom max
 	movf	xB+1,W			; Result in WREG
-	mullw		d'100'					; opt_ppO2_max*100
-	movff		PRODL,sub_b+0
-	movff		PRODH,sub_b+1
-	call		subU16					;  sub_c = sub_a - sub_b	
-	btfss		neg_flag
-	bra			TFT_warnings_color      ; too high -> Warning Color!
+	mullw	d'100'			; opt_ppO2_max*100
+	movff	PRODL,sub_b+0
+	movff	PRODH,sub_b+1
+	infsnz	sub_a+0,F
+	incf	sub_a+1,F		; add 1mbar to avoid warning on equal
+	call	subU16			;  sub_c = sub_a - sub_b	
+	btfss	neg_flag
+	bra	TFT_warnings_color      ; too high -> Warning Color!
 	return
-
+	
 TFT_color_code_ceiling:
     SAFE_2BYTE_COPY rel_pressure, lo
 	call	adjust_depth_with_salinity			; computes salinity setting into lo:hi [mbar]
@@ -226,6 +228,19 @@ TFT_color_code_depth_std:
 	
 
 TFT_color_code_ppo2_depth:
+	movff   opt_dive_mode,WREG        ; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
+	decfsz	WREG,F			
+	bra	TFT_color_code_ppo2_depth_no_ccr   ; Not CCR...
+	
+	btfsc	is_bailout
+	bra	TFT_color_code_ppo2_depth_no_ccr   ; Is bailout -> Test for MOD warning
+
+	movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
+	decfsz	WREG,F
+	bra	TFT_color_code_ppo2_depth_no_ccr   ; Not Sensor
+	; -> CCR and Sensor: Skip this test
+	return
+TFT_color_code_ppo2_depth_no_ccr:
     SAFE_2BYTE_COPY amb_pressure, xA
 	movlw	d'10'
 	movwf	xB+0
@@ -258,7 +273,9 @@ TFT_color_code_ppo2_depth:
 	mullw	d'100'
 	movff	PRODL,sub_b+0
 	movff	PRODH,sub_b+1
-	call	subU16			  		; sub_c = sub_a - sub_b
+	infsnz	sub_a+0,F
+	incf	sub_a+1,F		; add 1mbar to avoid warning on equal
+	call	subU16			; sub_c = sub_a - sub_b
 	btfss	neg_flag
     bra     TFT_color_code_depth_warn
 
@@ -325,6 +342,8 @@ TFT_color_code_ppo2:
 	mullw	d'100'
 	movff	PRODL,sub_b+0
 	movff	PRODH,sub_b+1
+	infsnz	sub_a+0,F
+	incf	sub_a+1,F		; add 1mbar to avoid warning on equal
 	call	subU16			  		; sub_c = sub_a - sub_b
 	btfss	neg_flag
 	bra		TFT_warnings_color     ; Set to warning color
@@ -909,14 +928,14 @@ TFT_display_deko:
 	movff	char_O_first_deco_time,lo   ; length of first stop in min
 	output_99
 	STRCAT_PRINT "'"
-	bra	TFT_standard_color	; and return...
+	goto	TFT_standard_color	; and return...
 
     global  TFT_decoplan
 TFT_decoplan:
     call    TFT_divemask_color
     WIN_TINY    dm_custom_decoplan_title_column, dm_custom_decoplan_title_row
     STRCPY_TEXT_PRINT tDiveDecoplan
-	rcall	TFT_standard_color
+	call	TFT_standard_color
 
 	movff	char_O_deco_depth+1,lo
 	tstfsz	lo							; Show another stop?

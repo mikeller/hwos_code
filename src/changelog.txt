@@ -8,6 +8,9 @@ CHANGE: Apply safety margin parameters to both models (GF and non-GF)
 BUGFIX: Impossible fixed-ppO2 (e.g. 1,6bar in 3m) used for tissue calculations
 BUGFIX: Menu tree cleaned up (Exited to CCR menu from simulator settings)
 BUGFIX: Do not show GF in divemode for non-GF deco mode
+BUGFIX: Skip MOD Test for CCR in Sensor modes (OSTC cR and OSTC3 only)
+CHANGE: Swap positions of ppO2(O2) and ppO2(Dil) in customview 10 on screen: "left = lean" and "right = rich"
+BUGFIX: A wrong configured gas was suggested as "Better gas" on the configured depth even if this resulted in a ppO2 high or low condition
 
 [2.18]
 - Beta Version -
