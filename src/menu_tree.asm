@@ -131,7 +131,7 @@ do_calibrate_mix:
     extern  calibrate_mix
     call    calibrate_mix               ; Calibrate with opt_calibration_O2_ratio, also calibrate S8 HUD if connected
     WAITMS  d'250'                      ; Wait for HUD v3
-    goto    restart                     ; Restart into surface mode 
+    goto    restart                     ; Restart into surface mode
 
 do_ccr_sensor:
     call    enable_ir_s8                ; Enable IR/S8-Port
@@ -243,7 +243,7 @@ do_gas_depth_menu:
     btfsc   ccr_diluent_setup       ; =1: Setting up Diluents ("Gas6-10")
     movlw   .2                      ; 2=Normal
     cpfseq  lo
-    bra	    do_edit_gas_menu_1      ; Non-Deco gas or "Normal" Diluent, Return!
+    bra     return_gas_depth        ; Non-Deco gas or "Normal" Diluent, Return!
 
     MENU_BEGIN  tGasEdit, .7
         MENU_DYNAMIC    gaslist_gastitle,       0
@@ -272,8 +272,6 @@ do_planner_menu_reset:
         lfsr    FSR0,obottomDepth
         call    option_reset
 
-do_planner_menu_1:
-    rcall	menu_tree_double_pop              ; R.L.
 do_planner_menu:
     extern  do_demo_planner
     MENU_BEGIN  tPlan, .7
@@ -290,9 +288,9 @@ do_planner_config:
     MENU_BEGIN  tPlan, .3
         MENU_OPTION     tSetBotUse, obottom_usage,  0
         MENU_OPTION     tSetDecoUse,  odeco_usage,  0
-        MENU_CALL       tExit,                      do_planner_menu_1
+        MENU_CALL       tExit,                      do_planner_menu
     MENU_END
-    
+
 
 ;=============================================================================
 ; Divemode menu
@@ -393,7 +391,7 @@ do_settings_menu_more_piezo_exit:
 	call	TFT_ClearScreen
     extern  piezo_config
     call    piezo_config                ; Configure buttons
-;    bra	    do_settings_menu_more_piezo
+
 do_settings_menu_more_piezo:
     MENU_BEGIN  tSystSets, .7
         MENU_CALL   tCompassMenu,   do_compass_menu
@@ -485,7 +483,7 @@ do_reset_logbook:
 	write_int_eeprom	.5
 	write_int_eeprom	.6              ; Reset logbook pointers
 	call	ext_flash_erase_logbook		; And complete logbook (!)
-    	goto	do_continue_menu_4stack				; back to menu
+    goto	do_continue_main_menu		; back to menu
 
 
 do_reset_deco:
@@ -507,20 +505,18 @@ do_reset_deco:
   	clrf	nofly_time+1
 	clrf	desaturation_time+0				; Reset Desat
 	clrf	desaturation_time+1
-	goto	do_continue_menu_4stack				; back to menu
+	goto	do_return_settings				; back to menu
 
 do_reset_settings:
     call		TFT_ClearScreen				; Clear screen    
     banksel common
 	extern	option_reset_all
     call	option_reset_all        	; Reset all options to factory default.
-	goto	restart                     ; Restart into surfacemode, to show reset values like gases and deco model to the user
+	goto	restart                     ; Restart into surfacemode
 
-do_continue_menu_4stack:			; Return four levels deep	
-    call    menu_processor_pop
 do_continue_menu_3stack:			; Return three levels deep
     call    menu_processor_pop
-    goto    do_return_settings
+	goto	do_return_settings
 
 do_reboot:
 	call	ext_flash_enable_protection			; Enables write protection
