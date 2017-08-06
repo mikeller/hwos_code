@@ -334,6 +334,11 @@ do_divemode_sensor:
     MENU_END
 
 do_divemode_togglegf:
+    movff   char_I_deco_model,WREG  ; 0 = ZH-L16, 1 = ZH-L16-GF
+    decfsz  WREG,W		    ; Was 1?
+    bra     do_continue_main_divemenu   ; No, do nothing and return
+
+    ; Toggle GF only in GF modes
     ; Set customview to 5 (GF informations)
     movlw   .4
     movwf   menupos3                    ; Customview to come-1
