@@ -438,9 +438,9 @@ do_compass_menu:
 do_reset_menu:
     MENU_BEGIN  tResetMenu, .6
         MENU_CALL       tExit,                  do_return_settings
-        MENU_CALL       tReboot,	            do_reset_menu2			; Confirm
-		MENU_CALL       tResetDeco,	            do_reset_menu3			; Confirm
-		MENU_CALL       tResetSettings,	        do_reset_menu4			; Confirm
+        MENU_CALL       tReboot,	        do_reset_menu2			; Confirm
+	MENU_CALL       tResetDeco,	        do_reset_menu3			; Confirm
+	MENU_CALL       tResetSettings,	        do_reset_menu4			; Confirm
         MENU_CALL       tResetLogbook,	        do_reset_menu5			; Confirm
         MENU_CALL       tResetBattery,          new_battery_menu        ; New Battery submenu
     MENU_END
