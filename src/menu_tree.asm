@@ -131,6 +131,8 @@ do_calibrate_mix:
     extern  calibrate_mix
     call    calibrate_mix               ; Calibrate with opt_calibration_O2_ratio, also calibrate S8 HUD if connected
     WAITMS  d'250'                      ; Wait for HUD v3
+    movlw   .9 
+    movwf   customview_surfmode		; show sensor mV custom view after restart
     goto    restart                     ; Restart into surface mode
 
 do_ccr_sensor:

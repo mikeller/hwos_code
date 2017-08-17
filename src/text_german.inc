@@ -17,6 +17,7 @@
     TCODE   tView,      "View>"         ; View>
     TCODE   tHeading,   "Kurs:"         ; Heading:
     TCODE   tLastDive,	"Letzter TG"	; Last Dive (Max 10 chars)
+    TCODE   tSensorMilliVolt, "CCR Sensoren mV" ; CCR Sensors mV
 
 ; Divemode Menu
     TCODE   tDivemenu_Gaslist,  "Gasliste"    ; Gaslist
@@ -83,6 +84,9 @@
     TCODE   tSPPlus,    "ppO2+"                  ; pO2+
     TCODE   tSensorFallback, "Fallback:"        ; Fallback:
     TCODE   tppO2,      "ppO2:"                 ; ppO2:
+    TCODE   tppO2O2,	"ppO2(O2)"		; ppO2(O2)
+    TCODE   tppO2Dil,	"ppO2(Dil)"		; ppO2(Dil)
+
 
 ; New batteries menu
 	TCODE   tNewBattTitle,      "Neue Batterie?"
@@ -158,7 +162,7 @@
     TCODE   tGerman,    "Deutsch"
     TCODE   tFrench,    "Französisch"
     TCODE   tItalian,   "Italienisch"
-    TCODE   tCompassMenu,"Kompass-kalibrierung"  ; Compass calibration
+    TCODE   tCompassMenu,"Kompass-Kalibrierung"  ; Compass calibration
     TCODE   tCompassGain,"Empfindlichkeit:"      ; Compass gain:
 
     TCODE   tUnits,     "Einheiten:"
@@ -246,6 +250,7 @@
     TCODE   tDiveSafetyStop,"Stop"         ; Stop (Four chars, right alligned)
     TCODE   tDiveFallback,  "Fallback!"     ; Fallback! (max. nine chars)
     TCODE   tSensorCheck,   "Sensor Test"   ; Sensor Check
+    TCODE   tdil,	    "Dil:"	    ; Diluent ppO2 Warning
 
 ; Divemode menu
     TCODE   tDivePreMenu,   "Menü?"         ; Menu?
@@ -287,7 +292,7 @@
 	TCODE	tSetYear,	"Setze Jahr"		; Set Year
 
 ; Logbook Offset Menu
-	TCODE	tLogOffset,		"Logbuch offset"	; Logbook offset
+	TCODE	tLogOffset,		"Logbuch-Offset"	; Logbook offset
 	TCODE	tLogOffsetp1,	"+1"				; +1
 	TCODE	tLogOffsetp10,	"+10"				; +10
 	TCODE	tLogOffsetm1,	"-1"				; -1

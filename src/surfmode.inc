@@ -106,4 +106,9 @@
 #DEFINE surf_decotype_boxes_left3   surf_decotype_boxes_left1+.18
 #DEFINE surf_decotype_boxes_left4   surf_decotype_boxes_left1+.27
 #DEFINE surf_decotype_boxes_left5   surf_decotype_boxes_left1+.36
+ 
+ #DEFINE surf_mV_sensor_column .5 
+ #DEFINE surf_mV_sensor1_row .90 
+ #DEFINE surf_mV_sensor2_row surf_mV_sensor1_row+.24 
+ #DEFINE surf_mV_sensor3_row surf_mV_sensor2_row+.24
 

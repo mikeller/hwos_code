@@ -132,6 +132,7 @@ diveloop_loop4:                             ; Menu-Exit returns here...
     bra     diveloop_loop4a             ; No
     extern  TFT_dive_compass_heading
     call    TFT_dive_compass_heading    ; Yes, update compass heading value
+    call    TFT_temp_divemode		; Redraw temperature
 diveloop_loop4a:
     btfsc   enable_screen_dumps         ; =1: Ignore vin_usb, wait for "l" command (Screen dump)
     bra     diveloop_loop5
@@ -1683,11 +1684,8 @@ divemode_check_for_warnings1:
 	bra     divemode_check_for_warnings2
 
     ; Warnings only in deco modes
-    btfss   FLAG_ccr_mode                       ; Don't check in CCR mode
-	rcall	check_ppO2							; check ppO2 and displays warning, if required
+    	rcall	check_ppO2							; check ppO2 and displays warning, if required
 	
-    btfsc   is_bailout                          ; But check in Bailout case...
-	rcall	check_ppO2							; check ppO2 and displays warning, if required
 	rcall	check_cns_violation					; Check CNS value and display it, if required
 	btfsc	decostop_active						; In deco mode?
 	rcall	check_and_store_gf_violation		; Yes, Sets warnings, if required
@@ -1830,10 +1828,11 @@ check_ppO2_0:
 	cpfseq	xA+0			; Deco?
 	movff   opt_ppO2_max,xB+1	; No, overwrite with travel/bottom max
 	movf	xB+1,W			; Result in WREG
-	addlw   .1                  ; e.g. >1.60
 	mullw	d'100'				; opt_ppO2_max*100
 	movff	PRODL,sub_a+0
 	movff	PRODH,sub_a+1
+	infsnz	sub_a+0,F		
+	incf	sub_b+1,F		
 	call	subU16					
 	btfss	neg_flag
 	return						; Done. Not too high
@@ -1867,6 +1866,11 @@ check_ppO2_b:
     bra     check_ppO2_c        ; No
     return                      ; Yes, do not show twice (in custom view and in warning area)
 check_ppO2_c:
+    movlw   .10
+    cpfseq  menupos3            ; ppO2 shown in Custom View 10?
+    bra     check_ppO2_d        ; No
+    return                      ; Yes, do not show twice (in custom view and in warning area)
+check_ppO2_d:    
     incf	warning_counter,F	; increase counter
     goto    TFT_display_ppo2	; Show ppO2  (and return)
 

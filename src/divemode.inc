@@ -158,9 +158,9 @@
 #DEFINE    dm_custom_decoplan_title_row          dm_customview_row              ; 101
 #DEFINE    dm_custom_decoplan_title_column       .65                            ; 65
 ; 1st col
-#DEFINE    dm_cust_dstop_2nd_stop_row            dm_customview_row+.15          ; 116
+#DEFINE    dm_cust_dstop_2nd_stop_row            dm_customview_row+.14          ; 115
 #DEFINE    dm_cust_dstop_2nd_stop_column         .0                             ; 0
-#DEFINE    dm_cust_dstop_3rd_stop_row            dm_customview_row+.39          ; 140
+#DEFINE    dm_cust_dstop_3rd_stop_row            dm_customview_row+.37          ; 138
 #DEFINE    dm_cust_dstop_3rd_stop_column         dm_cust_dstop_2nd_stop_column  ; 0
 ; 2nd col
 #DEFINE    dm_cust_dstop_4th_stop_row            dm_cust_dstop_2nd_stop_row     ; 116
@@ -251,10 +251,10 @@
 #DEFINE    dm_custom_dyn_gas_mask_row          dm_customview_row        ; 101
 #DEFINE    dm_custom_dyn_gas_mask_column       .59                      ; 59
 ; col #1
-#DEFINE    dm_custom_dyn_gas_row1              dm_customview_row+.16    ; 117
+#DEFINE    dm_custom_dyn_gas_row1              dm_customview_row+.14    ; 115
 #DEFINE    dm_custom_dyn_gas_column1           .0                       ; 0
 ; col #2
-#DEFINE    dm_custom_dyn_gas_row2              dm_customview_row+.39    ; 140
+#DEFINE    dm_custom_dyn_gas_row2              dm_customview_row+.37    ; 138
 #DEFINE    dm_custom_dyn_gas_column2           .80                      ; 80
 
 ;******* Custom content / #8 - Ceiling value for GF_hi *******
@@ -310,13 +310,13 @@
 
 ;******* Bottom content / 1st col *******
 ; Temperature
-#DEFINE    dm_temp_row               dm_3rdrow_top     ; 165
+#DEFINE    dm_temp_row               dm_3rdrow_top-.4     ; 161
 #DEFINE    dm_temp_column            .0                ; 0
 ; Simulation text
 #DEFINE    dm_simtext_row            dm_3rdrow_top     ; 165
-#DEFINE    dm_simtext_column         .30               ; 30
+#DEFINE    dm_simtext_column         .35               ; 35
 ; Diluent gas
-#DEFINE    dm_active_dil_row         dm_3rdrow_top+.23 ; 189
+#DEFINE    dm_active_dil_row         dm_3rdrow_top+.19 ; 185
 #DEFINE    dm_active_dil_column      .0                ; 0
 ; active gas for OC, blinking better gas, setpoint or bailout for CCR
 #DEFINE    dm_active_gas_row         .208              ; 208

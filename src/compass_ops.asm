@@ -1088,14 +1088,14 @@ TFT_dive_compass_dir_text_2:
     btfsc   compass_bearing_lft
     bra     TFT_dive_compass_dir_ldir      ; bearing_lft=1, print the left marker
 ;TFT_dive_compass_text_rdir:
-    WIN_SMALL   dm_custom_compass_rdir_column, dm_custom_compass_head_row
+    WIN_SMALL   dm_custom_compass_rdir_column, dm_custom_compass_head_row-.2
     STRCPY_PRINT    ">>"
     ; do not forget to clear the left
     rcall    TFT_dive_compass_dir_lclr
     bra     TFT_dive_compass_text
 
 TFT_dive_compass_dir_ldir:
-    WIN_SMALL   dm_custom_compass_ldir_column, dm_custom_compass_head_row
+    WIN_SMALL   dm_custom_compass_ldir_column, dm_custom_compass_head_row-.2
     STRCPY_PRINT    "<<"
     ; do not forget to clear the right
     rcall    TFT_dive_compass_dir_rclr
@@ -1112,12 +1112,12 @@ TFT_dive_compass_text:
     return
 
 TFT_dive_compass_dir_lclr:
-    WIN_SMALL   dm_custom_compass_ldir_column, dm_custom_compass_head_row
+    WIN_SMALL   dm_custom_compass_ldir_column, dm_custom_compass_head_row-.2
     STRCPY_PRINT    "  "
     return
 
 TFT_dive_compass_dir_rclr:
-    WIN_SMALL   dm_custom_compass_rdir_column, dm_custom_compass_head_row
+    WIN_SMALL   dm_custom_compass_rdir_column, dm_custom_compass_head_row-.2
     STRCPY_PRINT    "  "
     return
 

@@ -865,6 +865,9 @@ TFT_divemode_warning_clear:
 
 	global	TFT_display_deko_mask
 TFT_display_deko_mask:
+	btfsc	divemode_menu	; Is the dive mode menu shown? 
+	return			; Yes, return
+    
 	rcall		TFT_clear_decoarea
    	WIN_STD 	dm_tts_text_column, dm_tts_text_row
     if dm_offset != 0
@@ -944,7 +947,7 @@ TFT_decoplan:
 	call	TFT_standard_color
 	WIN_SMALL	dm_cust_dstop_4th_stop_column,dm_cust_dstop_4th_stop_row
 	STRCPY_PRINT "  ---  "
-	WIN_BOX_BLACK   dm_cust_dstop_2nd_stop_row, dm_customview_bot, dm_cust_dstop_2nd_stop_column, dm_cust_dstop_4th_stop_column	; top, bottom, left, right
+	WIN_BOX_BLACK   dm_cust_dstop_2nd_stop_row, dm_customview_bot-.1, dm_cust_dstop_2nd_stop_column, dm_cust_dstop_4th_stop_column	; top, bottom, left, right
 	WIN_BOX_BLACK   dm_cust_dstop_5th_stop_row, dm_customview_bot, dm_cust_dstop_5th_stop_column, dm_cust_dstop_6th_stop_column	; top, bottom, left, right
 	WIN_BOX_BLACK   dm_cust_dstop_6th_stop_row, dm_customview_bot, dm_cust_dstop_6th_stop_column, .159	; top, bottom, left, right
     return
@@ -960,7 +963,7 @@ TFT_display_deko2:
 	tstfsz	lo							; Show another stop?
 	bra		TFT_display_deko3			; Yes
 	; No, clear output and return
-	WIN_BOX_BLACK   dm_cust_dstop_3rd_stop_row, dm_customview_bot, dm_cust_dstop_2nd_stop_column, dm_cust_dstop_4th_stop_column	; top, bottom, left, right
+	WIN_BOX_BLACK   dm_cust_dstop_3rd_stop_row, dm_customview_bot-.1, dm_cust_dstop_2nd_stop_column, dm_cust_dstop_4th_stop_column	; top, bottom, left, right
 	WIN_BOX_BLACK   dm_cust_dstop_4th_stop_row, dm_customview_bot, dm_cust_dstop_4th_stop_column, .159	; top, bottom, left, right
 	return
 
@@ -1431,7 +1434,34 @@ TFT_surface_sensor5:
 TFT_surface_sensor6:
     bcf     leftbind
     goto    TFT_standard_color; and return...
+    
+    global TFT_sensor_mV 
+TFT_sensor_mV: 
+    call    TFT_standard_color 
+    bsf	    leftbind
+    WIN_SMALL surf_mV_sensor_column,surf_mV_sensor1_row 
+    movff   o2_mv_sensor1+0,lo ; in 0.1mV steps 
+    movff   o2_mv_sensor1+1,hi ; in 0.1mV steps 
+    STRCAT  "1: " 
+    output_16dp .4	; xxx.y mV 
+    STRCAT_PRINT "mV "
+    
+    WIN_SMALL surf_mV_sensor_column,surf_mV_sensor2_row 
+    movff   o2_mv_sensor2+0,lo ; in 0.1mV steps
+    movff   o2_mv_sensor2+1,hi ; in 0.1mV steps 
+    STRCAT  "2: " 
+    output_16dp .4 ; xxx.y mV 
+    STRCAT_PRINT "mV "
 
+    WIN_SMALL surf_mV_sensor_column,surf_mV_sensor3_row 
+    movff   o2_mv_sensor3+0,lo ; in 0.1mV steps 
+    movff   o2_mv_sensor3+1,hi ; in 0.1mV steps 
+    STRCAT "3: " 
+    output_16dp .4 ; xxx.y mV 
+    STRCAT_PRINT "mV "
+    bcf	    leftbind 
+    goto    TFT_standard_color ; and return...
+    
     global  TFT_menu_hud
 TFT_menu_hud:            ; Yes, update HUD data
     call    compute_ppo2			; compute mv_sensorX and ppo2_sensorX arrays
@@ -3586,9 +3616,9 @@ TFT_sensor_check_mask:
     WIN_TINY    dm_custom_s_check_text_column, dm_custom_s_check_text_row
     STRCPY_TEXT_PRINT   tSensorCheck
     WIN_TINY    dm_custom_ppO2_text_column, dm_custom_s_check_text_row
-    STRCPY_PRINT "ppO2(O2)"
+    STRCPY_TEXT_PRINT tppO2O2
     WIN_TINY    dm_custom_ppDil_text_column, dm_custom_s_check_text_row
-    STRCPY_PRINT "ppO2(Dil)"
+    STRCPY_TEXT_PRINT tppO2Dil
     return
 
     global  TFT_sensor_check                    ; Show ppO2 of O2 and Diluent
@@ -3854,7 +3884,17 @@ TFT_display_cns:
 TFT_mask_ppo2:
     call    TFT_divemask_color
     WIN_TINY  dm_custom_ceiling_ppo2_column, dm_custom_ceiling_text_row
-    STRCPY_TEXT_PRINT tppO2
+    
+    btfss   FLAG_ccr_mode 
+    bra	    TFT_mask_ppo2a	; not in CC mode 
+    btfsc   is_bailout 
+    bra	    TFT_mask_ppo2a	; in CC mode but in bailout 
+    STRCPY_TEXT_PRINT tppO2Dil	; in CC mode and not bailout 
+    goto    TFT_standard_color ; and return... 
+
+TFT_mask_ppo2a:
+    
+    STRCPY_TEXT_PRINT tppO2	; in all other modes
     goto    TFT_standard_color; and return...
 
 	global	TFT_display_ppo2_val
@@ -3907,8 +3947,19 @@ TFT_display_ppo2:                       ; Show ppO2 (ppO2 stored in xC, in mbar!
     tstfsz  WREG                        ; Is there room for the warning?
     return                              ; No
     call    TFT_warning_set_window_com
-	TFT_color_code		warn_ppo2		; Color-code output (ppO2 stored in xC)
-    STRCPY_TEXT tppO2                   ; ppO2:
+    TFT_color_code		warn_ppo2		; Color-code output (ppO2 stored in xC)
+	
+    btfss   FLAG_ccr_mode ; new code to conditionally name the warning ppO2: or Dil: 
+    bra	    TFT_display_ppo2_none_ccr ; ppO2 warning text 
+    btfsc   is_bailout 
+    bra	    TFT_display_ppo2_none_ccr ; ccr-mode but in bailout, ppO2 warning text again 
+    ; ccr-mode and no bailout 
+    STRCPY_TEXT tdil	    ; "Dil:"
+    bra	    TFT_display_ppo2_cont
+    
+TFT_display_ppo2_none_ccr:
+    STRCPY_TEXT tppO2                   ; "ppO2:"
+TFT_display_ppo2_cont:
     ; hijacking neg_flag_velocity to know where the value is displayed
     bcf     neg_flag_velocity
 TFT_display_ppo2_com:

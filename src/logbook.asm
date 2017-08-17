@@ -1821,7 +1821,7 @@ logbook_page3: ; Show even more info
     movlw       color_lightblue
     call	TFT_set_color
     WIN_FRAME_COLOR16   .63,.220,.2,.90; Top, Bottom, Left, Right
-
+    
     rcall       logbook_preloop_tasks       ; Clear some flags and set to Speed_eco
 display_details2_loop:
     btfsc		switch_left		; SET/MENU?
@@ -1833,9 +1833,13 @@ display_details2_loop:
     bra			exit_profileview	; back to list
     bra			display_details2_loop   ; wait for something to do	
 
-logbook_page4: ; Show even more info
+logbook_page4: ; Show even more info in CC mode
+    LOG_POINT_TO    log_divemode 
+    call	    ext_flash_byte_read ; 0=OC, 1=CC, 2=Gauge, 3=Apnea into WREG and temp1 
+    decfsz	    temp1,w		; =1 (CC)? 
+    goto	    display_profile2	; no 
+
     rcall   log_details_header	; Shows number, time/date and basic dive info
-    
         ; Setpoint list
     LOG_POINT_TO    log_sp1
     WIN_SMALL   .5,.65

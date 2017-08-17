@@ -119,7 +119,7 @@ customview_minute:
 surf_customview_toggle:
 	bcf		switch_right
 	incf	menupos3,F			            ; Number of customview to show
-	movlw	d'8'					; Max number of customsviews in surface mode
+	movlw	d'9'					; Max number of customsviews in surface mode
 	cpfsgt	menupos3			            ; Max reached?
 	bra		surf_customview_mask		    ; No, show
     movlw   .1
@@ -148,6 +148,8 @@ surf_customview_mask:
 	bra		surf_customview_init_view7      ; Deco settings
 	dcfsnz	WREG,F
 	bra		surf_customview_init_view8      ; Last Dive info
+	dcfsnz	WREG,F
+	bra		surf_customview_init_view9      ; Sensor mV readings
 
     call    I2C_sleep_accelerometer         ; Stop accelerometer
     call    I2C_sleep_compass               ; Stop compass
@@ -201,6 +203,22 @@ surf_customview_init_view3:                 ; View3: CC SP list
     call    TFT_standard_color
     call	TFT_splist_surfmode             ; Show Setpoint list
     bra		customview_toggle_exit          ; Done.
+    
+surf_customview_init_view9:		    ; View 9: Sensor mV on the surface
+    btfsc   FLAG_ccr_mode 
+    bra	    surf_customview_init_view9a	    ; we are in CCR mode 
+    btfsc   FLAG_pscr_mode
+    bra	    surf_customview_init_view9a	    ; we are in PSCR mode 
+    bra	    surf_customview_toggle	    ; we are not in any rebreather mode, so skip 
+surf_customview_init_view9a: 
+    movff   opt_ccr_mode,WREG		    ; =0: Fixed SP, =1: Sensor, =2: Auto SP 
+    sublw   .1				    ; opt_ccr_mode = 1 (Sensor)? 
+    bnz	    surf_customview_toggle	    ; sorry, no sensors, skip again 
+    STRCPY_TEXT_PRINT tSensorMilliVolt	    ; Title of customview 
+    call    TFT_standard_color 
+    extern  TFT_sensor_mV
+    call    TFT_sensor_mV		    ; write sensor mV readings to screen 
+    bra	    customview_toggle_exit		; Done.
 
 surf_customview_init_view4:                 ; View4: Custom text
     call    TFT_standard_color
@@ -235,7 +253,6 @@ surf_customview_init_view7:
 
 surf_customview_init_view8:                 ; View8: Last dive info
     call	TFT_surface_lastdive		; Show last dive interval
-
     bra		customview_toggle_exit          ; Done.
     
     
@@ -558,6 +575,8 @@ customview_init_view12:		            ; PSCR Info
     bra		customview_toggle_exit
     
 customview_toggle_exit:
+	btfsc	divemode		    ; In Dive Mode?
+	call    TFT_temp_divemode	    ; Yes, redraw temperature
 	call	TFT_standard_color
 	bcf		toggle_customview			; Clear flag
 	return

@@ -17,6 +17,7 @@
     TCODE   tView,      "View>"         ; View>
     TCODE   tHeading,   "Heading:"      ; Heading:
     TCODE   tLastDive,	"Last Dive"	; Last Dive (Max 10 chars)
+    TCODE   tSensorMilliVolt, "CCR Sensors mV" ; CCR Sensors mV
 
 ; Divemode Menu
     TCODE   tDivemenu_Gaslist,  "Gaslist"       ; Gaslist
@@ -83,6 +84,8 @@
     TCODE   tSPPlus,    "ppO2+"                  ; pO2+
     TCODE   tSensorFallback, "Fallback:"        ; Fallback:
     TCODE   tppO2,      "ppO2:"                 ; ppO2:
+    TCODE   tppO2O2,	"ppO2(O2)"		; ppO2(O2)
+    TCODE   tppO2Dil,	"ppO2(Dil)"		; ppO2(Dil)
 
 	TCODE   tNewBattTitle,      "New Battery?"
 	TCODE	tNewBattOld,		"Keep old"
@@ -247,6 +250,7 @@
     TCODE   tDiveSafetyStop,"Stop"         ; Stop (Four chars, right alligned)
     TCODE   tDiveFallback,  "Fallback!"     ; Fallback! (max. nine chars)
     TCODE   tSensorCheck,   "Sensor Check"  ; Sensor Check
+    TCODE   tdil,	    "Dil:"	    ; Diluent ppO2 Warning
 
 ; Divemode menu
     TCODE   tDivePreMenu,   "Menu?"         ; Menu?
