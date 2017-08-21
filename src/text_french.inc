@@ -294,7 +294,7 @@
 	TCODE	tSetYear,	"Ajust. Année"      ; Set Year
 
 ; Logbook Offset Menu
-	TCODE	tLogOffset,		"Num. 1er plongée"  ; Logbook offset
+	TCODE	tLogOffset,		"Num.1er plongée"  ; Logbook offset (Max. 15 Chars!)
 	TCODE	tLogOffsetp1,	"+1"				; +1
 	TCODE	tLogOffsetp10,	"+10"				; +10
 	TCODE	tLogOffsetm1,	"-1"				; -1

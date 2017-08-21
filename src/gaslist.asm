@@ -211,7 +211,7 @@ gaslist_gastitle3:                          ; Short version
         movf    PLUSW1,W
         bnz     gaslist_strcat_3
         call    TFT_disabled_color
-	;bra	gaslist_strcat_3	; NEW ; No MOD-check and red color for disabled gases
+	bra	gaslist_strcat_4	; NEW ; No MOD-check and red color for disabled gases
 gaslist_strcat_3:
         rcall   gaslist_strcat_gas_0
 	PUTC	" "
@@ -226,32 +226,38 @@ gaslist_strcat_3:
         rcall   gaslist_calc_mod        ; Compute MOD into WREG
         cpfsgt  lo
         bra	gaslist_strcat_5
+        call    TFT_warnings_color      ; Turn red if bigger
+	bra	gaslist_strcat_5	; skip gaslist_strcat_gas_0 here
+gaslist_strcat_4:
+        rcall   gaslist_strcat_gas_0
+	PUTC	" "
 	
-	movf	gaslist_gas,W		; load gas index 
-	lfsr	FSR1,opt_gas_type	; set-up index read from gas table 
-	movff	PLUSW1,gaslist_Type	; get current gas type into lo 
-	movlw	.3			; compare current gas type with 3 = deco 
-	cpfseq	gaslist_Type		; skip next line if gas is of type deco 
-	bra	gaslist_strcat_5	; gas is not deco gas
-	
-        call    TFT_warnings_color      ; Turn red if bigger and gas is a deco gas
-	;bra	gaslist_strcat_5	; skip gaslist_strcat_gas_0 here
+	; Dummy code, needs some cleanup somedays...
+        ; Read switch depth
+        lfsr    FSR1,char_I_dil_change-.5   ; Setup Diluents-5
+        movlw   .4
+	cpfsgt  gaslist_gas                 ; >4? (-> Diluents)
+        lfsr    FSR1,opt_OC_bail_gas_change ; Setup OC Gases
+
+        movf    gaslist_gas,W           ; (0-4 for OC/Bailout, 5-9 for Diluents)
+        movff   PLUSW1,lo
+        ;rcall   gaslist_calc_mod        ; Compute MOD into WREG
 
 gaslist_strcat_5:
 	TSTOSS	opt_units               ; 0=Meters, 1=Feets
 	bra		gaslist_strcat_3_metric
 ;gaslist_strcat_3_imperial:
         btfsc   ccr_diluent_setup       ; =1: Setting up Diluents ("Gas6-10")
-        bra     gaslist_imperial_decogas
+        bra     gaslist_imperial_non_travel
         movf    gaslist_gas,W
         lfsr    FSR1,opt_gas_type       ; Read opt_gas_type[WREG]
         movff   PLUSW1,gaslist_Type
-        movlw   .3                      ; 0= Diabled, 1 = First, 2=Travel/Normal, 3 = Deco
-        cpfslt  gaslist_Type		; skip next line for disabled, first and travel gases
-        bra     gaslist_imperial_decogas ; Deco gas ? show meters
-        bra     gaslist_strcat_depth_nondeco   ; Show "---" instead of "0m"...
+        movlw   .2                      ; 2=Travel
+        cpfseq  gaslist_Type
+        bra     gaslist_imperial_non_travel   ; Non-Travel Gas
+        bra     gaslist_strcat_depth_travel   ; Show "---" instead of "0m"...
 
-gaslist_imperial_decogas:
+gaslist_imperial_non_travel:
         movf    lo,W
         mullw   .100                    ; convert meters to mbar
         movff   PRODL,lo
@@ -264,17 +270,17 @@ gaslist_imperial_decogas:
 		
 gaslist_strcat_3_metric:
         btfsc   ccr_diluent_setup       ; =1: Setting up Diluents ("Gas6-10")
-        bra     gaslist_metric_decogas
+        bra     gaslist_metric_non_travel
         movf    gaslist_gas,W
         lfsr    FSR1,opt_gas_type       ; Read opt_gas_type[WREG]
         movff   PLUSW1,gaslist_Type
-        movlw   .3                      ; 0= Diabled, 1 = First, 2=Travel/Normal, 3 = Deco
-        cpfslt  gaslist_Type		; skip next line for disabled, first and travel gases
-        bra     gaslist_metric_decogas  ; Deco gas ? show meters
-gaslist_strcat_depth_nondeco:            ; Show "---" instead of "0m"...
+        movlw   .2                      ; 2=Travel
+        cpfseq  gaslist_Type
+        bra     gaslist_metric_non_travel   ; Non-Travel Gas
+gaslist_strcat_depth_travel:            ; Show "---" instead of "0m"...
         STRCAT  "---"
         return
-gaslist_metric_decogas:
+gaslist_metric_non_travel:
         output_99
         STRCAT_TEXT	tMeters				; "m"
         return
