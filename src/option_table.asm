@@ -196,7 +196,7 @@ option_table_begin:
         OPTION_ENUM8    oColorSetDive,  4,  0, tColorSetName0,        .146,    opt_dive_color_scheme            ; Color scheme divemode
         OPTION_UINT8    oPressureAdjust, .0,.255,   .0,     -1,       .147,    opt_pressure_adjust              ; SIGNED int (-20/+20mbar max.)
         OPTION_BOOL     oSafetyStop,    0,                            .148,    opt_enable_safetystop            ; =1: A safety stop is shown
-        OPTION_UINT8    oCalGasO2,      .21,.100,   .21,    tPercent, .149,    opt_calibration_O2_ratio         ; Calibration gas %O2
+        OPTION_UINT8    oCalGasO2,      .21,.100,   .21,    tPercent, .149,    opt_calibration_O2_ratio         ; Calibration gas %O2 (Do not move in EEPROM, must stay at .149!)
         OPTION_BOOL     oSensorFallback,1,                            .150,    opt_sensor_fallback              ; =1: Fallback to SP1 when sensor is lost
         OPTION_BOOL     oFlipScreen,    0,                            .151,    opt_flip_screen                  ; =1: Flip the screen
         OPTION_UINT8p10 ocR_button_left, .20, .100,   .40,  tPercent, .152,    opt_cR_button_left               ; left button sensitivity

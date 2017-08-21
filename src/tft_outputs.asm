@@ -3889,11 +3889,12 @@ TFT_mask_ppo2:
     bra	    TFT_mask_ppo2a	; not in CC mode 
     btfsc   is_bailout 
     bra	    TFT_mask_ppo2a	; in CC mode but in bailout 
+    WIN_TINY dm_custom_ceiling_ppo2_column_dil,dm_custom_ceiling_text_row ; NEW position for loger text
     STRCPY_TEXT_PRINT tppO2Dil	; in CC mode and not bailout 
     goto    TFT_standard_color ; and return... 
 
 TFT_mask_ppo2a:
-    
+    WIN_TINY  dm_custom_ceiling_ppo2_column, dm_custom_ceiling_text_row
     STRCPY_TEXT_PRINT tppO2	; in all other modes
     goto    TFT_standard_color; and return...
 

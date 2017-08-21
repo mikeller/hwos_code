@@ -395,7 +395,20 @@ option_inc_uint8:                       ; Defaults type too...
         movf    opt_min,W
 option_inc_1:
         movwf   INDF1
+	
+	; Now some rather crude hack into this routine to make CCR Calibration more convenient:
+	movlw	.149			; eeprom address of option CalGasO2 
+	cpfseq	opt_eeprom		; skip next line if we deal with this option right now
         return
+	
+	btfsc	FLAG_pscr_mode		; skip next line if we are not in PSCR mode 
+	return 
+	movlw	.26 
+	cpfseq	INDF1			; skip next line if current option value is =26
+	return	
+	movlw	.95			; current option value =26, advance it to 95 
+	movwf	INDF1 
+	return
 
 option_inc_enum8:                       ; Always +1
         incf    INDF1,W

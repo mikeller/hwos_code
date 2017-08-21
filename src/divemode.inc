@@ -262,6 +262,8 @@
 #DEFINE    dm_custom_ceiling_text_row       dm_customview_row+.1        ; 102
 #DEFINE    dm_custom_ceiling_text_column    .68                         ; 66
 #DEFINE    dm_custom_ceiling_ppo2_column    .8                          ; 8
+#DEFINE	   dm_custom_ceiling_ppo2_column_dil	    .0			; 0 NEW tuned position because text is longer
+
 ; Value
 #DEFINE    dm_custom_ceiling_value_row      dm_customview_row+.18       ; 119
 #DEFINE    dm_custom_ceiling_value_column   .66                         ; 64

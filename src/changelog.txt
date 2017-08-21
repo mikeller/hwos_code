@@ -1,3 +1,7 @@
+[2.21]
+- Beta Version -
+CHANGE: CCR Calibration gas range limited to O2% 21-25 and 95-100 to save button presses
+
 [2.20]
 - Beta Version -
 BUGFIX: Lost Diluent now possible in CCR and PSCR mode
