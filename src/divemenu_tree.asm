@@ -113,6 +113,7 @@ do_switch_gas:
 do_switch_gasX:
     btfsc   is_bailout_menu         ; Bailout confirmed?
     bsf     is_bailout              ; =1: Bailout
+    call    customview_mask         ; update customview mask to (eventually) rewrite ppO2(Dil): to ppO2:
 do_exit_divemode_menu:
     call    timeout_divemode_menu2
     clrf    STKPTR
@@ -145,6 +146,7 @@ do_switch_sp2:
     bcf     is_bailout_menu         ;
     bcf	    better_gas_available    ;=1: A better gas is available and a gas change is advised in divemode
     bcf     blinking_better_gas     ; Clear blinking flag
+    call    customview_mask         ; update customview mask to (eventually) rewrite ppO2(Dil): to ppO2:
     bra     do_exit_divemode_menu   ; And exit
 
 do_divemode_gaslist_pscr:
