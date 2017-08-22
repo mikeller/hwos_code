@@ -1461,6 +1461,29 @@ TFT_sensor_mV:
     STRCAT_PRINT "mV "
     bcf	    leftbind 
     goto    TFT_standard_color ; and return...
+
+    global TFT_sensor_surface_warning
+TFT_sensor_surface_warning: 
+    call    TFT_warnings_color     
+    movff   opt_x_s1+1,lo   ; into bank1
+    movf    lo,W	    ; when opt_x_s1 > 255 the sensor will just give 8 mV at a ppO2 of 0,21 any more 
+    bz	    TFT_sensor_mV2  ; the sensor is not too bad yet for a warning 
+    WIN_SMALL surf_mV_sensor_status_column,surf_mV_sensor1_row-.5 
+    STRCPY_PRINT    "\xb8"  ; mark sensor as beeing at end of lifetime 
+TFT_sensor_mV2:
+    movff   opt_x_s2+1,lo   ; into bank1
+    movf    lo,W	    ; when opt_x_s2 > 255 the sensor will just give 8 mV at a ppO2 of 0,21 any more 
+    bz	    TFT_sensor_mV3  ; the sensor is not too bad yet for a warning 
+    WIN_SMALL surf_mV_sensor_status_column,surf_mV_sensor2_row-.5 
+    STRCPY_PRINT    "\xb8"  ; mark sensor as beeing at end of lifetime 
+TFT_sensor_mV3:
+    movff   opt_x_s3+1,lo   ; into bank1
+    movf    lo,W	    ; when opt_x_s3 > 255 the sensor will just give 8 mV at a ppO2 of 0,21 any more 
+    bz	    TFT_sensor_mV4  ; the sensor is not too bad yet for a warning 
+    WIN_SMALL surf_mV_sensor_status_column,surf_mV_sensor3_row-.5
+    STRCPY_PRINT    "\xb8"  ; mark sensor as beeing at end of lifetime 
+TFT_sensor_mV4:
+    goto    TFT_standard_color ; (And return) Done.
     
     global  TFT_menu_hud
 TFT_menu_hud:            ; Yes, update HUD data
@@ -3883,13 +3906,11 @@ TFT_display_cns:
     global  TFT_mask_ppo2
 TFT_mask_ppo2:
     call    TFT_divemask_color
-    WIN_TINY  dm_custom_ceiling_ppo2_column, dm_custom_ceiling_text_row
-    
     btfss   FLAG_ccr_mode 
     bra	    TFT_mask_ppo2a	; not in CC mode 
     btfsc   is_bailout 
     bra	    TFT_mask_ppo2a	; in CC mode but in bailout 
-    WIN_TINY dm_custom_ceiling_ppo2_column_dil,dm_custom_ceiling_text_row ; NEW position for loger text
+    WIN_TINY dm_custom_ceiling_ppo2_col_dil,dm_custom_ceiling_text_row ; NEW position for loger text
     STRCPY_TEXT_PRINT tppO2Dil	; in CC mode and not bailout 
     goto    TFT_standard_color ; and return... 
 
@@ -4008,7 +4029,7 @@ TFT_LogOffset_Logtitle:
 	PUTC	":"
 	call	do_logoffset_common_read	; Offset into lo:hi
 	bsf		leftbind
-	output_16
+	output_16_4
 	bcf		leftbind
 	PUTC	" "
 	return			; No "_PRINT" here...

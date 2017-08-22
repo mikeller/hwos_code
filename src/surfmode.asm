@@ -235,6 +235,7 @@ surfloop_loop2a1:
     bnz     surfloop_loop2a		; No, skip
 
     call    TFT_surface_sensor          ; ...update sensor data in surface mode
+    call    TFT_sensor_surface_warning	; Show a warning arrow-down behind sensor readings when sensor is end-of-life
     movlw   .9 
     cpfseq  menupos3			; in Sensor mV surface custom view? 
     bra	    surfloop_loop2a		; No

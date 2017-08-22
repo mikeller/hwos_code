@@ -1,6 +1,7 @@
 [2.21]
 - Beta Version -
 CHANGE: CCR Calibration gas range limited to O2% 21-25 and 95-100 to save button presses
+NEW: Show a warning for each sensor if the sensor is end-of-life after calibration (Less then 8mV in Air at sea level)
 
 [2.20]
 - Beta Version -

@@ -1032,6 +1032,11 @@ change_logbook_offset2:
 
 	global	do_logoffset_common_write
 do_logoffset_common_write:
+	; TODO: limit [lo:hi] to 9999 ? may arrive here as >= 10000 because of +10 increment option 
+	; SIMPLER WAY: return without writing to eeprom if hi == 0x27 -> 0x2700 = 9984, this is within 
+	; the save range for a +10 increment, shall do it...
+	; mH
+    
 	movff	lo,EEDATA
 	write_int_eeprom	0x0D
 	movff	hi,EEDATA

@@ -85,6 +85,8 @@
 #DEFINE surf_menu2_sensor3_row      surf_menu2_sensor1_row+.27*.2
 #DEFINE surf_menu2_ambient_row      surf_menu2_sensor1_row+.27*.4
 #DEFINE surf_menu2_ambient_column   .95
+ 
+#DEFINE	surf_mV_sensor_status_column	.145
 
 #DEFINE surf_tissue_diagram_top     .66
 #DEFINE surf_tissue_diagram_bottom  surf_tissue_diagram_top+.117  ; 183
