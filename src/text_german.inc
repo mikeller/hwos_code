@@ -200,7 +200,7 @@
     TCODE   tIntvl, 	"Intervall:"        ; Interval : (10 chars)
     TCODE   tDeco,  	"Deko berechnen"    ; Calculate Deco
     TCODE   tDivePlan,  "Tauchplan:"        ; Dive Plan:
-    TCODE   tNoDeco,    "Keine Deco"        ; No Deco
+    TCODE   tNoDeco,    "Keine Deko"        ; No Deco
     TCODE   tMore,      "Mehr..."           ; More...
     TCODE   tGasUsage,  "Verbrauch"         ; Gas Usage
     TCODE   tSetBotUse, "Reise Gas: "       ; Bottom Gas: (space)
@@ -292,7 +292,7 @@
 	TCODE	tSetYear,	"Setze Jahr"		; Set Year
 
 ; Logbook Offset Menu
-	TCODE	tLogOffset,		"Logbuch-Offset"	; Logbook offset
+	TCODE	tLogOffset,	"Logbuch-Offset"	; Logbook offset
 	TCODE	tLogOffsetp1,	"+1"				; +1
 	TCODE	tLogOffsetp10,	"+10"				; +10
 	TCODE	tLogOffsetm1,	"-1"				; -1
