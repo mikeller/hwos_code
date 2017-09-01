@@ -191,8 +191,6 @@ do_lost_gas:
     movlw   .1
     movwf   menupos                 ; Set to first option in divemode menu
 do_lost_gas0:
-;    bcf     ccr_diluent_setup       ; use OC gases
-;    bsf     is_bailout_menu         ; =1: Bailout
     bsf     short_gas_decriptions
     MENU_BEGIN  tDivemenu_LostGas, .6
         MENU_DYNAMIC    gaslist_strcat_gas_mod, do_toggle_active    ; Toggle the gas (in)active

@@ -711,17 +711,16 @@ update_temp_and_or_depth:			    ; New sensor data arrived...
 	btfsc	temp_changed	
 	call	TFT_temp_divemode		    ; Displays temperature
 
-	btfsc	pressure_refresh
-	call	TFT_depth					; Displays new depth
+;	btfsc	pressure_refresh
+	call	TFT_depth			    ; Displays new depth
 
-	rcall	set_max_depth               ; update max. depth if required
-	bcf		pressure_refresh			; until new pressure is available
+	rcall	set_max_depth			    ; update max. depth if required
+	bcf	pressure_refresh		    ; until new pressure is available
 	return
 
 update_divemode60:                      ; update any minute
 	call	get_battery_voltage			; gets battery voltage
 	rcall	set_powersafe				; Battery low?
-	call	TFT_max_pressure			; Update max. depth
 	call	customview_minute			; Do every-minute tasks for the custom view area
 	bcf		oneminupdate
 
