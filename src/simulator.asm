@@ -80,7 +80,7 @@ get_first_dil_to_WREG2:
         cpfseq  lo                      ; All done?
         bra     get_first_dil_to_WREG2  ; Not yet
         ; No first dil found, use #1
-        movlw   .1
+        movlw   .0
         movff   WREG,opt_dil_type+0     ; Set Dil1 to First
         return
 get_first_dil_to_WREG3:
@@ -101,7 +101,7 @@ get_first_gas_to_WREG2:
         cpfseq  lo                      ; All done?
         bra     get_first_gas_to_WREG2  ; Not yet
         ; No first gas found, use #1
-        movlw   .1
+        movlw   .0
         movff   WREG,opt_gas_type+0     ; Set Gas1 to First
         return
 get_first_gas_to_WREG3:
@@ -179,7 +179,7 @@ deco_setup_cc_diluents:
         movff   opt_dil_type+0,WREG   ; 0=Disabled, 1=First, 2=Normal
         tstfsz  WREG                  ; Disabled?
         bra     $+4                   ; No
-        movff   WREG,char_I_dil_change+0   ; Yes, clear char_I_deco_gas_change
+        movff   WREG,char_I_dil_change+0   ; Yes, clear char_I_deco_gas_change (Bank safe)
 
         movff   opt_dil_He_ratio+1,char_I_deco_He_ratio+1
         movff   char_I_deco_He_ratio+1,lo
@@ -808,16 +808,16 @@ simulator_show_decoplan5_1:
     WIN_COLOR   color_greenish
     WIN_SMALL   .80,.25
 
-    btfsc   FLAG_ccr_mode               ; =1: CCR mode (Fixed ppO2 or Sensor) active
-    bra     simulator_show_decoplan5_4  ; YES: This is bailout mode
+;    btfsc   FLAG_ccr_mode               ; =1: CCR mode (Fixed ppO2 or Sensor) active
+;    bra     simulator_show_decoplan5_4  ; YES: This is bailout mode
 
 	STRCPY_TEXT tGasUsage               ; OC: "Gas Usage"
-    bra     simulator_show_decoplan5_5
+;    bra     simulator_show_decoplan5_5
 
-simulator_show_decoplan5_4:
-	STRCPY_TEXT tDiveBailout            ; CCR: "Bailout"
+;simulator_show_decoplan5_4:
+;	STRCPY_TEXT tDiveBailout            ; CCR: "Bailout"
 
-simulator_show_decoplan5_5
+;simulator_show_decoplan5_5:
     STRCAT_PRINT  ":"
     call	TFT_standard_color
 
