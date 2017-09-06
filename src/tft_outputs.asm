@@ -3161,6 +3161,44 @@ info_menu_uptime:
     PUTC    "h"
     bcf	    leftbind
     return  ; Done.
+    
+    extern  tCalX,tCalY,tCalZ
+    global  menu_cal_x
+menu_cal_x:  
+    lfsr    FSR1,tCalX
+    call    strcat_text
+    movff   compass_CX_f+0,lo
+    movff   compass_CX_f+1,hi
+    call    TFT_convert_signed_16bit	; converts lo:hi into signed-short and adds '-' to POSTINC2 if required
+    bsf		leftbind
+    output_16
+    bcf		leftbind
+    return
+
+    global  menu_cal_y
+menu_cal_y:  
+    lfsr    FSR1,tCalY
+    call    strcat_text
+    movff   compass_CY_f+0,lo
+    movff   compass_CY_f+1,hi
+    call    TFT_convert_signed_16bit	; converts lo:hi into signed-short and adds '-' to POSTINC2 if required
+    bsf		leftbind
+    output_16
+    bcf		leftbind
+    return
+    
+    global  menu_cal_z
+menu_cal_z:  
+    lfsr    FSR1,tCalZ
+    call    strcat_text
+    movff   compass_CZ_f+0,lo
+    movff   compass_CZ_f+1,hi
+    call    TFT_convert_signed_16bit	; converts lo:hi into signed-short and adds '-' to POSTINC2 if required
+    bsf		leftbind
+    output_16
+    bcf		leftbind
+    return
+
 
 ;-----------------------------------------------------------------------------
 ; ppO2 menu

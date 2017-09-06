@@ -164,6 +164,10 @@
     TCODE   tItalian,   "Italienisch"
     TCODE   tCompassMenu,"Kompass-Kalibrierung"  ; Compass calibration
     TCODE   tCompassGain,"Empfindlichkeit:"      ; Compass gain:
+    TCODE   tCalX,	 "Kal. X:"		; Cal X
+    TCODE   tCalY,	 "Kal. Y:"		; Cal Y
+    TCODE   tCalZ,	 "Kal. Z:"		; Cal Z
+
 
     TCODE   tUnits,     "Einheiten:"
     TCODE   tMetric,     " m/°C"            ; Enum menu

@@ -321,22 +321,20 @@ compass_calibration_loop3:
     call    compass_add_calibration     ; check and store new max/min values
     banksel common
 
-    call    TFT_compass_fast            ; show values
+    rcall    TFT_compass_fast            ; show values
 
-    btfsc	sleepmode					; Sleepmode active?
+    btfsc   sleepmode			; Sleepmode active?
     bra     compass_calibration_exit    ; Yes, exit
 
-;    btfsc   switch_left                 ; Button pressed?
-;    bra     compass_calibration_exit    ; Yes, exit
 
-    btfss	onesecupdate				; do every second tasks?
+    btfss   onesecupdate		; do every second tasks?
     bra     compass_calibration_loop2   ; no, loop here
 
-	movlw	.60
-    call	timeout_testmode			; check timeout
+    movlw   .60
+    call    timeout_testmode		; check timeout
     movlw   .60
     rcall   TFT_show_timeout_testmode   ; Show the timeout
-
+    
     bcf     onesecupdate                ; clear flag
 
     bra     compass_calibration_loop2   ; loop here
@@ -344,8 +342,9 @@ compass_calibration_loop3:
 compass_calibration_exit:
     call    compass_solve_calibration
     banksel common
+    ; Done.
     extern  option_save_all
-	call	option_save_all             ; save all settings into EEPROM
+    call	option_save_all             ; save all settings into EEPROM
     bcf     sleepmode                   ; Clear the flag before exiting to surfacemode
     movlw   .6
     movwf   customview_surfmode         ; Set to compass view...
@@ -385,7 +384,7 @@ TFT_show_timeout_testmode:              ; With timeout in WREG...
     bcf     leftbind
     STRCAT_PRINT "s "
     return
-
+    
 
 TFT_compass_show_gain:       ; Show the current compass gain
     movff   opt_compass_gain,lo    ; 0-7 (230LSB/Gauss to 1370LSB/Gaus)

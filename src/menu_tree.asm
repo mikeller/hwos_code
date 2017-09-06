@@ -428,9 +428,12 @@ do_settings_menu_more_ostc3p:  ; Menu with BLE feature
     MENU_END
 
 do_compass_menu:
-    MENU_BEGIN  tSystSets, .2
+    MENU_BEGIN  tSystSets, .5
         MENU_CALL   tCompassMenu,   compass_calibration_loop
 ;        MENU_OPTION tCompassGain,   oCompassGain,       0
+	MENU_DYNAMIC    menu_cal_x,       0
+	MENU_DYNAMIC    menu_cal_y,       0
+	MENU_DYNAMIC    menu_cal_z,       0
         MENU_CALL   tExit,          do_return_settings_more
     MENU_END
 
