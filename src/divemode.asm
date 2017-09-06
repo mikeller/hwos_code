@@ -1211,7 +1211,6 @@ check_gas_change2:
     bra     check_gas_change_OC_bail; Yes, check for OC or bailout
 
     ; Check Diluents
-    bsf     ccr_diluent_setup       ; in CCR menus
     movlw   .0
     rcall   check_dil_common        ; With Gas 0-4 in WREG
     movlw   .1
@@ -1225,7 +1224,6 @@ check_gas_change2:
     bra     check_gas_change_exit
 
 check_gas_change_OC_bail:
-    bcf     ccr_diluent_setup       ; in OC menus
     movlw   .0
     rcall   check_gas_common        ; With Gas 0-4 in WREG
     movlw   .1
@@ -1625,6 +1623,7 @@ diveloop_boot_2:
 	movlw	samplingrate_apnoe
 	movwf	samplesecs_value			; to avoid EEPROM access in the ISR
 divemode_boot1:
+    bsf     ccr_diluent_setup		; For CCR mode (Required to have better gas working)
     btfsc   FLAG_ccr_mode               ; =1: CCR mode (Fixed ppO2 or Sensor) active
     bra     divemode_boot2
     btfsc   FLAG_pscr_mode
@@ -1633,6 +1632,8 @@ divemode_boot1:
     ; in OC Mode, disable ppO2 logging
     movlw   .0
     movwf   divisor_ppo2_sensors
+    
+    bcf     ccr_diluent_setup		; For OC mode (Required to have better gas working)
 divemode_boot2:
 
 	bcf		LEDg
