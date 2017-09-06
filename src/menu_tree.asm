@@ -263,8 +263,9 @@ do_gas_depth_menu:
         global  do_planner_menu
 
 do_planner_menu_reset:
-		extern	option_save_all
-		call	option_save_all
+	extern	option_save_all
+	call	option_save_all
+	call	restart_set_modes_and_flags	; To have correct simulator results for mode changes without prior surfacemode call
         ;---- Reset dive time/depth to default values
         extern  option_reset
         lfsr    FSR0,odiveInterval

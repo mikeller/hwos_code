@@ -1147,6 +1147,7 @@ TFT_dyn_gaslist_common2:
     output_8            ; Gas number
     bcf     leftbind
     PUTC    ":"
+    bcf	    ccr_diluent_setup
     call    gaslist_strcat_gas_mod  ;Append gas description of gas #PRODL (0-4) to current string
     PUTC    " "         ; Clearing space
     movlw   0x00

@@ -22,7 +22,7 @@
 
 ; Firmware definition
 #DEFINE	softwareversion_x		d'2'		; Software version  XX.YY
-#DEFINE	softwareversion_y		d'23'		; Software version  XX.YY
+#DEFINE	softwareversion_y		d'24'		; Software version  XX.YY
 #DEFINE softwareversion_beta 	1 			; (and 0 for release)
 ; Firmware version will appear in "Change Firmware" style
 #DEFINE firmware_expire_year    .18
@@ -249,7 +249,7 @@ TSTOSS  macro opt_reg           ; TeST Option Skip if not Zero
 ;---------------------------- Bank0 DATA ------------------------------------
 isr_backup  equ		    0x60
 isr_backup  udata_ovr   isr_backup    ; Reserved space for interupt data
-
+ 
 ;---- Backup for general registers
 isr_prod    res 2
 

@@ -90,7 +90,7 @@ diveloop_loop1x:
 ; Common 1sec. tasks for all modes
 	rcall	timeout_divemode				; dive finished? This routine sets the required flags
 	rcall	set_dive_modes                  ; tests if depth>threshold
-	rcall	set_min_temp                    ; store min. temp if required
+	rcall	set_min_temp                    ; store min. temp if required (Future hardware will need this to be checked 1/second...)
 
 	btfsc	store_sample					; store new sample?
 	call	store_dive_data					; Store profile data
@@ -106,8 +106,6 @@ diveloop_loop1x:
 
     btfsc   FLAG_ccr_mode                   ; In CCR mode...
     call    check_dive_autosp               ; ...check for Auto-SP
-
-    call    compute_ppo2                    ; compute mv_sensorX and ppo2_sensorX arrays
 
 diveloop_loop3:
 	rcall	test_switches_divemode			; Check switches in divemode
@@ -132,7 +130,7 @@ diveloop_loop4:                             ; Menu-Exit returns here...
     bra     diveloop_loop4a             ; No
     extern  TFT_dive_compass_heading
     call    TFT_dive_compass_heading    ; Yes, update compass heading value
-    call    TFT_temp_divemode		; Redraw temperature
+    call    TFT_temp_divemode		; Redraw temperature (Is slighty affected from compass heading arrow)
 diveloop_loop4a:
     btfsc   enable_screen_dumps         ; =1: Ignore vin_usb, wait for "l" command (Screen dump)
     bra     diveloop_loop5
@@ -297,10 +295,8 @@ check_fallback_clear:
     goto    check_sensors                   ; Check O2 sensor thresholds for fallback customview_minute
 
 calc_deko_divemode2:
-	bcf		twosecupdate
+	bcf	twosecupdate
 
-	btfsc	FLAG_apnoe_mode             ; Done for Apnoe or Gauge mode
-    return
 	btfsc	FLAG_gauge_mode             ; Done for Apnoe or Gauge mode
 	return
 
@@ -418,9 +414,10 @@ calc_deko_divemode_sensor:                  ; External sensor stuff
     sublw   .1                              ; opt_ccr_mode = 1 (Sensor)?
     bnz     calc_deko_divemode_sensor_done  ; No, return
 
-    rcall   divemode_setup_sensor_values    ; Setup sensor values
-    call    check_sensors                   ; Check O2 sensor thresholds for fallback
-    movff   sensor_setpoint,char_I_const_ppO2; Copy sensor result
+    call    compute_ppo2		    ; computes o2_ppo2_sensorX from mV-Readings
+    call    check_sensors		    ; analyses mv-Readings to set up use- and voting-Flags
+    call    divemode_setup_sensor_values    ; computes sensor_setpoint from o2_pp02_sensorX and Flags
+    movff   sensor_setpoint,char_I_const_ppO2; Copy sensor result to C-code
 
     TSTOSS  opt_sensor_fallback             ; =1: Fallback to SP1 when sensor is lost
     return                                  ; Never fallback
@@ -722,7 +719,7 @@ update_divemode60:                      ; update any minute
 	call	get_battery_voltage			; gets battery voltage
 	rcall	set_powersafe				; Battery low?
 	call	customview_minute			; Do every-minute tasks for the custom view area
-	bcf		oneminupdate
+	bcf	oneminupdate
 
     btfss   simulatormode_active        ; in simulator mode?
 	return                              ; No
@@ -970,6 +967,10 @@ gas_switched_common2:
     decf    menupos,W               ; 1-5 -> 0-4
     btfsc   is_bailout              ; Choose OC Bailouts (OC Gases)
     rcall   setup_gas_registers     ; With WREG=Gas 0-4
+    
+    movlw   .0
+    btfsc   is_bailout
+    movff   WREG,char_I_const_ppO2  ; deactivate CCR-mode deco calc
 
     call	TFT_active_gas_divemode	; Display gas/Setpoint
     clrf    WREG
@@ -1457,22 +1458,24 @@ xmit_sp_set_flag:
 dive_boot_oc:
     extern  get_first_gas_to_WREG
     call    get_first_gas_to_WREG           ; Gets first gas (0-4) into WREG
-    movff   WREG,char_I_first_gas           ; Copy for compatibility
-    rcall   setup_gas_registers             ; With WREG=Gas 0-4
-    banksel char_I_first_gas
-    incf    char_I_first_gas,F              ; 0-4 -> 1-5
-    banksel common
+    addlw   .1
+    movff   WREG,char_I_first_gas           ; Copy for compatibility (1-5)
+    sublw   .1				    ; decrement WREG to old value again
+    rcall    setup_gas_registers            ; With WREG=Gas 0-4
+    movlw   .0
+    movff   WREG,char_I_const_ppO2	    ; deactivate CCR-mode deco calc
     return
 
 dive_boot_cc:
     bcf     is_bailout                      ; =1: Bailout
     bcf     setpoint_fallback               ; =1: Fallback to SP1 due to external O2 sensor failure
     bcf		blinking_setpoint               ; Reset blinking SP flag
-    call    compute_ppo2                    ; compute mv_sensorX and ppo2_sensorX arrays
-    bsf     voting_logic_sensor1
-    bsf     voting_logic_sensor2
-    bsf     voting_logic_sensor3
-    call   divemode_setup_sensor_values     ; setup sensor values
+    ; Noch testen mH
+;    call    compute_ppo2                    ; compute mv_sensorX and ppo2_sensorX arrays
+;    bsf     voting_logic_sensor1
+;    bsf     voting_logic_sensor2
+;    bsf     voting_logic_sensor3
+;    call   divemode_setup_sensor_values     ; setup sensor values
 
     ; Setup first SP for Fixed or Auto mode (Skipped here, because value is overwritten in sensor mode immediately anyway)
 ;    movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
@@ -1490,12 +1493,11 @@ dive_boot_cc2:
 
     extern  get_first_dil_to_WREG
     call    get_first_dil_to_WREG           ; Gets first gas (0-4) into WREG
+    addlw   .1
     movff   WREG,char_I_first_gas           ; Copy for compatibility
+    sublw   .1
     rcall   setup_dil_registers             ; With WREG=Gas 0-4
-    banksel char_I_first_gas
-    incf    char_I_first_gas,F              ; 0-4 -> 1-5
-    banksel common
-    goto  calc_deko_divemode_sensor        ; External sensor stuff and return...
+    goto  calc_deko_divemode_sensor        ; External sensor stuff (and return!)
 
 diveloop_boot:
 	call	restart_set_modes_and_flags
@@ -1524,18 +1526,26 @@ diveloop_boot:
     movff   day,start_day
     movff   hours,start_hours
     movff   mins,start_mins
+    
+    movff   int_O_CNS_fraction+0,CNS_start+0
+    movff   int_O_CNS_fraction+1,CNS_start+1   ; Save CNS value at beginning of dive
+    movff   char_O_gradient_factor,GF_start    ; Save GF value at  beginning of dive
+
 
     bcf     no_more_divesecs            ; =1: Do no longer show seconds in divemode
 	bcf		divemode_menu_active
     clrf    menupos
     clrf    menupos2                    ; Reset to zero (Zero=no premenu or simulator task)
 
-    btfss   FLAG_ccr_mode
-    rcall   dive_boot_oc
     btfsc   FLAG_ccr_mode
-    rcall   dive_boot_cc
+    bra	    diveloop_boot_cc
     btfsc   FLAG_pscr_mode
-    rcall   dive_boot_cc
+    bra	    diveloop_boot_cc
+    rcall   dive_boot_oc
+    bra	    diveloop_boot_cont
+diveloop_boot_cc:
+    rcall dive_boot_cc
+diveloop_boot_cont:
     
     ; Copy opt_dil_types into backup (For "lost gas" feature)
     movff   opt_dil_type+0,opt_dil_type_backup+0    ; 0=Disabled, 1=First, 2=Normal
@@ -1573,14 +1583,13 @@ diveloop_boot:
 	clrf 	timeout_counter2			; takes care of the timeout (High byte)
 	clrf	AlarmType					; Clear all alarms
 	bcf		event_occured				; clear flag
-	clrf 	total_divetime_seconds+1
 	clrf	average_depth_hold_total+0
 	clrf	average_depth_hold_total+1
 	clrf	average_depth_hold_total+2
 	clrf	average_depth_hold_total+3	; Clear Non-Resettable Average
-    rcall	reset_average1				; Reset the resettable average depth
-    bcf		decostop_active
-	bcf		better_gas_available        ;=1: A better gas is available and a gas change is advised in divemode
+        rcall	reset_average1				; Reset the resettable average depth
+        bcf	decostop_active
+	bcf	better_gas_available        ;=1: A better gas is available and a gas change is advised in divemode
 	call	ghostwriter_short_header	; Write short header with divenumber into profile memory
 
     btfsc   simulatormode_active
@@ -1645,15 +1654,13 @@ divemode_boot2:
     call	enable_rs232				; Also sets to speed_normal ...
     ; Reset divetime seconds
     movlw   .2                          ; Start at 2seconds
-	movwf   total_divetime_seconds+0
-	movwf   divesecs
-    movwf	apnoe_secs
-	bsf		divemode2                   ; displayed divetime is running (Divetime starts HERE)
-
-	movff	int_O_CNS_fraction+0,CNS_start+0
-    movff	int_O_CNS_fraction+1,CNS_start+1        ; Save CNS value at beginning of dive
-    movff	char_O_gradient_factor,GF_start    ; Save GF value at  beginning of dive
-	return								; Done with divemode boot
+    movwf   total_divetime_seconds+0
+    clrf    total_divetime_seconds+1
+    movwf   divesecs
+    movwf   apnoe_secs
+    bsf	    divemode2                   ; displayed divetime is running (Divetime starts HERE)
+    
+    return								; Done with divemode boot
 
 divemode_check_for_warnings:
     movlw   .2

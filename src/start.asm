@@ -386,14 +386,17 @@ restart_set_modes_and_flags:		    ; "Call"ed from divemode, as well!
     movlw   .10
     movwf   samplingrate
 restart_set_modes_and_flags1:
-    movff   opt_dive_mode,lo            ; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
-
-	bcf		FLAG_apnoe_mode
-    bcf     FLAG_ccr_mode             ; =1: CCR mode (Fixed ppO2 or Sensor) active
-    bcf     FLAG_gauge_mode           ; =1: In Gauge mode
+    bcf	    twosecupdate		; to have divemode routines in sync
+    movlw   .3
+    movff   WREG,char_O_deco_status	; will init the deco_calc_hauptroutine on first invocation
+    bcf	    FLAG_apnoe_mode
+    bcf     FLAG_ccr_mode		; =1: CCR mode (Fixed ppO2 or Sensor) active
+    bcf     FLAG_gauge_mode		; =1: In Gauge mode
     bcf	    FLAG_pscr_mode
-    call    disable_ir_s8             ; IR off
+    call    disable_ir_s8		; IR off
 
+    movff   opt_dive_mode,lo            ; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
+    
     tstfsz  lo
     bra     restart_set_modes_and_flags2
     ; OC Mode

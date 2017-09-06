@@ -127,32 +127,46 @@ deco_setup:
         bcf     use_agf                  ; =1: Use aGF
         
         rcall   deco_setup_dive
+	
+	movlw	.0
+	movff	WREG,char_I_const_ppO2	; deactivate CCR-mode in deco calculations unless in CCR mode (char_I_const_ppO2 is filled below again)
 
         ; Setup char_I_const_ppO2 for CC modes
         btfsc   FLAG_ccr_mode           ; =1: CCR mode (Fixed ppO2 or Sensor) active
         movff   char_I_setpoint_cbar+0,char_I_const_ppO2    ; Setup fixed Setpoint (Always start with SP1)
+	rcall   get_first_gas_to_WREG           ; Gets first gas (0-4) into WREG
 
-        rcall   get_first_gas_to_WREG           ; Gets first gas (0-4) into WREG
+	; Overwrite WREG in CCR and PSCR Mode
+	btfsc	FLAG_ccr_mode
+        rcall	get_first_dil_to_WREG
+        btfsc	FLAG_pscr_mode
+        rcall	get_first_dil_to_WREG
+
+	addlw	.1				; 1-5
         movff   WREG,char_I_first_gas           ; Copy for compatibility
-        banksel char_I_first_gas
-        incf    char_I_first_gas,F              ; 0-4 -> 1-5
-        banksel common
+	sublw	.1				; 0-4
         extern  setup_gas_registers
-        call    setup_gas_registers             ; With WREG=Gas 0-4, set current N2/He/O2 ratios.
+	call    setup_gas_registers             ; With WREG=Gas 0-4, set current N2/He/O2 ratios.
         extern  set_actual_ppo2
-        call    set_actual_ppo2                 ; Then configure char_I_actual_ppO2 (For CNS)
-        return
+        goto    set_actual_ppo2                 ; Then configure char_I_actual_ppO2 (For CNS) (And return!)
 
         global	deco_setup_dive
 deco_setup_dive:						; Called from divemode
         banksel common                  ; Bank1
 
-        btfsc   FLAG_ccr_mode           ; =1: CCR mode (Fixed ppO2 or Sensor) active
-        rcall   deco_setup_cc_diluents  ; Setup CC Diluents
-        btfss   FLAG_ccr_mode           ; =1: CCR mode (Fixed ppO2 or Sensor) active
-        rcall   deco_setup_oc_gases     ; Setup OC Gases
-        btfsc   is_bailout              ; =1: Bailout
-        rcall   deco_setup_oc_gases     ; Setup OC/Bailout Gases
+        btfsc	is_bailout
+	bra	deco_setup_dive_oc
+	btfsc	FLAG_ccr_mode
+	bra	deco_setup_dive_cc
+	btfsc	FLAG_pscr_mode
+	bra	deco_setup_dive_cc
+	
+deco_setup_dive_oc:
+    rcall   deco_setup_oc_gases ; Setup OC/Bailout Gases
+    bra	    deco_setup_dive_cont
+deco_setup_dive_cc:
+    rcall   deco_setup_cc_diluents ; Setup CC Diluents
+deco_setup_dive_cont:	
 
     	movff   divemins+0,int_I_divemins+0         ; Current dive time.
     	movff   divemins+1,int_I_divemins+1
@@ -384,6 +398,9 @@ deco_planer_endloop:
         bra     deco_planer_finishing   ; NO: keep gases
         
         rcall   deco_setup_oc_gases     ; Switch to OC gas and no const_ppO2
+	
+	movlw	.0
+	movff	WREG,char_I_const_ppO2	; deactivate CCR-mode deco calculations
 
 ;---- Wait until status reach zero -------------------------------------------
 deco_planer_finishing:
