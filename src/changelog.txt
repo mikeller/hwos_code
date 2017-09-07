@@ -1,3 +1,12 @@
+[2.25]
+- Stable Version -
+BUGFIX: "lost gas" showed current set of gases (Diluents in CC, OC in Bailout) for both "lost gas" menus
+NEW: Show Compass calibration results in Compass menu
+BUGFIX: Simulator in CC mode
+BUGFIX: Changing the dive mode and starting the simulator (without leaving the menu first) caused false calculations in the simulator
+BUGFIX: PSCR Mode "OC Gases" showed Diluents, not OC gases
+BUGFIX: CCR Mode ("First Diluent") was chosen based on OC "First Gas" number
+
 [2.23]
 - Beta Version -
 CHANGE: CCR Calibration gas range limited to O2% 21-25 and 95-100 to save button presses
