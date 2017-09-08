@@ -1458,9 +1458,9 @@ xmit_sp_set_flag:
 dive_boot_oc:
     extern  get_first_gas_to_WREG
     call    get_first_gas_to_WREG           ; Gets first gas (0-4) into WREG
-    addlw   .1
+    incf    WREG
     movff   WREG,char_I_first_gas           ; Copy for compatibility (1-5)
-    sublw   .1				    ; decrement WREG to old value again
+    decf    WREG,W			    ; decrement WREG to old value again
     rcall    setup_gas_registers            ; With WREG=Gas 0-4
     movlw   .0
     movff   WREG,char_I_const_ppO2	    ; deactivate CCR-mode deco calc
@@ -1493,9 +1493,9 @@ dive_boot_cc2:
 
     extern  get_first_dil_to_WREG
     call    get_first_dil_to_WREG           ; Gets first gas (0-4) into WREG
-    addlw   .1
+    incf    WREG
     movff   WREG,char_I_first_gas           ; Copy for compatibility
-    sublw   .1
+    decf    WREG,W
     rcall   setup_dil_registers             ; With WREG=Gas 0-4
     goto  calc_deko_divemode_sensor        ; External sensor stuff (and return!)
 
