@@ -111,7 +111,6 @@ get_first_gas_to_WREG3:
 deco_setup:
         banksel char_I_step_is_1min     ; Select the right bank...
         clrf    char_I_step_is_1min     ; Default to 2sec steps.
-        clrf    char_I_const_ppO2       ; Clear for OC, will be set for CC later
 
         ; Fixed ambient surface pressure to 1bar.
         movlw   LOW(.1000)
@@ -123,15 +122,16 @@ deco_setup:
     
         clrf    int_I_divemins+0         ; Dive start
         clrf    int_I_divemins+1
+	
         banksel common                   ; Bank1
         bcf     use_agf                  ; =1: Use aGF
         
         rcall   deco_setup_dive
 	
-	movlw	.0
+	movlw	.0			; Bank safe "clrf"
 	movff	WREG,char_I_const_ppO2	; deactivate CCR-mode in deco calculations unless in CCR mode (char_I_const_ppO2 is filled below again)
 
-        ; Setup char_I_const_ppO2 for CC modes
+	; Setup char_I_const_ppO2 for CC modes
         btfsc   FLAG_ccr_mode           ; =1: CCR mode (Fixed ppO2 or Sensor) active
         movff   char_I_setpoint_cbar+0,char_I_const_ppO2    ; Setup fixed Setpoint (Always start with SP1)
 	rcall   get_first_gas_to_WREG           ; Gets first gas (0-4) into WREG
