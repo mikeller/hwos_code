@@ -142,9 +142,9 @@ deco_setup:
         btfsc	FLAG_pscr_mode
         rcall	get_first_dil_to_WREG
 
-	addlw	.1				; 1-5
+	incf	WREG				; 1-5
         movff   WREG,char_I_first_gas           ; Copy for compatibility
-	sublw	.1				; 0-4
+	decf	WREG				; 0-4
         extern  setup_gas_registers
 	call    setup_gas_registers             ; With WREG=Gas 0-4, set current N2/He/O2 ratios.
         extern  set_actual_ppo2

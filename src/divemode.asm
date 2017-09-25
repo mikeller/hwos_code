@@ -410,13 +410,14 @@ calc_deko_divemode4:
  	return                              ; done.
 
 calc_deko_divemode_sensor:                  ; External sensor stuff
-    movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
-    sublw   .1                              ; opt_ccr_mode = 1 (Sensor)?
-    bnz     calc_deko_divemode_sensor_done  ; No, return
-
     call    compute_ppo2		    ; computes o2_ppo2_sensorX from mV-Readings
     call    check_sensors		    ; analyses mv-Readings to set up use- and voting-Flags
     call    divemode_setup_sensor_values    ; computes sensor_setpoint from o2_pp02_sensorX and Flags
+    
+    movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
+    sublw   .1                              ; opt_ccr_mode = 1 (Sensor)?
+    bnz     calc_deko_divemode_sensor_done  ; No, return
+    
     movff   sensor_setpoint,char_I_const_ppO2; Copy sensor result to C-code
 
     TSTOSS  opt_sensor_fallback             ; =1: Fallback to SP1 when sensor is lost
@@ -1469,22 +1470,28 @@ dive_boot_oc:
 dive_boot_cc:
     bcf     is_bailout                      ; =1: Bailout
     bcf     setpoint_fallback               ; =1: Fallback to SP1 due to external O2 sensor failure
-    bcf		blinking_setpoint               ; Reset blinking SP flag
-    ; Noch testen mH
-;    call    compute_ppo2                    ; compute mv_sensorX and ppo2_sensorX arrays
-;    bsf     voting_logic_sensor1
-;    bsf     voting_logic_sensor2
-;    bsf     voting_logic_sensor3
-;    call   divemode_setup_sensor_values     ; setup sensor values
-
-    ; Setup first SP for Fixed or Auto mode (Skipped here, because value is overwritten in sensor mode immediately anyway)
-;    movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
-;    sublw   .1                              ; opt_ccr_mode = 1 (Sensor)?
-;    bnz     dive_boot_cc2		    ; No, Skip
-    movff   char_I_setpoint_cbar+0,char_I_const_ppO2    ; No, setup fixed Setpoint (Always start with SP1)
+    bcf	    blinking_setpoint               ; Reset blinking SP flag
+    ; load default setpoint
+    movff   char_I_setpoint_cbar+0,char_I_const_ppO2    ; Always start with SP1
     movff   char_I_const_ppO2,WREG
-dive_boot_cc2:
+
     call    transmit_setpoint           ; Transmit current setpoint from WREG (in cbar) to external electronics
+	
+    ; check if in sensor mode
+    movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
+    sublw   .1                              ; opt_ccr_mode = 1 (Sensor)?
+    bnz     dive_boot_cc2                   ; No, Skip
+
+    ; get initial setpoint from all sensors in use
+    call   compute_ppo2                    ; compute mv_sensorX and ppo2_sensorX arrays
+    bsf    voting_logic_sensor1            ; voting logic not used while computing initial setpoint	
+    bsf    voting_logic_sensor2
+    bsf    voting_logic_sensor3
+    call   divemode_setup_sensor_values     ; setup sensor values
+    tstfsz sensor_setpoint		    ; if no sensor is in use, sensor_setpoint will be zero
+    movff  sensor_setpoint,char_I_const_ppO2; overwrite default only if we have a valid sensor_setpoint 
+
+dive_boot_cc2:
     bsf     setpoint_changed                ; Set flag (For profile)
     bcf     sp2_switched                    ; =1: This setpoint has been autoselected already
     bcf     sp3_switched                    ; =1: This setpoint has been autoselected already

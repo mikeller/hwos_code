@@ -1790,11 +1790,6 @@ logbook_page3: ; Show even more info
     rcall   log_details_header	; Shows number, time/date and basic dive info
 
     ; OC/CC Gas List
-    LOG_POINT_TO    log_divemode
-    call	ext_flash_byte_read_plus            ; 0=OC, 1=CC, 2=Gauge, 3=Apnea into temp1
-    WIN_SMALL   .5,.65
-    WIN_COLOR   color_greenish
-    STRCPY_TEXT_PRINT   tGaslist
     bcf		leftbind
     LOG_POINT_TO    log_gas1
     movlw	color_white				; Color for Gas 1
@@ -1818,6 +1813,18 @@ logbook_page3: ; Show even more info
     WIN_SMALL   .5,.190
     rcall       log_show_gas_common2
 
+    ; OC/CC Gas List
+    WIN_SMALL	    .5,.65
+    WIN_COLOR	    color_greenish
+    LOG_POINT_TO    log_divemode
+    call	ext_flash_byte_read_plus            ; 0=OC, 1=CC, 2=Gauge, 3=Apnea into temp1
+    decfsz	temp1,w		; =1 (CC)? 
+    bra		logbook_page3a
+    STRCPY_TEXT_PRINT   tGaslistCC  ; CC 
+    bra     logbook_page3b
+logbook_page3a:
+    STRCPY_TEXT_PRINT   tGaslist    ; OC
+logbook_page3b:
     movlw       color_lightblue
     call	TFT_set_color
     WIN_FRAME_COLOR16   .63,.220,.2,.90; Top, Bottom, Left, Right
