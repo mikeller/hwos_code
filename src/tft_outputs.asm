@@ -3025,7 +3025,9 @@ TFT_serial_common:
         WIN_LEFT    .160-4*9/2          ; Right pad.
         STRCPY_TEXT_PRINT tBeta
     endif
-    goto	TFT_standard_color  ; and return...
+    call    TFT_standard_color
+    bcf	    win_invert
+    return
 
 
 	

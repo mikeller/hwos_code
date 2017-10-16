@@ -127,6 +127,7 @@ menu_processor_bottom_line:
         call    TFT_cat_firmware
         STRCAT_PRINT ""
         call    TFT_standard_color
+	bcf	win_invert
         return
 
 ;=============================================================================
