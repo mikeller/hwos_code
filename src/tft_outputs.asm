@@ -1824,6 +1824,17 @@ TFT_temp_common_1:
     rcall    TFT_convert_signed_16bit                ; converts lo:hi into signed-short and adds '-' to POSTINC2 if required
     btfsc    neg_flag                                               ; is the temperature negative?
     bra        TFT_temp_common_2                    ; YES - the minus sign has already been written
+    ; temp is positive, is it less then 10°C? 
+    tstfsz  hi
+    bra	    TFT_temp_common_1a			    ; >25,5°C, skip here
+    movlw   .100
+    cpfslt  lo
+    bra	    TFT_temp_common_1a			    ; >10,0°C, skip here
+    bsf	    leftbind
+    output_16dp	d'4'				    ; x.y°C
+    bcf	    leftbind
+    bra	    TFT_temp_common_3			    ; Done.
+TFT_temp_common_1a:
     PUTC    " "                                                        ; NO  - write a space instead of the minus sign
 TFT_temp_common_2:
     bsf        ignore_digit5                                     ; ignore decimal

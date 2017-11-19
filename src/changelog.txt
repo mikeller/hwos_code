@@ -1,6 +1,7 @@
 [2.27]
 - Beta Version -
 BUGFIX: Display of negative (°C) water temperatures
+NEW: Display dezimal for temperatures between 10 and 0°C
 
 [2.25]
 - Stable Version -
