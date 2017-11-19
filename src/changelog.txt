@@ -1,3 +1,7 @@
+[2.27]
+- Beta Version -
+BUGFIX: Display of negative (°C) water temperatures
+
 [2.25]
 - Stable Version -
 BUGFIX: "lost gas" showed current set of gases (Diluents in CC, OC in Bailout) for both "lost gas" menus

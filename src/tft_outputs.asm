@@ -1791,60 +1791,64 @@ TFT_ftts2:
 
 ;=============================================================================
 	
-	global	TFT_temp_surfmode
+    global    TFT_temp_surfmode
 TFT_temp_surfmode:
-	WIN_SMALL   surf_temp_column,surf_temp_row
-	call	TFT_standard_color
-
-    SAFE_2BYTE_COPY    temperature, lo
-
-    TSTOSS  opt_units   			; 0=°C, 1=°F
-	bra		TFT_temp_surfmode_metric
-
-;TFT_temp_surfmode_imperial:
-	rcall	TFT_convert_signed_16bit	; converts lo:hi into signed-short and adds '-' to POSTINC2 if required
-	call	convert_celsius_to_fahrenheit	; convert value in lo:hi from celsius to fahrenheit
-	lfsr	FSR2,buffer						; Overwrite "-"
-	bsf		ignore_digit5		; Full degrees only
-	output_16
-	STRCAT_PRINT  ""
     call    TFT_divemask_color
-	WIN_SMALL   surf_temp_column+4*8,surf_temp_row
-	STRCPY_PRINT  "°F"
-	return
-
+    WIN_SMALL   surf_temp_column+3*8,surf_temp_row
+    TSTOSS  opt_units                                           ; 0=°C, 1=°F
+    bra        TFT_temp_surfmode_metric
+    STRCAT_TEXT    tLogTunitF                            ; °F
+    bra        TFT_temp_surfmode_common
 TFT_temp_surfmode_metric:
-	rcall	TFT_convert_signed_16bit	; converts lo:hi into signed-short and adds '-' to POSTINC2 if required
-	movlw	d'3'
-	movwf	ignore_digits
-	bsf		ignore_digit5		; Full degrees only
-	output_16
+    STRCAT_TEXT    tLogTunitC                            ; °C
+TFT_temp_surfmode_common:
+    STRCAT_PRINT ""
+    WIN_SMALL   surf_temp_column,surf_temp_row
+    bra        TFT_temp_common
+   
+    global    TFT_temp_divemode
+TFT_temp_divemode:
+    btfsc   divemode_menu                                   ; Is the dive mode menu shown?
+    return                                                                  ; Yes, no update of temperature now
+    btfsc    blinking_better_gas                             ; blinking better Gas?
+    return                                                                  ; Yes, no update of temperature now
+    WIN_SMALL    dm_temp_column,dm_temp_row
 
-	; read-back the buffer+4
-	movff	buffer+4,lo
-	movlw	" "					; Space
-	cpfseq	lo					; Was it a space (between +1°C and -1°C)?
-	bra		TFT_temp_surfmode1	; No.
-	movlw	"0"					; Yes, print manual zero
-	movff	WREG,buffer+3
-	bra		TFT_temp_surfmode2
-TFT_temp_surfmode1:
-	; Test if output was negative (Flag set in TFT_convert_signed_16bit)
-	btfss	neg_flag			; Negative temperature?
-    bra		TFT_temp_surfmode3	; No, continue
-	; Yes, negative temperature!
-	movff	buffer+3,buffer+2	; remove two spaces manually
-	movff	buffer+4,buffer+3
-TFT_temp_surfmode2:
-	movlw	0x00
-	movff	WREG,buffer+4
-TFT_temp_surfmode3:
-	STRCAT_PRINT  ""
-    call    TFT_divemask_color
-	WIN_SMALL   surf_temp_column+4*8,surf_temp_row
-	STRCPY_PRINT  "°C"
-	return
-
+TFT_temp_common:
+    call    TFT_standard_color
+    SAFE_2BYTE_COPY    temperature, lo            ; get current temperature
+    TSTOSS  opt_units                                             ; 0=°C, 1=°F
+    bra        TFT_temp_common_1
+    call    convert_celsius_to_fahrenheit            ; convert value in lo:hi from celsius to fahrenheit
+TFT_temp_common_1:
+    rcall    TFT_convert_signed_16bit                ; converts lo:hi into signed-short and adds '-' to POSTINC2 if required
+    btfsc    neg_flag                                               ; is the temperature negative?
+    bra        TFT_temp_common_2                    ; YES - the minus sign has already been written
+    PUTC    " "                                                        ; NO  - write a space instead of the minus sign
+TFT_temp_common_2:
+    bsf        ignore_digit5                                     ; ignore decimal
+    output_16_3                                                   ; output 0-999 without decimal -> writes ' ' - 99
+    bcf        ignore_digit5
+    movff    buffer+2,lo                                        ; get output from unit position
+    movlw    " "                                                      ; load code of the space character
+    cpfseq    lo                                                        ; is there a space sign on the unit position? (happens between +1 and -1)
+    bra        TFT_temp_common_3                     ; NO
+    movff    WREG,buffer+0                                 ; YES - replace potential minus sign with a space (temps from -0.9° to -0.1° else would appear as '- 0')
+    movlw    "0"                                                     ; load code of the zero character
+    movff    WREG,buffer+2                                 ; replace space with a zero
+TFT_temp_common_3:
+    btfss    divemode                                            ; are we in dive mode?
+    bra        TFT_temp_common_5                    ; NO  - no unit to append
+    TSTOSS  opt_units                                          ; YES - check unit type: 0=°C, 1=°F
+    bra        TFT_temp_common_4                    ; go metric
+    STRCAT_TEXT    tLogTunitF                           ; append °F
+    bra        TFT_temp_common_5
+TFT_temp_common_4:
+    STRCAT_TEXT    tLogTunitC                          ; append °C   
+TFT_temp_common_5:
+    STRCAT_PRINT ""                                           ; output to screen
+    return                
+    
 ;=============================================================================
     global  TFT_divemode_menu_cursor
 TFT_divemode_menu_cursor:
@@ -1874,44 +1878,6 @@ TFT_divemode_menu_cursor:
     movff   WREG,win_font
     STRCPY_PRINT    "\xb7"          ; print cursor
     return
-
-	global	TFT_temp_divemode
-TFT_temp_divemode:
-    btfsc   divemode_menu               ; Is the dive mode menu shown?
-    return                              ; Yes, return
-	btfsc	blinking_better_gas         ; blinking better Gas?
-	return                              ; Yes, no update of temperature now
-; temperature
-	WIN_SMALL	dm_temp_column,dm_temp_row
-	call	TFT_standard_color
-    bsf     leftbind
-
-    SAFE_2BYTE_COPY    temperature, lo
-    TSTOSS  opt_units   			; 0=°C, 1=°F
-	bra		TFT_temp_divemode_metric
-
-;TFT_temp_divemode_imperial:
-	rcall	TFT_convert_signed_16bit        ; converts lo:hi into signed-short and adds '-' to POSTINC2 if required
-	call	convert_celsius_to_fahrenheit	; convert value in lo:hi from celsius to fahrenheit
-	lfsr	FSR2,buffer						; Overwrite "-" (There won't be less then -18°C underwater...)
-	bsf		ignore_digit5		; Full degrees only
-	output_16
-	STRCAT_TEXT tLogTunitF
-TFT_temp_divemode_common:
-    bcf     leftbind
-    movlw   .4                      ; limit to three chars
-    call    TFT_fillup_with_spaces  ; Fillup FSR2 with spaces (Total string length in #WREG)
-    STRCAT_PRINT    ""
-	return                          ; Done.
-
-TFT_temp_divemode_metric:
-	rcall	TFT_convert_signed_16bit	; converts lo:hi into signed-short and adds '-' to POSTINC2 if required
-	movlw	d'3'
-	movwf	ignore_digits
-	bsf		ignore_digit5		; Full degrees only
-	output_16
-	STRCAT_TEXT tLogTunitC
-    bra     TFT_temp_divemode_common    ; Done.
 
 TFT_active_setpoint2:
 	movff	char_I_const_ppO2,lo
@@ -4137,33 +4103,37 @@ convert_mbar_to_feet:              	; convert value in lo:hi from mbar to feet
 	movff	xC+1,hi				    ; restore lo and hi with updated value
 	return
 
-	global	convert_celsius_to_fahrenheit	; convert value in lo:hi from celsius to fahrenheit
-convert_celsius_to_fahrenheit:		; convert value in lo:hi from celsius to fahrenheit
-	; Does it work with signed temperature? mH
-	movff	lo,xA+0
-	movff	hi,xA+1
+    global    convert_celsius_to_fahrenheit    ; convert value in lo:hi from celsius to fahrenheit
+convert_celsius_to_fahrenheit:        ; convert value in lo:hi from celsius to fahrenheit
+    movff   lo,xA+0                    ; temperature in 1/10 of °C
+    movff   hi,xA+1
+   
+    movlw   LOW  d'1000'            ; offset °C value by 1000 to get out of any negative numbers
+    addwf   xA+0,F
+    movlw   HIGH d'1000'
+    addwfc  xA+1,F
 
-	movlw	d'18'                   ; 1C = 1.8F
-	movwf	xB+0
-	clrf	xB+1
+    movlw   d'18'                   ; adjust scaling: 1°C = 1.8°F
+    movwf   xB+0
+    clrf    xB+1
 
-	call	mult16x16               ;xA*xB=xC (lo:hi * 18)
+    call    mult16x16               ; xA*xB=xC (lo:hi * 18)
 
-	movlw	d'10'
-	movwf	xB+0
-	clrf	xB+1
+    movlw   d'10'
+    movwf   xB+0
+    clrf    xB+1
 
-	call	div32x16                ; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
+    call    div32x16                ; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
 
-    movlw	LOW d'320'              ; 0C = 32F
-	addwf	xC+0,F
-	movlw	HIGH d'320'
-	addwfc	xC+1,F
-
-	movff	xC+0,lo
-	movff	xC+1,hi                 ; restore lo and hi with updated value
-	return
-
+    movlw   LOW  d'1480'            ; adjust offset: subtract above offset of 1000 * 1.8 = 1800 now and add 320 => subtract 1480
+    subwf   xC+0,F
+    movlw   HIGH d'1480'
+    subwfb  xC+1,F
+   
+    movff   xC+0,lo
+    movff   xC+1,hi                 ; restore lo and hi with updated value
+    return
+    
 ;=============================================================================
     global	compute_pscr_ppo2
 compute_pscr_ppo2:

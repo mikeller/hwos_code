@@ -39,7 +39,7 @@
 #DEFINE surf_warning_length     .11                 ; total string length
 
 #DEFINE	surf_temp_row		.185
-#DEFINE	surf_temp_column	.112
+#DEFINE	surf_temp_column	.120
 #DEFINE	surf_press_row		.160
 #DEFINE	surf_press_column	.98
 
