@@ -1432,7 +1432,7 @@ static void calc_tissue(PARAMETER unsigned char period)
 //
 static void calc_limit(void)
 {
-    char_O_gtissue_no = 255;
+    char_O_gtissue_no   = 0;	// BUGFIX, changed from 255 to 0 to have a valid leading tissue number defined at any times
     calc_lead_tissue_limit = 0.0;
 
     for(ci=0; ci<NUM_COMP;ci++)

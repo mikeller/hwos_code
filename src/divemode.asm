@@ -1526,6 +1526,10 @@ diveloop_boot:
 	clrf	apnoe_mins
 	clrf	divemins+0
 	clrf	divemins+1
+
+	bcf        blinking_depth_prev                ; clear flag for blinking depth    ## NEW BUGFIX
+	bcf        blinking_depth_warning         ; clear flag for blinking depth    ## NEW BUGFIX
+	bcf        blinking_depth_toggle            ; clear flag for blinking depth    ## NEW BUGFIX
     
 ; Copy date and time for logbook
     movff   year,start_year
