@@ -457,8 +457,8 @@ divemode_setup_sensor_values:
     clrf    xA+1
     btfss   use_O2_sensor1                  ; Sensor1 active?
     bra     divemode_setup_sensor_values2   ; No
-    btfss   voting_logic_sensor1            ; Sensor within voting logic?
-    bra     divemode_setup_sensor_values2   ; No
+;    btfss   voting_logic_sensor1            ; Sensor within voting logic?
+;    bra     divemode_setup_sensor_values2   ; No
     movf    o2_ppo2_sensor1,W
     addwf   xA+0
     movlw   .0
@@ -467,8 +467,8 @@ divemode_setup_sensor_values:
 divemode_setup_sensor_values2:
     btfss   use_O2_sensor2                  ; Sensor2 active?
     bra     divemode_setup_sensor_values3   ; No
-    btfss   voting_logic_sensor2            ; Sensor within voting logic?
-    bra     divemode_setup_sensor_values3   ; No
+;    btfss   voting_logic_sensor2            ; Sensor within voting logic?
+;    bra     divemode_setup_sensor_values3   ; No
     movf    o2_ppo2_sensor2,W
     addwf   xA+0
     movlw   .0
@@ -477,8 +477,8 @@ divemode_setup_sensor_values2:
 divemode_setup_sensor_values3:
     btfss   use_O2_sensor3                  ; Sensor3 active?
     bra     divemode_setup_sensor_values4   ; No
-    btfss   voting_logic_sensor3            ; Sensor within voting logic?
-    bra     divemode_setup_sensor_values4   ; No
+;    btfss   voting_logic_sensor3            ; Sensor within voting logic?
+;    bra     divemode_setup_sensor_values4   ; No
     movf    o2_ppo2_sensor3,W
     addwf   xA+0
     movlw   .0
