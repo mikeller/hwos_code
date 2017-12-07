@@ -638,6 +638,21 @@ I2C_sleep_accelerometer:
 	rcall		WaitMSSP
     return
 
+lt2942_init_again:
+	clrf	i2c_temp
+	movlw	0x02                ; Point to accumulated charge registers
+	rcall	I2C_TX_GAUGE
+	movff	battery_acumulated_charge+1,SSP1BUF       ; Data Byte
+	rcall	WaitMSSP
+	rcall	I2C_WaitforACK
+	movff	battery_acumulated_charge+0,SSP1BUF       ; Data Byte
+	rcall	WaitMSSP
+	rcall	I2C_WaitforACK
+	bsf	SSP1CON2,PEN		; Stop condition
+	rcall	WaitMSSP; (and return)
+	movff	battery_acumulated_charge+1,sub_a+1
+	movff	battery_acumulated_charge+0,sub_a+0
+	; and init again...
     global  lt2942_init
 lt2942_init:                    ; Setup Control register B
 	clrf	i2c_temp
@@ -787,7 +802,7 @@ lt2942_get_accumulated_charge:	; Read accumulated charge and compute percent
 	
 	movff	gauge_status_byte,sub_b+0   ; copy into bank common
 	btfsc	sub_b+0,0		    ; =1: UVLO Event
-	rcall	lt2942_init
+	rcall	lt2942_init_again
 
 	movff	sub_a+1,battery_acumulated_charge+1 ; Save raw value
 	movff	sub_a+0,battery_acumulated_charge+0 ; Save raw value
