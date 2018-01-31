@@ -2,6 +2,8 @@
 // ** Common definitions for the OSTC decompression code  **
 // *********************************************************
 
+//									REFACTORED VERSION	V2.95
+
 //////////////////////////////////////////////////////////////////////////////
 // OSTC - diving computer code
 // Copyright (C) 2008 HeinrichsWeikamp GbR
@@ -20,30 +22,26 @@
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 //
 //////////////////////////////////////////////////////////////////////////////
-// history:
-// 2010-12-25 v110: [jDG] split in three files (deco.c, main.c, definitions.h)
 
-#define	MBAR_REACH_GASCHANGE_AUTO_CHANGE_OFF	150
+
 
 // *************************
 // ** P R O T O T Y P E S **
 // *************************
 
-extern void calc_percentage(void);
 extern void deco_calc_hauptroutine(void);
 extern void deco_clear_tissue(void);
-extern void deco_calc_percentage(void);
 extern void deco_calc_wo_deco_step_1_min(void);
 extern void deco_calc_dive_interval(void);
-extern void deco_gradient_array(void);
 extern void deco_calc_desaturation_time(void);
-extern void deco_calc_CNS_fraction(void);
-extern void deco_calc_CNS_planning(void);
+extern void calc_CNS_fraction(void);
+extern void calc_CNS_planning(void);
 extern void deco_calc_CNS_decrease_15min(void);
-extern void deco_clear_CNS_fraction(void);
+extern void clear_CNS_fraction(void);
 extern void deco_push_tissues_to_vault(void);
 extern void deco_pull_tissues_from_vault(void);
-extern void deco_gas_volumes(void);
+extern void gas_volumes(void);
+
 
 // ***********************************************
 // **         Allow compile on VisualC          **

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File hwos.inc
+;   File hwos.inc									REFACTORED VERSION V2.95a1
 ;
 ;   OSTC Platform definitions
 ;
@@ -15,19 +15,20 @@
 
 ;#DEFINE __DEBUG
 
-;#DEFINE	    french_italian	    ; If defined, use french and italian instead of english and german	
+;#DEFINE french_italian	    	; If defined, use french and italian instead of english and german	
 	
 #include <p18f87k22.inc>
 #include <ports.inc>                        ; Portmap
 
 ; Firmware definition
 #DEFINE	softwareversion_x		d'2'		; Software version  XX.YY
-#DEFINE	softwareversion_y		d'27'		; Software version  XX.YY
-#DEFINE softwareversion_beta 	0 			; (and 0 for release)
+#DEFINE	softwareversion_y		d'96'		; Software version  XX.YY
+#DEFINE softwareversion_beta 	1 			; (and 0 for release)
+
 ; Firmware version will appear in "Change Firmware" style
 #DEFINE firmware_expire_year    .18
-#DEFINE firmware_expire_month   .12
-#DEFINE firmware_expire_day     .3
+#DEFINE firmware_expire_month   .2
+#DEFINE firmware_expire_day     .22
 
 #DEFINE comm_service_key        0xABCDEF
 
@@ -46,10 +47,10 @@
 #DEFINE TMR1H_VALUE_CONT_DIVE    .255-.64   ; in steps of 7,8125ms -> 0.5s
 
 ; Color Definitions: 8Bit RGB b'RRRGGGBB'
-#DEFINE	color_red	    	b'11100000'     ; (7,0,0)
+#DEFINE	color_red	        b'11100000'     ; (7,0,0)
 #DEFINE	color_dark_red	    b'10000101'     ; (4,1,1)
-#DEFINE	color_violet    	b'11101011'     ; (7,2,3)
-#DEFINE	color_blue		    b'11000111'     ; (6,1,3)
+#DEFINE	color_violet	    b'11101011'     ; (7,2,3)
+#DEFINE	color_blue	        b'11000111'     ; (6,1,3)
 #DEFINE	color_green	        b'00011100'     ; (0,7,0)
 #DEFINE	color_greenish      b'00111110'     ; (1,7,2)
 #DEFINE color_dark_green    b'00111001'     ; (1,6,1)
@@ -74,8 +75,9 @@
 #DEFINE warn_ppo2           .4
 #DEFINE warn_ceiling        .5
 #DEFINE warn_gas_in_gaslist .6
-#DEFINE warn_ppo2_hud       .7
+#DEFINE warn_ppo2_hud		.7
 #DEFINE warn_battery        .8
+#DEFINE warn_stop			.9
 
 ; External O2 cell input parameters
 #DEFINE	min_mv				.80			; = 8mV
@@ -85,6 +87,7 @@
 ; Profile recording parameters
 #DEFINE	logbook_profile_version	0x24
 #DEFINE	samplingrate_apnoe	.1	; [seconds]
+
 ; Warning: Divisors must be <.16 !
 #DEFINE	div_temperature		.6	; x samplingrate [s]
 #DEFINE	div_deco			.6	; x samplingrate [s]
@@ -93,6 +96,7 @@
 #DEFINE	div_decoplan		.12	; x samplingrate [s]
 #DEFINE div_cns				.12	; x samplingrate [s]
 #DEFINE div_tank			.0	; x samplingrate [s]
+
 ; Warning: Information lengths must be <.16 !
 #DEFINE infolength_temperature  .2  ; [byte]
 #DEFINE infolength_deco         .2  ; [byte]
@@ -110,29 +114,36 @@
 #DEFINE	better_gas_window_pos   .1			; [m] (Depth below change depth, if ppO2<opt_ppO2_max)
 
 ; Dive mode limits and thresholds
-#DEFINE	start_dive_threshold 	.100	; [cm]
-#DEFINE	high_altitude_dive_threshold .300;[cm]
-#DEFINE	apnoe_timeout			.15 	; [min]
-#DEFINE divemode_menuview_timeout   .10 ; [s]
-#DEFINE	divemode_timeout_default	.5	; [min]
-#DEFINE	divemode_menu_timeout	.30		; [s]
-#DEFINE	ppo2_warning_low		.19     ; [cbar] (Default value)
-#DEFINE ppo2_lowest_setting     .16     ; [cbar] (Minimum value)
-#DEFINE	ppo2_display_high		.120	; [cbar]
-#DEFINE	ppo2_warning_high		.160    ; [cbar] (Default value) for bottom/travel gases
+#DEFINE	start_dive_threshold 		.100	; [cm]
+#DEFINE	high_altitude_dive_threshold .300	; [cm]
+#DEFINE	apnoe_timeout				.15 	; [min]
+#DEFINE divemode_menuview_timeout   .10		; [s]
+#DEFINE	divemode_timeout_default	.5		; [min]
+#DEFINE	divemode_menu_timeout		.30		; [s]
+
+#DEFINE	ppo2_warning_low			.19     ; [cbar] (Default value)
+#DEFINE ppo2_lowest_setting     	.16     ; [cbar] (Minimum value)
+;#DEFINE ppo2_display_high			.120	; [cbar]											## V2.94 moved to p2_deco.c
+#DEFINE	ppo2_warning_high			.160    ; [cbar] (Default value) for bottom/travel gases
 #DEFINE	ppo2_warning_high_deco		.160    ; [cbar] (Default value) for deco gases
-#DEFINE ppo2_highest_setting    .160    ; [cbar] (Max. Value) for bottom/travel gases
-#DEFINE ppo2_highest_setting_deco  .160    ; [cbar] (Max. Value) for deco gases
-#DEFINE	cns_display_high		.70		; [%]
-#DEFINE	cns_warning_high		.100    ; [%]
-#DEFINE	gf_display_high     	.75		; [%]
-#DEFINE	gf_warning_high         .100    ; [%]
+#DEFINE ppo2_highest_setting    	.160    ; [cbar] (Max. Value) for bottom/travel gases
+#DEFINE ppo2_highest_setting_deco	.160    ; [cbar] (Max. Value) for deco gases
+
+; NEW	## min ppO2 CC
+#DEFINE	ppo2_warning_low_cc		.40		; [cbar] Default value for loop
+#DEFINE	ppo2_warning_low_cc_min	.20		; [cbar] Default value for loop
+#DEFINE	ppo2_warning_low_cc_max	.60		; [cbar] Default value for loop
+
+;#DEFINE cns_display_high		.70		; [%]													## V2.94 moved to p2_deco.c
+;#DEFINE cns_warning_high		.100    ; [%]													## V2.94 moved to p2_deco.c
+;#DEFINE gf_display_high    	.75		; [%]													## V2.94 moved to p2_deco.c
+;#DEFINE gf_warning_high	    .100    ; [%]													## V2.94 moved to p2_deco.c
 #DEFINE	depth_warn_mbar 		.13000	; [mbar]
 #DEFINE	wake_up_from_sleep		.1160	; [mbar]
 #DEFINE	gf_display_threshold	.20		; [%]
 #DEFINE simulator_timeout       .15     ; [s]
-#DEFINE sensor_voting_logic_threshold   .20 ; Threshold in 0.01bar
 
+#DEFINE sensor_voting_logic_threshold   .10 ; Threshold in 0.01bar
 
 ; Surface mode limits and thresholds
 #DEFINE	cns_display_surface_high .70	; [%]
@@ -143,14 +154,13 @@
 #DEFINE timeout_ccr_surface      .240   ; [s]
 
 ; Decomodel paramters
-#DEFINE no_fly_time_ratio		.60		; [%]
 #DEFINE	deco_distance			.10		; [dm]
 
 ; Color-code parameters for the divemode
-#DEFINE	color_code_cns_high		.100	; [%]
-#DEFINE	color_code_gf_warn_high .101	; [%]
-#DEFINE	color_code_velocity_warn_high .11   ;[m/min]
-#DEFINE	color_code_velocity_attn_high .10   ;[m/min]
+;#DEFINE	color_code_cns_high			.100	; [%]											## V2.94 moved to p2_deco.c
+;#DEFINE	color_code_gf_warn_high 	.101	; [%]											## V2.94 moved to p2_deco.c
+#DEFINE	color_code_velocity_warn_high 	.11		;[m/min]
+#DEFINE	color_code_velocity_attn_high 	.10		;[m/min]
 
 ; Velocity threshold
 #DEFINE	velocity_display_threshold_1	.3	; [m/min]
@@ -172,7 +182,7 @@
 ; Capacity for 2.4Ah Saft LS14500 and 0.8Ah Panasonic UR14500P
 ; battery_gauge:6 is nAs
 ; devide through 65536
-; a) devide through 364 -> Result is in percent of a 2.4Ah Battery
+;    a) devide through 364 -> Result is in percent of a 2.4Ah Battery
 ; or b) devide through 121 -> Result is in percent of a 0.8Ah Battery
 
 ; For internal battery gauging
@@ -181,9 +191,9 @@
 
 ; For gauge IC	
 #DEFINE	saft_capacity		.281	; 2.4Ah/0.085mAh/100 [%]
-#DEFINE	saft_offset		.37300  ; 65536-(2.4Ah/0.085mAh)
+#DEFINE	saft_offset			.37300  ; 65536-(2.4Ah/0.085mAh)
 
-#DEFINE	panasonic_capacity	.94	; 0.8Ah/0.085mAh/100 [%]
+#DEFINE	panasonic_capacity	.94		; 0.8Ah/0.085mAh/100 [%]
 #DEFINE	panasonic_offset	.56124	; 65536-(0.8Ah/0.085mAh)
 
 #DEFINE	ncr18650_capacity	.364	; 3.1Ah/0.085mAh/100 [%]
@@ -229,12 +239,12 @@
 #DEFINE compass_averaging           .10         ; numbers of extra averaging
 
 ; Hardware defines
-#DEFINE battery_gauge_available        hardware_flag,0     ; OSTC has rechargeable battery with battery management chip
-#DEFINE ambient_sensor      hardware_flag,1     ; OSTC has an ambient sensor
-#DEFINE analog_o2_input     hardware_flag,2     ; OSTC has analog inputs and S8 digital
-#DEFINE optical_input       hardware_flag,3     ; OSTC has an digital optical input
-#DEFINE ble_available       hardware_flag,4     ; OSTC has an BLE module
-;unused
+#DEFINE battery_gauge_available	hardware_flag,0	; OSTC has rechargeable battery with battery management chip
+#DEFINE ambient_sensor			hardware_flag,1	; OSTC has an ambient sensor
+#DEFINE analog_o2_input			hardware_flag,2	; OSTC has analog inputs and S8 digital
+#DEFINE optical_input			hardware_flag,3	; OSTC has an digital optical input
+#DEFINE ble_available			hardware_flag,4	; OSTC has an BLE module
+#DEFINE	ostc_rx_present			hardware_flag,5	; OSTC_RX circuity present
 ;unused
 ;unused
 
@@ -251,56 +261,56 @@ isr_backup  equ		    0x60
 isr_backup  udata_ovr   isr_backup    ; Reserved space for interupt data
  
 ;---- Backup for general registers
-isr_prod    res 2
+isr_prod    			res 2
 
 ;---- MS5541 subroutines
-amb_pressure	res	2
-temperature		res	2
+amb_pressure			res	2
+temperature				res	2
 
-C1              res 2           ; Decoded calibration data
-C2              res 2
-C3              res 2
-C4              res 2           ; Here: C4-250
-C5              res 2           ; Here: Reference Temperature UT1 = 8*C5 + 10000 (u16 range 10.000 .. +42.760)
-C6              res 2
-D1              res 2           ; raw pressure
-D2              res 2           ; raw temperature
-xdT				res	2
-xdT2			res	2
-OFF				res	2
-SENS			res	2
-dLSB            res 1           ;Pressure sensor interface 
-dMSB            res 1
-clock_count     res 1
-sensor_state_counter res 1		; counts to eight for state maschine
-amb_pressure_avg res 2
-temperature_avg	res	2
-minimum_temperature	res 2		; minimum temperature
-last_temperature	res 2
-last_pressure	res 2
+C1 			            res 2   ; Decoded calibration data
+C2          			res 2
+C3              		res 2
+C4              		res 2   ; Here: C4-250
+C5              		res 2   ; Here: Reference Temperature UT1 = 8*C5 + 10000 (u16 range 10.000 .. +42.760)
+C6              		res 2
+D1              		res 2   ; raw pressure
+D2              		res 2   ; raw temperature
+xdT						res	2
+xdT2					res	2
+OFF						res	2
+SENS					res	2
+dLSB            		res 1   ; Pressure sensor interface 
+dMSB            		res 1
+clock_count     		res 1
+sensor_state_counter 	res 1	; counts to eight for state maschine
+amb_pressure_avg 		res 2
+temperature_avg			res	2
+minimum_temperature		res 2	; minimum temperature
+last_temperature		res 2
+last_pressure			res 2
 last_pressure_velocity	res 2   ; For velocity
-last_surfpressure res 2
+last_surfpressure 		res 2
 last_surfpressure_15min res 2
 last_surfpressure_30min res 2
-rel_pressure	res 2
-sim_pressure	res 2   ; hold simulated pressure in mbar if in Simulator mode
-max_pressure	res 2
-avg_rel_pressure	res 2
-avg_rel_pressure_total res 2
+rel_pressure			res 2
+sim_pressure			res 2   ; hold simulated pressure in mbar if in Simulator mode
+max_pressure			res 2
+avg_rel_pressure		res 2
+avg_rel_pressure_total 	res 2
 ;---- Data for ISR math subroutines
-isr_xC          res 4
-isr_xA          res 2
-isr_xB          res 2
+isr_xC          		res 4
+isr_xA       		   	res 2
+isr_xB         			res 2
 
 ;---- Data for ISR routines
-isr1_temp       res 1           ; ISR temp variable, used in ms5541.asm, isr_rtcc, isr_battery_gauge
-isr2_temp       res 1           ; ISR temp variable, used isr_battery_gauge
+isr1_temp       	res 1		; ISR temp variable, used in ms5541.asm, isr_rtcc, isr_battery_gauge
+isr2_temp       	res 1		; ISR temp variable, used isr_battery_gauge
 
 ;---- Display brightness
-max_CCPR1L		res	1			; Max. brightness value for CCPR1L
+max_CCPR1L			res	1		; Max. brightness value for CCPR1L
 
 ; Battery gauge (nAs, nC)
-battery_gauge	res	6			; 48Bit -> 78Ah max...
+battery_gauge		res	6		; 48Bit -> 78Ah max...
 
 ; IR/S8-Link
 ir_s8_buffer        res .18     ; temporally used in get_calibration_data for the raw (packed) calibration data
@@ -334,8 +344,8 @@ compass_CZ_f        res 2
 compass_heading     res 2       ; Corrected heading (in 1°) : -180 .. 180
 compass_heading_old res 2       ; Old heading (For smoother display)
 compass_heading_shown res 2     ; Displayed heading
-;compass_roll        res 2       ; Rotation around the X axis
-;compass_pitch       res 2       ; Rotation around the Y axis
+;compass_roll       res 2       ; Rotation around the X axis
+;compass_pitch      res 2       ; Rotation around the Y axis
 
 compass_a           res 2       ; Tmp data for Q15 arithmetics
 compass_b           res 2
@@ -344,16 +354,16 @@ compass_r           res 3
 CNS_start           res 2       ; CNS value at beginning of dive
 GF_start            res 1       ; GF value at beginning of dive
 
-speed_setting        	res 1           ; =1: Eco, =2: Normal, =3: Fastest
+speed_setting       res 1       ; =1: Eco, =2: Normal, =3: Fastest
 
 ;---- Data for graphical compass
-xRD             res 2       ; virtual compass ruler offset
-xRDr            res 2       ; virtual compass ruler offset - right end
-xRD180          res 2       ; virtual compass ruler offset for the -180 marker
-xLO             res 1       ; lo backup to prevent trashing
-xHI             res 1       ; hi backup to prevent trashing
-xCM             res 1       ; compass bearing relative position
-compass_bearing res 2       ; this is where the bearing menu stores the actual heading for bearing
+xRD             	res 2       ; virtual compass ruler offset
+xRDr            	res 2       ; virtual compass ruler offset - right end
+xRD180          	res 2       ; virtual compass ruler offset for the -180 marker
+xLO             	res 1       ; lo backup to prevent trashing
+xHI             	res 1       ; hi backup to prevent trashing
+xCM             	res 1       ; compass bearing relative position
+compass_bearing 	res 2       ; this is where the bearing menu stores the actual heading for bearing
 
 ;---------------------------- Common DATA ------------------------------------
 
@@ -361,30 +371,30 @@ common          equ         0x100       ; Alias for "banksel common"
 common          udata_ovr   common      ; Bank1 general variables
 
 ;---- Time and Date
-secs         	   		res 1           
-mins            		res 1
-hours           		res 1
-day             		res 1
-month           		res 1
-year            		res 1
+secs					res 1           
+mins					res 1
+hours					res 1
+day						res 1
+month					res 1
+year					res 1
 surface_interval		res 2
 
-flag1            		res 1
-flag2           		res 1
-flag3           		res 1
-flag4           		res 1
-flag5           		res 1
-flag6           		res 1
-flag7           		res 1
-flag8           		res 1
-flag9           		res 1
-flag10           		res 1
-flag11           		res 1
-flag12           		res 1
-flag13                  res 1
-flag14			res 1
+flag1					res 1
+flag2					res 1
+flag3					res 1
+flag4					res 1
+flag5					res 1
+flag6					res 1
+flag7					res 1
+flag8					res 1
+flag9					res 1
+flag10					res 1
+flag11					res 1
+flag12					res 1
+flag13					res 1
+flag14					res 1
 
-hardware_flag           res 1           ; hardware descriptor flag
+hardware_flag			res 1           ; hardware descriptor flag
 
 temp1			res 1
 temp2			res 1
@@ -430,7 +440,7 @@ sub_a           res 2
 sub_b           res 2
 
 ;---- Data for conversion subroutines
-cvt_flags       res 1
+cvt_flags       res 2
 ignore_digits   res 1
 
 #define leftbind            cvt_flags,0
@@ -441,8 +451,11 @@ ignore_digits   res 1
 #DEFINE screen_type         cvt_flags,5 ; =1: display1, =0; display0
 #DEFINE	compass_type	    cvt_flags,6 ; =1: compass1, =0: compass0
 #DEFINE	analog_switches	    cvt_flags,7 ; =1: Analog switches available
+
+#DEFINE	compass_type2	    cvt_flags+1,0   ; =1: Compass2, =0: Compass1 or compass0
+
+
 ;---- Misc.
-nofly_time              res 2   		; No Fly time in Minutes (Calculated after Dive)
 timeout_counter 		res 1
 timeout_counter2		res 1
 timeout_counter3		res 1
@@ -451,12 +464,10 @@ batt_percent            res 1           ; Battery in percent (1-100)
 ambient_light			res 2			; ambient_light level
 lo_temp					res 1
 hi_temp					res 1
-desaturation_time		res 2  
 convert_value_temp      res 3           ; used in menu_battery_state_convert_date
-active_gas				res 1
-active_diluent          res 1           ; As a backup when switching back from Bailout to CCR
+active_gas				res 1			; the currently breathed gas (1-5)
+active_diluent          res 1           ; backup when switching back from bailout to CCR/pSCR loop
 warning_counter			res 1			; Counts amount of warning in divemode
-warning_counter_backup	res 1			; Backup of warning_counter
 warning_page            res 1           ; current # of warning page
 
 ; Remind history for menu processor (and such):
@@ -493,11 +504,11 @@ apnoe_surface_mins 		res 1
 apnoe_surface_secs		res 1
 
 ; Profile storing
-AlarmType			res 1
-samplesecs			res 1
-EventByte			res 1
-EventByte2			res 1
-ProfileFlagByte		res 1
+AlarmType				res 1
+samplesecs				res 1
+EventByte				res 1
+EventByte2				res 1
+ProfileFlagByte			res 1
 
 ; External flash
 ext_flash_address		res 3	; 24bit Address
@@ -525,12 +536,16 @@ hud_status_byte     res 1
 ;Bit6 unused in stand-alone HUD
 ;Bit7 unused in stand-alone HUD
 
-sensor_setpoint     res 1       ; sensor ppo2 in 0.01bar for deco routine
+sensor_setpoint     	res 1       ; sensor ppo2 in 0.01bar for deco routine
 
 better_gas_number	res 1       ; number (1-5) of the "better gas" in divemode, =0: no better gas available
-customview_divemode res 1       ; keeps last custom view
-customview_surfmode res 1
-safety_stop_countdown	res 1	; counts seconds of safety stop
+customview_divemode 	res 1       ; keeps last custom view
+customview_surfmode 	res 1
+safety_stop_countdown	res 1		; counts seconds of safety stop
+tft_update_flags	res 3		; probably more then needed...
+
+; bank common 1 Byte left here...
+
 
 ;---------------------------- TMP DATA ---------------------------------------
 ; Space for various overlayed data from color, word, menu processors, etc.
@@ -545,42 +560,50 @@ tmp             equ         0x1A0       ; Alias for CBLOCK directive.
 common2          equ         0xA00       ; Alias for "banksel common"
 common2          udata_ovr   common2     ; Bank1 general variables
 
-s8_rawdata_sensor1   res 3  ; 24bit A/D raw data from S8 HUD sensor 1
-s8_rawdata_sensor2   res 3  ; 24bit A/D raw data from S8 HUD sensor 2
-s8_rawdata_sensor3   res 3  ; 24bit A/D raw data from S8 HUD sensor 3
+s8_rawdata_sensor1			res 3	; 24bit A/D raw data from S8 HUD sensor 1
+s8_rawdata_sensor2			res 3	; 24bit A/D raw data from S8 HUD sensor 2
+s8_rawdata_sensor3			res 3	; 24bit A/D raw data from S8 HUD sensor 3
 
-hud_battery_mv      res 2   ; hud/ppo2 monitor battery voltage in mV
-start_day           res 1   ; At start of dive (For logbook)
-start_month         res 1   ; At start of dive (For logbook)
-start_year          res 1   ; At start of dive (For logbook)
-start_hours         res 1   ; At start of dive (For logbook)
-start_mins          res 1   ; At start of dive (For logbook)
+hud_battery_mv				res 2   ; hud/ppo2 monitor battery voltage in mV
+start_day					res 1   ; At start of dive (For logbook)
+start_month					res 1   ; At start of dive (For logbook)
+start_year					res 1   ; At start of dive (For logbook)
+start_hours					res 1   ; At start of dive (For logbook)
+start_mins					res 1   ; At start of dive (For logbook)
 
-old_velocity        res 4   ; Stores the last 4 speeds (8 seconds) in m/min
-opt_gas_type_backup res 5   ; 0=Disabled, 1=First, 2=Travel, 3=Deco
-opt_dil_type_backup res 5   ; 0=Disabled, 1=First, 2=Normal
-opt_OC_bail_gas_change_backup  res 5   ; Gas change depths OC/Bailout
-opt_dil_change_backup  res 5; Gas change depths Diluents
+old_velocity				res 4   ; Stores the last 4 speeds (8 seconds) in m/min
+opt_gas_type_backup			res 5   ; 0=Disabled, 1=First, 2=Travel, 3=Deco
+opt_dil_type_backup			res 5   ; 0=Disabled, 1=First, 2=Normal
+
+opt_OC_bail_gas_change_backup	res 5   ; Gas change depths OC/Bailout
+opt_dil_change_backup  			res 5	; Gas change depths Diluents
   
 internal_battery_capacity	res 2	; For internal battery gauging
-battery_capacity		res 2	; For battery gauge IC
-battery_offset			res 2	; For battery gauge IC
+battery_capacity			res 2	; For battery gauge IC
+battery_offset				res 2	; For battery gauge IC
 
-analog_sw1_raw		res 2	; idle values (average)
-analog_sw2_raw		res 2	; idle values (average)
-analog_counter		res 1	; for averaging
-analog_sw1		res 1	; analog value for switch 1
-analog_sw2		res 1	; analog value for switch 2
-battery_type		res 1	; =0:1.5V, =1:3,6V Saft, =2:LiIon 3,7V/0.8Ah, =3:LiIon 3,7V/3.1Ah, =4: LiIon 3,7V/2.3Ah
-uptime			res 4	; Uptime [s]
-lastdive_time		res 4	; Time since last dive [s]
-lastdive_duration	res 3	; mins:2 and secs
-lastdive_maxdepth	res 2	; in mbar	
+analog_sw1_raw				res 2	; idle values (average)
+analog_sw2_raw				res 2	; idle values (average)
+analog_counter				res 1	; for averaging
+analog_sw1					res 1	; analog value for switch 1
+analog_sw2					res 1	; analog value for switch 2
+battery_type				res 1	; =0:1.5V, =1:3,6V Saft, =2:LiIon 3,7V/0.8Ah, =3:LiIon 3,7V/3.1Ah, =4: LiIon 3,7V/2.3Ah
+uptime						res 4	; Uptime [s]
+lastdive_time				res 4	; Time since last dive [s]
+lastdive_duration			res 3	; mins:2 and secs
+lastdive_maxdepth			res 2	; in mbar	
 battery_acumulated_charge   res 2   ; Raw values in battery gauge IC
-gauge_status_byte	res 1	 ; Gauge IC status byte
-button_polarity		res 1	; 0xFF (Both normal), 0x00 (Both inverted), 0x01 (Left inverted only), 0x02 (Right inverted only) 
-gaslist_gas_global	res 1	; for color coding the gas lists
-active_gas_type		res 1	; 0=Disabled, 1=First, 2=Travel, 3=Deco for OC gases and 0=Disabled, 1=First, 2=Normal for diluents	
+gauge_status_byte			res 1	; Gauge IC status byte
+button_polarity				res 1	; 0xFF (Both normal), 0x00 (Both inverted), 0x01 (Left inverted only), 0x02 (Right inverted only) 
+gaslist_gas_global			res 1	; for color coding the gas lists
+;active_gas_type			res 1	; 0=Disabled, 1=First, 2=Travel, 3=Deco for OC gases and 0=Disabled, 1=First, 2=Normal for diluents	
+rx_buffer					res .48 ; Buffer for RX data (Slots 0-7)
+rx_firmware					res 2	; The RX firmware version xx.yy
+
+gas6_O2_ratio				res 1	; gas6 O2 ratio
+gas6_He_ratio				res 1	; gas6 He ratio
+gas6_temp					res 1	; temp used in divemenu_tree.asm
+
 
 ;-----------------------------------------------------------------------------
 ; Reserve BANK2 for general purpose buffer (strings, images, etc).
@@ -599,12 +622,10 @@ opt_dil_He_ratio        res 5   ; Must be in line with opt_gas_He_ratio
 opt_gas_type            res 5   ; 0=Disabled, 1=First, 2=Travel, 3=Deco
 opt_dil_type            res 5   ; 0=Disabled, 1=First, 2=Normal -> ; Must be in line with opt_gas_type
 opt_dive_mode           res 1   ; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
-opt_ppO2_max            res 1   ; PPO2 Max for MOD calculation and color coding in divemode
 opt_ccr_mode            res 1   ; =0: Fixed SP, =1: Sensor
-opt_ppO2_min            res 1   ; PPO2 min for Sensors and color coding in divemode
 opt_OC_bail_gas_change  res 5   ; Gas change depths OC/Bailout
-;---- Managing Settings
 
+;---- Managing Settings
 opt_brightness          res 1   ; =0: Eco, =1:Medium, =2:Full
 opt_salinity            res 1	; 0-5%
 #DEFINE opt_name_length    .60  ; Custom text string 5 rows with 12 chars
@@ -627,7 +648,7 @@ opt_calibration_O2_ratio    res 1   ; %O2 of calibration gas
 opt_x_s1                res	2	; calibration factor (Not stored in EEPROM)
 opt_x_s2                res	2	; calibration factor (Not stored in EEPROM)
 opt_x_s3                res	2	; calibration factor (Not stored in EEPROM)
-opt_sensor_fallback     res 1   ; =1: Fallback to SP1 when sensor is lost
+opt_sensor_fallback     res 1   ; NOT USED ANY MORE, KEPT FOR COMPATIBILITY WITH EEPROM IMAGE
 opt_flip_screen         res 1   ; =1: Flip the screen
 opt_cR_button_left      res 1   ; Left button sensitivity (cR hardware)
 opt_cR_button_right     res 1   ; Right button sensitivity (cR hardware)
@@ -640,20 +661,21 @@ opt_safety_stop_length  res 1   ; [s]
 opt_safety_stop_start   res 1   ; [cbar]
 opt_safety_stop_end     res 1   ; [cbar]
 opt_safety_stop_reset   res 1   ; [cbar]
-opt_diveTimeout		res 1	; Timeout for Divemode [min]
-opt_PSCR_drop		res 1	; PSCR Drop [%]
-opt_PSCR_lungratio	res 1	; PSCR Lung Ratio [1/x]
-opt_ppO2_max_deco       res 1   ; PPO2 Max Decogases (for MOD calculation and color coding in divemode)
+opt_diveTimeout			res 1	; Timeout for Divemode [min]
+opt_sim_setpoint_number	res 1	; NEW setpoint to use for deco calculation
+opt_calc_asc_gasvolume	res 1	; NEW calculate OC gas volume needs for ascent
+opt_sim_use_aGF			res 1	; NEW use GF (no) or aGF (yes) for deco calculation
+opt_enable_IBCD			res 1	; NEW enable IBCD warning
 
 ;-----------------------------EEPROM DATA ------------------------------------
 ; Automatic reset of all options when this is changed:
-#define    eeprom_opt_serial   0x0005   ; Version 0.5
+#define    eeprom_opt_serial   0x0006   ; Version 0.6
 
 ;-----------------------------------------------------------------------------
 ; Flags
 #DEFINE	switch_left				flag1,0
 #DEFINE	switch_right			flag1,1			
-#DEFINE neg_flag				flag1,2	; e.g. sub16 (sub_c = sub_a - sub_b)
+#DEFINE neg_flag				flag1,2	;     e.g. sub16 (sub_c = sub_a - sub_b)
 #DEFINE pressure_refresh 		flag1,3	; =1: A new pressure/temperature is available
 #DEFINE	sleepmode				flag1,4	; =1: In Sleepmode
 #DEFINE	tft_is_dimming			flag1,5	; =1: The TFT is dimming, ignore light sensor
@@ -666,14 +688,14 @@ opt_ppO2_max_deco       res 1   ; PPO2 Max Decogases (for MOD calculation and co
 #DEFINE	FLAG_apnoe_mode			flag2,3	; =1: Apnoe mode selected
 #DEFINE	restore_deco_data		flag2,4	; =1: Restore deco data (After simulation)
 #DEFINE premenu					flag2,5	; =1: Premenu/Divemenu selected
-#DEFINE	menubit					flag2,6	; menu
+#DEFINE	menubit					flag2,6	;     menu
 #DEFINE	simulatormode_active	flag2,7	; =1: Simulator mode active, override pressure sensor readings
 
 #DEFINE divemode_menu           flag3,0	; =1: Divemode menu is shown
-#DEFINE	onesecupdate			flag3,1	; =1 after any second
+#DEFINE	onesecupdate			flag3,1	; =1: after any second
 #DEFINE twosecupdate			flag3,2	; =1: New two-second update
 #DEFINE	toggle_customview		flag3,3	; =1: Next customview
-#DEFINE	oneminupdate			flag3,4	; =1 after any minute
+#DEFINE	oneminupdate			flag3,4	; =1: after any minute
 #DEFINE	divemode				flag3,5	; =1: in Divemode
 #DEFINE	battery_is_36v          flag3,6	; =1: 3,6V Battery is in use
 #DEFINE	warning_active          flag3,7	; =1: A warning is active in divemode or surfacemode
@@ -691,7 +713,7 @@ opt_ppO2_max_deco       res 1   ; PPO2 Max Decogases (for MOD calculation and co
 #DEFINE	reset_average_depth		flag5,1	; =1: Reset the average depth
 #DEFINE	store_sample			flag5,2	; =1: Store a new sample
 #DEFINE	divemode2				flag5,3	; =1: Dive longer then one minute
-#DEFINE	FLAG_active_descent		flag5,4	; Used in Apnoe mode
+#DEFINE	FLAG_active_descent		flag5,4	;     Used in Apnoe mode
 #DEFINE	event_occured			flag5,5	; =1: An event occured, store it!
 #DEFINE	divemode_menu_active	flag5,6 ; =1: The divemode menu is shown
 #DEFINE	temp_changed			flag5,7	; =1: The temperature changed
@@ -708,9 +730,9 @@ opt_ppO2_max_deco       res 1   ; PPO2 Max Decogases (for MOD calculation and co
 #DEFINE dive_hud3_displayed     flag7,0 ; =1: The Sensor3 HUD reading is displayed
 #DEFINE no_more_divesecs        flag7,1 ; =1: Do no longer show seconds in divemode
 #DEFINE FLAG_gauge_mode         flag7,2 ; =1: In Gauge mode
-#DEFINE ignore_last_edited_gas  flag7,3 ; Used in gaslist_cleanup_list
+#DEFINE ignore_last_edited_gas  flag7,3 ;     Used in gaslist_cleanup_list
 #DEFINE ccr_diluent_setup       flag7,4 ; =1: Setting up Diluents ("Gas6-10")
-#DEFINE menu_show_sensors       flag7,5 ; =1: Update HUD data in menu
+#DEFINE menu_show_sensors       flag7,5 ; =1: Update HUD data in menu			## NOT USED ANYMORE ##
 #DEFINE short_gas_decriptions   flag7,6 ; =1: Use short versions of gaslist_strcat_gas_mod and gaslist_strcat_setpoint
 #DEFINE max_depth_greater_100m  flag7,7 ; =1: Max. Depth > 100m
 
@@ -727,7 +749,7 @@ opt_ppO2_max_deco       res 1   ; PPO2 Max Decogases (for MOD calculation and co
 #DEFINE in_color_menu           flag9,1 ; =1: In the color scheme menu
 #DEFINE bailoutgas_event        flag9,2 ; =1: bailout was selected or a gaschange during bailout
 #DEFINE win_invert              flag9,3 ; =1: Invert font output
-#DEFINE show_safety_stop	flag9,4	; =1: Show the safety stop
+#DEFINE show_safety_stop		flag9,4	; =1: Show the safety stop
 #DEFINE	safety_stop_active      flag9,5	; =1: The safety stop is currently displayed
 #DEFINE new_s8_data_available   flag9,6 ; =1: New data frame recieved
 #DEFINE print_compass_label     flag9,7 ; =1: print the graphical comapss label
@@ -760,28 +782,106 @@ opt_ppO2_max_deco       res 1   ; PPO2 Max Decogases (for MOD calculation and co
 #DEFINE blinking_depth_toggle   flag12,7    ; toggle to blink
 
 #DEFINE neg_flag_velocity       flag13,0    ; neg_flag backup for velocity logic
-#DEFINE	analog_sw1_pressed	flag13,1    ; =1: Analog switch 1 pressed
-#DEFINE	analog_sw2_pressed	flag13,2    ; =1: Analog switch 2 pressed
+#DEFINE	analog_sw1_pressed		flag13,1    ; =1: Analog switch 1 pressed
+#DEFINE	analog_sw2_pressed		flag13,2    ; =1: Analog switch 2 pressed
 #DEFINE sp2_switched            flag13,3    ; =1: This setpoint has been autoselected already
 #DEFINE sp3_switched            flag13,4    ; =1: This setpoint has been autoselected already
 #DEFINE sp4_switched            flag13,5    ; =1: This setpoint has been autoselected already
 #DEFINE sp5_switched            flag13,6    ; =1: This setpoint has been autoselected already
-#DEFINE	use_old_batt_flag	flag13,7    ; =1: load old battery information after power-on reset
+#DEFINE	use_old_batt_flag		flag13,7    ; =1: load old battery information after power-on reset
 		
-#DEFINE	FLAG_pscr_mode		flag14,0    ; =1: OSTC is in PSCR mode
-#DEFINE	deep_sleep		flag14,1    ; OSTC is in deep sleep (ignore buttons, etc)
+#DEFINE	FLAG_pscr_mode			flag14,0    ; =1: OSTC is in PSCR mode
+#DEFINE	deep_sleep				flag14,1    ; OSTC is in deep sleep (ignore buttons, etc)
+#DEFINE sensors_agree			flag14,2    ; =1: the ppO2 of all sensors are within the threshold range
+#DEFINE	gas_needs_attention		flag14,3    ; =1: the gas needs attention      has been raised before
+#DEFINE	gas_needs_warning		flag14,4    ; =1: the gas needs warning        has been raised before
+#DEFINE	sensor_warning			flag14,5    ; =1: the sensors disagree warning has been raised before
+#DEFINE	alternative_divelayout	flag14,6    ; =1: the alternative divelayout is used (aka Blind Mode)
+#DEFINE	i2c_error_flag			flag14,7    ; =1: An I2C error occured
+
+
+; Update flags in divemode, =1: Update the screen
+#DEFINE	FLAG_TFT_divemode_mask				tft_update_flags+0,0
+#DEFINE	FLAG_TFT_display_ndl_mask			tft_update_flags+0,1
+#DEFINE FLAG_TFT_depth						tft_update_flags+0,2
+#DEFINE FLAG_TFT_divemins					tft_update_flags+0,3
+#DEFINE	FLAG_TFT_show_safety_stop			tft_update_flags+0,4	
+#DEFINE	FLAG_TFT_display_ndl				tft_update_flags+0,5
+#DEFINE	FLAG_TFT_display_deko_mask			tft_update_flags+0,6
+#DEFINE	FLAG_TFT_display_deko				tft_update_flags+0,7
+#DEFINE	FLAG_TFT_display_tts				tft_update_flags+1,0
+#DEFINE	FLAG_TFT_temp_divemode				tft_update_flags+1,1
+#DEFINE	FLAG_TFT_divemode_warning			tft_update_flags+1,2
+#DEFINE	FLAG_TFT_divemode_warning_clear		tft_update_flags+1,3
+#DEFINE	FLAG_TFT_active_gas_divemode		tft_update_flags+1,4
+#DEFINE	FLAG_TFT_clear_safety_stop			tft_update_flags+1,5
+#DEFINE	FLAG_TFT_max_depth					tft_update_flags+1,6
+#DEFINE	FLAG_TFT_divemode_mask_alt			tft_update_flags+1,7
+#DEFINE	FLAG_TFT_dive_warning_text_clear	tft_update_flags+2,0
+#DEFINE	FLAG_TFT_dive_warning_text_clr2		tft_update_flags+2,1
+#DEFINE	FLAG_TFT_max_depth_alt				tft_update_flags+2,2
+#DEFINE	FLAG_TFT_big_deco_alt				tft_update_flags+2,3
+#define FLAG_TFT_not_defined_yet			tft_update_flags+2,7	; last usable flag within tft_update_flags memory space
+
+
+; Bit Masks	for communication with p2_deco.c
+#define	DECO_STATUS_MASK		.3
+
+; Bit Flags for communication with p2_deco.c - char_O_deco_status
+#define DECO_STATUS_0_FLAG		.0
+#define DECO_STATUS_1_FLAG		.1
+#define DECO_MODE_LOOP_FLAG 	.2
+#define DECO_MODE_PSCR_FLAG 	.3
+#define DECO_PLAN_FLAG 			.4
+#define DECO_CNS_FLAG 			.5
+#define DECO_VOLUME_FLAG 		.6
+#define DECO_ASCENT_FLAG 		.7
+
+; Bit Flags for communication with p2_deco.c - char_O_main_status
+;#define DECO_MODE_LOOP_FLAG 	.2
+;#define DECO_MODE_PSCR_FLAG 	.3
+#define DECO_GASCHANGE_OVRD		.4
+#define DECO_BOTTOM_FLAG		.6
+
+; Bit Values for communication with p2_deco.c
+#define DECO_STATUS_INIT		.3
+#define	DECO_MODE_LOOP			.4
+#define DECO_MODE_PSCR			.8
+#define DECO_PLAN_ALTERNATE		.16
+#define DECO_CNS_CALCULATE		.32
+#define DECO_VOLUME_CALCULATE	.64
+#define	DECO_ASCENT_DELAYED		.128
+
+; Bit Flags for char_O_deco_warnings
+#define IBCD_warning			.0
+#define IBCD_warning_lock		.1
+#define mbubble_warning			.2
+#define mbubble_warning_lock	.3
+#define	outside_warning			.4
+#define	outside_warning_lock	.5
+#define stoptable_overflow		.6
+#define	deco_flag				.7
+
+#define char_invalid_flag		.7
+
+#define int_invalid_flag		.2
+#define int_not_yet_computed	.3
+#define	int_is_zero				.3
+#define int_low_flag			.4
+#define int_high_flag			.5
+#define	int_prewarning_flag		.6
+#define	int_warning_flag		.7
+
+
+
 ;=============================================================================
 ; C-code Routines
 ; PART 2
     extern deco_calc_CNS_decrease_15min    
-    extern deco_calc_CNS_fraction
     extern deco_calc_desaturation_time
     extern deco_calc_hauptroutine
-    extern deco_calc_tissue
-    extern deco_calc_percentage
     extern deco_calc_wo_deco_step_1_min
     extern deco_calc_dive_interval
-    extern deco_clear_CNS_fraction
     extern deco_clear_tissue
     extern deco_pull_tissues_from_vault
     extern deco_push_tissues_to_vault

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File surfmode.inc
+;   File surfmode.inc								REFACTORED VERSION V2.92
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -9,7 +9,7 @@
 ;  2011-08-07 : [mH] moving from OSTC code
 
  extern surfloop
- extern	calc_deko_surfmode
+; extern	calc_deko_surfmode			DELETED - not used any more	## no fly
  extern	timeout_surfmode
  extern	timeout_testmode
 
@@ -39,7 +39,7 @@
 #DEFINE surf_warning_length     .11                 ; total string length
 
 #DEFINE	surf_temp_row		.185
-#DEFINE	surf_temp_column	.120
+#DEFINE	surf_temp_column	.120					; CHANGED - clear overlapp with warning text area ## temp
 #DEFINE	surf_press_row		.160
 #DEFINE	surf_press_column	.98
 

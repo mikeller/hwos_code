@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File divemode.inc
+;   File divemode.inc								REFACTORED VERSION V2.91
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -11,6 +11,8 @@
     extern    set_dive_modes
     extern    diveloop
     extern    apnoe_calc_maxdepth
+	extern	  calc_deko_divemode_sensor
+
 
 ; Divemode layout:
 ; row=0...239
@@ -73,6 +75,9 @@
 #DEFINE    dm_max_depth_dm_row          dm_max_depth_row+.11           ; 25
 #DEFINE    dm_max_depth_dm_column       dm_max_depth_column+.23        ; 87
 #DEFINE    dm_max_depth_dm_column_nvsi  dm_max_depth_column_nvsi+.23   ; 77
+#DEFINE	   dm_max_alt_column		.0
+#DEFINE	   dm_max_alt_row		.170
+#DEFINE	   dm_max_dm_alt_column		dm_max_alt_column+.60
 ; Warning area (combined)
 #DEFINE    dm_warning_row             dm_offset+.36             ; 50
 #DEFINE    dm_warning_column          dm_upcnt_2ndcol           ; 74
@@ -99,6 +104,8 @@
 #DEFINE    dm_divetime_rgt                .159                   ; 159
 #DEFINE    dm_divetime_secs_row           dm_divetime_row+.11    ; 25
 #DEFINE    dm_divetime_secs_column        dm_divetime_column+.24 ; 139
+#DEFINE	   dm_divetime_alt_row		  dm_offset              ; 14
+#DEFINE	   dm_divetime_alt_column	  .68
 ; Warning icon
 #DEFINE    dm_warning_icon_row            dm_offset+.41                ; 55
 #DEFINE    dm_warning_icon_column         .137                         ; 137
@@ -262,7 +269,7 @@
 #DEFINE    dm_custom_ceiling_text_row       dm_customview_row+.1        ; 102
 #DEFINE    dm_custom_ceiling_text_column    .68                         ; 66
 #DEFINE    dm_custom_ceiling_ppo2_column    .8                          ; 8
-#DEFINE	   dm_custom_ceiling_ppo2_col_dil   .0				; 0 NEW tuned position because text is longer
+#DEFINE	   dm_custom_ceiling_ppo2_col_dil   .0							; 0 NEW tuned position because text is longer	## (?)
 
 ; Value
 #DEFINE    dm_custom_ceiling_value_row      dm_customview_row+.18       ; 119

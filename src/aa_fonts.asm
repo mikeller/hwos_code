@@ -12,7 +12,7 @@
 ;=============================================================================
 
 ;---- TINY font description and data ----------------------------------------
-fonts_data	CODE_PACK
+fonts_data	CODE_PACK   0x11000	    ; <- Make sure all three fonts are in the same 64kByte page...
 
 
             global  aa_font16_block
@@ -150,8 +150,6 @@ aa_font48_end:
             global aa_font90_block
 aa_font90_block:
 			DB	' ', 0x2F
-			DB	'm', 0x3A
-			DB	'f', 0x3B
 			DB	0
 			DB	aa_font90_firstChar
 			DB	aa_font90_chars

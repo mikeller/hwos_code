@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File ghostwriter.asm
+;   File ghostwriter.asm							REFACTORED VERSION 2.94
 ;
 ;   Ghostwriter (Log profile recorder)
 ;
@@ -23,8 +23,8 @@
 ghostwriter	CODE
 
 	global	store_dive_data
-store_dive_data:						; 5 seconds gone
-	bcf		store_sample				; update only any 5 seconds
+store_dive_data:
+	bcf		store_sample		; clear flag
 
     ifndef __DEBUG
     	btfsc	simulatormode_active    ; Are we in simulator mode?
@@ -93,7 +93,7 @@ check_extended7:
 	addwf	EventByte,F			; Copy to EventByte Bit 0-3
 	clrf	AlarmType			; Reset AlarmType
 	
-; Third, check events and add aditional bytes
+; Third, check events and add additional bytes
 	btfss	gas6_changed    	; Check flag
 	bra		check_event2
 	movlw	d'2'				; Information length
@@ -257,7 +257,7 @@ store_dive_decoplan_loop:
 store_dive_ppO2_sensors:
     movf    o2_ppo2_sensor1,W            ; Sensor1 ppO2 (in 0.01bar steps)
 	rcall   ghostwrite_byte_profile      ; WREG -> Profile in ext. Flash
-    SAFE_2BYTE_COPY o2_mv_sensor1,lo     ; o2_mv_sensor may be modifified via ISR during the two writes here...
+    SAFE_2BYTE_COPY o2_mv_sensor1,lo     ; o2_mv_sensor may be modified via ISR during the two writes here...
     movf    lo,W                         ; in 0.1mV steps
 	rcall   ghostwrite_byte_profile      ; WREG -> Profile in ext. Flash
     movf    hi,W                         ; in 0.1mV steps
@@ -265,7 +265,7 @@ store_dive_ppO2_sensors:
 
     movf    o2_ppo2_sensor2,W            ; Sensor2 ppO2 (in 0.01bar steps)
 	rcall   ghostwrite_byte_profile      ; WREG -> Profile in ext. Flash
-    SAFE_2BYTE_COPY o2_mv_sensor2,lo     ; o2_mv_sensor may be modifified via ISR during the two writes here...
+    SAFE_2BYTE_COPY o2_mv_sensor2,lo     ; o2_mv_sensor may be modified via ISR during the two writes here...
     movf    lo,W                         ; in 0.1mV steps
 	rcall   ghostwrite_byte_profile      ; WREG -> Profile in ext. Flash
     movf    hi,W                         ; in 0.1mV steps
@@ -273,7 +273,7 @@ store_dive_ppO2_sensors:
 
     movf    o2_ppo2_sensor3,W            ; Sensor3 ppO2 (in 0.01bar steps)
 	rcall   ghostwrite_byte_profile      ; WREG -> Profile in ext. Flash
-    SAFE_2BYTE_COPY o2_mv_sensor3,lo     ; o2_mv_sensor may be modifified via ISR during the two writes here...
+    SAFE_2BYTE_COPY o2_mv_sensor3,lo     ; o2_mv_sensor may be modified via ISR during the two writes here...
     movf    lo,W                         ; in 0.1mV steps
 	rcall   ghostwrite_byte_profile      ; WREG -> Profile in ext. Flash
     movf    hi,W                         ; in 0.1mV steps
@@ -284,8 +284,8 @@ store_dive_ppO2_sensors:
 	return
 
 store_dive_gf:
-	movff	char_O_gradient_factor,WREG		; gradient factor absolute
-	rcall   ghostwrite_byte_profile      ; WREG -> Profile in ext. Flash
+	movff	int_O_gradient_factor+0,WREG	; gradient factor absolute (range is limited to 255, only lower byte used for value)
+	rcall   ghostwrite_byte_profile			; WREG -> Profile in ext. Flash
 	movlw	div_gf
 	movwf	divisor_gf						; Reload divisor
 	return
@@ -346,14 +346,11 @@ ghostwriter_end_dive:
 	movff	last_surfpressure_30min+0,int_I_pres_surface+0          ; Pass surface to desat routine !
 	movff	last_surfpressure_30min+1,int_I_pres_surface+1
 
-	call	deco_calc_desaturation_time ; calculate desaturation time
-	movlb	b'00000001'                 ; select ram bank 1
-	movff	int_O_desaturation_time+0, desaturation_time+0
-	movff	int_O_desaturation_time+1, desaturation_time+1	; Buffer
-    call	calc_deko_surfmode
-	rcall	calculate_noflytime         ; Calc NoFly time
-
-										; store header and ...
+	call	deco_calc_wo_deco_step_1_min						; calculate deco in surface mode
+	
+	call	deco_calc_desaturation_time							; calculate desaturation time
+	movlb	b'00000001'											; select ram bank 1
+	
 	movlw	0xFD						; .... End-of-Profile Bytes
 	rcall   ghostwrite_byte_profile      ; WREG -> Profile in ext. Flash
 	movlw	0xFD
@@ -426,7 +423,7 @@ ghostwriter_end_dive:
 	movf	EEDATA,W
 	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
 
-		; store pointer to end of diveprofile
+	; store pointer to end of diveprofile
 	movf	ext_flash_log_pointer+0,W
 	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
 	movf	ext_flash_log_pointer+1,W
@@ -479,30 +476,30 @@ end_dive1:
 	movff	lo,max_pressure+0
 	movff	hi,max_pressure+1
 	
-	movff	max_pressure+0,WREG			; Max. depth
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
+	movff	max_pressure+0,WREG				; Max. depth
+	rcall	ghostwrite_byte_header			; WREG -> Header in ext. flash
 	movff	max_pressure+1,WREG
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
+	rcall	ghostwrite_byte_header			; WREG -> Header in ext. flash
 
 end_dive2:
-	movf	divemins+0,W            ; divetime minutes
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
+	movf	divemins+0,W            		; divetime minutes
+	rcall	ghostwrite_byte_header			; WREG -> Header in ext. flash
 	movf	divemins+1,W
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
-	movf	divesecs,W				; divetime seconds
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
-	movff	minimum_temperature+0,WREG			; minimum temperature
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
+	rcall	ghostwrite_byte_header			; WREG -> Header in ext. flash
+	movf	divesecs,W						; divetime seconds
+	rcall	ghostwrite_byte_header			; WREG -> Header in ext. flash
+	movff	minimum_temperature+0,WREG		; minimum temperature
+	rcall	ghostwrite_byte_header			; WREG -> Header in ext. flash
 	movff	minimum_temperature+1,WREG		
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
-	movff	last_surfpressure_30min+0,WREG		; airpressure before dive
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
+	rcall	ghostwrite_byte_header			; WREG -> Header in ext. flash
+	movff	last_surfpressure_30min+0,WREG	; airpressure before dive
+	rcall	ghostwrite_byte_header			; WREG -> Header in ext. flash
 	movff	last_surfpressure_30min+1,WREG		
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
-	movff	int_O_desaturation_time+0,WREG		; desaturation time in minutes
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
+	rcall	ghostwrite_byte_header			; WREG -> Header in ext. flash
+	movff	int_O_desaturation_time+0,WREG	; desaturation time in minutes
+	rcall	ghostwrite_byte_header			; WREG -> Header in ext. flash
 	movff	int_O_desaturation_time+1,WREG
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
+	rcall	ghostwrite_byte_header			; WREG -> Header in ext. flash
 
     btfss   FLAG_ccr_mode           ; In CCR mode...
     bra     end_dive_oc_gaslist     ; No, write OC gases
@@ -601,11 +598,11 @@ end_dive_oc_gaslist:            	; OC Gases...
 ;    bra     end_dive_oc_cc_common
 
 end_dive_oc_cc_common:
-	movlw	softwareversion_x			; Firmware version
+	movlw	softwareversion_x		; Firmware version
 	rcall	ghostwrite_byte_header
 	movlw	softwareversion_y
 	rcall	ghostwrite_byte_header
-	movf	batt_voltage+0,W			; Battery voltage 
+	movf	batt_voltage+0,W		; Battery voltage 
 	rcall	ghostwrite_byte_header
 	movf	batt_voltage+1,W
 	rcall	ghostwrite_byte_header
@@ -623,7 +620,7 @@ end_dive_oc_cc_common:
     ; Gradient factor
     movff	GF_start,WREG
     rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
-    movff	char_O_gradient_factor,WREG
+    movff	int_O_gradient_factor+0,WREG	; value limited to 255, only lower byte in use
     rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
 
     ; Logbook offset
@@ -707,13 +704,14 @@ end_dive_oc_cc_common:
     lfsr    FSR1,char_O_tissue_N2_saturation+0
 end_dive_store_tissues_N2:
     movf    POSTINC1,W
+	bcf		WREG,7						; clear flag bit for ongassing/offgassing
     rcall	ghostwrite_byte_header      ; WREG -> Header in ext. flash
     decfsz  lo,F
     bra     end_dive_store_tissues_N2   ; No
 
     movlw   .64
     movwf   lo
-    lfsr    FSR1,0x700;pres_tissue_N2+0       ; 16*4Byte Float = 64Bytes
+    lfsr    FSR1,0x700;pres_tissue_N2+0 ; 16*4Byte Float = 64Bytes
 end_dive_store_tissues_N2_2:
     movf    POSTINC1,W
     rcall	ghostwrite_byte_header      ; WREG -> Header in ext. flash
@@ -725,13 +723,14 @@ end_dive_store_tissues_N2_2:
     lfsr    FSR1,char_O_tissue_He_saturation+0
 end_dive_store_tissues_He:
     movf    POSTINC1,W
+	bcf		WREG,7						; clear flag bit for ongassing/offgassing
     rcall	ghostwrite_byte_header      ; WREG -> Header in ext. flash
     decfsz  lo,F
     bra     end_dive_store_tissues_He   ; No
 
     movlw   .64
     movwf   lo
-    lfsr    FSR1,0x740;pres_tissue_He+0       ; 16*4Byte Float = 64Bytes
+    lfsr    FSR1,0x740;pres_tissue_He+0 ; 16*4Byte Float = 64Bytes
 end_dive_store_tissues_He_2:
     movf    POSTINC1,W
     rcall	ghostwrite_byte_header      ; WREG -> Header in ext. flash
@@ -768,14 +767,14 @@ end_dive_store_tissues_He_2:
 
     ; Header stop
 	movlw	0xFB
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
+	rcall	ghostwrite_byte_header		; WREG -> Header in ext. flash
 	movlw	0xFB
-	rcall	ghostwrite_byte_header	; WREG -> Header in ext. flash
+	rcall	ghostwrite_byte_header		; WREG -> Header in ext. flash
 	
-	call	divemode_store_statistics		; Store/update statistics for this unit
+	call	divemode_store_statistics	; Store/update statistics for this unit
 
 	clrf	surface_interval+0
-	clrf	surface_interval+1				; Clear surface interval timer
+	clrf	surface_interval+1			; Clear surface interval timer
 
 ghostwriter_end_dive_common:
 ; Update ext_flash_log_pointer into EEPROM
@@ -787,30 +786,30 @@ ghostwriter_end_dive_common:
 	movff	ext_flash_log_pointer+2,EEDATA
 	write_int_eeprom .6
 
-	bcf		simulatormode_active			; if we were in simulator mode
+	bcf		simulatormode_active		; if we were in simulator mode
 
 ; In DEBUG compile, keep all simulated dives in logbook, Desat time, nofly, etc...
     ifndef __DEBUG
-		extern	deco_pull_tissues_from_vault
-		btfsc	restore_deco_data			; Restore decodata?
-	    call    deco_pull_tissues_from_vault
-        banksel common                  ; Bank1
+	extern	deco_pull_tissues_from_vault
+	btfsc	restore_deco_data					; Restore decodata?
+    call    deco_pull_tissues_from_vault
+	banksel common                  			; Bank1
 	endif
-	call	update_battery_registers	; update battery registers into EEPROM
-	goto	surfloop					; and return to surfaceloop
+	call	update_battery_registers			; update battery registers into EEPROM
+	goto	surfloop							; and return to surfaceloop
 
 ghostwriter_end_dive_common_sim:
-    tstfsz  surface_interval+0              ; Was interval zero?
+    tstfsz  surface_interval+0              	; Was interval zero?
     bra     ghostwriter_end_dive_common_sim2    ; No
-    tstfsz  surface_interval+1              ; Was interval zero?
+    tstfsz  surface_interval+1              	; Was interval zero?
     bra     ghostwriter_end_dive_common_sim2    ; No
-    bra     ghostwriter_end_dive_common     ; Yes, done.
+    bra     ghostwriter_end_dive_common     	; Yes, done.
 
 ghostwriter_end_dive_common_sim2:
     movf    divemins+0,W
     addwf   surface_interval+0,F
     movf    divemins+1,W
-	addwfc  surface_interval+1				; Add simulated divetime to surface interval
+	addwfc  surface_interval+1			; Add simulated divetime to surface interval
     bra     ghostwriter_end_dive_common
 
 ghostwriter_load_pointer:               ; Load ext_flash_address:3 from EEPROM .4-.6
@@ -957,47 +956,6 @@ ghostwriter_short_header2:
     rcall	ghostwrite_byte_profile 	; WREG -> Profile in ext. flash
 
 	return
-
-calculate_noflytime:
-	; calculate nofly time
-	movff	int_O_desaturation_time+0,xA+0
-	movff	int_O_desaturation_time+1,xA+1
-
-    btfsc   xA+1,7                  ; Is desat time negative ?
-    bra     calculate_noflytime_3   ; Then surely not valid !
-
-	tstfsz	xA+0			; Desat=0?
-	bra		calculate_noflytime2
-	tstfsz	xA+1			; Desat=0?
-	bra		calculate_noflytime2
-
-calculate_noflytime_3:	
-	; Desaturation time = zero
-	clrf	nofly_time+0			; Clear nofly time
-	clrf	nofly_time+1			; Clear nofly time
-	return
-
-calculate_noflytime2:	
-	movff	xA+0,int_I_temp+0
-	movff	xA+1,int_I_temp+1
-	movlw	no_fly_time_ratio		; nofly_time_ratio                
-	movff	WREG,char_I_temp
-	call	deco_calc_percentage
-	movlb	b'00000001'				; select ram bank 1
-	movff	int_I_temp+0,xA+0
-	movff	int_I_temp+1,xA+1
-	tstfsz	xA+0			; Desat=0?
-	bra		calculate_noflytime_2_final
-	tstfsz	xA+1			; Desat=0?
-	bra		calculate_noflytime_2_final
-	bra     calculate_noflytime_3
-
-calculate_noflytime_2_final:
-	movff	xA+0,nofly_time+0
-	movff	xA+1,nofly_time+1
-	return
-
-
 divemode_store_statistics:	; Store/update statistics for this unit
     rcall   vault_decodata_into_eeprom  ; update deco data
 	rcall	do_logoffset_common_read	; Existing logbook offset into lo:hi
@@ -1103,19 +1061,19 @@ vault_decodata_into_eeprom:
     write_int_eeprom .7
     movff   int_O_CNS_fraction+1,EEDATA
     write_int_eeprom .8
-    movff   desaturation_time+0,EEDATA
+    movff   int_O_desaturation_time+0,EEDATA
     write_int_eeprom .9
-    movff   desaturation_time+1,EEDATA
+    movff   int_O_desaturation_time+1,EEDATA
     write_int_eeprom .10
     movff   surface_interval+0,EEDATA
     write_int_eeprom .11
     movff   surface_interval+1,EEDATA
     write_int_eeprom .12
-    movff   char_O_gradient_factor,EEDATA
+    movff   int_O_gradient_factor+0,EEDATA		; value limited to 255, only lower byte in use for value
     write_int_eeprom .13
-    movff   nofly_time+0,EEDATA
+    movff   int_O_nofly_time+0,EEDATA
     write_int_eeprom .14
-    movff   nofly_time+1,EEDATA
+    movff   int_O_nofly_time+1,EEDATA
     write_int_eeprom .15
 
     ; Tissue data from 16 to 144
@@ -1123,7 +1081,7 @@ vault_decodata_into_eeprom:
     movwf   EEADR
     movlw   .128
     movwf   lo
-    lfsr    FSR1,0x700;pres_tissue_N2+0       ; 32*4Byte Float = 128Bytes
+    lfsr    FSR1,0x700;pres_tissue_N2+0 ; 32*4Byte Float = 128Bytes
 vault_decodata_into_eeprom2:
     movff   POSTINC1,EEDATA
     call    write_eeprom                ; EEDATA into EEPROM@EEADR
@@ -1160,31 +1118,31 @@ restore_decodata_from_eeprom:
     read_int_eeprom .8
     movff   EEDATA,int_O_CNS_fraction+1
     read_int_eeprom .9
-    movff   EEDATA,desaturation_time+0
+    movff   EEDATA,int_O_desaturation_time+0
     read_int_eeprom .10
-    movff   EEDATA,desaturation_time+1
+    movff   EEDATA,int_O_desaturation_time+1
     read_int_eeprom .11
     movff   EEDATA,surface_interval+0
     read_int_eeprom .12
     movff   EEDATA,surface_interval+1
     read_int_eeprom .13
-    movff   EEDATA,char_O_gradient_factor
+    movff   EEDATA,int_O_gradient_factor+0
     read_int_eeprom .14
-    movff   EEDATA,nofly_time+0
+    movff   EEDATA,int_O_nofly_time+0
     read_int_eeprom .15
-    movff   EEDATA,nofly_time+1
+    movff   EEDATA,int_O_nofly_time+1
 
     ; Tissue data from 16 to 144
     movlw   .16
     movwf   EEADR
     movlw   .128
     movwf   lo
-    lfsr    FSR1,0x700;pres_tissue_N2+0       ; 32*4Byte Float = 128Bytes
+    lfsr    FSR1,0x700;pres_tissue_N2+0		; 32*4Byte Float = 128Bytes
 restore_decodata_from_eeprom2:
-    call    read_eeprom                ; EEPROM@EEADR into EEDATA
+    call    read_eeprom						; EEPROM@EEADR into EEDATA
     movff   EEDATA,POSTINC1
     incf    EEADR,F
-    decfsz  lo,F                        ; All done?
+    decfsz  lo,F                        	; All done?
     bra     restore_decodata_from_eeprom2   ; No
     clrf    EEADRH
     return

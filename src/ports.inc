@@ -19,7 +19,7 @@
 #DEFINE	switch_right2	PORTB,0	; Switch
 #DEFINE mcp_power		PORTB,2	; RX Power supply
 #DEFINE	s8_npower		PORTB,3	; Powers S8 Bulkhead (inverted)
-#DEFINE	LEDg			PORTB,4	; LED green
+#DEFINE	LEDg			PORTB,4	; LED green / active_reset_ostc_rx (<- Do no longer use this LED unless for debugging)
 #DEFINE	tft_power		PORTB,5 ; via P-MOSFET (Inverted)
 #DEFINE	icsp_clk		PORTB,6	; ICSP
 #DEFINE	icsp_dat		PORTB,7	; ICSP
@@ -32,8 +32,8 @@
 #DEFINE	I2C_RC3			PORTC,3	; I²C
 #DEFINE	I2C_RC4			PORTC,4	; I²C
 #DEFINE	MS5541_mosi		PORTC,5	; MS5541
-#DEFINE	uart1_RC6		PORTC,6	; UART1 (USB)
-#DEFINE	uart1_RC7		PORTC,7	; UART1 (USB)
+#DEFINE	uart1_RC6		PORTC,6	; UART1 (USB/BLE)
+#DEFINE	uart1_RC7		PORTC,7	; UART1 (USB/BLE)
 ; TRIS=b'10011010'
 
 ; PORTD
@@ -82,7 +82,7 @@
 #DEFINE	CHRG_IN 		PORTJ,3	; CHRG_IN
 #DEFINE	vusb_in			PORTJ,4	; external power supply detect, USB enumerated
 #DEFINE	power_sw1		PORTJ,5	; Power supply for switch2 circuit
-#DEFINE	MS5541_clk		PORTJ,6	; MS5541 mH
-#DEFINE	MS5541_miso		PORTJ,7	; MS5541 mH
+#DEFINE	MS5541_clk		PORTJ,6	; MS5541
+#DEFINE	MS5541_miso		PORTJ,7	; MS5541
 ; TRIS=b'10010000'
 

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File menu_processor.asm
+;   File menu_processor.asm							REFACTORED VERSION V2.91
 ;
 ;   Routines to handle all hwOS graphic/text menus.
 ;
@@ -81,10 +81,11 @@ menu_processor:
         movff   TBLPTRH, menu_block+1
         movff   TBLPTRU, menu_block+2
 
-    extern  TFT_clear_divemode_menu
         btfss   divemode                ; In divemode?
         bra     menu_processor0         ; No
 
+	; Required for menus with less entries then the calling menu but not so nice when setting up gas 6.... mH
+	extern  TFT_clear_divemode_menu
         movlw   .1
         cpfsgt  menupos                 ; only if menupos=1...
         call    TFT_clear_divemode_menu ; ... Clear the menu!
@@ -127,7 +128,7 @@ menu_processor_bottom_line:
         call    TFT_cat_firmware
         STRCAT_PRINT ""
         call    TFT_standard_color
-	bcf	win_invert
+		bcf		win_invert
         return
 
 ;=============================================================================
@@ -354,8 +355,9 @@ menu_line_loop1:
 		btfsc	settime_setdate			; In the Set Time or Set Date menu?
 		call	TFT_show_time_date_menu	; Yes, update clock
 
-        btfsc   menu_show_sensors       ; In the "Sensors" menu?
-        call    TFT_menu_hud            ; Yes, update HUD data
+		; DELETE - menu has been deleted	## memory
+        ; btfsc   menu_show_sensors       ; In the "Sensors" menu?
+        ; call    TFT_menu_hud            ; Yes, update HUD data
 
 		bcf		onesecupdate			; one second updates done
 
@@ -365,21 +367,21 @@ menu_line_loop2:
 		btfsc	divemode
 		goto	restart					; Enter Divemode if required
 
-        btfsc   enable_screen_dumps         ; =1: Ignore vin_usb, wait for "l" command (Screen dump)
+        btfsc   enable_screen_dumps     ; =1: Ignore vin_usb, wait for "l" command (Screen dump)
         bra     menu_line_loop3
-        btfsc   vusb_in                     ; USB plugged in?
-        call    comm_mode                   ; Start COMM mode
+        btfsc   vusb_in                 ; USB plugged in?
+        call    comm_mode               ; Start COMM mode
         bra     menu_line_loop4
 menu_line_loop3:
-        btfss   vusb_in                     ; USB (still) plugged in?
-        bcf     enable_screen_dumps         ; No, clear flag
+        btfss   vusb_in                 ; USB (still) plugged in?
+        bcf     enable_screen_dumps     ; No, clear flag
         call    rs232_get_byte
         btfsc   rs232_recieve_overflow
         bra     menu_line_loop4
         movlw   "l"
         cpfseq	RCREG1
         bra     menu_line_loop4
-        call    TFT_dump_screen             ; Dump the screen contents
+        call    TFT_dump_screen         ; Dump the screen contents
 menu_line_loop4:
 
         bra     menu_line_loop
@@ -445,12 +447,12 @@ menu_draw_lines_divemode:
         movlw   dm_menu_item1_column
         movff   WREG,win_leftx2
         clrf    start_item
-        movff   item_max,menupos4           ; Copy item_max for divemode cursor routine
+        movff   item_max,menupos4       ; Copy item_max for divemode cursor routine
         bra     menu_draw_lines_2
 
 menu_draw_lines:
-        btfsc   divemode                    ; in divemode?
-        bra     menu_draw_lines_divemode    ; Yes
+        btfsc   divemode                ; in divemode?
+        bra     menu_draw_lines_divemode; Yes
 
         btfsc   menu_flags,0            ; Dynamic title ?
         rcall   menu_processor_title    ; YES: redraw it then.
@@ -477,7 +479,7 @@ menu_draw_lines_2:
         movff   start_item, menu_item
 
 menu_draw_lines_1:
-        call    TFT_standard_color     ; Restore color after disabled lines.
+        call    TFT_standard_color     	; Restore color after disabled lines.
         
         movf    menu_item,W
         rcall   menu_read_item

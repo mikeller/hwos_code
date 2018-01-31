@@ -18,6 +18,8 @@
     extern  menuview_toggle
     extern  menuview_toggle_reset
     extern  customview_mask
+    
+    extern  customview_alternative_second
 
     ; Surface mode
     extern  surf_customview_toggle

@@ -8,11 +8,10 @@
 ; HISTORY
 ;  2012-10-24 : [mH] Creation
 
-	extern	I2C_RX_accelerometer
-	extern 	I2C_init_accelerometer
+    extern  I2C_RX_accelerometer
+    extern  I2C_init_accelerometer
     extern  I2C_sleep_accelerometer
     extern  I2C_init_compass
-    extern  I2C_init_compass_fast
     extern  I2C_sleep_compass
     extern  I2C_RX_compass
     extern  lt2942_get_voltage              ; Read battery voltage registers

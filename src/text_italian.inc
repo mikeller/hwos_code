@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;    File text_italian.asm
+;    File text_italian.asm							REFACTORED VERSION V2.95
 ;
 ;    Italian texts translation file.
 ;
@@ -10,6 +10,7 @@
 ; Basic texts
 	TCODE	tNo,        "No"            ; No
 	TCODE	tYes,       "Si"            ; Yes = No + 1
+	TCODE	tblank,			" "					; (a single space character)	## NEW (layout)
 
 ; Surface-mode texts
     TCODE   tBeta,      "beta"         	; beta
@@ -23,7 +24,7 @@
     TCODE   tDivemenu_Gaslist,  "Lista Gas"       ; Gaslist
     TCODE   tDivemenu_ResetAvg, "Azzera Media"  ; Reset Avg.
     TCODE   tDivemenu_Setpoint, "Setpoint"      ; Setpoint
-    TCODE   tDivemenu_UseSensor,"Usa Sensori"    ; Use Sensor
+    TCODE   tDivemenu_UseSensor,"usa Sensori"    ; Use Sensor
     TCODE   tDivemenu_ToggleGF, "Alterna GF"     ; Toggle GF
     TCODE   tDivemenu_Marker,   "Set Marker"    ; Set Marker
     TCODE   tDivemenu_LostGas,  "Gas perduto"    ; Lost Gas
@@ -50,6 +51,7 @@
     TCODE   tCalibrateMenu, "Calibration"   ; Calibration
     TCODE   tCalibrationGas, "Cal. Gas O2:"  ; Cal. Gas O2:
     TCODE   tCalibrate, "Calibrate"     ; Calibrate
+	TCODE	tBack,			 "back..."			;								## NEW 
 
 ; Gas menu
     TCODE   tGaslist,   "Lista Gas OC"
@@ -78,15 +80,17 @@
     TCODE   tSetup_mix, "Imposta Miscela"
     TCODE   tCCRMode,   "Modo CCR:"             ; CCR Mode:
     TCODE   tCCRModeFixedSP,  "SP Fissi"        ; Fixed SP
-    TCODE   tCCRModeSensor,   "Sensori"          ; Sensor
+    TCODE   tCCRModeSensor,   "Sensori"			; Sensor
     TCODE   tCCRModeAutoSP,   "Auto SP"         ; Auto SP
     TCODE   tSP,            "SP"                ; SP (SetPoint)
-    TCODE   tSPPlus,    "ppO2+"                  ; pO2+
+    TCODE   tSPPlus,    "ppO2+"					; pO2+
     TCODE   tSensorFallback, "Fallback:"        ; Fallback:
+	TCODE	tCalculated,	"calculated"		; calculated
     TCODE   tppO2,      "ppO2:"                 ; ppO2:
-    TCODE   tppO2O2,	"ppO2(O2)"		; ppO2(O2)
-    TCODE   tppO2Dil,	"ppO2(Dil)"		; ppO2(Dil)
-    
+	TCODE   tppO2O2,	"ppO2(O2)"				; ppO2(O2)
+    TCODE   tppO2Dil,	"ppO2(Dil)"				; ppO2(Dil)
+    TCODE   tppO2Mix,	"ppO2(Mix)"				; ppO2(Mix)
+		
 ; New battery menu
 	TCODE   tNewBattTitle,      "Nuova Batteria?"
 	TCODE	tNewBattOld,		"Mantieni vecchio"
@@ -114,16 +118,18 @@
 ; Dive Settings
     TCODE   tDvMode,    "Modo Dive:"
     TCODE   tDvOC,      "OC"
-    TCODE   tDvCC,      "CC"
+	TCODE	tDvCCR,		"CCR"
     TCODE   tDvGauge,   "Gauge"
     TCODE   tDvApnea,   "Apnea"
-    TCODE   tDvPSCR,	"PSCR"
-    TCODE   tDkMode,    "Algorit.:"
-    TCODE   tZHL16,     "ZH-L16"
-    TCODE   tZHL16GF,   "ZH-L16+GF"
+    TCODE   tDvPSCR,	"pSCR"
+    TCODE   tDvCC,      "CC"
+    TCODE   tDkMode,    "Algorit.:ZH-L16"		;								## MODIFIED (memory)
+    TCODE   tZHL16,     " "						;								## MODIFIED (memory)
+    TCODE   tZHL16GF,   "+GF"					;								## MODIFIED (memory)
     TCODE   tPPO2Max,   "ppO2 Max:"
     TCODE   tPPO2DECO,	"ppO2 Deco:"
     TCODE   tPPO2MIN,   "ppO2 Min:"
+	TCODE	tPPO2MINCC, 	"Min Loop:"			; 								## NEW ppO2 min cc
     TCODE   tLastDecostop, "Ultima Deco:"
     TCODE   tDecoparameters, "Parametri Deco"
     TCODE   tGF_low,    "GF basso:"
@@ -138,6 +144,20 @@
     TCODE   tDiveaGF_active,"aGF!"          ; aGF!
     TCODE   tppO2settings,"Menu ppO2"        ; ppO2 Settings (max. 18 chars)
     TCODE   tsafetystopmenu,"Usa tappa sicur:"       ; Safety Stop: (max. 16 chars)
+	TCODE   tGasUsage,  	"Gas Usage"         ; Gas Usage
+    TCODE   tSetBotUse, 	"Bottom Gas: "      ; Bottom Gas: (space)
+    TCODE   tSetDecoUse,	"Deco   Gas: "      ; Deco   Gas: (space)			## MODIFIED (layout)
+	TCODE	tCalcAscGas,	 "Calc.Gas (B/O):"	;								## NEW bailout gas needs
+	TCODE	tTankSizes,		 "Tank Sizes"		;								## NEW bailout gas needs
+	TCODE   tLiter,			 " l"				;								## NEW bailout gas needs 
+	TCODE	tTankFillPress,	 "Tank Press Budget";								## NEW bailout gas needs
+	TCODE	tGas1,			 "Gas 1:"			;								## NEW bailout gas needs
+	TCODE	tGas2,			 "Gas 2:"			;								## NEW bailout gas needs
+	TCODE	tGas3,			 "Gas 3:"			;								## NEW bailout gas needs
+	TCODE	tGas4,			 "Gas 4:"			;								## NEW bailout gas needs
+	TCODE	tGas5,			 "Gas 5:"			;								## NEW bailout gas needs
+	TCODE	tCCmaxFracO2,	 "Loop %O2 max.:"	;								## NEW CCR max ppO2 limiter
+	TCODE	t2ndDecoPlanMenu,"2nd Deco Plan"	;								## NEW deco engine
 
 ; Display Settings
     TCODE   tBright,    "Luminosita':"
@@ -145,9 +165,10 @@
     TCODE   tMedium,    "Media"
     TCODE   tHigh,      "Alta"
     TCODE   tDvSalinity,"Salinita':"            ; Salinity
+	TCODE   tShowppO2,  "Always show ppO2:"     ; Always show ppO2:
     TCODE   tFlip,      "Ruotare schermo:"      ; Rotate Screen
     TCODE   tMODwarning,"MOD warning:"          ; MOD warning
-    TCODE   tShowppO2,  "Always show ppO2:"     ; Always show ppO2:
+	TCODE	tIBCDwarning,	"IBCD Warning  :"	; IBCD Warning					## NEW IBCD
     TCODE   tTimeoutDive,"Dive Timeout:"	; Dive Timeout
 
 ; VSI display Settings
@@ -167,17 +188,21 @@
     TCODE   tCalY,	 "Cal Y:"		; Cal Y
     TCODE   tCalZ,	 "Cal Z:"		; Cal Z
 
-
     TCODE   tUnits,     "Unita':"
     TCODE   tMetric,     " m/°C"            ; Enum menu
     TCODE   tImperial,   "ft/°F"
 
     TCODE   tDefName,   "HW OSTC"
-	TCODE	tbar,		"bar"				; bar
 
     TCODE   tButtonleft,"Bottone sinistra:"      ; Left button
     TCODE   tButtonright,"Bottone destra:"    ; Right button
 
+	TCODE	tAltMode,		"Waiting Time:"		;								## NEW no fly altitude
+	TCODE	tAltModeFly,	"Flying"			;								## NEW no fly altitude
+	TCODE	tAltMode1000,	"1000m"				;								## NEW no fly altitude
+	TCODE	tAltMode2000,	"2000m"				;								## NEW no fly altitude
+	TCODE	tAltMode3000,	"3000m"				;								## NEW no fly altitude
+	
 ; Units for all menu
     TCODE   tMeters,    "m"
 	TCODE	tFeets,		"ft"
@@ -185,7 +210,11 @@
     TCODE   tMinutes,   "'"
     TCODE   tPercent,   "%"
     TCODE   tLitersMinute, "l/min"
-
+	TCODE	tbar,		"bar"					; bar
+	TCODE	tbar10,		"0 bar"					; bar							## NEW 2.95
+	TCODE	tMeterMinute, "m/min"				; meter per minute				## NEW ascent speed
+	TCODE	tmin,		"min"					; minutes
+	
 ; Date
 	TCODE	tDateFormat, "Data:"
 	TCODE	tDateformat, "MMGGAA"
@@ -201,14 +230,14 @@
     TCODE   tBtTm_short,"Tempo:"               ; Bot. Time: (max. 6 chars)
     TCODE   tMxDep, 	"Profond. Max:"        ; Max Depth: (10 chars)
     TCODE   tIntvl, 	"Int.Superf. :"        ; Interval : (10 chars)
+	TCODE	tDecoSetup,	"Calculator Setup"	;									## NEW (layout)
     TCODE   tDeco,  	"Calcola Deco"         ; Calculate Deco
     TCODE   tDivePlan,  "Pianificat:"          ; Dive Plan:
     TCODE   tNoDeco,    "No Deco"              ; No Deco
     TCODE   tMore,      "Dettagli.."           ; More...
-    TCODE   tGasUsage,  "Gas Usage"            ; Gas Usage
-    TCODE   tSetBotUse, "Bottom Gas: "      ; Bottom Gas: (space)
-    TCODE   tSetDecoUse,"Deco Gas: "        ; Deco Gas: (space)
-
+	TCODE	tSelectSetpoint,"CCR Setpoint: "	;								## NEW deco calculator enhancement
+	TCODE	tuseAGF,		"use aGF: "			;								## NEW deco calculator enhancement
+	TCODE	tCalculating,	"Calculating..."	;								## NEW deco calculator enhancement
 
 ; Information menu
     TCODE   tFirmware,  "Firmware: "        ; Firmware: (space)
@@ -251,11 +280,24 @@
     TCODE   taGFactors,     "Valori aGF"    ; aGF Values
     TCODE   tGFInfo,        "Info GF"       ; GF Info
     TCODE   tCeiling,       "Ceiling"       ; Ceiling
-    TCODE   tDiveSafetyStop,"Stop"         ; Stop (Four chars, right alligned)
+    TCODE   tDiveSafetyStop,"Stop"			; Stop (Four chars, right alligned)
     TCODE   tDiveFallback,  "Fallback!"     ; Fallback! (max. nine chars)
+	TCODE	tDecoInfo,		"Deco Zone"		; Deco info
     TCODE   tSensorCheck,   "Sensor Check"  ; Sensor Check
     TCODE   tdil,	    "Dil:"	    ; Diluent ppO2 Warning
-
+	TCODE	tmix,			"Mix:"			; Pre-Mix ppO2 Warning
+    TCODE   tSensorDisagree,"Sensors<>"	    ; Sensors disagree Warning		## NEW voting logic
+    TCODE   tGasNeedsWarn,  "Gas Needs"	    ;					## NEW bailout gas needs
+    TCODE   tGasNeedsBar,   "Gas Needs (bar)"	;				## NEW bailout gas needs
+    TCODE   tCNSsurf,	    "CNS Surf."	    ;					## NEW CNS at end-of-dive
+    TCODE   tCNSfTTS,	    "CNS fTTS"	    ;					## NEW CNS at end-of-dive
+    TCODE   tCNSBO,	    	"CNS B/O"	    ;					## NEW CNS at end-of-dive
+    TCODE   tCNSnow,	    "CNS now"	    ;					## NEW CNS at end-of-dive
+    TCODE   tCNSeod,	    "CNS final"	    ;					## NEW CNS at end-of-dive
+    TCODE   tIBCD,	    	"IBCD N2He"	    ;					## NEW IBCD
+    TCODE   tMicroBubbles,  "M.Bubbles"	    ;					## NEW microbubbles
+	TCODE	tCNS,			"CNS: "			;					## V2.95 optics
+	
 ; Divemode menu
     TCODE   tDivePreMenu,   "Menu?"         ; Menu?
     TCODE   tSetHeading,    "Direz."        ; Bearing (Max. seven chars)
@@ -301,11 +343,6 @@
 	TCODE	tLogOffsetp10,	"+10"				; +10
 	TCODE	tLogOffsetm1,	"-1"				; -1
 	TCODE	tLogOffsetm10,	"-10"				; -10
-
-; Sampling rate
-    TCODE   tSamplingrate,  "Campionamento:"    ; Sampling rate:
-    TCODE   tSampling2s,    "2s"                ; 2s
-    TCODE   tSampling10s,   "10s"               ; 10s
 
 ; Compass directions
     TCODE   tN,             "N "                ; N(orth),338°-22°

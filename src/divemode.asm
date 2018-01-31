@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File divemode.asm
+;   File divemode.asm								REFACTORED VERSION V2.96a
 ;
 ;   Divemode
 ;
@@ -9,19 +9,19 @@
 ; HISTORY
 ;  2011-08-15 : [mH] moving from OSTC code
 
-#include    "hwos.inc"                  ; Mandatory header
-#include 	"shared_definitions.h"         ; Mailbox from/to p2_deco.c
-#include	"tft_outputs.inc"
-#include 	"strings.inc"
-#include 	"tft.inc"
-#include	"eeprom_rs232.inc"
-#include	"isr.inc"
-#include	"math.inc"
-#include	"wait.inc"
-#include	"customview.inc"
-#include	"start.inc"
-#include	"adc_lightsensor.inc"
-#include	"ghostwriter.inc"
+#include    "hwos.inc"					; Mandatory header
+#include    "shared_definitions.h"		; Mailbox from/to p2_deco.c
+#include    "tft_outputs.inc"
+#include    "strings.inc"
+#include    "tft.inc"
+#include    "eeprom_rs232.inc"
+#include    "isr.inc"
+#include    "math.inc"
+#include    "wait.inc"
+#include    "customview.inc"
+#include    "start.inc"
+#include    "adc_lightsensor.inc"
+#include    "ghostwriter.inc"
 #include    "i2c.inc"
 #include    "calibrate.inc"
 #include    "convert.inc"
@@ -31,136 +31,273 @@ gui     CODE
 	global	diveloop
 diveloop:
     banksel common
-	call	speed_normal
-	call	diveloop_boot			; Boot tasks for all modes
+    call    speed_normal
+    call    diveloop_boot				; Boot tasks for all modes
 
-; Startup Tasks for all modes
-    call	TFT_boot                ; Initialize TFT (includes clear screen)
-	call	TFT_divemode_mask		; Display mask
-	call	TFT_temp_divemode		; Displays temperature
-    movff   customview_divemode,menupos3    ; Reload last customview
-    call    customview_mask         ; Redraw last custom view
+    ; Startup Tasks for all modes
+    call    TFT_boot                	; Initialize TFT (includes clear screen)
+    bsf	    FLAG_TFT_divemode_mask		; Display mask
+    movff   customview_divemode,menupos3; Reload last customview
+    call    customview_mask         	; Redraw last custom view
 
-	btfsc	FLAG_apnoe_mode
-	bsf		realdive					; Set Realdive flag in Apnoe mode
+    btfsc   FLAG_apnoe_mode
+    bsf	    realdive					; Set Realdive flag in Apnoe mode
 
-	btfsc	FLAG_apnoe_mode             ; Done for Apnoe or Gauge mode
-    bra     diveloop_loop
-	btfsc	FLAG_gauge_mode             ; Done for Apnoe or Gauge mode
-	bra     diveloop_loop
+    btfsc   FLAG_apnoe_mode             ; Done for Apnoe or Gauge mode
+    bra     diveloop_loop_start
+    btfsc   FLAG_gauge_mode             ; Done for Apnoe or Gauge mode
+    bra     diveloop_loop_start
 
-	call	TFT_active_gas_divemode     ; Display gas/Setpoint
-	call	TFT_display_ndl_mask		; display "NDL"
+    bsf	    FLAG_TFT_display_ndl_mask	; display "NDL"
 
 	; +@5 init
-    setf        WREG                    ; WAIT marker: display "---"
-    movff       WREG,int_O_extra_ascenttime+0
-    movff       WREG,int_O_extra_ascenttime+1
-	movlw       1
-    movwf       apnoe_mins              ; Start compute after next cycle.
+    clrf    WREG                    	; WAIT marker: display "---"
+    movff   WREG,char_I_sim_advance_time; bank safe clrf
+    movff   WREG,int_O_alternate_ascenttime+0
+	bsf		WREG,int_not_yet_computed
+	bsf		WREG,int_invalid_flag
+    movff   WREG,int_O_alternate_ascenttime+1
 
-;--------------------------------------------------------------------------------------------------------
-diveloop_loop:		; The diveloop starts here
-	btfss	onesecupdate					
-	bra		diveloop_loop3
+diveloop_loop_start:
+    btfsc   FLAG_TFT_display_ndl_mask
+    call    TFT_display_ndl_mask
 
-; tasks any new second...
-    bcf     onesecupdate					; one seconds update, clear flag here in case it's set again in ISR before all tasks are done.
 
-	btfsc	FLAG_apnoe_mode					; Only in apnoe mode
-	bra		diveloop_loop1b					; One Second Tasks in Apnoe mode
+diveloop_loop:							; The diveloop starts here
+    btfss   quarter_second_update
+    bra     diveloop_loop4a
 
-	call	TFT_divemins					; Display (new) divetime!
-	call	customview_second				; Do every-second tasks for the custom view area
-    call	divemode_check_for_warnings     ; Check for any warnings
-
-; Tasks only for deco modes
-	btfsc	show_safety_stop				; Show the safety stop?
-	call	TFT_show_safety_stop			; Yes, show/delete if done.
-	call	calc_deko_divemode				; calculate decompression and display result (any two seconds)
-	bra		diveloop_loop1x					; Common Tasks
-
-diveloop_loop1b:
-; Tasks only for Apnoe mode
-	rcall	divemode_apnoe_tasks			; 1 sec. Apnoe tasks
-    call	customview_second				; Do every-second tasks for the custom view area
- ;	bra		diveloop_loop1x					; Common Tasks
-
-diveloop_loop1x:
-; Common 1sec. tasks for all modes
-	rcall	timeout_divemode				; dive finished? This routine sets the required flags
-	rcall	set_dive_modes                  ; tests if depth>threshold
-	rcall	set_min_temp                    ; store min. temp if required (Future hardware will need this to be checked 1/second...)
-
-	btfsc	store_sample					; store new sample?
-	call	store_dive_data					; Store profile data
-
-	btfss	divemode						; Dive finished?
-	goto	ghostwriter_end_dive    		; Dive finished!
-
-    btfsc   divemode_gaschange              ; Gas switch flag set?
-    rcall   gas_switched_common             ; Yes
-
-    btfsc   toggle_gf                       ; =1: Toggle GF/aGF
-    rcall   divemodemode_togglegf           ; Toggle aGF/GF
-
-    btfsc   FLAG_ccr_mode                   ; In CCR mode...
-    call    check_dive_autosp               ; ...check for Auto-SP
-
-diveloop_loop3:
-	rcall	test_switches_divemode			; Check switches in divemode
-
-    global  diveloop_loop4
-diveloop_loop4:                             ; Menu-Exit returns here...
-	btfsc	toggle_customview				; Next view?
-	call	customview_toggle				; Yes, show next customview (and delete this flag)
-
-	btfsc	pressure_refresh				; new pressure available?
-	rcall	update_temp_and_or_depth        ; Yes, display new depth and clear 	"pressure_refresh" flag
-
-	btfsc	oneminupdate					; one minute tasks
-	rcall	update_divemode60				; Update clock, etc.
-
-;    btfss   quarter_second_update
-;    bra     diveloop_loop4a
-
-    bcf     quarter_second_update
+    ; tasks any 1/4 second, any mode
+    bcf     quarter_second_update		; clear flag
+    
     movlw   .6
     cpfseq  menupos3                    ; in compass view?
-    bra     diveloop_loop4a             ; No
+    bra     diveloop_loop4a				; No, done.
+
+    btfsc   alternative_divelayout		; In alternative layout mode?
+    bra	    diveloop_loop4a				; Yes, done. No Compass.
+
+; TFT Output routines	
     extern  TFT_dive_compass_heading
     call    TFT_dive_compass_heading    ; Yes, update compass heading value
-    call    TFT_temp_divemode		; Redraw temperature (Is slighty affected from compass heading arrow)
+    bsf	    FLAG_TFT_temp_divemode		; Redraw temperature (Is slighty affected from compass heading arrow)
+; TFT Output routines	
+
 diveloop_loop4a:
-    btfsc   enable_screen_dumps         ; =1: Ignore vin_usb, wait for "l" command (Screen dump)
+	btfss	onesecupdate					
+	bra		diveloop_loop3
+	
+; tasks any new second...
+    bcf     onesecupdate				; one seconds update, clear flag here in case it's set again in ISR before all tasks are done.
+
+	;bsf	LEDg	; ### DEBUG - used to measure the time used by all deco code to see if there is enough margin each second ###	
+
+	; display depth based on full seconds interval (nicer blinking)
+    btfss   alternative_divelayout
+    rcall   TFT_output4_normal
+    btfsc   alternative_divelayout
+    rcall   TFT_output4_alternative
+	
+	btfsc	FLAG_apnoe_mode				; Only in apnoe mode
+	bra		diveloop_loop1b				; One Second Tasks in Apnoe mode
+	
+; tasks any new second - only for deco modes
+	bsf		FLAG_TFT_divemins			; Display (new) divetime!
+	btfsc	show_safety_stop			; Show the safety stop?
+	bsf		FLAG_TFT_show_safety_stop	; Yes, show/delete if done.
+
+	btfss	alternative_divelayout
+	rcall	TFT_output1_normal
+	btfsc	alternative_divelayout
+	rcall	TFT_output1_alternative
+
+	btfsc   FLAG_ccr_mode				; In CCR mode...
+	call    check_dive_autosp			; ...check for Auto-SP
+	
+	call	calc_deko_divemode			; calculate decompression and set resulting display flags
+
+	btfss	alternative_divelayout
+	rcall	TFT_output2_normal
+	btfsc	alternative_divelayout
+	rcall	TFT_output2_alternative
+
+	call	divemode_check_for_warnings	; Check for any warnings
+
+	bra		diveloop_loop1x				; Common Tasks
+
+	
+; tasks any new second - only for apnoe mode
+diveloop_loop1b:
+	rcall	divemode_apnoe_tasks		; 1 sec. Apnoe tasks
+	call	customview_second			; Do every-second tasks for the custom view area
+
+	;bra	diveloop_loop1x				; Common Tasks
+
+; continue tasks any new second, any mode
+diveloop_loop1x:
+	rcall	timeout_divemode			; ** menu timeout? ** This routine sets the required flags
+	rcall	set_dive_modes				; tests if depth>threshold
+	rcall	set_min_temp				; store min. temp if required (Future hardware will need this to be checked 1/second...)
+
+	btfsc	oneminupdate				; one minute tasks
+	rcall	update_divemode60			; Update clock, etc.
+
+	btfss	alternative_divelayout
+	rcall	TFT_output3_normal
+	btfsc	alternative_divelayout
+	rcall	TFT_output3_alternative
+
+	;bcf	LEDg	; ### DEBUG - used to measure the time used by all deco code to see if there is enough margin each second ###
+
+; tasks any round, any mode
+diveloop_loop3:
+    call	test_switches_divemode		; Check switches in divemode
+	
+    global  diveloop_loop4
+diveloop_loop4:							; Menu-Exit returns here...
+	btfsc	divemode_menu				; in the big divemode menu?
+	bra		diveloop_loop4b				; YES - no space for CCR/pSCR info
+	btfsc	menuview					; NO  - in the small yellow menu?
+	bra		diveloop_loop4b				; 		YES - no space for CCR/pSCR info
+	btfsc	alternative_divelayout		; 		NO  - in the alternative layout?
+	bra		diveloop_loop4b				; 			  YES - no space for CCR/pSCR info
+	call	TFT_show_mode_divemode		; 			  NO  - (re)write CCR/pSCR mode info to display
+diveloop_loop4b:
+    btfsc   toggle_customview			; Next view?
+    call    customview_toggle			; Yes, show next customview (and delete this flag)
+
+    btfsc   store_sample				; store new sample?
+    call    store_dive_data				; Store profile data
+
+    btfss   divemode					; Dive finished?
+    goto    ghostwriter_end_dive    	; Dive finished!
+
+    btfsc   divemode_gaschange			; Gas switch flag set?
+    call    gas_switched_common			; Yes
+
+    btfsc   toggle_gf					; =1: Toggle GF/aGF
+    rcall   divemodemode_togglegf		; Toggle aGF/GF
+    
+    btfsc   pressure_refresh			; new pressure available?	
+    rcall   set_max_depth				; update max. depth if required
+    btfsc   pressure_refresh			; new pressure available?	
+    bsf	    FLAG_TFT_depth				; Yes, update depth asap
+    bcf	    pressure_refresh			; clear flag
+
+    btfsc   temp_changed
+    bsf	    FLAG_TFT_temp_divemode		; Displays temperature
+
+	; display depth based on as-fast-as-possible (no nice blinking)
+    ;btfss   alternative_divelayout
+    ;rcall   TFT_output4_normal
+    ;btfsc   alternative_divelayout
+    ;rcall   TFT_output4_alternative
+    
+    btfsc   enable_screen_dumps			; =1: Ignore vin_usb, wait for "l" command (Screen dump)
     bra     diveloop_loop5
     bra     diveloop_loop6
+
 diveloop_loop5:
-    btfss   vusb_in                     ; USB (still) plugged in?
-    bcf     enable_screen_dumps         ; No, clear flag
+    btfss   vusb_in						; USB (still) plugged in?
+    bcf     enable_screen_dumps			; No, clear flag
     call    rs232_get_byte
     btfsc   rs232_recieve_overflow
     bra     diveloop_loop6
     movlw   "l"
     cpfseq	RCREG1
     bra     diveloop_loop6
-    call    TFT_dump_screen             ; Dump the screen contents
+    call    TFT_dump_screen				; Dump the screen contents
+	
 diveloop_loop6:
+	bra		diveloop_loop				; Loop the divemode
+	
+;--------------------------------------------------------------------------------------------------------	
+	
+TFT_output1_normal:	    				; beginning of any new second - only for deco modes
+	btfsc   FLAG_TFT_divemode_mask
+	call    TFT_divemode_mask
+	btfsc	FLAG_TFT_divemins
+	call	TFT_divemins				; Display (new) divetime!
+	call	customview_second			; Do every-second tasks for the custom view area (In sync with the divetime) mH
+	btfsc	FLAG_TFT_show_safety_stop
+	call	TFT_show_safety_stop		; Show safety stop
+	btfsc	FLAG_TFT_clear_safety_stop
+	call	TFT_clear_safety_stop		; Clear safety stop
+	return
+	
+TFT_output1_alternative:				; beginning of any new second - only for deco modes
+	btfsc	FLAG_TFT_divemins
+	call	TFT_divemins_alternative	; Display (new) divetime!
+	btfsc	FLAG_TFT_divemode_mask_alt
+	call    TFT_divemode_mask_alternative	; Alt. mask
+	call	customview_alternative_second	; Do every-second tasks for the custom view area (In sync with the divetime) mH
+	return
+	
+TFT_output2_normal:	    				; any new second - only for deco modes
+	btfsc   FLAG_TFT_display_ndl_mask
+	call    TFT_display_ndl_mask
+	btfsc   FLAG_TFT_display_ndl
+	call    TFT_display_ndl
+	btfsc	FLAG_TFT_display_deko_mask
+	call	TFT_display_deko_mask
+	btfsc	FLAG_TFT_display_deko
+	call	TFT_display_deko
+	btfsc	FLAG_TFT_display_tts
+	call	TFT_display_tts
+	return
 
-	bra		diveloop_loop					; Loop the divemode
+TFT_output2_alternative:    			; any new second - only for deco modes
+	return
+	
+TFT_output3_normal:	    				; tasks any new second, any mode
+	btfsc	FLAG_TFT_max_depth
+	call	TFT_max_depth				; use normal max. depth
+	btfsc	FLAG_TFT_divemode_warning
+	call	TFT_divemode_warning
+	btfsc	FLAG_TFT_divemode_warning_clear
+	call	TFT_divemode_warning_clear
+	btfsc	FLAG_TFT_active_gas_divemode
+	call	TFT_active_gas_divemode			; Display gas/Setpoint
+	btfsc	FLAG_TFT_dive_warning_text_clear
+	call	TFT_clear_warning_text          ; clear complete warnings area
+	btfsc   FLAG_TFT_dive_warning_text_clr2
+	call    TFT_clear_warning_text_2nd_row	; clear 2nd row of warnings
+	return
+	
+TFT_output3_alternative:    			; tasks any new second, any mode
+	btfsc	FLAG_TFT_max_depth_alt
+	call	TFT_max_depth_alternative	; big max. depth
+	btfsc	FLAG_TFT_dive_warning_text_clear
+	call	TFT_clear_warning_text		; clear complete warnings area (In alt mode only 2nd. row...)
+	btfsc	FLAG_TFT_big_deco_alt
+	call	TFT_big_deco_alt			; Big deco
+	return
+
+TFT_output4_normal:						; tasks any round, any mode
+	btfsc	FLAG_TFT_depth
+	call	TFT_depth					; Displays new depth
+	btfsc	FLAG_TFT_temp_divemode		
+	call	TFT_temp_divemode			; Update temperature
+	return
+	
+TFT_output4_alternative:    			; tasks any round, any mode
+    btfsc	FLAG_TFT_depth
+	call	TFT_depth					; Displays new depth
+	return
+	
+	
 ;--------------------------------------------------------------------------------------------------------
 
+divemode_apnoe_tasks:					; 1 sec. Apnoe tasks
+	call	TFT_display_apnoe_descent	; Yes, Show descent timer
+	call	TFT_max_depth				; use normal max. depth
 
-divemode_apnoe_tasks:                       ; 1 sec. Apnoe tasks
-	call	TFT_display_apnoe_descent		; Yes, Show descent timer
-	call	TFT_max_pressure				; use normal max. depth
-
-	btfsc	divemode2						; Time running?
-	bra		divemode_apnoe_tasks2			; New descent, reset data if flag is set
+	btfsc	divemode2					; Time running?
+	bra		divemode_apnoe_tasks2		; New descent, reset data if flag is set
 
 	rcall	apnoe_calc_maxdepth
 	call	TFT_display_apnoe_surface
-	call	TFT_display_apnoe_last_max		; Show last max. depth
+	call	TFT_display_apnoe_last_max	; Show last max. depth
 	incf	apnoe_surface_secs,F
 	movlw	d'60'
 	cpfseq	apnoe_surface_secs
@@ -169,26 +306,26 @@ divemode_apnoe_tasks:                       ; 1 sec. Apnoe tasks
 	incf	apnoe_surface_mins,F
 
 divemode_apnoe_tasks1:	
-	bcf		FLAG_active_descent				; Clear flag
-	btfsc	divemode2						; Time running?
-	return									; Yes, return
-	bsf		FLAG_active_descent				; Set Flag
+	bcf	FLAG_active_descent				; Clear flag
+	btfsc	divemode2					; Time running?
+	return								; Yes, return
+	bsf	FLAG_active_descent				; Set Flag
 	return
 
 divemode_apnoe_tasks2:
-	btfss	FLAG_active_descent				; Are we descending?
-	return									; No, We are at the surface
-	rcall	apnoe_calc_maxdepth				; Yes!
-	call	TFT_apnoe_clear_surface			; Clear Surface timer
-	clrf	apnoe_timeout_counter			; Delete timeout
+	btfss	FLAG_active_descent			; Are we descending?
+	return								; No, We are at the surface
+	rcall	apnoe_calc_maxdepth			; Yes!
+	call	TFT_apnoe_clear_surface		; Clear Surface timer
+	clrf	apnoe_timeout_counter		; Delete timeout
 	clrf	apnoe_surface_secs
 	clrf	apnoe_surface_mins
 	clrf	apnoe_secs
-	clrf	apnoe_mins						; Reset Descent time
+	clrf	apnoe_mins					; Reset Descent time
 	movlw	.0
 	movff	WREG,max_pressure+0
-	movff	WREG,max_pressure+1				; Reset Max. Depth
-	bcf		FLAG_active_descent				; Clear flag
+	movff	WREG,max_pressure+1			; Reset Max. Depth
+	bcf		FLAG_active_descent			; Clear flag
 	return
 
 	global	apnoe_calc_maxdepth
@@ -197,259 +334,341 @@ apnoe_calc_maxdepth:
 	movff	apnoe_max_pressure+1,sub_a+1
 	movff	max_pressure+0,sub_b+0
 	movff	max_pressure+1,sub_b+1
-	call	subU16				; sub_c = sub_a - sub_b
-								; apnoe_max_pressure<max_pressure -> neg_flag=1
-								; max_pressure<=apnoe_max_pressure -> neg_flag=0
+	call	subU16						; sub_c = sub_a - sub_b
+										; apnoe_max_pressure<max_pressure -> neg_flag=1
+										; max_pressure<=apnoe_max_pressure -> neg_flag=0
 	btfss	neg_flag	
 	return
-								;apnoe_max_pressure<max_pressure
+										;apnoe_max_pressure<max_pressure
 	movff	max_pressure+0,apnoe_max_pressure+0
 	movff	max_pressure+1,apnoe_max_pressure+1
 	return
 
+	; --------------------------------------------------------------------------------------
 
 calc_deko_divemode:
-	btfsc	twosecupdate			; two seconds after the last call
-	bra		calc_deko_divemode2		; Yes, calculate and display deco data ("first second")
-
-	bsf		twosecupdate			; No, but next second!
-	; Routines used in the "other second"
-	call	calc_average_depth          ; calculate average depth
-	call	calc_velocity               ; calculate vertical velocity and display if > threshold (every two seconds)
-    call	set_reset_safety_stop       ; Set flags for safety stop and/or reset safety stop
+	rcall	calc_deko_divemode2			; all deco relevant code is now invoked every second
+	btfsc	twosecupdate
+	bra		calc_deko_divemode1
+	bsf		twosecupdate
+	return
+	
+calc_deko_divemode1:					; the following code is invoked every 2 seconds
+	bcf		twosecupdate
+	
+	call	calc_average_depth			; calculate average depth
+	call	calc_velocity				; calculate vertical velocity and display if > threshold (every two seconds)
+	call	set_reset_safety_stop		; Set flags for safety stop and/or reset safety stop
 	call	TFT_debug_output
 
-	btfsc	FLAG_apnoe_mode             ; Done for Apnoe or Gauge mode
-    return
-	btfsc	FLAG_gauge_mode             ; Done for Apnoe or Gauge mode
+	btfsc	FLAG_apnoe_mode				; Done for Apnoe or Gauge mode
+	return
+	btfsc	FLAG_gauge_mode				; Done for Apnoe or Gauge mode
 	return
 
-; Calculate CNS
-    btfss   FLAG_pscr_mode		; in PSCR mode?
-    rcall   set_actual_ppo2             ; No, set char_I_actual_ppO2
-    btfsc   is_bailout			; Always in bailout...
-    rcall   set_actual_ppo2             ; ...set char_I_actual_ppO2
-    
-    clrf    WREG
-    movff   WREG,char_I_step_is_1min    ; Make sure to be in 2sec mode.
-	call	deco_calc_CNS_fraction		; calculate CNS
-	movlb	b'00000001'					; rambank 1 selected
 ; Check for a gas change
-	bra	check_gas_change			; Checks if a better gas should be selected (by user) and return...
+	goto	check_gas_change			; Checks if a better gas should be selected (by user) and return...
 
-    global  set_actual_ppo2
-set_actual_ppo2:                        ; calculate ppO2 in 0.01bar (e.g. 150 = 1.50 bar ppO2)
-    btfsc   divemode                    ; in divemode
-    bra     set_actual_ppo2_dive        ; Yes
-    ; No, use simulated ambient pressure for char_I_actual_ppO2
-    movff   char_I_bottom_depth,WREG
-    mullw   .100
-    movlw   LOW(.1000)
-    addwf   PRODL,W
-    movwf   xA+0
-    movlw   HIGH(.1000)
-    addwfc  PRODH,W
-    movwf   xA+1                        ; P_amb in millibar (1000 = 1.00 bar).
-    bra     set_actual_ppo2_common
-set_actual_ppo2_dive:
-    SAFE_2BYTE_COPY amb_pressure, xA    ; P_amb in millibar (1000 = 1.00 bar).
-set_actual_ppo2_common:
- 	movlw		d'10'
-	movwf		xB+0
-	clrf		xB+1
-	call		div16x16				; xC=p_amb/10 (100 = 1.00 bar).
-	movff		xC+0,xA+0
-	movff		xC+1,xA+1
-	movff		char_I_O2_ratio,xB+0
-	clrf		xB+1
-	call		mult16x16				; char_I_O2_ratio * (p_amb/10)
-	movff		xC+0,xA+0
-	movff		xC+1,xA+1
-	movlw		d'100'
-	movwf		xB+0
-	clrf		xB+1
-	call		div16x16				; xC=(char_I_O2_ratio * p_amb/10)/100
-
-; Copy ppO2 for CNS calculation
-    tstfsz      xC+1                    ; Is ppO2 > 2.55bar ?
-    setf        xC+0                    ; yes: bound to 2.55... better than wrap around.
-
-    movff		xC+0, char_I_actual_ppO2	; copy last ppO2 to buffer register
-    btfsc       is_bailout                  ; In Bailout?
-    return                                  ; Yes, done.
-    ; No Bailout, check for ccr mode
-    btfsc		FLAG_ccr_mode               ; If FLAG_ccr_mode=1...
-    movff		char_I_const_ppO2, char_I_actual_ppO2	; ...copy last ppO2 to buffer register
-    return
-
-check_fallback_clear:
-    call    check_sensors                   ; Setups "use_O2_sensorX" flags
-    ; Copy use flags to voting logic flags in case we are no longer in fallback
-    btfsc   use_O2_sensor1
-    bsf     voting_logic_sensor1
-    btfsc   use_O2_sensor2
-    bsf     voting_logic_sensor2
-    btfsc   use_O2_sensor3
-    bsf     voting_logic_sensor3
-    rcall   divemode_setup_sensor_values    ; Setup sensor values
-    goto    check_sensors                   ; Check O2 sensor thresholds for fallback customview_minute
-
+	
 calc_deko_divemode2:
-	bcf	twosecupdate
-
-	btfsc	FLAG_gauge_mode             ; Done for Apnoe or Gauge mode
+	btfsc	FLAG_gauge_mode				; Done for Apnoe or Gauge mode
 	return
 
-	extern	deco_setup_dive
-	call	deco_setup_dive				;  Pass all parameters to the C code
+	btfsc	FLAG_ccr_mode				; In CCR mode?
+	rcall	calc_deko_divemode_sensor	; do sensor data acquisition if applicable by OSTC model
 
-
-    btfsc   setpoint_fallback               ; Are we in Fallback?
-    rcall   check_fallback_clear            ; Yes, check if we still have fallback condition
-
-    bcf     setpoint_fallback               ; =1: Fallback to SP1 due to external O2 sensor failure
-
-    btfsc   FLAG_ccr_mode                   ; In CCR mode?
-    rcall    calc_deko_divemode_sensor      ; External sensor stuff
-
-;    btfsc   FLAG_pscr_mode                   ; In PSCR mode?
-;    rcall    calc_deko_divemode_sensor      ; External sensor stuff
-
+    btfsc   FLAG_pscr_mode				; In PSCR mode?
+    rcall   calc_deko_divemode_sensor	; do sensor data acquisition if applicable by OSTC model
     
-	SAFE_2BYTE_COPY amb_pressure,int_I_pres_respiration ; C-code needs the ambient pressure
-	clrf	WREG
-	movff	WREG,char_I_step_is_1min    ; Force 2 second deco mode
+	SAFE_2BYTE_COPY amb_pressure,int_I_pres_respiration ; transfer ambient pressure to deco engine
 
-	movff	char_I_O2_ratio,lo_temp		; Backup original value for everything
-	movff	char_I_N2_ratio,hi_temp		; Backup original value for everything
-	
-	btfss	FLAG_pscr_mode
-	bra	calc_deko_divemode2a	    ; Non-PSCR modes...
 
-	btfsc	is_bailout
-	bra	calc_deko_divemode2a	    ; Skip in bailout
+	; check deco engine state and switch between normal and alternative plan calculations
+	;
+	; Remark: Any reconfigurations done here do only affect the ascent & deco calculation settings,
+	;         not the settings for the calculations done on the real tissues. The later ones are only
+	;         altered in case of a gas change, or in case of a real bailout or switchback to setpoint
+	;         or sensor, respectively.
+	;         In case of a gas change or real bailout/switchback, the settings for the deco calculations
+	;         are also changed to match the settings for the real tissues. This is done on signal through
+	;         'divemode_gaschange' and will also leave the deco engine status in state as if having done
+	;         the alternative plan last.
 	
-	; in PSCR mode, compute fO2 into char_I_O2_ratio
-	call		compute_pscr_ppo2	; pSCR ppO2 into sub_c:2
-	movff		sub_c+0,xA+0
-	movff		sub_c+1,xA+1
-	movlw		LOW		.10
-	movwf		xB+0
-	movlw		HIGH	.10
-	movwf		xB+1
-	call		mult16x16		;xA*xB=xC	-> xC:4 = ppO2*10
-	SAFE_2BYTE_COPY amb_pressure, xB
-	call		div32x16	 	; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
-	; xC+0 has O2 in percent
-	movff	xC+0,char_I_O2_ratio
+	; check state of ascent/deco calculations
+	movff	char_O_deco_status,lo		; get a working copy of char_O_deco_status into bank common
+	movlw	DECO_STATUS_MASK			; load bit mask covering the deco status bits
+	andwf	lo,W						; mask out bits showing deco engine computations state
+	tstfsz	WREG						; check if the last compute cycle has finished (bits 1 and 0 cleared)
+	bra		calc_deko_divemode2e		; NO  - computations still in progress, needs more computation cycles
+	btfss	lo,DECO_PLAN_FLAG			; YES - computation cycle finished, so check what has been computed
+	bra		calc_deko_divemode2b		; PLAN bit is cleared i.e. normal plan was done, may do alternative next
 
-	movff	char_I_He_ratio, wait_temp	; copy into bank1 register
-	bsf	STATUS,C			; Borrow bit
-	movlw	d'100'				; 100%
-	subfwb	wait_temp,W			; minus He
-	bsf	STATUS,C			; Borrow bit
-	subfwb	xC+0,W				; minus O2
-	movff	WREG, char_I_N2_ratio		; = N2!
+	; The PLAN bit is set, i.e. an alternative plan was computed in the last cycle, or the deco engine has
+	; been restarted because of a gas change etc. --> Reconfigure to normal plan for next computation cycle.
 	
-calc_deko_divemode2a:
+	; reset flags for special calculations
+	bcf		lo,DECO_PLAN_FLAG			; clear flag for alternative plan
+	bcf		lo,DECO_ASCENT_FLAG			; clear flag for delayed ascent calculation
+	bcf		lo,DECO_VOLUME_FLAG			; clear flag for gas needs calculation
+	movff	lo,char_O_deco_status		; write-back char_O_deco_status to deco engine interface
+
+	; check if a switchback from CCR or pSCR bailout calculation is to be done
+	btfsc	FLAG_ccr_mode				; may a switchback from a CCR bailout calculation be needed?
+	bra		calc_deko_divemode2a		; in CCR  mode, so may need to switch back from bailout calculation
+	btfsc	FLAG_pscr_mode				; may a switchback from a pSCR bailout calculation be needed?
+	bra		calc_deko_divemode2a		; in pSCR mode, so may need to switch back from bailout calculation
+	bra		calc_deko_divemode2e		; not in CCR nor pSCR, so no switchback needed, start normal plan now
+										; (first cycle omits gas needs calculation in OC without delayed ascent)
+
+	; switch back to loop calculation if last cycle was doing a bailout calculation
+calc_deko_divemode2a:					
+	movff	opt_calc_asc_gasvolume,hi	; get the gas volume needs calculation setting
+	movf	hi,W						; are gas volume calculations turned on?
+	bz		calc_deko_divemode2e		; NO  - can't have done a bailout calculation then, start normal plan
+	btfsc	is_bailout					; YES - check if a real bailout situation is present
+	bra		calc_deko_divemode2e		; YES - OC gases have been set by bailout action then, start normal plan
+	movff	active_gas,WREG				; NO  - switch back to loop calculation: get current (diluent) gas, ...
+	call	deco_setup_cc_diluents		;       ... set up deco calculations in CCR/pSCR mode with diluents,
+	bra		calc_deko_divemode2e		;       ... and start in normal plan mode
+
+	; The PLAN bit was cleared, i.e. a normal plan was computed in the last cycle. For the next
+	; computation cycle the mode may be switched to alternative plan, or stay in normal mode...
+	
+calc_deko_divemode2b:
+	bcf		lo,DECO_ASCENT_FLAG			; clear flag for delayed ascent calculation (for safety only)
+	btfsc	is_bailout					; check if a real bailout situation is present
+	bra		calc_deko_divemode2c		; YES - stay in normal plan mode and preclude delayed ascent calculation
+	movff	char_I_extra_time,hi		; NO  -	get the delayed ascent setting
+	tstfsz	hi							; 		check if delayed ascent calculation is enabled
+	bsf		lo,DECO_ASCENT_FLAG			; 		YES - set flag for delayed ascent calculation
+	tstfsz	hi							; 		check if delayed ascent calculation is enabled (again)
+	bsf		lo,DECO_PLAN_FLAG			; 		YES - set flag for alternative plan
+
+	; check if a gas needs calculation shall be done
+calc_deko_divemode2c:					
+	bsf		lo,DECO_VOLUME_FLAG			; set gas needs calculation flag (may be cleared again next)
+	TSTOSS  opt_calc_asc_gasvolume		; check if gas needs calculation is enabled
+	bcf		lo,DECO_VOLUME_FLAG			; NO  - reset flag again
+	movff	lo,char_O_deco_status		; write-back char_O_deco_status to deco engine interface
+	TSTOSS  opt_calc_asc_gasvolume		; check if gas volume calculation is enabled (again)
+	bra		calc_deko_divemode2e		; NO  - no volume calculation, no simulated bailout plan in no case
+	
+	; check if conditions are met to calculate a bailout plan
+	btfsc	is_bailout					; check if a real bailout situation is present
+	bra		calc_deko_divemode2e		; YES - normal plan already does bailout (OC) calculation "for real"
+	btfss	lo,DECO_MODE_LOOP_FLAG		; NO  - have loop mode calculation been done during the normal plan?
+	bra		calc_deko_divemode2e		; NO  - when not in loop mode, no simulated bailout to be done
+	bsf		lo,DECO_PLAN_FLAG			; YES - set flag for alternative plan
+	movff	lo,char_O_deco_status		; 		write-back char_O_deco_status to deco engine interface
+	call    get_first_gas_to_WREG		; 		get first OC gas, ...
+	call	deco_setup_oc_gases			;       ... set up deco calculations in OC mode with OC gases,
+	;bra	calc_deko_divemode2e		;       ... and start in alternative plan mode
+
+
+calc_deko_divemode2e:
     clrf    TMR5L
     clrf    TMR5H                       ; 30,51757813µs/bit in TMR5L:TMR5H
 	call	deco_calc_hauptroutine		; calc_tissue
-    movlb   .1
-    
-  	movff	lo_temp,char_I_O2_ratio		; Restore original value for everything
-	movff	hi_temp,char_I_N2_ratio		; Restore original value for everything
-
-
-    movff   char_O_deco_status,WREG     ; Is a compute cycle finished ?
-    iorwf   WREG,F
-    btfss   STATUS,Z
-    return                              ; Return is status <> 0
+	banksel common
 
     ; Check if deco stops are necessary ?
 	movff	char_O_first_deco_depth,wait_temp	; copy ceiling to temp register
 	tstfsz	wait_temp							; Ceiling<0m?
 	bra		calc_deko_divemode3					; Yes!
 
-	btfsc	decostop_active             ; Already in nodeco mode ?
-	call	TFT_display_ndl_mask       	; No, Clear deco data, display nostop time
-	bcf		decostop_active             ; clear flag (again)
+	btfsc	decostop_active             		; Already in nodeco mode ?
+	bsf		FLAG_TFT_display_ndl_mask       	; No, Clear deco data, display nostop time
+	bcf		decostop_active						; clear flag (again)
 
 	; Copy for profile recording
 	clrf	decodata+0
-	movff	char_O_nullzeit,decodata+1  ; NDL
+	movff	char_O_nullzeit,decodata+1 			; NDL
 	
-	goto	TFT_display_ndl            ; display no deco limit, and return...
+	bsf		FLAG_TFT_display_ndl				; display no deco limit
+	return
 
 calc_deko_divemode3:
-	btfss	decostop_active            ; Already in deco mode ?
-	call	TFT_display_deko_mask      ; No, clear nostop time, display decodata
-	bsf		decostop_active            ; Set flag (again)
+	btfss	decostop_active						; Already in deco mode ?
+	bsf		FLAG_TFT_display_deko_mask			; No, clear nostop time, display decodata
+	bsf		decostop_active						; Set flag (again)
 
 	; Copy for profile recording
 	movff	char_O_first_deco_depth,decodata+0	; ceiling
-	movff	char_O_first_deco_time,decodata+1	; length of first stop in minues
-	call	TFT_display_deko            ; display decodata
-	call	TFT_show_TTS_divemode       ; display TTS
+	movff	char_O_first_deco_time,decodata+1	; length of first stop in minutes
+	bsf		FLAG_TFT_display_deko				; display decodata
+	bsf		FLAG_TFT_display_tts				; display TTS
+	return
 
-    movff   char_I_extra_time,WREG
-    tstfsz  WREG                    ; extra time = 0?
-    bra     calc_deko_divemode4     ; No, compute it
-    return
+	; --------------------------------------------------------------------------------------
 
-calc_deko_divemode4:
-    ; Check if extra cycles are needed to compute @5 variant:
-	decfsz  apnoe_mins,F                ; Reached count-down ?
-	return                              ; No: don't compute yet.
+	global	calc_deko_divemode_sensor
+calc_deko_divemode_sensor:
+	; sensor acquisition code
+	btfss   s8_digital							; check if we have digital interface to the sensors
+	bra     calc_deko_divemode_sensor_analog	; NO  - use analog interface
+	btfss   new_s8_data_available				; YES - check if a new data frame was received
+	bra		calc_deko_divemode_sensor_common	; NO  - use old values
+	call	compute_mvolts_for_all_sensors		; YES - compute mV values from digital data
+	bra		calc_deko_divemode_sensor_common
+
+calc_deko_divemode_sensor_analog:
+	call    get_analog_inputs					; TODO: abort when OSTC model does not have analog inputs
+
+calc_deko_divemode_sensor_common:
+	; Check for each sensor if it is calibrated and if its mv value is within min_mv and max_mv limits.
+	; If     ok: compute o2_ppo2_sensorX := o2_mv_sensorX * opt_x_sX / 1000.
+	; If not ok: reset o2_ppo2_sensorX, reset use_O2_sensorX and show the customview 1 in case the sensor was ok before.
+
+	; Check min_mv of sensor 1
+	btfss	sensor1_calibrated_ok			; check if sensor is usable at all
+	bra		check_sensor_1_fail				; NO  - handle it as failed
+	movff	o2_mv_sensor1+0, sub_a+0		; load sensor mV value
+	movff	o2_mv_sensor1+1, sub_a+1
+	movlw	LOW		min_mv					; load minimum mV value
+	movwf	sub_b+0
+	movlw	HIGH	min_mv
+	movwf	sub_b+1
+	call	sub16							; sub_c = sensor_mv - min_mv
+    btfsc	neg_flag						; check if result is negative, i.e. sensor_mv < min_mv
+	bra		check_sensor_1_fail				; YES - declare sensor as failed
+	; Check max_mv of sensor 1				  NO  - continue with next check
+	movff	o2_mv_sensor1+0, sub_a+0
+	movff	o2_mv_sensor1+1, sub_a+1
+	movlw	LOW		max_mv
+	movwf	sub_b+0
+	movlw	HIGH	max_mv
+	movwf	sub_b+1
+	call	sub16							;  sub_c = sensor_mv - max_mv
+	btfss	neg_flag						; check if result is negative, i.e. sensor_mv < max_mv
+	bra		check_sensor_1_fail				; NO  - declare sensor as failed
+	; Check HUD data, if available			  YES - continue with next check
+	btfss   hud_connection_ok				; check if there is a HUD connected
+    bra     check_sensor_1_ok				; NO  - all checks done then and positive
+	btfss   sensor1_active					; YES - check HUD report on sensor
+	bra		check_sensor_1_fail				; HUD reports a fail
+
+check_sensor_1_ok:
+	; o2_ppo2_sensor1 := o2_mv_sensor1:2 * opt_x_s1:2 / 1000
+	movff	o2_mv_sensor1+0,xA+0
+	movff	o2_mv_sensor1+1,xA+1
+	movff	opt_x_s1+0,xB+0
+	movff	opt_x_s1+1,xB+1
+	rcall	compute_ppo2_helper
+	movff	xC+0,o2_ppo2_sensor1			; result in 0.01bar
+	bra	check_sensor_2						; continue with next sensor
+
+check_sensor_1_fail:
+	clrf	WREG
+	movff	WREG,o2_ppo2_sensor1			; set ppO2 reading to zero
+	btfss	use_O2_sensor1					; check if sensor was in use before
+	bra		check_sensor_1_fail_1			; NO  - no new news then
+	call	check_sensor_custview_helper	; YES - show customview 1 (sensor values) on further conditions met
+check_sensor_1_fail_1:
+	bcf		use_O2_sensor1					; revoke sensor from usage
+	;bra	check_sensor_2					; continue with next sensor
+
+check_sensor_2:								; Check min_mv of sensor 2
+	btfss	sensor2_calibrated_ok			; check if sensor is usable at all
+	bra		check_sensor_2_fail				; NO  - handle it as failed
+	movff	o2_mv_sensor2+0, sub_a+0		; load sensor mV value
+	movff	o2_mv_sensor2+1, sub_a+1
+	movlw	LOW		min_mv					; load minimum mV value
+	movwf	sub_b+0
+	movlw	HIGH	min_mv
+	movwf	sub_b+1
+	call	sub16							; sub_c = sensor_mv - min_mv
+    btfsc	neg_flag						; check if result is negative, i.e. sensor_mv < min_mv
+	bra		check_sensor_2_fail				; YES - declare sensor as failed
+	; Check max_mv of sensor 2				  NO  - continue with next check
+	movff	o2_mv_sensor2+0, sub_a+0
+	movff	o2_mv_sensor2+1, sub_a+1
+	movlw	LOW		max_mv
+	movwf	sub_b+0
+	movlw	HIGH	max_mv
+	movwf	sub_b+1
+	call	sub16							;  sub_c = sensor_mv - max_mv
+	btfss	neg_flag						; check if result is nagative, i.e. sensor_mv < max_mv
+	bra		check_sensor_2_fail				; NO  - declare sensor as failed
+	; Check HUD data, if available			  YES - continue with next check
+	btfss   hud_connection_ok				; check if there is a HUD connected
+    bra     check_sensor_2_ok				; NO  - all checks done then and positive
+	btfss   sensor2_active					; YES - check HUD report on sensor
+	bra		check_sensor_2_fail				; HUD reports a fail
+
+check_sensor_2_ok:
+	; o2_ppo2_sensor2 := o2_mv_sensor2:2 * opt_x_s2:2 / 1000
+	movff	o2_mv_sensor2+0,xA+0
+	movff	o2_mv_sensor2+1,xA+1
+	movff	opt_x_s2+0,xB+0
+	movff	opt_x_s2+1,xB+1
+	rcall	compute_ppo2_helper
+	movff	xC+0,o2_ppo2_sensor2			; result in 0.01bar
+	bra	check_sensor_3						; continue with next sensor
+
+check_sensor_2_fail:
+	clrf	WREG
+	movff	WREG,o2_ppo2_sensor2			; set ppO2 reading to zero
+	btfss	use_O2_sensor2					; check if sensor was in use before
+	bra		check_sensor_2_fail_1			; NO  - no new news then
+	call	check_sensor_custview_helper	; YES - show customview 1 (sensor values) on further conditions met
+check_sensor_2_fail_1:
+	bcf		use_O2_sensor2					; revoke sensor from usage
+	;bra	check_sensor_3					; continue with next sensor	
+
+check_sensor_3:								; Check min_mv of sensor 2
+	btfss	sensor3_calibrated_ok			; check if sensor is usable at all
+	bra		check_sensor_3_fail				; NO  - handle it as failed
+	movff	o2_mv_sensor3+0, sub_a+0		; load sensor mV value
+	movff	o2_mv_sensor3+1, sub_a+1
+	movlw	LOW		min_mv					; load minimum mV value
+	movwf	sub_b+0
+	movlw	HIGH	min_mv
+	movwf	sub_b+1
+	call	sub16							; sub_c = sensor_mv - min_mv
+    btfsc	neg_flag						; check if result is negative, i.e. sensor_mv < min_mv
+	bra		check_sensor_3_fail				; YES - declare sensor as failed
+	; Check max_mv of sensor 2				  NO  - continue with next check
+	movff	o2_mv_sensor3+0, sub_a+0
+	movff	o2_mv_sensor3+1, sub_a+1
+	movlw	LOW		max_mv
+	movwf	sub_b+0
+	movlw	HIGH	max_mv
+	movwf	sub_b+1
+	call	sub16							;  sub_c = sensor_mv - max_mv
+	btfss	neg_flag						; check if result is nagative, i.e. sensor_mv < max_mv
+	bra		check_sensor_3_fail				; NO  - declare sensor as failed
+	; Check HUD data, if available			  YES - continue with next check
+	btfss   hud_connection_ok				; check if there is a HUD connected
+    bra     check_sensor_3_ok				; NO  - all checks done then and positive
+	btfss   sensor3_active					; YES - check HUD report on sensor
+	bra		check_sensor_3_fail				; HUD reports a fail
+
+check_sensor_3_ok:
+	; o2_ppo2_sensor3 := o2_mv_sensor3:2 * opt_x_s1:2 / 1000
+	movff	o2_mv_sensor3+0,xA+0
+	movff	o2_mv_sensor3+1,xA+1
+	movff	opt_x_s3+0,xB+0
+	movff	opt_x_s3+1,xB+1
+	rcall	compute_ppo2_helper
+	movff	xC+0,o2_ppo2_sensor3			; result in 0.01bar
+	bra		calc_deko_divemode_sensor1		; continue with calculating sensor average
+
+check_sensor_3_fail:
+	clrf	WREG
+	movff	WREG,o2_ppo2_sensor3			; set ppO2 reading to zero
+	btfss	use_O2_sensor3					; check if sensor was in use before
+	bra		check_sensor_3_fail_1			; NO  - no new news then
+	call	check_sensor_custview_helper	; YES - show customview 1 (sensor values) on further conditions met
+check_sensor_3_fail_1:
+	bcf		use_O2_sensor3					; revoke sensor from usage
+	;bra	calc_deko_divemode_sensor1		; continue with calculating sensor average
 	
-	movlw   .6
-	movff   WREG,char_O_deco_status     ; Stole next cycles for @5 variant.
-    
-    movlw   .2                          ; Restart countdown.
-    movwf   apnoe_mins
- 	return                              ; done.
+calc_deko_divemode_sensor1:					; calculate sensor average
+	; exit here if not in divemode
+	btfss	divemode
+	return
 
-calc_deko_divemode_sensor:                  ; External sensor stuff
-    call    compute_ppo2		    ; computes o2_ppo2_sensorX from mV-Readings
-    call    check_sensors		    ; analyses mv-Readings to set up use- and voting-Flags
-    call    divemode_setup_sensor_values    ; computes sensor_setpoint from o2_pp02_sensorX and Flags
-    
-    movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
-    sublw   .1                              ; opt_ccr_mode = 1 (Sensor)?
-    bnz     calc_deko_divemode_sensor_done  ; No, return
-    
-    movff   sensor_setpoint,char_I_const_ppO2; Copy sensor result to C-code
-
-    TSTOSS  opt_sensor_fallback             ; =1: Fallback to SP1 when sensor is lost
-    return                                  ; Never fallback
-
-    btfsc   is_bailout                      ; In bailout?
-    return                                  ; Never fallback in bailout
-    ; Check if we should fallback to SP1
-  	btfsc	use_O2_sensor1
-    return                                  ; At least one sensor is active, no fallback
-	btfsc	use_O2_sensor2
-	return                                  ; At least one sensor is active, no fallback
-	btfsc	use_O2_sensor3
-	return                                  ; At least one sensor is active, no fallback
-    ; No sensor in use -> fallback
-    movff   char_I_setpoint_cbar+0,char_I_const_ppO2    ; Setup fixed Setpoint (Always fallback to SP1), overwrite sensor result
-    bsf     setpoint_fallback               ; =1: Fallback to SP1 due to external O2 sensor failure
-calc_deko_divemode_sensor_done:
-    return
-   
-;-----------------------------------------------------------------------------
-
-divemodemode_togglegf:                  ; Toggle aGF/GF
-    bcf     toggle_gf                   ; clear flag    
-    btg     use_agf                     ; Toggle GF
-    call    TFT_gf_mask                 ; Setup Mask
-    clrf    WREG
-    movff   WREG,char_O_deco_status     ; Restart decoplan computation
-    return
-
-    global  divemode_setup_sensor_values
-divemode_setup_sensor_values:
+	; compute sensor_setpoint := average of all o2_ppo2_sensorX of those sensors that have use_O2_sensorX == true
     ; sum up sensor values (in xA:2) and active sensors in (xB:2)
     clrf    xB+0
     clrf    xB+1
@@ -457,8 +676,6 @@ divemode_setup_sensor_values:
     clrf    xA+1
     btfss   use_O2_sensor1                  ; Sensor1 active?
     bra     divemode_setup_sensor_values2   ; No
-;    btfss   voting_logic_sensor1            ; Sensor within voting logic?
-;    bra     divemode_setup_sensor_values2   ; No
     movf    o2_ppo2_sensor1,W
     addwf   xA+0
     movlw   .0
@@ -467,8 +684,6 @@ divemode_setup_sensor_values:
 divemode_setup_sensor_values2:
     btfss   use_O2_sensor2                  ; Sensor2 active?
     bra     divemode_setup_sensor_values3   ; No
-;    btfss   voting_logic_sensor2            ; Sensor within voting logic?
-;    bra     divemode_setup_sensor_values3   ; No
     movf    o2_ppo2_sensor2,W
     addwf   xA+0
     movlw   .0
@@ -477,17 +692,171 @@ divemode_setup_sensor_values2:
 divemode_setup_sensor_values3:
     btfss   use_O2_sensor3                  ; Sensor3 active?
     bra     divemode_setup_sensor_values4   ; No
-;    btfss   voting_logic_sensor3            ; Sensor within voting logic?
-;    bra     divemode_setup_sensor_values4   ; No
     movf    o2_ppo2_sensor3,W
     addwf   xA+0
     movlw   .0
     addwfc  xA+1                            ; Add into xA:2
     incf    xB+0,F                          ; Add a sensor
+
+	; Divide sum of sensor values by number of active sensors found.
 divemode_setup_sensor_values4:
     call    div16x16						; xA/xB=xC with xA+0 as remainder
-    movff   xC+0,sensor_setpoint            ; Copy result
+    movff   xC+0,sensor_setpoint            ; copy result
+	
+	; set default value for pSCR mode: 0 = let p2_deco.c compute the ppO2 based on current dil gas and depth
+	; will be overwritten later in case we are in sensor mode and have at least one usable sensor
+	clrf	WREG							; preload a zero
+	btfsc	FLAG_pscr_mode					; check if we are in pSCR mode
+	movff	WREG,char_I_const_ppO2			; YES - write 0 to char_I_const_ppo2,
+											;		it will be overwritten if we have a usable sensor reading
+	
+	btfsc	is_bailout						; check if we are in bailout
+	bra		calc_deko_divemode_sensor2		; YES - no sensor data transfer to char_I_const_ppO2 in this case
+	movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
+    sublw   .1                              ; opt_ccr_mode = 1 (Sensor)?
+    bnz     calc_deko_divemode_sensor2		; not in sensor mode - no transfer of sensor data to char_I_const_ppO2
+	tstfsz	xB+0							; check if we have found at least one usable sensor
+	bra		calc_deko_divemode_sensor1a		; YES - we have at least one usable sensor
+	bsf		setpoint_fallback				; NO  - we have NO usable sensors -> initiate fallback
+	btfss	FLAG_ccr_mode					; check if we are in CCR mode
+	bra		calc_deko_divemode_sensor2		; NO  - continue with voting logic flags
+	movff	char_I_setpoint_cbar+0,char_I_const_ppO2	; YES - select fixed setpoint no. 1 for fallback
+	bra		calc_deko_divemode_sensor2		; done - continue with voting logic flags
+calc_deko_divemode_sensor1a:				; we have at least one usable sensor with a value > 0
+	bcf		setpoint_fallback				; clear fallback condition
+	movff	sensor_setpoint,char_I_const_ppO2	; transfer average sensor value to p2_deco.c code
+	; bra	calc_deko_divemode_sensor2
+
+calc_deko_divemode_sensor2:
+    bsf     voting_logic_sensor1
+    movff   o2_ppo2_sensor1,temp1
+    rcall   check_sensor_voting_helper
+    incfsz  WREG                    		; Was Wreg=255?
+    bcf     voting_logic_sensor1    		; No, ignore this sensor
+
+    bsf     voting_logic_sensor2
+    movff   o2_ppo2_sensor2,temp1
+    rcall   check_sensor_voting_helper
+    incfsz  WREG                    		; Was Wreg=255?
+    bcf     voting_logic_sensor2    		; No, ignore this sensor
+
+    bsf     voting_logic_sensor3
+    movff   o2_ppo2_sensor3,temp1
+    rcall   check_sensor_voting_helper
+    incfsz  WREG                    		; Was Wreg=255?
+    bcf     voting_logic_sensor3    		; No, ignore this sensor
+	
+	; check if a warning shall be issued on sensor disagreement
+
+	btfsc	FLAG_ccr_mode					; check if we are in CCR mode
+	bra 	check_warn_sensor_1				; YES - continue with further checks
+	btfsc	FLAG_pscr_mode					; check if we are in pSCR mode
+	bra		check_warn_sensor_1				; YES - continue with further checks
+	bra 	check_warn_sensor_agree			; not in CCR and not in pSCR, so no warning
+check_warn_sensor_1:						; we are in CCR or pSCR mode
+	btfsc	is_bailout						; check if we are in bailout
+	bra		check_warn_sensor_agree			; YES - no warning in this case
+	movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
+    sublw   .1                              ; opt_ccr_mode = 1 (Sensor)?
+    bnz     check_warn_sensor_agree			; not in sensor mode - no warning in this case
+											; check sensor 1
+	btfss	sensor1_calibrated_ok			; check if sensor has a valid calibration
+	bra		check_warn_sensor_2				; NO  - sensor can not cause a warning then
+	btfss	use_O2_sensor1					; YES - check if sensor is in use
+	bra		check_warn_sensor_2				; NO  - sensor can not cause a warning then
+	btfsc	voting_logic_sensor1			; YES - check if sensor value is within agreement range
+	bra		check_warn_sensor_2				; YES - continue with next sensor
+	bcf		sensors_agree					; NO  - issue a warning
+	return
+
+check_warn_sensor_2:						; check sensor 2
+	btfss	sensor2_calibrated_ok			; check if sensor has a valid calibration
+	bra		check_warn_sensor_3				; NO  - sensor can not cause a warning then
+	btfss	use_O2_sensor2					; YES - check if sensor is in use
+	bra		check_warn_sensor_3				; NO  - sensor can not cause a warning then
+	btfsc	voting_logic_sensor2			; YES - check if sensor value is within agreement range
+	bra		check_warn_sensor_3				; YES - continue with next sensor
+	bcf		sensors_agree					; NO  - issue a warning
+	return
+	
+check_warn_sensor_3:						; check sensor 2
+	btfss	sensor3_calibrated_ok			; check if sensor has a valid calibration
+	bra		check_warn_sensor_agree			; NO  - sensor can not cause a warning then
+	btfss	use_O2_sensor3					; YES - check if sensor is in use
+	bra		check_warn_sensor_agree			; NO  - sensor can not cause a warning then
+	btfsc	voting_logic_sensor3			; YES - check if sensor value is within agreement range
+	bra		check_warn_sensor_agree			; YES - continue with next sensor
+	bcf		sensors_agree					; NO  - issue a warning
+	return
+					
+check_warn_sensor_agree:
+	bsf		sensors_agree
+	return
+
+compute_ppo2_helper:
+	call	mult16x16						;xA:2*xB:2=xC:4
+	movlw	LOW		.1000
+	movwf	xB+0
+	movlw	HIGH	.1000
+	movwf	xB+1
+	call	div32x16						; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
+	movlw	d'1'
+	addwf	xC+0,W							; we are just interessed in the carry flag
+	movlw	d'0'
+	addwfc	xC+1,W							; we are still just interessed in the carry flag
+    tstfsz  WREG							; ppO2 is higher than 2.55bar?
+    setf    xC+0							; Yes.
     return
+
+check_sensor_custview_helper:
+	btfss	divemode						; check if we are in divemode
+	return									; NO  - not in dive mode, return
+    movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
+    sublw   .1                              ; opt_ccr_mode = 1 (Sensors)?
+    bnz		check_sensor_helper_1			; NO  - not using the sensors in the moment
+	clrf	menupos3						; YES - arm customview 1 (sensor values)
+	bsf		toggle_customview				;       and request a customview toggle
+check_sensor_helper_1:
+	return
+
+	
+check_sensor_voting_helper:
+    movf    temp1,W
+    cpfsgt  sensor_setpoint
+    bra     check_sensor_voting_common2		; temp1<sensor_setpoint
+    ; temp1>sensor_setpoint
+    movf    temp1,W
+    subwf   sensor_setpoint,W
+    movwf   temp1
+check_sensor_voting_common1:
+    movlw	sensor_voting_logic_threshold	; Threshold in 0.01 bar
+    cpfsgt  temp1
+    retlw   .255							; Within range
+    retlw   .0								; Out of range
+check_sensor_voting_common2:
+    ; temp1<sensor_setpoint
+    movf    sensor_setpoint,W
+    subwf   temp1,F
+    bra     check_sensor_voting_common1
+		
+;-----------------------------------------------------------------------------
+
+divemodemode_togglegf:						; Toggle aGF/GF
+    bcf     toggle_gf						; clear flag    
+    btg     use_agf							; toggle GF
+
+	movff	opt_GF_low,char_I_GF_Low_percentage
+	movff	opt_GF_high,char_I_GF_High_percentage
+
+	; Overwrite GF if aGF is wanted
+	btfsc	use_agf							; =1: Use aGF
+	movff	opt_aGF_low,char_I_GF_Low_percentage
+	btfsc	use_agf							; =1: Use aGF
+	movff	opt_aGF_high,char_I_GF_High_percentage
+
+    call    TFT_gf_mask						; Setup Mask
+	goto	restart_deco_engine				; ...and return
+
 
 calc_velocity:								; called every two seconds
     btfsc   display_velocity                
@@ -501,7 +870,7 @@ calc_velocity1:
 	movff	sub_a+0,last_pressure_velocity+0	; store old value for velocity
 	movff	sub_a+1,last_pressure_velocity+1
 
-	call	subU16						; sub_c = amb_pressure - last_pressure
+	call	subU16							; sub_c = amb_pressure - last_pressure
 
     bcf     neg_flag_velocity
     btfsc   neg_flag
@@ -509,20 +878,20 @@ calc_velocity1:
 
 	movff	sub_c+0,xA+0
 	movff	sub_c+1,xA+1
-	movlw	d'39'						; 77 when called every second....
+	movlw	d'39'							; 77 when called every second....
 	movwf	xB+0
 	clrf	xB+1
-	call	mult16x16					; differential pressure in mbar*77...
+	call	mult16x16						; differential pressure in mbar*77...
 	movff	xC+0,divA+0
 	movff	xC+1,divA+1
 	movlw	d'7'
 	movwf	divB+0
-	call	div16						; devided by 2^7 equals velocity in m/min
+	call	div16							; devided by 2^7 equals velocity in m/min
 
 	movlw	d'99'
-	cpfsgt	divA+0                      ; limit to 99m/min
+	cpfsgt	divA+0                      	; limit to 99m/min
 	bra		calc_velocity3
-	movwf	divA+0						; divA=99
+	movwf	divA+0							; divA=99
 
 calc_velocity3:
     ; Copy old speeds
@@ -532,22 +901,22 @@ calc_velocity3:
     movff   divA+0,old_velocity+0
     
 ;    movff   old_velocity+3,WREG
-;    addwf   divA+0,F                    ; add old speed
+;    addwf   divA+0,F                    	; add old speed
 ;    bcf     STATUS,C
-;    rrcf    divA+0,F                    ; /2
+;    rrcf    divA+0,F                    	; /2
 ;    movff   old_velocity+2,WREG
-;    addwf   divA+0,F                    ; add old speed
+;    addwf   divA+0,F                    	; add old speed
 ;    bcf     STATUS,C
-;    rrcf    divA+0,F                    ; /2
+;    rrcf    divA+0,F                    	; /2
 ;    movff   old_velocity+1,WREG
-;    addwf   divA+0,F                    ; add old speed
+;    addwf   divA+0,F                    	; add old speed
 ;    bcf     STATUS,C
-;    rrcf    divA+0,F                    ; /2
+;    rrcf    divA+0,F                    	; /2
 ;    movff   old_velocity+0,WREG
-;    addwf   divA+0,F                    ; add old speed
+;    addwf   divA+0,F                    	; add old speed
 ;    bcf     STATUS,C
-;    rrcf    divA+0,F                    ; /2
-	goto	TFT_display_velocity		; With divA+0 = m/min..., and return...
+;    rrcf    divA+0,F                    	; /2
+	goto	TFT_display_velocity			; With divA+0 = m/min..., and return...
 
 
 ;=============================================================================
@@ -558,6 +927,7 @@ set_reset_safety_stop:						; Set flags for safety stop and/or reset safety stop
 
 	btfsc	decostop_active					; Is a deco stop displayed?
 	bra		delete_safety_stop				; Yes, don't show safety stop
+
 	; Below "opt_safety_stop_reset"? Set flag and reset count-down timer
     SAFE_2BYTE_COPY rel_pressure, lo
 	call	adjust_depth_with_salinity		; computes salinity setting into lo:hi [mbar]
@@ -567,7 +937,7 @@ set_reset_safety_stop:						; Set flags for safety stop and/or reset safety stop
     mullw   .10                             ; mbar in PRODL:H
     movff   PRODL,sub_b+0
     movff   PRODH,sub_b+1
-	call	subU16							;  sub_c = sub_a - sub_b
+	call	subU16							; sub_c = sub_a - sub_b
 	btfss	neg_flag
 	bra		reset_safety_stop				; Below 10m, reset safety stop
 
@@ -576,11 +946,11 @@ set_reset_safety_stop:						; Set flags for safety stop and/or reset safety stop
 	call	adjust_depth_with_salinity		; computes salinity setting into lo:hi [mbar]
 	movff	lo,sub_a+0
 	movff	hi,sub_a+1
-    movff   opt_safety_stop_end,WREG      ; [cbar]
+    movff   opt_safety_stop_end,WREG      	; [cbar]
     mullw   .10                             ; mbar in PRODL:H
     movff   PRODL,sub_b+0
     movff   PRODH,sub_b+1
-	call	subU16							;  sub_c = sub_a - sub_b
+	call	subU16							; sub_c = sub_a - sub_b
 	btfsc	neg_flag
 	bra		delete_safety_stop				; Above 3m, remove safety stop
 
@@ -614,7 +984,8 @@ reset_safety_stop2:
 	btfss	safety_stop_active				; Safety stop shown
 	return									; No, don't delete it
 	bcf		safety_stop_active				; Clear flag
-    goto    TFT_clear_safety_stop           ; Clear safety stop, and return...
+    bsf	    FLAG_TFT_clear_safety_stop		; Clear safety stop
+    return
 
 
 ;=============================================================================
@@ -633,21 +1004,24 @@ timeout_divemode_menu:
 timeout_divemode_menu2:                 ; Called from divemenu_tree.asm
     bcf     divemode_menu               ; Timeout! Clear flag
     call    TFT_clear_divemode_menu     ; Clear menu
-    call    TFT_active_gas_divemode     ; Redraw gas/setpoint/diluent
+    bsf	    FLAG_TFT_active_gas_divemode; Redraw gas/setpoint/diluent
     bcf     blinking_better_gas         ; Clear flag to have temperature updated once
-    call	TFT_temp_divemode           ; Displays temperature
+    bsf	    FLAG_TFT_temp_divemode		; Displays temperature
     call    TFT_draw_gassep_line        ; Gas separator grid in spec mode only
 
     btfss   decostop_active             ; In deco mode ?
     bra     timeout_divemode_menu_ndl   ; No, show NDL again
     ; Show deco
-	call	TFT_display_deko_mask      ; clear nostop time, display decodata
-    call    TFT_display_deko
-    goto    TFT_show_TTS_divemode; and return...
-
-timeout_divemode_menu_ndl:              ; Show NDL
-	call	TFT_display_ndl_mask       	; Clear deco data, display nostop time
-    goto    TFT_display_ndl; and return...
+    bsf	    FLAG_TFT_display_deko_mask
+    bsf	    FLAG_TFT_display_deko
+    bsf	    FLAG_TFT_display_tts
+    return
+    
+timeout_divemode_menu_ndl:              
+    ; Show NDL
+    bsf	    FLAG_TFT_display_ndl_mask
+    bsf	    FLAG_TFT_display_ndl
+    return
 
 timeout_divemode:
     btfsc   divemode_menu               ; Divemode menu active?
@@ -674,7 +1048,7 @@ timeout_divemode:
 	movff	opt_diveTimeout,WREG	    ; in [min]
 	mullw	.60
 	movff	PRODL,sub_a+0
-	movff	PRODH,sub_a+1		    ; in [s]
+	movff	PRODH,sub_a+1		    	; in [s]
 
 	movff	timeout_counter, sub_b+0
 	movff	timeout_counter2, sub_b+1
@@ -703,17 +1077,6 @@ timeout_divemode3:
 	movlw	simulator_timeout   		; simulator timeout
 	cpfsgt	timeout_counter
 	bsf		divemode
-	return
-
-update_temp_and_or_depth:			    ; New sensor data arrived...
-	btfsc	temp_changed	
-	call	TFT_temp_divemode		    ; Displays temperature
-
-;	btfsc	pressure_refresh
-	call	TFT_depth			    ; Displays new depth
-
-	rcall	set_max_depth			    ; update max. depth if required
-	bcf	pressure_refresh		    ; until new pressure is available
 	return
 
 update_divemode60:                      ; update any minute
@@ -745,7 +1108,8 @@ set_max_depth:
                                         ; max_pressure<rel_pressure
 	movff	sub_b+0,max_pressure+0
 	movff	sub_b+1,max_pressure+1
-	goto	TFT_max_pressure			; No, use normal max. depth; and return...
+	bsf	FLAG_TFT_max_depth				; Set flag
+	return
 
 set_min_temp:
 	movff	minimum_temperature+0,sub_a+0
@@ -763,39 +1127,39 @@ set_min_temp:
 
 	global	set_dive_modes
 set_dive_modes:
-	btfsc	high_altitude_mode		; In high altitude (Fly) mode?
-	bra		set_dive_modes3			; Yes!
+	btfsc	high_altitude_mode			; In high altitude (Fly) mode?
+	bra		set_dive_modes3				; Yes!
 
 set_dive_modes0:
 	movlw	LOW		start_dive_threshold
-	movwf	sub_a+0					; dive_treshold is in cm
+	movwf	sub_a+0						; dive_treshold is in cm
 	movlw	HIGH	start_dive_threshold
-	movwf	sub_a+1					; dive_treshold is in cm
+	movwf	sub_a+1						; dive_treshold is in cm
 
 set_dive_modes1:
     SAFE_2BYTE_COPY rel_pressure, sub_b
-	call	subU16					; sub_c = sub_a - sub_b
+	call	subU16						; sub_c = sub_a - sub_b
 
 	btfss	neg_flag	
-	bra		set_dive_modes2			; too shallow (rel_pressure<dive_threshold)
+	bra		set_dive_modes2				; too shallow (rel_pressure<dive_threshold)
 
-	btfsc	realdive				; Dive longer than one minute?
-	clrf 	timeout_counter			; Yes, reset timout counter
+	btfsc	realdive					; Dive longer than one minute?
+	clrf 	timeout_counter				; Yes, reset timout counter
 
-	bsf		divemode				; (Re-)Set divemode flag
-	bsf		divemode2				; displayed divetime is running
+	bsf		divemode					; (Re-)Set divemode flag
+	bsf		divemode2					; displayed divetime is running
 	return
 
 set_dive_modes2:
-	bcf		divemode2				; Stop time
-	btfss	realdive				; dive longer then one minute?
-	bcf		divemode				; no -> this was no real dive
-	return							; No, return
+	bcf		divemode2					; Stop time
+	btfss	realdive					; dive longer then one minute?
+	bcf		divemode					; no -> this was no real dive
+	return								; No, return
 
 
-set_dive_modes3:					; High-altitude mode
-	btfsc	realdive				; dive longer then one minute?
-	bra		set_dive_modes0			; Yes -> this is a real dive -> Use start_dive_threshold or ascend
+set_dive_modes3:						; High-altitude mode
+	btfsc	realdive					; dive longer then one minute?
+	bra		set_dive_modes0				; Yes -> this is a real dive -> Use start_dive_threshold or ascend
 
 	movlw	HIGH	high_altitude_dive_threshold
 	movwf	sub_a+1
@@ -808,22 +1172,22 @@ set_powersafe:
     cpfslt  batt_percent
 	return
 
-	movlw	d'7'					; Type of Alarm (Battery Low)
-	movwf	AlarmType				; Copy to Alarm Register
-	bsf		event_occured			; Set Event Flag
+	movlw	d'7'						; Type of Alarm (Battery Low)
+	movwf	AlarmType					; Copy to Alarm Register
+	bsf		event_occured				; Set Event Flag
     movlw   .0
-    movff   WREG,opt_brightness     ; Set Brightness to ECO
-	return							; return
+    movff   WREG,opt_brightness     	; Set Brightness to ECO
+	return								; return
 
 calc_average_depth:
-	btfsc	reset_average_depth		; Reset the Average depth?
-	rcall	reset_average1			; Reset the resettable average depth
+	btfsc	reset_average_depth			; Reset the Average depth?
+	rcall	reset_average1				; Reset the resettable average depth
 
 	; 1. Add new 2xdepth to the Sum of depths registers
     SAFE_2BYTE_COPY rel_pressure, xB	; Buffer...
     bcf     STATUS,C
     rlcf    xB+0,F
-    rlcf    xB+1,F                  ; x2
+    rlcf    xB+1,F                  	; x2
 
 	movf	xB+0,w
 	addwf	average_depth_hold+0,F
@@ -831,9 +1195,9 @@ calc_average_depth:
 	addwfc	average_depth_hold+1,F
 	movlw	d'0'
 	addwfc	average_depth_hold+2,F
-	addwfc	average_depth_hold+3,F ; Will work up to 9999mbar*60*60*24=863913600mbar
+	addwfc	average_depth_hold+3,F 		; Will work up to 9999mbar*60*60*24=863913600mbar
 
-; Do the same for the _total registers (Non-Resettable)
+	; Do the same for the _total registers (Non-Resettable)
 	movf	xB+0,w
 	addwf	average_depth_hold_total+0,F
 	movf	xB+1,w
@@ -850,7 +1214,7 @@ calc_average_depth:
 	movff	average_depth_hold+2,xC+2
 	movff	average_depth_hold+3,xC+3
 
-	call	div32x16 	; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
+	call	div32x16 					; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
 	movff	xC+0,avg_rel_pressure+0
 	movff	xC+1,avg_rel_pressure+1
 
@@ -864,7 +1228,7 @@ calc_average_depth:
 	movff	average_depth_hold_total+1,xC+1
 	movff	average_depth_hold_total+2,xC+2
 	movff	average_depth_hold_total+3,xC+3
-	call	div32x16 	; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
+	call	div32x16 					; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
 	movff	xC+0,avg_rel_pressure_total+0
 	movff	xC+1,avg_rel_pressure_total+1
 	return
@@ -880,11 +1244,12 @@ reset_average1:
 	bcf		reset_average_depth			; Clear flag
 	return
 
-test_switches_divemode:		; checks switches in divemode
+test_switches_divemode:					; checks switches in divemode
     btfsc   divemode_menu               ; Divemode menu shown?
     bra     test_switches_divemode_menu ; Yes, use menu processor
 	btfsc	switch_left
-	goto    menuview_toggle         ; Menu or Simulator tasks; and return...; bra		test_switches_divemode2		; Enter button pressed, check if we need to do something
+	; bra	test_switches_divemode2		; Enter button pressed, check if we need to do something
+	goto    menuview_toggle         	; Menu or Simulator tasks; and return...
 	btfss	switch_right
 	return                              ; No button press
     tstfsz  menupos2                    ; any option shown?
@@ -914,7 +1279,7 @@ test_switches_divemode_menu2:
 
 test_switches_divemode_menu3:           ; Enter submenu or do something
     bcf     switch_right
-;    decf    menupos,F                   ; menu_processor needs 0-5...
+;    decf    menupos,F					; menu_processor needs 0-5...
     extern  do_line_menu
     goto    do_line_menu                ; Warning! Trashes STKPTR and returns to diveloop_loop4:
 
@@ -941,103 +1306,281 @@ test_switches_divemode1:
 	bra		divemode_option6			; +5mins simulation
 	dcfsnz	WREG,F
 	bra		divemode_option7			; Store heading
+	dcfsnz	WREG,F
+	bra		divemode_option8			; Switch to alt. layout
     return
 
 gas_switched_common:
-    bcf     divemode_gaschange      ; Clear flag
+    bcf     divemode_gaschange			; Clear flag
+    tstfsz  menupos						; menupos=0?
+    bra     gas_switched_common1		; No
+    return								; Yes, do not switch gas (there is no Gas #0 !)
+gas_switched_common1:
+	movf	menupos,W					; get selected gas into WREG (1-6)
 
-    tstfsz  menupos                 ; menupos=0?
-    bra     $+4                     ; No
-    return                          ; Yes, do not switch gas (There is no Gas #0 !)
+    btfsc   FLAG_ccr_mode				; in CCR mode?
+	bra		gas_switched_common2		; YES - configure diluent or bailout
+	btfsc   FLAG_pscr_mode				; in pSCR mode?
+	bra		gas_switched_common2		; YES - configure diluent or bailout
+	
+	; OC
+	rcall	setup_gas_registers			; With WREG = Gas 1-6
+    rcall	deco_setup_oc_gases			; With WREG = Gas 1-6
+	bra		gas_switched_common3
 
-    decf    menupos,W               ; 1-5 -> 0-4
-    btfsc   FLAG_ccr_mode           ; Choose CC Diluents
-    rcall   setup_dil_registers     ; With WREG=Gas 0-4
-    decf    menupos,W               ; 1-5 -> 0-4
-    btfsc   FLAG_pscr_mode          ; Choose CC Diluents
-    rcall   setup_dil_registers     ; With WREG=Gas 0-4
-    ; OC mode?
-    btfsc   FLAG_ccr_mode           ; CCR?
-    bra	    gas_switched_common2    ; Yes
-    btfsc   FLAG_pscr_mode          ; PSCR?
-    bra	    gas_switched_common2    ; Yes
-    ; -> OC
-    decf    menupos,W               ; 1-5 -> 0-4
-    rcall   setup_gas_registers     ; With WREG=Gas 0-4
+	; Loop or Bailout
 gas_switched_common2:
-    decf    menupos,W               ; 1-5 -> 0-4
-    btfsc   is_bailout              ; Choose OC Bailouts (OC Gases)
-    rcall   setup_gas_registers     ; With WREG=Gas 0-4
-    
-    movlw   .0
-    btfsc   is_bailout
-    movff   WREG,char_I_const_ppO2  ; deactivate CCR-mode deco calc
-
-    call	TFT_active_gas_divemode	; Display gas/Setpoint
-    clrf    WREG
-    movff   WREG,char_O_deco_status ; Restart decoplan computation
+    rcall   setup_dil_registers			; With WREG = diluent 1-6, in case of is_bailout reverts to OC gases
+    rcall	deco_setup_cc_diluents		; With WREG = diluent 1-6, in case of is_bailout reverts to OC gases
+ 
+gas_switched_common3:
+    bsf		FLAG_TFT_active_gas_divemode	; Redraw gas/setpoint/diluent
+    call	restart_deco_engine_wo_ceiling	; abort any running deco calculations and restart the deco engine
 
     ; Set flags for profile recording
-	bsf		event_occured			; Set global event byte
-    btfsc   is_bailout              ; Choose OC Bailouts (OC Gases)
-    bsf     bailoutgas_event        ; Bailout gas change
-    btfss   is_bailout              ; Choose OC Bailouts (OC Gases)
-	bsf		stored_gas_changed		; OC gas change
+	bsf		event_occured				; Set global event byte
+    btfsc   is_bailout					; Choose OC Bailouts (OC Gases)
+    bsf     bailoutgas_event			; Bailout gas change
+    btfss   is_bailout					; Choose OC Bailouts (OC Gases)
+	bsf		stored_gas_changed			; OC gas change
 	return
 
-    global  setup_gas_registers
-setup_gas_registers:                ; With WREG=Gas 0-4
-    lfsr    FSR1,opt_gas_O2_ratio+0
-    movff   PLUSW1,char_I_O2_ratio  ; O2 (For ppO2 calculations)
-    lfsr    FSR1,opt_gas_He_ratio+0
-    movff   PLUSW1,char_I_He_ratio  ; He
-    lfsr    FSR1,opt_gas_type
-    movff   PLUSW1,active_gas_type  ; 0=Disabled, 1=First, 2=Travel, 3=Deco for OC gases and 0=Disabled, 1=First, 2=Normal for diluents
-    incf    WREG,W                  ; Gas# 1-5
-	movff	WREG,char_I_current_gas	; Set gas
-	movff	WREG,active_gas			; Set for logbook and display
-    banksel char_I_O2_ratio
-	movf    char_I_O2_ratio,W       ; Add O2...
-    addwf   char_I_He_ratio,W       ; ...and He...
-	sublw   .100                    ; ...subtract both from 100
-	movwf   char_I_N2_ratio         ; -> N2!
-    banksel common
-    return
 
-    global  setup_dil_registers
-setup_dil_registers:                ; With WREG=dil 0-4
-    btfsc   is_bailout
-    return                          ; Ignore in bailout
-    lfsr    FSR1,opt_dil_O2_ratio+0
-    movff   PLUSW1,char_I_O2_ratio  ; O2 (For ppO2 calculations)
-    lfsr    FSR1,opt_dil_He_ratio+0
-    movff   PLUSW1,char_I_He_ratio  ; He
-    lfsr    FSR1,opt_dil_type
-    movff   PLUSW1,active_gas_type  ; 0=Disabled, 1=First, 2=Travel, 3=Deco for OC gases and 0=Disabled, 1=First, 2=Normal for diluents
-    incf    WREG,W                  ; Gas# 1-5
-	movff	WREG,char_I_current_gas	; Set gas
-	movff	WREG,active_gas			; Set for logbook and display
-    movff   WREG,active_diluent     ; As a backup when switching back from Bailout to CCR
-    banksel char_I_O2_ratio
-	movf    char_I_O2_ratio,W       ; Add O2...
-    addwf   char_I_He_ratio,W       ; ...and He...
-	sublw   .100                    ; ...subtract both from 100
-	movwf   char_I_N2_ratio         ; -> N2!
-    banksel common
-    return
+; Code to pass all parameters to the C code
 
-divemode_option_gaschange:          ; Switch to the better gas
-    movff   better_gas_number,menupos; 1-5
-    bsf     divemode_gaschange      ; Change the gas in the dive mode loop...
-    call    menuview_toggle_reset   ; Reset to zero (Zero=no menuview)
-    bcf     better_gas_available    ; Clear flag immediately
-    return
+	global  get_first_gas_to_WREG
+get_first_gas_to_WREG:					; Gets first gas (1-5) into WREG
+	lfsr    FSR1,opt_gas_type			; Point to gas types
+	clrf    lo							; start with Gas0
+get_first_gas_to_WREG2:
+	movf    lo,W
+	movf    PLUSW1,W					; Get Type of Gas #lo
+	sublw   .1							; it is = 1 (First Gas)
+	bz      get_first_gas_to_WREG3		; Found the first gas!
+	incf    lo,F						; ++
+	movlw   NUM_GAS+1
+	cpfseq  lo							; All done?
+	bra     get_first_gas_to_WREG2		; Not yet
+	; No first gas found, use #1
+	movlw   .0
+	movff   WREG,opt_gas_type+0			; Set Gas1 to First
+	incf	WREG,W						; 0 -> 1
+	return
+get_first_gas_to_WREG3:
+	movf    lo,W						; Put into Wreg
+	incf	WREG,W						; 0-4 -> 1-5
+	return								; Done
 
-divemode_option0:                   ; Start/Setup Divemode menu
-    call    TFT_clear_divemode_menu ; Clear menu area
-    bcf     menuview
-    extern  do_main_divemenu
-    call    do_main_divemenu
+	global  get_first_dil_to_WREG
+get_first_dil_to_WREG:					; Gets first dil (1-5) into WREG
+	lfsr    FSR1,opt_dil_type			; Point to dil types
+	clrf    lo							; start with Gas0
+get_first_dil_to_WREG2:
+	movf    lo,W
+	movf    PLUSW1,W					; Get Type of Dil #lo
+	sublw   .1							; it is = 1 (First Dil)
+	bz      get_first_dil_to_WREG3		; Found the first dil!
+	incf    lo,F						; ++
+	movlw   NUM_GAS+1
+	cpfseq  lo							; All done?
+	bra     get_first_dil_to_WREG2		; Not yet
+	; No first dil found, use #1
+	movlw   .0
+	movff   WREG,opt_dil_type+0			; Set Dil1 to First
+	incf	WREG,W						; 0 -> 1
+	return
+get_first_dil_to_WREG3:
+	movf    lo,W						; Put into Wreg
+	incf	WREG,W						; 0-4 -> 1-5
+	return								; Done
+
+	global	deco_setup_oc_gases
+deco_setup_oc_gases:					; with currently breathed gas in WREG (1-5 or 6)
+	movff	WREG,char_I_current_gas		; gas to start with when doing the deco calculations
+
+	movff   opt_gas_He_ratio+0,char_I_deco_He_ratio+0
+	movff   opt_gas_O2_ratio+0,char_I_deco_O2_ratio+0
+	banksel opt_gas_type+0
+	movlw   .3							; 3=Deco
+	cpfseq  opt_gas_type+0				; Gas is deco type?
+	clrf    opt_OC_bail_gas_change+0	; No, clear depth for 0=Disabled, 1=First and 2=Travel
+	banksel common
+
+	movff   opt_gas_He_ratio+1,char_I_deco_He_ratio+1
+	movff   opt_gas_O2_ratio+1,char_I_deco_O2_ratio+1
+	banksel opt_gas_type+1
+	movlw   .3							; 3=Deco
+	cpfseq  opt_gas_type+1				; Gas is deco type?
+	clrf    opt_OC_bail_gas_change+1	; No, clear depth for 0=Disabled, 1=First and 2=Travel
+	banksel common
+
+	movff   opt_gas_He_ratio+2,char_I_deco_He_ratio+2
+	movff   opt_gas_O2_ratio+2,char_I_deco_O2_ratio+2
+	banksel opt_gas_type+2
+	movlw   .3							; 3=Deco
+	cpfseq  opt_gas_type+2				; Gas is deco type?
+	clrf    opt_OC_bail_gas_change+2	; No, clear depth for 0=Disabled, 1=First and 2=Travel
+	banksel common
+
+	movff   opt_gas_He_ratio+3,char_I_deco_He_ratio+3
+	movff   opt_gas_O2_ratio+3,char_I_deco_O2_ratio+3
+	banksel opt_gas_type+3
+	movlw   .3							; 3=Deco
+	cpfseq  opt_gas_type+3				; Gas is deco type?
+	clrf    opt_OC_bail_gas_change+3	; No, clear depth for 0=Disabled, 1=First and 2=Travel
+	banksel common
+
+	movff   opt_gas_He_ratio+4,char_I_deco_He_ratio+4
+	movff   opt_gas_O2_ratio+4,char_I_deco_O2_ratio+4
+	banksel opt_gas_type+4
+	movlw   .3							; 3=Deco
+	cpfseq  opt_gas_type+4				; Gas is deco type?
+	clrf    opt_OC_bail_gas_change+4	; No, clear depth for 0=Disabled, 1=First and 2=Travel
+	banksel common
+
+	; Setup char_I_deco_gas_change array
+	movff   opt_OC_bail_gas_change+0, char_I_deco_gas_change+0
+	movff   opt_OC_bail_gas_change+1, char_I_deco_gas_change+1
+	movff   opt_OC_bail_gas_change+2, char_I_deco_gas_change+2
+	movff   opt_OC_bail_gas_change+3, char_I_deco_gas_change+3
+	movff   opt_OC_bail_gas_change+4, char_I_deco_gas_change+4
+
+	; switch to oc mode
+	movff	char_O_deco_status,lo		; working copy of char_O_deco_status in bank common
+	bcf		lo,DECO_MODE_PSCR_FLAG		; clear the pSCR-mode flag (may not be set, but never mind)
+	bcf		lo,DECO_MODE_LOOP_FLAG		; clear the loop/CCR-mode flag
+	movff	lo,char_O_deco_status		; bank safe write-back of char_O_deco_status
+		
+	return
+
+		
+	global	deco_setup_cc_diluents
+deco_setup_cc_diluents:					; with currently breathed gas in WREG (1-5 or 6)
+	btfsc	is_bailout					; check if in bailout condition
+	bra		deco_setup_oc_gases			; revert to setting up OC gases in bailout condition
+	
+	movff	WREG,char_I_current_gas		; gas to start with when doing the deco calculations
+
+	movff   opt_dil_He_ratio+0,char_I_deco_He_ratio+0
+	movff   opt_dil_O2_ratio+0,char_I_deco_O2_ratio+0
+	movff   opt_dil_type+0,WREG			; 0=Disabled, 1=First, 2=Normal
+	tstfsz  WREG						; Disabled?
+	bra     $+4							; No
+	movff   WREG,char_I_dil_change+0	; Yes, clear char_I_deco_gas_change (Bank safe)
+
+	movff   opt_dil_He_ratio+1,char_I_deco_He_ratio+1
+	movff   opt_dil_O2_ratio+1,char_I_deco_O2_ratio+1
+	movff   opt_dil_type+1,WREG			; 0=Disabled, 1=First, 2=Normal
+	tstfsz  WREG						; Disabled?
+	bra     $+4							; No
+	movff   WREG,char_I_dil_change+1	; Yes, clear char_I_dil_change
+
+	movff   opt_dil_He_ratio+2,char_I_deco_He_ratio+2
+	movff   opt_dil_O2_ratio+2,char_I_deco_O2_ratio+2
+	movff   opt_dil_type+2,WREG			; 0=Disabled, 1=First, 2=Normal
+	tstfsz  WREG						; Disabled?
+	bra     $+4							; No
+	movff   WREG,char_I_dil_change+2	; Yes, clear char_I_dil_change
+
+	movff   opt_dil_He_ratio+3,char_I_deco_He_ratio+3
+	movff   opt_dil_O2_ratio+3,char_I_deco_O2_ratio+3
+	movff   opt_dil_type+3,WREG			; 0=Disabled, 1=First, 2=Normal
+	tstfsz  WREG						; Disabled?
+	bra     $+4							; No
+	movff   WREG,char_I_dil_change+3	; Yes, clear char_I_dil_change
+
+	movff   opt_dil_He_ratio+4,char_I_deco_He_ratio+4
+	movff   opt_dil_O2_ratio+4,char_I_deco_O2_ratio+4
+	movff   opt_dil_type+4,WREG			; 0=Disabled, 1=First, 2=Normal
+	tstfsz  WREG						; Disabled?
+	bra     $+4							; No
+	movff   WREG,char_I_dil_change+4	; Yes, clear char_I_dil_change
+
+	; Setup char_I_deco_gas_change array
+	movff   char_I_dil_change+0, char_I_deco_gas_change+0
+	movff   char_I_dil_change+1, char_I_deco_gas_change+1
+	movff   char_I_dil_change+2, char_I_deco_gas_change+2
+	movff   char_I_dil_change+3, char_I_deco_gas_change+3
+	movff   char_I_dil_change+4, char_I_deco_gas_change+4
+
+	; switch to CCR / pSCR mode
+	movff	char_O_deco_status,lo		; working copy of char_O_deco_status in bank common
+	bsf		lo,DECO_MODE_LOOP_FLAG		; loop flag is set in both, CCR and pSCR mode
+	bcf		lo,DECO_MODE_PSCR_FLAG		; clear pSCR mode flag by default
+	btfsc	FLAG_pscr_mode				; check if we are in pSCR mode
+	bsf		lo,DECO_MODE_PSCR_FLAG		; YES - set additional flag for pSCR mode
+	movff	lo,char_O_deco_status		; bank safe write-back of char_O_deco_status	
+		
+	return
+
+	global  setup_gas_registers
+setup_gas_registers:						; with currently breathed gas in WREG (1-5 or 6)
+	movwf	active_gas						; set as current gas
+	movlw	.6
+	cpfseq	active_gas						; gas = gas6 ?
+	bra		setup_gas_registers_15			; NO - load gas 1-5
+	movff	gas6_O2_ratio,char_I_O2_ratio	; copy gas6 O2 ratio to deco engine
+	movff	gas6_He_ratio,char_I_He_ratio	; copy gas6 H2 ratio to deco engine	
+	bra		setup_gas_registers_com			; continue with common part
+setup_gas_registers_15:
+	decf	active_gas,W					; 1-5 -> 0-4
+	lfsr	FSR1,opt_gas_O2_ratio+0
+	movff	PLUSW1,char_I_O2_ratio			; copy gas 1-5 O2 ratio to deco engine
+	lfsr	FSR1,opt_gas_He_ratio+0
+	movff	PLUSW1,char_I_He_ratio			; copy gas 1-5 He ratio to deco engine
+setup_gas_registers_com:	
+	;lfsr	FSR1,opt_gas_type				; commented out - currently not used anywhere
+	;movff	PLUSW1,active_gas_type			; 0=Disabled, 1=First, 2=Travel, 3=Deco
+	movff	char_O_main_status,lo			; working copy of char_O_main_status in bank common
+	bcf		lo,DECO_MODE_PSCR_FLAG			; clear the pSCR-mode flag (may not be set, but never mind)
+	bcf		lo,DECO_MODE_LOOP_FLAG			; clear the loop/CCR-mode flag
+	movff	lo,char_O_main_status			; bank safe write-back of char_O_main_status
+	movf	active_gas,W					; reload WREG with diluent 1-5 or 6 (important!)
+	return
+
+	global  setup_dil_registers
+setup_dil_registers:						; with currently breathed gas in WREG (1-5 or 6)
+	btfsc	is_bailout						; check if in bailout condition
+	bra		setup_gas_registers				; revert to setting up OC gases in bailout condition
+	movwf	active_gas						; set as current gas
+	movff	WREG,active_diluent				; remember for when switching back from bailout to loop
+	movlw	.6
+	cpfseq	active_gas						; diluent = gas6 ?
+	bra		setup_dil_registers_15			; NO - load diluent 1-5
+	movff	gas6_O2_ratio,char_I_O2_ratio	; copy gas6 O2 ratio to deco engine
+	movff	gas6_He_ratio,char_I_He_ratio	; copy gas6 H2 ratio to deco engine
+	bra		setup_dil_registers_com			; continue with common part
+setup_dil_registers_15:
+	decf	active_gas,W					; 1-5 -> 0-4
+	lfsr	FSR1,opt_dil_O2_ratio+0
+	movff	PLUSW1,char_I_O2_ratio			; copy diluent 1-5 O2 ratio to deco engine
+	lfsr	FSR1,opt_dil_He_ratio+0
+	movff	PLUSW1,char_I_He_ratio			; copy diluent 1-5 He ratio to deco engine
+setup_dil_registers_com:
+	;lfsr	FSR1,opt_dil_type				; commented out - currently not used anywhere
+	;movff	PLUSW1,active_gas_type			; 0=Disabled, 1=First, 2=Normal (there is no type 3 for diluents)
+	movff	char_O_main_status,lo			; working copy of char_O_main_status in bank common
+	bsf		lo,DECO_MODE_LOOP_FLAG			; loop flag is set in both, CCR and pSCR mode
+	bcf		lo,DECO_MODE_PSCR_FLAG			; clear pSCR mode flag by default
+	btfsc	FLAG_pscr_mode					; check if we are in pSCR mode
+	bsf		lo,DECO_MODE_PSCR_FLAG			; YES - set additional flag for pSCR mode
+	movff	lo,char_O_main_status			; bank safe write-back of char_O_main_status
+	movf	active_gas,W					; reload WREG with diluent 1-5 or 6 (important!)
+	return
+
+divemode_option_gaschange:					; Switch to the better gas
+	movff	better_gas_number,menupos		; 1-5
+	bsf		divemode_gaschange				; Change the gas in the dive mode loop...
+	call	menuview_toggle_reset			; Reset to zero (Zero=no menuview)
+	bcf		better_gas_available			; Clear flag immediately
+	return
+
+divemode_option0:							; Start/Setup Divemode menu
+	call	TFT_clear_divemode_menu			; Clear menu area
+	bcf	menuview
+	extern	do_main_divemenu
+	call	do_main_divemenu
+
     global  divemode_option0_return
 divemode_option0_return:
 ;    movlw   .1
@@ -1047,7 +1590,7 @@ divemode_option0_return:
 	movwf	timeout_counter3        ; timeout for divemode menu
     bsf     divemode_menu           ; Set flag
     clrf    menupos2                ; Clear option counter
-    bra     diveloop_loop4          ; Goto back to diveloop (Menuprocessor trashes STKPTR!)
+    goto	diveloop_loop4          ; Goto back to diveloop (Menuprocessor trashes STKPTR!)
 
 divemode_option4:
 	movlw	d'58'					; two seconds left
@@ -1056,7 +1599,7 @@ divemode_option4:
 	movwf	apnoe_timeout_counter
     btfss   simulatormode_active	; in simulator mode?
 	return							; No
-divemode_option1:						; Quit simulation mode
+divemode_option1:					; Quit simulation mode
 	banksel	isr_backup
     movlw   low     .1000
     movwf	sim_pressure+0
@@ -1073,7 +1616,7 @@ divemode_option1:						; Quit simulation mode
 	movwf	apnoe_timeout_counter
 	return
 
-divemode_option3:			; minus 1m
+divemode_option3:					; minus 1m
 	banksel	isr_backup
 	movlw	d'100'
 	subwf	sim_pressure+0
@@ -1083,7 +1626,7 @@ divemode_option3:			; minus 1m
 	banksel common
 	return
 
-divemode_option2:			; plus 1m
+divemode_option2:					; plus 1m
 	banksel	isr_backup
 	movlw	d'100'
 	addwf	sim_pressure+0
@@ -1112,13 +1655,14 @@ divemode_option6:
     addwf   total_divetime_seconds+0,F
     movlw   HIGH    (.5*.60)
     addwfc  total_divetime_seconds+1,F  ; Add 5*60 seconds
-; 1. Add 300xdepth to the Sum of depths registers
+
+	; 1. Add 300xdepth to the Sum of depths registers
     SAFE_2BYTE_COPY rel_pressure, xB	; Buffer...
     movlw   LOW     (.5*.60)
     movwf   xA+0
     movlw   HIGH    (.5*.60)
     movwf   xA+1
-    call    mult16x16           		;xA*xB=xC
+    call    mult16x16           		; xA*xB=xC
 
 	movf	xC+0,w
 	addwf	average_depth_hold+0,F
@@ -1127,38 +1671,37 @@ divemode_option6:
 	movf	xC+2,w
 	addwfc	average_depth_hold+2,F
     movf	xC+3,w
-	addwfc	average_depth_hold+3,F ; Will work up to 9999mbar*60*60*24=863913600mbar
+	addwfc	average_depth_hold+3,F		; Will work up to 9999mbar*60*60*24=863913600mbar
 
-; Do the same for the _total registers (Non-Resettable)
+	; Do the same for the _total registers (Non-Resettable)
 	movf	xC+0,w
 	addwf	average_depth_hold_total+0,F
 	movf	xC+1,w
 	addwfc	average_depth_hold_total+1,F
 	movf	xC+2,w
 	addwfc	average_depth_hold_total+2,F
-    movf	xC+3,w
-	addwfc	average_depth_hold_total+3,F ; Will work up to 9999mbar*60*60*24=863913600mbar
+	movf	xC+3,w
+	addwfc	average_depth_hold_total+3,F; Will work up to 9999mbar*60*60*24=863913600mbar
 
-    movlw   .5
-    movwf   up                          ; counter
-; 1min mode
-divemode_option6_2:
-	movlw   .1
-	movff	WREG,char_I_step_is_1min    ; Force 1min mode
-    clrf    TMR5L
-    clrf    TMR5H                       ; 30,51757813µs/bit in TMR5L:TMR5H
-	call	deco_calc_hauptroutine		; calc_tissue
-    movlb   .1
-    decfsz  up,F                        ; Done?
-    bra     divemode_option6_2          ; Not yet
-    bsf     divemode2                   ; continue divetime
-    goto    menuview_toggle_reset	; and return...
+	movlw	.5							; + 5 minutes
+	movff	WREG,char_I_sim_advance_time; copy to mailbox
+	bsf     divemode2                   ; continue divetime
+	call	restart_deco_engine
+    goto    menuview_toggle_reset		; and return...
 
 divemode_option7:
     ; Store heading for compass view
     movff   compass_heading_shown+0,compass_bearing+0
     movff   compass_heading_shown+1,compass_bearing+1
     bsf     compass_bearing_set         ; set flag
+    goto    menuview_toggle_reset       ; Done and return...
+    
+divemode_option8:
+    bsf	    alternative_divelayout		; Set flag for mode
+    bsf	    FLAG_TFT_divemode_mask_alt	; Set flag for mask
+    movlw   .1
+    movwf   menupos3					; For the customviews...
+    call    TFT_ClearScreen				; Clear screen
     goto    menuview_toggle_reset       ; Done and return...
 
 divemode_simulator_check_limits:
@@ -1237,12 +1780,14 @@ check_gas_change_OC_bail:
     movlw   .4
     rcall   check_gas_common        ; With Gas 0-4 in WREG
 ;    bra     check_gas_change_exit
+
 check_gas_change_exit:
-    btfss	better_gas_available	; Is a better gas available
-    bcf     blinking_better_gas     ; No, Clear blinking flag
-    btfss	better_gas_available	; Is a better gas available
+    btfss   better_gas_available	; Is a better gas available
+    bcf     blinking_better_gas		; No, Clear blinking flag
+    btfss   better_gas_available	; Is a better gas available
     clrf    better_gas_number		; No, Clear better_gas_number (For gaslist display)
-    goto    TFT_active_gas_divemode ; Display gas/Setpoint and return...
+    bsf	    FLAG_TFT_active_gas_divemode; Redraw gas/setpoint/diluent
+    return
 
 check_gas_common:                   ; With Gas 0-4 in WREG
     btfsc   better_gas_available	; Better Gas already found?
@@ -1253,7 +1798,7 @@ check_gas_common:                   ; With Gas 0-4 in WREG
     btfss   PLUSW1,1                ; Test for Bit0 and 1 -> type=3 -> Deco
     return                          ; No
     incf    WREG,W                  ; 1-5
-    cpfseq  active_gas				; is this gas currently selected?
+    cpfseq  active_gas				; is this gas current gas?
     bra     check_gas_common2       ; No
     return                          ; Yes, skip test for active gas
 check_gas_common2:
@@ -1272,7 +1817,7 @@ check_gas_common2:
 	movlw	better_gas_window_neg
 	subwf	lo,W                    ; Change depth-better_gas_window_neg
 	cpfslt	xC+0					; current depth<Change depth-better_gas_window_neg?
-    bra     check_gas_common4       ; Ok, now check the better gas ppO2<opt_ppO2_max
+    bra     check_gas_common4       ; Ok, now check the better gas ppO2<char_I_ppO2_max
     return
 
 check_gas_common3:
@@ -1281,20 +1826,13 @@ check_gas_common3:
 	movlw	better_gas_window_pos
 	addwf	lo,W                    ; Change depth+better_gas_window_pos
 	cpfsgt	xC+0					; current depth>Change depth+better_gas_window_pos?
-    bra     check_gas_common4       ; Ok, now check the better gas ppO2<opt_ppO2_max
+    bra     check_gas_common4       ; Ok, now check the better gas ppO2<char_I_ppO2_max
     return
 
 check_gas_common4:
-    movf    hi,W                    ; 0-4
-    lfsr    FSR1,char_I_deco_N2_ratio
-    movff   PLUSW1,lo               ; N2 ratio into lo
-    lfsr    FSR1,char_I_deco_He_ratio
-    movff   PLUSW1,xB+0             ; He ratio into xB+0
-    movf    xB+0,W
-    addwf   lo,F
-    movlw   .101
-    bcf     STATUS,C
-    subfwb  lo,F                    ; O2 ratio in lo
+    movf    hi,W                    	; gas 0-4 into WREG
+    lfsr    FSR1,char_I_deco_O2_ratio	; load base address char_I_deco_O2_ratio array
+    movff   PLUSW1,lo               	; read O2 ratio from array into lo
 
     SAFE_2BYTE_COPY amb_pressure, xA
 	movlw	d'10'
@@ -1308,35 +1846,35 @@ check_gas_common4:
 	call	mult16x16               ; lo * p_amb/10
 
     ; Check very high ppO2 manually
-	tstfsz	xC+2				; char_I_O2_ratio * p_amb/10 > 65536, ppO2>6,55bar?
-	return                      ; Done.
+	tstfsz	xC+2					; char_I_O2_ratio * p_amb/10 > 65536, ppO2>6,55bar?
+	return                      	; Done.
     ; Check if ppO2>3,30bar
 	btfsc   xC+1,7
-	return                      ; Done.
+	return                      	; Done.
 
     ; Check for low ppo2
 	movff	xC+0,sub_b+0
 	movff	xC+1,sub_b+1
-	movff   opt_ppO2_min,WREG
-	mullw	d'100'		    ; opt_ppO2_min*100
+	movff   char_I_ppO2_min,WREG
+	mullw	d'100'		    		; char_I_ppO2_min*100
 	movff	PRODL,sub_a+0
 	movff	PRODH,sub_a+1
-	call	subU16		    ; sub_c = sub_a - sub_b
+	call	subU16		    		; sub_c = sub_a - sub_b
 	btfss	neg_flag
-	return                      ; Done (Too low).
+	return                      	; Done (Too low).
 
-;check if we are within our warning thresholds!
+	;check if we are within our warning thresholds!
 	movff	xC+0,sub_a+0
 	movff	xC+1,sub_a+1
-	movff	opt_ppO2_max_deco,WREG	; PPO2 Max for MOD calculation and color coding in divemode
-	addlw   .1                  ; e.g. >1.60
-	mullw	d'100'		    ; opt_ppO2_max*100
+	movff	char_I_ppO2_max_deco,WREG	; ppO2 max for MOD calculation and color coding in divemode
+	addlw   .1                  	; e.g. >1.60
+	mullw	d'100'		    		; char_I_ppO2_max*100
 	movff	PRODL,sub_b+0
 	movff	PRODH,sub_b+1
-	call	subU16		    ; sub_c = sub_a - sub_b
+	call	subU16		    		; sub_c = sub_a - sub_b
 	btfsc	neg_flag
 	bsf		better_gas_available	;=1: A better gas is available and a gas change is advised in divemode
-	return                      ; Done.
+	return                      	; Done.
 
 check_dil_common:                   ; With Dil 0-4 in WREG
     btfsc   better_gas_available	; Better Diluent already found?
@@ -1347,7 +1885,7 @@ check_dil_common:                   ; With Dil 0-4 in WREG
     return                          ; Yes, skip inactive diluents for test
 check_dil_common1:
     incf    WREG,W                  ; 1-5
-    cpfseq  active_gas				; is this diluent currently selected?
+    cpfseq  active_gas				; is this the current diluent?
     bra     check_dil_common2       ; No
     return                          ; Yes, skip test for active diluent
 check_dil_common2:
@@ -1373,11 +1911,11 @@ check_dil_common2:
 ;=============================================================================
 ; Check for Auto-SP
 ;
-check_dive_autosp:               ; Check for Auto-SP
-    movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
-    sublw   .2                              ; opt_ccr_mode = 2 (Auto SP)?
-    bz      check_dive_autosp2              ; Yes, check
-    return                                  ; No, return for Sensor or Fixed mode
+check_dive_autosp:               	; Check for Auto-SP
+    movff   opt_ccr_mode,WREG       ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
+    sublw   .2                      ; opt_ccr_mode = 2 (Auto SP)?
+    bz      check_dive_autosp2      ; Yes, check
+    return                          ; No, return for Sensor or Fixed mode
 check_dive_autosp2:
     SAFE_2BYTE_COPY rel_pressure,xA
 	movlw	d'100'
@@ -1385,17 +1923,18 @@ check_dive_autosp2:
 	clrf	xB+1
 	call	div16x16				; compute depth in full m -> result in xC+0
     ; Check SP2
-    btfsc   sp2_switched            ;=1: This setpoint has been autoselected already
+    btfsc   sp2_switched            ; =1: This setpoint has been autoselected already
     bra     check_dive_autosp3      ; Skip check
     movff   char_I_setpoint_change+1,lo ; Get depth in m
     tstfsz  lo                      ; =0?
-    bra     $+4                     ; No, continue
+    bra     check_dive_autosp2a     ; No, continue
     bra     check_dive_autosp3      ; Skip check
+check_dive_autosp2a:
     decf    lo,W                    ; -1 -> WREG
     cpfsgt  xC+0                    ; Compare with depth
     bra     check_dive_autosp3      ; lower depth, do not switch
     ; auto switch to SP2
-	movff	char_I_setpoint_cbar+1, char_I_const_ppO2	; Use SetPoint
+	movff	char_I_setpoint_cbar+1,char_I_const_ppO2	; Use SetPoint
     rcall   xmit_sp_set_flag
     bsf     sp2_switched            ; Set flag
 check_dive_autosp3:
@@ -1404,13 +1943,14 @@ check_dive_autosp3:
     bra     check_dive_autosp4      ; Skip check
     movff   char_I_setpoint_change+2,lo ; Get depth in m
     tstfsz  lo                      ; =0?
-    bra     $+4                     ; No, continue
+    bra     check_dive_autosp3a      ; No, continue
     bra     check_dive_autosp4      ; Skip check
+check_dive_autosp3a:
     decf    lo,W                    ; -1 -> WREG
     cpfsgt  xC+0                    ; Compare with depth
     bra     check_dive_autosp4      ; lower depth, do not switch
     ; auto switch to SP3
-	movff	char_I_setpoint_cbar+2, char_I_const_ppO2	; Use SetPoint
+	movff	char_I_setpoint_cbar+2,char_I_const_ppO2	; Use SetPoint
     rcall   xmit_sp_set_flag
     bsf     sp3_switched            ; Set flag
 check_dive_autosp4:
@@ -1419,13 +1959,14 @@ check_dive_autosp4:
     bra     check_dive_autosp5      ; Skip check
     movff   char_I_setpoint_change+3,lo ; Get depth in m
     tstfsz  lo                      ; =0?
-    bra     $+4                     ; No, continue
+    bra     check_dive_autosp4a     ; No, continue
     bra     check_dive_autosp5      ; Skip check
+check_dive_autosp4a:
     decf    lo,W                    ; -1 -> WREG
     cpfsgt  xC+0                    ; Compare with depth
     bra     check_dive_autosp5      ; lower depth, do not switch
     ; auto switch to SP4
-	movff	char_I_setpoint_cbar+3, char_I_const_ppO2	; Use SetPoint
+	movff	char_I_setpoint_cbar+3,char_I_const_ppO2	; Use SetPoint
     rcall   xmit_sp_set_flag
     bsf     sp4_switched            ; Set flag
 check_dive_autosp5:
@@ -1434,13 +1975,14 @@ check_dive_autosp5:
     bra     check_dive_autosp6      ; Skip check
     movff   char_I_setpoint_change+4,lo ; Get depth in m
     tstfsz  lo                      ; =0?
-    bra     $+4                     ; No, continue
+    bra     check_dive_autosp5a     ; No, continue
     bra     check_dive_autosp6      ; Skip check
+check_dive_autosp5a:
     decf    lo,W                    ; -1 -> WREG
     cpfsgt  xC+0                    ; Compare with depth
     bra     check_dive_autosp6      ; lower depth, do not switch
     ; auto switch to SP5
-	movff	char_I_setpoint_cbar+4, char_I_const_ppO2	; Use SetPoint
+	movff	char_I_setpoint_cbar+4,char_I_const_ppO2	; Use SetPoint
     rcall   xmit_sp_set_flag
     bsf     sp5_switched            ; Set flag
 check_dive_autosp6:
@@ -1448,7 +1990,7 @@ check_dive_autosp6:
 
 xmit_sp_set_flag:
     movff   char_I_const_ppO2,WREG
-    call    transmit_setpoint           ; Transmit current setpoint from WREG (in cbar) to external electronics
+    call    transmit_setpoint       ; Transmit current setpoint from WREG (in cbar) to external electronics
     bsf     setpoint_changed        ; Set flag (For profile)
     bsf		event_occured			; Set global event byte
     return
@@ -1457,54 +1999,58 @@ xmit_sp_set_flag:
 ; Setup everything to enter divemode.
 ;
 dive_boot_oc:
-    extern  get_first_gas_to_WREG
-    call    get_first_gas_to_WREG           ; Gets first gas (0-4) into WREG
-    incf    WREG
-    movff   WREG,char_I_first_gas           ; Copy for compatibility (1-5)
-    decf    WREG,W			    ; decrement WREG to old value again
-    rcall    setup_gas_registers            ; With WREG=Gas 0-4
-    movlw   .0
-    movff   WREG,char_I_const_ppO2	    ; deactivate CCR-mode deco calc
+    rcall   get_first_gas_to_WREG			; Gets first gas (1-5) into WREG
+	rcall	setup_gas_registers				; set-up of gas parameters of currently breathed gas (with WREG = gas 1-5)
+	rcall	deco_setup_oc_gases				; set-up of gas list for deco calculations (with WREG = gas 1-5)
     return
 
 dive_boot_cc:
     bcf     is_bailout                      ; =1: Bailout
     bcf     setpoint_fallback               ; =1: Fallback to SP1 due to external O2 sensor failure
-    bcf	    blinking_setpoint               ; Reset blinking SP flag
-    ; load default setpoint
-    movff   char_I_setpoint_cbar+0,char_I_const_ppO2    ; Always start with SP1
-    movff   char_I_const_ppO2,WREG
+    bcf		blinking_setpoint               ; Reset blinking SP flag
 
-    call    transmit_setpoint           ; Transmit current setpoint from WREG (in cbar) to external electronics
+	; revoke sensors from usage if they do not have a valid calibration
+	bsf		use_O2_sensor1
+	bsf		use_O2_sensor2
+	bsf		use_O2_sensor3
+	btfss	sensor1_calibrated_ok
+	bcf		use_O2_sensor1
+	btfss	sensor2_calibrated_ok
+	bcf		use_O2_sensor2
+	btfss	sensor3_calibrated_ok
+	bcf		use_O2_sensor3
 	
-    ; check if in sensor mode
-    movff   opt_ccr_mode,WREG               ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
-    sublw   .1                              ; opt_ccr_mode = 1 (Sensor)?
-    bnz     dive_boot_cc2                   ; No, Skip
+	; In pSCR mode, only settings 0 (calculated ppO2) and 1 (ppO2 from sensors) are defined.
+	; In case we still have 3 (auto SP) selected out of previous ccr mode, we reset to 0.
+	btfss	FLAG_pscr_mode
+	bra		dive_boot_cc_1
+	movff   opt_ccr_mode,WREG				; =0: Fixed SP, =1: Sensor,  =2: Auto SP
+    sublw   .2								; opt_ccr_mode = 1 (Auto SP)?
+    bnz     dive_boot_cc_1
+	movlw	.0
+	movff	WREG,opt_ccr_mode
 
-    ; get initial setpoint from all sensors in use
-    call   compute_ppo2                    ; compute mv_sensorX and ppo2_sensorX arrays
-    bsf    voting_logic_sensor1            ; voting logic not used while computing initial setpoint	
-    bsf    voting_logic_sensor2
-    bsf    voting_logic_sensor3
-    call   divemode_setup_sensor_values     ; setup sensor values
-    tstfsz sensor_setpoint		    ; if no sensor is in use, sensor_setpoint will be zero
-    movff  sensor_setpoint,char_I_const_ppO2; overwrite default only if we have a valid sensor_setpoint 
-
-dive_boot_cc2:
+dive_boot_cc_1:
     bsf     setpoint_changed                ; Set flag (For profile)
     bcf     sp2_switched                    ; =1: This setpoint has been autoselected already
     bcf     sp3_switched                    ; =1: This setpoint has been autoselected already
     bcf     sp4_switched                    ; =1: This setpoint has been autoselected already
     bcf     sp5_switched                    ; =1: This setpoint has been autoselected already
 
-    extern  get_first_dil_to_WREG
-    call    get_first_dil_to_WREG           ; Gets first gas (0-4) into WREG
-    incf    WREG
-    movff   WREG,char_I_first_gas           ; Copy for compatibility
-    decf    WREG,W
-    rcall   setup_dil_registers             ; With WREG=Gas 0-4
-    goto  calc_deko_divemode_sensor        ; External sensor stuff (and return!)
+    rcall   get_first_dil_to_WREG           ; get first gas (1-5) into WREG
+    rcall   setup_dil_registers				; set-up of gas parameters for currently breathed gas (with WREG = current gas 1-5)
+	rcall	deco_setup_cc_diluents			; set-up of gas list for deco calculations (with WREG = current gas 1-5)
+
+	; Start with SP1 (CCR) or 0 (pSCR) as default.
+	; If in sensor mode, this value will be overwritten by calc_deko_divemode_sensor
+	clrf	WREG							; preload WREG with setpoint value 0 for pSCR calculated
+	btfss	FLAG_ccr_mode					; are we in CCR mode?
+	bra		dive_boot_cc_2					; NO  - keep preloaded value
+	movff	char_I_setpoint_cbar+0,WREG		; YES - get value of setpoint 1
+dive_boot_cc_2:
+	movff	WREG,char_I_const_ppO2			; write setpoint to deco engine
+	call	transmit_setpoint				; transmit current setpoint from WREG (in cbar) to external electronics
+	goto	calc_deko_divemode_sensor		; read & process sensor data (and return)
 
 diveloop_boot:
 	call	restart_set_modes_and_flags
@@ -1515,9 +2061,45 @@ diveloop_boot:
 	clrf	WREG
 	movff	WREG,max_pressure+0				; clear some variables
 	movff	WREG,max_pressure+1
+	
+	; init in invalid data state
+	clrf	WREG							; set WREG to 0
+	bsf		WREG,int_invalid_flag			; set invalid flag
+	bsf		WREG,int_is_zero				; set zero flag
+	movff	WREG,int_O_tank_pres_need+1		; Set flags for tank pressure needs = 0 before p2_deco.c
+	movff	WREG,int_O_tank_pres_need+3		; can do it. If this is not done here and the gas needs
+	movff	WREG,int_O_tank_pres_need+5		; custom view is shown before p2_deco.c completes the first
+	movff	WREG,int_O_tank_pres_need+7		; deco calculation, some rubbish numbers from last dive of
+	movff	WREG,int_O_tank_pres_need+9		; simulation may be shown
+	
+	; configure the deco engine:
+	movff	char_O_deco_status,WREG			; bank-safe copy
+	bsf		WREG,DECO_STATUS_0_FLAG			; configure init ...
+	bsf		WREG,DECO_STATUS_1_FLAG			; ... state,
+	bcf		WREG,DECO_PLAN_FLAG				; normal plan mode,
+	bsf		WREG,DECO_CNS_FLAG				; enable CNS calculation (CNS at end of dive),
+	bcf		WREG,DECO_VOLUME_FLAG			; disable gas volume calculation, and
+	bcf		WREG,DECO_ASCENT_FLAG			; disable delayed ascent calculation
+	movff	WREG,char_O_deco_status			; bank-safe copy back
+	
+	clrf	WREG
+	movff	WREG,char_O_main_status			; reset char_O_main_status
 
+	movlw	deco_distance
+	movff	WREG,char_I_deco_distance
+	movff	opt_last_stop,char_I_depth_last_deco
+	movff	opt_GF_low,char_I_GF_Low_percentage
+	movff	opt_GF_high,char_I_GF_High_percentage
+	
     bcf     use_agf                         ; Start with normal GF set
     bcf     divemode_menu                   ; clear divemode menu flag
+    
+    bcf	    alternative_divelayout			; Start with default layout
+	
+	bcf		blinking_depth_prev				; clear flag for blinking depth	## NEW BUGFIX
+	bcf		blinking_depth_warning			; clear flag for blinking depth	## NEW BUGFIX
+	bcf		blinking_depth_toggle			; clear flag for blinking depth	## NEW BUGFIX
+	
 	movlw	d'1'
 	movwf	apnoe_max_pressure+0
 	clrf	apnoe_max_pressure+1
@@ -1526,66 +2108,65 @@ diveloop_boot:
 	clrf	apnoe_mins
 	clrf	divemins+0
 	clrf	divemins+1
-
-	bcf        blinking_depth_prev                ; clear flag for blinking depth    ## NEW BUGFIX
-	bcf        blinking_depth_warning         ; clear flag for blinking depth    ## NEW BUGFIX
-	bcf        blinking_depth_toggle            ; clear flag for blinking depth    ## NEW BUGFIX
     
-; Copy date and time for logbook
+	; Copy date and time for logbook
     movff   year,start_year
     movff   month,start_month
     movff   day,start_day
     movff   hours,start_hours
     movff   mins,start_mins
     
-    movff   int_O_CNS_fraction+0,CNS_start+0
-    movff   int_O_CNS_fraction+1,CNS_start+1   ; Save CNS value at beginning of dive
-    movff   char_O_gradient_factor,GF_start    ; Save GF value at  beginning of dive
+    movff   int_O_CNS_fraction+0,CNS_start+0	; save CNS value at beginning of dive
+    movff   int_O_CNS_fraction+1,WREG			; get high byte to WREG
+	bcf		WREG,int_warning_flag				; clear warning flag bit
+	movff	WREG,CNS_start+1					; move high byte on
+    movff   int_O_gradient_factor+0,GF_start	; save GF value at beginning of dive (only lower byte used for value)
 
-
-    bcf     no_more_divesecs            ; =1: Do no longer show seconds in divemode
+    bcf     no_more_divesecs            		; =1: do no longer show seconds in divemode
 	bcf		divemode_menu_active
     clrf    menupos
-    clrf    menupos2                    ; Reset to zero (Zero=no premenu or simulator task)
-
+    clrf    menupos2                    		; Reset to zero (Zero=no premenu or simulator task)
+	bsf		sensors_agree						; init of sensors disagree warning system
+	
     btfsc   FLAG_ccr_mode
     bra	    diveloop_boot_cc
     btfsc   FLAG_pscr_mode
     bra	    diveloop_boot_cc
     rcall   dive_boot_oc
     bra	    diveloop_boot_cont
+
 diveloop_boot_cc:
-    rcall dive_boot_cc
+    rcall	dive_boot_cc
+	
 diveloop_boot_cont:
-    
     ; Copy opt_dil_types into backup (For "lost gas" feature)
-    movff   opt_dil_type+0,opt_dil_type_backup+0    ; 0=Disabled, 1=First, 2=Normal
-    movff   opt_dil_type+1,opt_dil_type_backup+1    ; 0=Disabled, 1=First, 2=Normal
-    movff   opt_dil_type+2,opt_dil_type_backup+2    ; 0=Disabled, 1=First, 2=Normal
-    movff   opt_dil_type+3,opt_dil_type_backup+3    ; 0=Disabled, 1=First, 2=Normal
-    movff   opt_dil_type+4,opt_dil_type_backup+4    ; 0=Disabled, 1=First, 2=Normal
+    movff   opt_dil_type+0,opt_dil_type_backup+0    				; 0=Disabled, 1=First, 2=Normal
+    movff   opt_dil_type+1,opt_dil_type_backup+1    				; 0=Disabled, 1=First, 2=Normal
+    movff   opt_dil_type+2,opt_dil_type_backup+2    				; 0=Disabled, 1=First, 2=Normal
+    movff   opt_dil_type+3,opt_dil_type_backup+3    				; 0=Disabled, 1=First, 2=Normal
+    movff   opt_dil_type+4,opt_dil_type_backup+4    				; 0=Disabled, 1=First, 2=Normal
     ; Copy opt_gas_types into backup (For "lost gas" feature)
-    movff   opt_gas_type+0,opt_gas_type_backup+0    ; 0=Disabled, 1=First, 2=Travel, 3=Deco
-    movff   opt_gas_type+1,opt_gas_type_backup+1    ; 0=Disabled, 1=First, 2=Travel, 3=Deco
-    movff   opt_gas_type+2,opt_gas_type_backup+2    ; 0=Disabled, 1=First, 2=Travel, 3=Deco
-    movff   opt_gas_type+3,opt_gas_type_backup+3    ; 0=Disabled, 1=First, 2=Travel, 3=Deco
-    movff   opt_gas_type+4,opt_gas_type_backup+4    ; 0=Disabled, 1=First, 2=Travel, 3=Deco
+    movff   opt_gas_type+0,opt_gas_type_backup+0    				; 0=Disabled, 1=First, 2=Travel, 3=Deco
+    movff   opt_gas_type+1,opt_gas_type_backup+1    				; 0=Disabled, 1=First, 2=Travel, 3=Deco
+    movff   opt_gas_type+2,opt_gas_type_backup+2    				; 0=Disabled, 1=First, 2=Travel, 3=Deco
+    movff   opt_gas_type+3,opt_gas_type_backup+3    				; 0=Disabled, 1=First, 2=Travel, 3=Deco
+    movff   opt_gas_type+4,opt_gas_type_backup+4   					; 0=Disabled, 1=First, 2=Travel, 3=Deco
     ; Also copy change depths into backup (For "lost gas" feature)
-    movff   char_I_dil_change+0,opt_dil_change_backup+0	; Gas change depths Diluents
-    movff   char_I_dil_change+1,opt_dil_change_backup+1	; Gas change depths Diluents
-    movff   char_I_dil_change+2,opt_dil_change_backup+2	; Gas change depths Diluents
-    movff   char_I_dil_change+3,opt_dil_change_backup+3	; Gas change depths Diluents
-    movff   char_I_dil_change+4,opt_dil_change_backup+4	; Gas change depths Diluents
+    movff   char_I_dil_change+0,opt_dil_change_backup+0				; Gas change depths Diluents
+    movff   char_I_dil_change+1,opt_dil_change_backup+1				; Gas change depths Diluents
+    movff   char_I_dil_change+2,opt_dil_change_backup+2				; Gas change depths Diluents
+    movff   char_I_dil_change+3,opt_dil_change_backup+3				; Gas change depths Diluents
+    movff   char_I_dil_change+4,opt_dil_change_backup+4				; Gas change depths Diluents
     ; Also copy change depths into backup (For "lost gas" feature)
-    movff   opt_OC_bail_gas_change+0,opt_OC_bail_gas_change_backup+0 ; Gas change depths OC/Bailout
-    movff   opt_OC_bail_gas_change+1,opt_OC_bail_gas_change_backup+1 ; Gas change depths OC/Bailout
-    movff   opt_OC_bail_gas_change+2,opt_OC_bail_gas_change_backup+2 ; Gas change depths OC/Bailout
-    movff   opt_OC_bail_gas_change+3,opt_OC_bail_gas_change_backup+3 ; Gas change depths OC/Bailout
-    movff   opt_OC_bail_gas_change+4,opt_OC_bail_gas_change_backup+4 ; Gas change depths OC/Bailout
+    movff   opt_OC_bail_gas_change+0,opt_OC_bail_gas_change_backup+0; Gas change depths OC/Bailout
+    movff   opt_OC_bail_gas_change+1,opt_OC_bail_gas_change_backup+1; Gas change depths OC/Bailout
+    movff   opt_OC_bail_gas_change+2,opt_OC_bail_gas_change_backup+2; Gas change depths OC/Bailout
+    movff   opt_OC_bail_gas_change+3,opt_OC_bail_gas_change_backup+3; Gas change depths OC/Bailout
+    movff   opt_OC_bail_gas_change+4,opt_OC_bail_gas_change_backup+4; Gas change depths OC/Bailout
 
 	clrf	better_gas_number           ; Clear better gas register
 
-	bcf		show_safety_stop			;=1: Show the safety stop
+	bcf		show_safety_stop			; =1: Show the safety stop
 	clrf	safety_stop_countdown		; Clear count-down
 
  	clrf	samplesecs
@@ -1598,9 +2179,9 @@ diveloop_boot_cont:
 	clrf	average_depth_hold_total+1
 	clrf	average_depth_hold_total+2
 	clrf	average_depth_hold_total+3	; Clear Non-Resettable Average
-        rcall	reset_average1				; Reset the resettable average depth
-        bcf	decostop_active
-	bcf	better_gas_available        ;=1: A better gas is available and a gas change is advised in divemode
+    rcall	reset_average1				; Reset the resettable average depth
+    bcf		decostop_active
+	bcf		better_gas_available        ; =1: A better gas is available and a gas change is advised in divemode
 	call	ghostwriter_short_header	; Write short header with divenumber into profile memory
 
     btfsc   simulatormode_active
@@ -1613,17 +2194,17 @@ diveloop_boot_cont:
 diveloop_boot_1:
     ; Simulator mode: Surface pressure is 1bar.
     movlw   LOW .1000
-	movff	WREG,int_I_pres_surface+0   ; LOW copy surfacepressure to deco routine
+	movff	WREG,int_I_pres_surface+0   	; LOW copy surfacepressure to deco routine
     movlw   HIGH .1000
-	movff	WREG,int_I_pres_surface+1   ; HIGH copy surfacepressure to deco routine
+	movff	WREG,int_I_pres_surface+1   	; HIGH copy surfacepressure to deco routine
 
 diveloop_boot_2:
 	SAFE_2BYTE_COPY	temperature,minimum_temperature ; Reset Min-Temp registers
 
 ; Init profile recording parameters	
-	movff	samplingrate,samplesecs_value            ; to avoid EEPROM access in the ISR
+	movff	samplingrate,samplesecs_value	; to avoid EEPROM access in the ISR
 	movlw	div_temperature
-	movwf	divisor_temperature         ; load divisors for profile storage
+	movwf	divisor_temperature         	; load divisors for profile storage
 	movlw	div_deco
 	movwf	divisor_deco				
 	movlw	div_gf
@@ -1637,14 +2218,16 @@ diveloop_boot_2:
 	movlw	div_tank
 	movwf	divisor_tank
 
-	btfss	FLAG_apnoe_mode				; In Apnoe mode?
+	btfss	FLAG_apnoe_mode					; In Apnoe mode?
 	bra		divemode_boot1
-; Overwrite some parameters in Apnoe mode....
+
+	; Overwrite some parameters in Apnoe mode....
 	movlw	samplingrate_apnoe
-	movwf	samplesecs_value			; to avoid EEPROM access in the ISR
+	movwf	samplesecs_value				; to avoid EEPROM access in the ISR
+
 divemode_boot1:
-    bsf     ccr_diluent_setup		; For CCR mode (Required to have better gas working)
-    btfsc   FLAG_ccr_mode               ; =1: CCR mode (Fixed ppO2 or Sensor) active
+    bsf     ccr_diluent_setup				; For CCR mode (Required to have better gas working)
+    btfsc   FLAG_ccr_mode               	; =1: CCR mode (Fixed ppO2 or Sensor) active
     bra     divemode_boot2
     btfsc   FLAG_pscr_mode
     bra     divemode_boot2
@@ -1653,84 +2236,115 @@ divemode_boot1:
     movlw   .0
     movwf   divisor_ppo2_sensors
     
-    bcf     ccr_diluent_setup		; For OC mode (Required to have better gas working)
-divemode_boot2:
+    bcf     ccr_diluent_setup				; For OC mode (Required to have better gas working)
 
+divemode_boot2:
 	bcf		LEDg
 	bcf		LEDr
 	bcf		realdive
-	btfss	simulatormode_active		; do not disable in simulator mode!					
-	call	disable_rs232				; Disable RS232
-    btfsc   enable_screen_dumps         ; =1: Ignore vin_usb, wait for "l" command (Screen dump)
-    call	enable_rs232				; Also sets to speed_normal ...
+	btfss	simulatormode_active			; do not disable in simulator mode!					
+	call	disable_rs232					; Disable RS232
+    btfsc   enable_screen_dumps         	; =1: Ignore vin_usb, wait for "l" command (Screen dump)
+    call	enable_rs232					; Also sets to speed_normal ...
     ; Reset divetime seconds
-    movlw   .2                          ; Start at 2seconds
+    movlw   .2                          	; Start at 2seconds
     movwf   total_divetime_seconds+0
     clrf    total_divetime_seconds+1
     movwf   divesecs
     movwf   apnoe_secs
-    bsf	    divemode2                   ; displayed divetime is running (Divetime starts HERE)
-    
-    return								; Done with divemode boot
+    bsf	    divemode2                   	; displayed divetime is running (Divetime starts HERE)
+    return									; Done with divemode boot
 
 divemode_check_for_warnings:
-    movlw   .2
-    cpfsgt  warning_counter						; only two warnings active?
-    bra     divemode_check_for_warnings1        ; Yes, update every second
+    movlw   .1				    			; One warning at a time in alt. layout mode
+    btfss   alternative_divelayout  
+    movlw   .2				    			; Two warnings at a time in default layout mode
+    cpfsgt  warning_counter		    		; only one (or two) warnings active?
+    bra     divemode_check_for_warnings1    ; Yes, update every second
 
-    btfss   secs,0                      ; Every two seconds...
+    btfss   secs,0                      	; Every two seconds...
     return
-    btfss   secs,1                      ; Every four seconds...
+    btfss   secs,1                      	; Every four seconds...
     return
 
 divemode_check_for_warnings1:
-	movf	warning_counter_backup,W
-	cpfseq	warning_counter						; warning_counter_backup = warning_counter?
-	call	TFT_clear_warning_text              ; No, clear all warnings
-	movff	warning_counter,warning_counter_backup	; copy warning_counter
-
-	bcf		warning_active				; Clear flag
+	bcf		warning_active						; Clear flag
 	clrf	warning_counter						; Clear counter
 
+	; warnings sorted by severity, highest severity first
+	
     ; Warnings for all modes
     call	check_warn_battery                  ; Check if the battery level should be displayed/warned
     call    check_divetimeout                   ; Not actually a warning. Check and show the divemode timeout
 
-	btfsc	FLAG_apnoe_mode             ; Done for Apnoe or Gauge mode
+	btfsc	FLAG_apnoe_mode             		; Done for Apnoe or Gauge mode
     bra     divemode_check_for_warnings2
-	btfsc	FLAG_gauge_mode             ; Done for Apnoe or Gauge mode
+	btfsc	FLAG_gauge_mode             		; Done for Apnoe or Gauge mode
 	bra     divemode_check_for_warnings2
 
     ; Warnings only in deco modes
-    	rcall	check_ppO2							; check ppO2 and displays warning, if required
+    rcall	check_ppO2							; check ppO2 and displays warning, if required
 	
-	rcall	check_cns_violation					; Check CNS value and display it, if required
+	btfss	sensors_agree						; are the sensor values within the threshold range?
+	rcall	check_warn_sensors_disagree			; NO  - further evaluate
+	btfsc	sensors_agree						; are the sensor values within the threshold range?
+	bcf		sensor_warning						; YES - revoke memorized sensor warning
+
+	movff	char_O_deco_warnings,WREG			; bank-safe copy for deco warnings
+	btfsc	WREG,outside_warning_lock			; are we outside of the ZH-L16 model?
+	rcall	warn_outside						; YES
+	
+	rcall	check_IBCD							; check for IBCD attention or warning
+	
 	btfsc	decostop_active						; In deco mode?
-	rcall	check_and_store_gf_violation		; Yes, Sets warnings, if required
-	btfsc	decostop_active						; In deco mode?
-    call    TFT_ftts                            ; Show @+x time
+	rcall	check_and_store_gf_violation		; Yes, sets warnings, if required
+
+	movff	char_O_deco_warnings,WREG			; bank-safe copy for deco warnings
+	btfsc	WREG,mbubble_warning_lock			; do we have a microbubbles warning?
+	rcall	warn_mbubbles						; YES
+	
+	rcall	check_cns_violation					; Check CNS value and display it, if required	
+	
+	;btfsc	decostop_active						; In deco mode?
+	rcall	check_gas_needs						; show gas needs warning if any gas need is > threshold
+
+	rcall	check_eod_cns_violation				; Check CNS values for end-of-dive and display warning, if required
+	
+    call    TFT_display_ftts					; Show @+x time
+	
     btfsc   use_agf                             ; In aGF mode?
     rcall   warn_agf                            ; Yes, show a warning for it
+
     btfsc   setpoint_fallback                   ; =1: Fallback to SP1 due to external O2 sensor failure
     rcall   warn_fallback                       ; Show the warning
-
+	
 divemode_check_for_warnings2:
 ; Display the warning icon?
-	btfsc	warning_active				; Any warning active?
-	call	TFT_divemode_warning				; Yes
-	btfss	warning_active				; Any warning active?
-	call	TFT_divemode_warning_clear			; No, clear warning icon
+	btfsc	warning_active						; Any warning active?
+	bsf	FLAG_TFT_divemode_warning				; Yes
+	btfss	warning_active						; Any warning active?
+	bsf	FLAG_TFT_divemode_warning_clear			; No, clear warning icon
 
 ; Setup warning_page number
     incf    warning_page,F
+    movf    warning_page,W
     bcf     STATUS,C
-    rlcf    warning_page,W                      ; *2
+    btfss   alternative_divelayout
+    rlcf    warning_page,W                      ; *2 (But only in standard layout mode)
     cpfsgt  warning_counter                     ; > warning_counter
     clrf    warning_page                        ; No, clear
-
+	
+; Clear both rows of warnings if there is nothing to show at all
+	tstfsz	warning_counter						; any warnings?
+	bra	divemode_check_for_warnings3			; YES - look if second row needs to be cleared
+	bsf	FLAG_TFT_dive_warning_text_clear		; Set flag
+	return
+divemode_check_for_warnings3:
+	
+	
 ; Clear 2nd row of warnings if there is nothing to show (on this page)
     btfss   second_row_warning                  ; =1: The second row contains a warning
-    call    TFT_clear_warning_text_2nd_row      ; No, clear this row
+    bsf	    FLAG_TFT_dive_warning_text_clr2	; Set flag for 2nd row
     return                                      ; Done.
 
     global  check_warn_battery
@@ -1738,210 +2352,192 @@ check_warn_battery:
     movff   batt_percent,lo
     movlw	battery_show_level+1
     cpfslt	lo
-    return                              ; No Display, no warning
+    return                              		; No Display, no warning
     ; Display Battery, but warn?
     movff	batt_percent,lo
     movlw	color_code_battery_low+1
-    cpfsgt	lo                          ;
-    bsf		warning_active		; Set Warning flag
+    cpfsgt	lo                          		;
+    bsf		warning_active						; Set Warning flag
     
     movlw   .4
-    cpfseq  menupos3            ; battery shown in Custom View 4?
-    bra     check_warn_battery2	; No
-    return                      ; Yes, do not show twice (in custom view and in warning area)
+    cpfseq  menupos3            				; battery shown in Custom View 4?
+    bra     check_warn_battery2					; No
+    return                     					; Yes, do not show twice (in custom view and in warning area)
 check_warn_battery2:
-    incf	warning_counter,F		    ; increase counter
-    goto	TFT_update_batt_percent_divemode    ; Show percent (And return)
+    incf	warning_counter,F					; increase counter
+    goto	TFT_update_batt_percent_divemode	; Show percent (And return)
 
 check_divetimeout:
     btfsc		divemode2				
-    return                              ; displayed divetime is not running
-	incf	warning_counter,F			; increase counter
-    goto    TFT_divetimeout             ; Show timeout counter  (and return)
+    return										; displayed divetime is not running
+	incf	warning_counter,F					; increase counter
+    goto    TFT_divetimeout						; Show timeout counter  (and return)
 
 
-check_ppO2:							    ; check current ppO2 and display warning if required
-    btfss	FLAG_pscr_mode
-    bra		check_ppO2_non_pscr		; Non-PSCR modes...
-    	; in PSCR mode
-    btfsc	is_bailout
-    bra		check_ppO2_non_pscr		; Non-PSCR modes...
-	
-    call		compute_pscr_ppo2		; pSCR ppO2 into sub_c:2
-    movff		sub_c+0,xA+0
-    movff		sub_c+1,xA+1
-    movlw		d'100'
-    movwf		xB+0
-    clrf		xB+1
-    call		div16x16				; /100
-    tstfsz      xC+1                    ; Is ppO2 > 2.55bar ?
-    setf        xC+0                    ; yes: bound to 2.55... better than wrap around.
-    movff		xC+0,char_I_actual_ppO2	; copy last ppO2 to buffer register (for pSCR CNS)
-    clrf		xC+2
-    clrf		xC+3
-    movff		sub_c+0,xC+0
-    movff		sub_c+1,xC+1			; copy for comptibility
-    bra			check_ppO2_check
-
-check_ppO2_non_pscr:    
-    SAFE_2BYTE_COPY amb_pressure, xA
-    movlw	d'10'
-    movwf	xB+0
-    clrf	xB+1
-    call	div16x16				; xC=p_amb/10
-
-    movff	xC+0,xA+0
-    movff	xC+1,xA+1
-    movff   char_I_O2_ratio,xB+0    ; =O2 ratio
-    clrf	xB+1
-    call	mult16x16               ; char_I_O2_ratio * p_amb/10
-
-check_ppO2_check:
-    ; Check very high ppO2 manually
-	tstfsz	xC+2				; char_I_O2_ratio * p_amb/10 > 65536, ppO2>6,55bar?
-	bra		check_ppO2_1		; Yes, display Value!
-    ; Check if ppO2>3,30bar
-	btfsc   xC+1,7
-	bra     check_ppO2_1		; Yes!
-
-    ; Check for low ppo2
-    movff	xC+0,sub_b+0
-	movff	xC+1,sub_b+1
-    movff   opt_ppO2_min,WREG
-	mullw	d'100'				; opt_ppO2_min*100
-	movff	PRODL,sub_a+0
-	movff	PRODH,sub_a+1
-	call	subU16
-	btfsc	neg_flag
-	bra     check_ppO2_0        ; Not too low
-    ; ppO2 low
-    rcall   check_ppo2_display  ; display if not already shown in custom view
-	movlw	d'4'				; Type of Alarm (ppO2 low)
-	movwf	AlarmType			; Copy to Alarm Register
-	bsf		event_occured		; Set Event Flag
-	bsf		warning_active		; Set Warning flag
-	return						; Done.
-
-check_ppO2_0:
-    ; Check if ppO2 should be displayed
-    movlw   .0
-    TSTOSS  opt_showppo2		; 0=no, 1=always show
-    movlw   ppo2_display_high
-	mullw	d'100'				; ppo2_display_high*100
-	movff	PRODL,sub_a+0
-	movff	PRODH,sub_a+1
-	call	subU16
-	btfss	neg_flag
-	return						; No Display, no warning
-    ; Display ppO2, but warn?
-    rcall   check_ppo2_display  ; display if not already shown in custom view
-
-;check if we are within our warning thresholds!
-	movff	xC+0,sub_b+0
-	movff	xC+1,sub_b+1
-		;active_gas_type -> 0=Disabled, 1=First, 2=Travel, 3=Deco for OC gases and 0=Disabled, 1=First, 2=Normal for diluents	
-	movff   active_gas_type,xA+0	; xA+0 used as temp here -> holds type
-	movff   opt_ppO2_max_deco,xB+1	; xB+1 used as temp here
-	movlw	.3			
-	cpfseq	xA+0			; Deco?
-	movff   opt_ppO2_max,xB+1	; No, overwrite with travel/bottom max
-	movf	xB+1,W			; Result in WREG
-	mullw	d'100'				; opt_ppO2_max*100
-	movff	PRODL,sub_a+0
-	movff	PRODH,sub_a+1
-	infsnz	sub_a+0,F		
-	incf	sub_b+1,F		
-	call	subU16					
-	btfss	neg_flag
-	return						; Done. Not too high
-	movlw	d'5'				; Type of Alarm (ppO2 high)
-	movwf	AlarmType			; Copy to Alarm Register
-	bsf		event_occured		; Set Event Flag
-	bsf		warning_active		; Set Warning flag
-	return						; Done.
-
-check_ppO2_1:                   ; ppO2 very high
-    rcall   check_ppo2_display  ; display if not already shown in custom view
-	movlw	d'5'				; Type of Alarm
-	movwf	AlarmType			; Copy to Alarm Register
-	bsf		event_occured		; Set Event Flag
-	bsf		warning_active		; Set Warning flag
-	return						; Done.
-
-check_ppo2_display:
+check_ppO2:
+	btfsc   FLAG_ccr_mode 				; are we in CCR mode?
+	bra		check_ppO2_loop				; YES
+	btfsc	FLAG_pscr_mode				; are we in pSCR mode?
+	bra		check_ppO2_loop				; YES
+	bra		check_ppO2_oc_1				; NO  - neither CCR nor pSCR
+check_ppO2_loop:
+	btfsc	is_bailout					; in bailout?
+	bra		check_ppO2_oc_1				; YES - continue with OC
+	movff	int_O_pure_ppO2+1,hi		; NO  - get upper part of int_O_pure_ppO2
+	btfsc	hi,int_warning_flag			; 		ppO2 of the pure diluent to low or high? 
+	rcall	check_ppO2_d				; 		YES - show warning and return on next line
+	bra		check_ppO2_oc_2				;		      skip pre-warning threshold test on breathed ppO2
+check_ppO2_oc_1:
+	movff	int_O_breathed_ppO2+1,WREG	; get upper part of int_O_breathed_ppO2
+	btfsc	WREG,int_prewarning_flag	; breathed ppO2 just above pre-warning threshold?
+	bra		check_ppo2_display			; YES - show ppO2
+check_ppO2_oc_2:
+	movff	int_O_breathed_ppO2+1,WREG	; get upper part of int_O_breathed_ppO2 (perhaps again)
+	btfsc	WREG,int_low_flag			; breathed ppO2 to low?
+	bra		check_ppO2_low				; YES - record the warning and show ppO2
+	btfsc	WREG,int_high_flag			; breathed ppO2 to high?
+	bra		check_ppO2_high				; YES - record the warning and show ppO2
+	TSTOSS  opt_showppo2				; show ppO2 anyhow? (0 = no, 1 = show always)
+	return								; NO  - no warnings, no show
+	bra		check_ppo2_display			; YES - just show ppO2
+check_ppO2_low:
+    movlw	d'4'						; set type of alarm (ppO2 low)
+	bra		check_ppO2_common  			; continue with common part
+check_ppO2_high:
+	movlw	d'5'						; set type of alarm (ppO2 high)
+check_ppO2_common:
+	movwf	AlarmType					; copy alarm type to alarm register
+	bsf		event_occured				; set event   flag
+	bsf		warning_active				; set warning flag
+	btfsc	is_bailout					; are we in bailout?
+	bra		check_ppo2_display			; YES - skip CCR/pSCR checks
+	btfsc   FLAG_ccr_mode 				; are we in CCR mode?
+	return								; YES - no extra warning required
+	btfsc	FLAG_pscr_mode				; are we in pSCR mode?
+	return								; YES - no extra warning required
+check_ppo2_display:						; display warning if ppO2 is not already shown in custom view
     movlw   .9
-    cpfseq  menupos3            ; ppO2 shown in Custom View 9?
-    bra     check_ppO2_a        ; No
-    return                      ; Yes, do not show twice (in custom view and in warning area)
+    cpfseq  menupos3            		; ppO2 shown in Custom View 9?
+    bra     check_ppO2_a        		; No
+    return                      		; Yes, do not show twice (in custom view and in warning area)
 check_ppO2_a:
     movlw   .11
-    cpfseq  menupos3            ; ppO2 shown in Custom View 11?
-    bra     check_ppO2_b        ; No
-    return                      ; Yes, do not show twice (in custom view and in warning area)
+    cpfseq  menupos3            		; ppO2 shown in Custom View 11?
+    bra     check_ppO2_b        		; No
+    return                      		; Yes, do not show twice (in custom view and in warning area)
 check_ppO2_b:
     movlw   .12
-    cpfseq  menupos3            ; ppO2 shown in Custom View 12?
-    bra     check_ppO2_c        ; No
-    return                      ; Yes, do not show twice (in custom view and in warning area)
+    cpfseq  menupos3            		; ppO2 shown in Custom View 12?
+    bra     check_ppO2_c        		; No
+    return                      		; Yes, do not show twice (in custom view and in warning area)
 check_ppO2_c:
     movlw   .10
-    cpfseq  menupos3            ; ppO2 shown in Custom View 10?
-    bra     check_ppO2_d        ; No
-    return                      ; Yes, do not show twice (in custom view and in warning area)
+    cpfseq  menupos3            		; ppO2 shown in Custom View 10?
+    bra     check_ppO2_d				; No
+    return                      		; Yes, do not show twice (in custom view and in warning area)
 check_ppO2_d:    
-    incf	warning_counter,F	; increase counter
-    goto    TFT_display_ppo2	; Show ppO2  (and return)
+    incf	warning_counter,F			; increase counter
+    goto    TFT_display_ppo2			; show breathed gas or diluent ppO2 warning (and return)
+	
 
     global  check_cns_violation
 check_cns_violation:
     ; Check if CNS should be displayed
-    movff   int_O_CNS_fraction+1,lo		; copy into bank1
-    tstfsz  lo                          ; >255% ?
-    bra     check_cns_violation2        ; Yes
-	movff	int_O_CNS_fraction+0,lo		; copy into bank1
-
-	movlw	cns_warning_high			; cns_warning_high
-	subwf	lo,W
-	btfsc	STATUS,C
-	bsf		warning_active              ; Set Warning flag
-
-	movlw	cns_display_high			; cns_display_high
-	subwf	lo,W
-	btfss	STATUS,C
-	return                              ; No Display, no warning
-    ; Display CNS
-	bra	display_cns_violation
+    movff   int_O_CNS_fraction+1,WREG	; get high byte
+    btfsc	WREG,int_warning_flag		; warning flag set?
+    bra     check_cns_violation2		; Yes - issue warning
+	btfsc	WREG,int_prewarning_flag	; pre-warning flag set?
+	bra		display_cns_violation		; YES - just display CNS
+	return                              ; No  - no display, no warning
 check_cns_violation2:
-        bsf		warning_active      ; Set Warning flag
-display_cns_violation:			    ; Show CNS if not shown in the custom view
-        movlw   .11
-	cpfseq  menupos3		    ; CNS shown in Custom View?
+	bsf		warning_active				; Set Warning flag
+display_cns_violation:					; Show CNS if not shown in the custom view
+	movlw   .11
+	cpfseq  menupos3					; CNS shown in Custom View?
 	bra     display_cns_violation2      ; No
-        return				    ; Yes, do not show twice (in custom view and in warning area)
+    return								; Yes, do not show twice (in custom view and in warning area)
 display_cns_violation2:
-	incf	warning_counter,F	    ; increase counter
-        goto	TFT_display_cns		    ; Show CNS  (and return)
-    
+	movlw   .8
+	cpfseq  menupos3					; CNS shown through Custom View 8 right now?
+	bra     display_cns_violation3      ; No
+    return								; Yes, do not show twice (in custom view and in warning area)
+display_cns_violation3:
+	incf	warning_counter,F	    	; increase counter
+    goto	TFT_display_cns				; Show CNS  (and return)
+
 	
+    global  check_eod_cns_violation		; check end-of-dive CNS values
+check_eod_cns_violation:
+	movff   int_O_CNS_fraction+1,WREG	; get high-byte of current CNS value
+    btfsc	WREG,int_warning_flag       ; current CNS value in warning state?
+    return								; YES - inhibit eod warning if current CNS is already in warning
+    movff   int_O_normal_CNS_fraction+1,WREG
+	btfsc	WREG,int_invalid_flag		; flag for invalid value set?
+	bra		check_eod_cns_violation1	; YES - continue with checking the other CNS value
+    btfsc	WREG,int_warning_flag		; NO  - flag for warning set?
+    bra     check_eod_cns_violation2	; 		YES - issue warning
+check_eod_cns_violation1:				; 		NO  - continue with checking the other CNS value
+    movff   int_O_alternate_CNS_fraction+1,WREG
+	btfsc	WREG,int_invalid_flag		; flag for invalid value set?
+	return								; YES - done with CNS checking
+	btfsc	WREG,int_warning_flag		; NO  - flag for warning set?
+    bra     check_eod_cns_violation2	; 		Yes - issue warning
+	return								; 		NO  - done with CNS checking
+check_eod_cns_violation2:				; YES - issue warning
+	bsf		warning_active				; set Warning flag
+	movlw   .8							; issue textual warning if CNS values are not shown in the custom view right now
+	cpfseq  menupos3					; CNS values shown through Custom View 8 right now?
+	bra     display_eod_cns_violation	; NO  - issue textual warning
+	return								; YES - do not show twice (in custom view and in warning area)
+display_eod_cns_violation:
+	incf	warning_counter,F	    	; increase counter
+    goto	TFT_display_eod_cns			; issue CNS at end-of-dive warning (and return)
+
+
     global  check_and_store_gf_violation
 check_and_store_gf_violation:
-	movff	char_O_gradient_factor,lo			; gradient factor absolute (Non-GF model)
-
-	movlw	gf_warning_high
-	cpfsgt	lo
-	bra     check_and_store_gf_violation2   ; No warning
-	movlw	d'2'                        ; Type of Alarm
-	movwf	AlarmType                   ; Copy to Alarm Register
-	bsf		event_occured               ; Set Event Flag
-	bsf		warning_active              ; Set Warning flag
+	movff	int_O_gradient_factor+1,WREG	; get upper byte of gradient factor
+	btfss	WREG,int_warning_flag			; check if the warning flag is set
+	bra     check_and_store_gf_violation2   ; NO  - continue with checking for pre-warning
+	movlw	d'2'                        	; YES - set type of alarm
+	movwf	AlarmType                   	; 		copy to alarm register
+	bsf		event_occured               	; 		set event   flag
+	bsf		warning_active              	; 		set warning flag
+	bra		check_and_store_gf_violation3	;		show gf warning
 check_and_store_gf_violation2:
-	movlw	gf_display_high
-	cpfsgt	lo
-    return                              ; No Display, no warning
-    ; Display GF
+	btfsc	WREG,int_prewarning_flag		; check if the pre-warning flag is set
+    bra		check_and_store_gf_violation3	; YES - show gf
+	TSTOSS	opt_enable_IBCD					; NO  - IBCD warning activated?
+	bra		check_and_store_gf_violation4	; 		NO  - continue checking of deco info
+	movff	char_O_deco_warnings,WREG		; 		YES - get the deco warnings vector
+	btfss	WREG,IBCD_warning				; 			  is the IBCD warning flag set?
+	bra		check_and_store_gf_violation4	; 			  NO  - continue checking for deco info
+check_and_store_gf_violation3:				;			  YES - show gf
+	bsf		warning_active					; set Warning flag
+	incf	warning_counter,F				; increase counter
+    goto    TFT_warning_gf              	; show GF (and return)
+check_and_store_gf_violation4:				; check for deco info
+	btfss	divemode						; in divemode?
+	return									; NO  - done, return
+	movff	char_O_deco_warnings,WREG		; YES - get the deco warnings vector
+	btfss	WREG,deco_flag					; 		check if the deco flag is set
+    return									; 		NO  - all done, return
+	incf	warning_counter,F				; 		YES - increase counter
+    goto    TFT_info_deco	             	; 			  show deco info
+	
+	
+warn_outside:
 	incf	warning_counter,F			; increase counter
-    goto    TFT_warning_gf              ; Show GF Warning (and return)
+	bsf		warning_active              ; Set Warning flag
+    goto    TFT_warning_outside			; show microbubbles warning (and return)
 
+	
+	global	warn_mbubbles
+warn_mbubbles:
+	incf	warning_counter,F			; increase counter
+	bsf		warning_active              ; Set Warning flag
+    goto    TFT_warning_mbubbles		; show microbubbles warning (and return)
+	
 warn_agf:
 	incf	warning_counter,F			; increase counter
 	goto    TFT_warning_agf             ; Show aGF warning  (and return)
@@ -1951,5 +2547,87 @@ warn_fallback:
     bsf		warning_active              ; Set Warning flag
 	goto    TFT_warning_fallback        ; Show fallback warning  (and return)
 
+	
+check_gas_needs:
+	banksel	int_O_tank_pres_need
+	movf	int_O_tank_pres_need+1,w	; get 				HIGH(pres need of 1st tank)
+	iorwf	int_O_tank_pres_need+3,w	; inclusive or with HIGH(pres need of 2nd tank)
+	iorwf	int_O_tank_pres_need+5,w	; inclusive or with HIGH(pres need of 3rd tank)
+	iorwf	int_O_tank_pres_need+7,w	; inclusive or with HIGH(pres need of 4th tank)
+	iorwf	int_O_tank_pres_need+9,w	; inclusive or with HIGH(pres need of 5th tank)
+	banksel	common
+	btfsc	WREG,int_invalid_flag						; check if invalid flag is set
+	return								; YES - no further checking required
+	btfsc	WREG,int_warning_flag		; NO  - check if any gas has a pres_need >= pres_fill
+	bsf		warning_active				; YES - set warning flag
+	btfsc	WREG,int_warning_flag		; NO  - check if any gas has a pres_need >= pres_fill
+	goto	TFT_warning_gas_needs_warn	; Yes - show a warning
+	btfsc	WREG,int_prewarning_flag	; NO  - check if any gas has a pres_need >= pres_fill * threshold
+	goto	TFT_warning_gas_needs_att	; YES - show an attention
+	bcf		gas_needs_attention			; NO  - clear flag for a new attention
+	bcf		gas_needs_warning			;       clear flag for a new warning
+	return
 
+	
+check_warn_sensors_disagree:
+    incf	warning_counter,F			; increase counter
+	bsf		warning_active				; YES - set Warning flag
+	goto	TFT_warning_sensor_disagree	; 		show sensor disagree warning (and return)
+
+
+check_IBCD:
+	TSTOSS	opt_enable_IBCD				; IBCD warning activated?
+	return								; NO  - done
+	movff	char_O_deco_warnings,WREG	; YES - get deco warnings vector
+	btfss	WREG,IBCD_warning			; 		IBCD warning flag set?
+	return								; 		NO  - return
+	incf	warning_counter,F			; 		YES - increase counter
+	goto	TFT_warning_IBCD			;			  write warning to display
+	
+
+
+	global	restart_deco_engine
+	global	restart_deco_engine_wo_ceiling
+restart_deco_engine:
+	; make bank save copies and set flags for invalid data
+	movff	int_O_ceiling+1,WREG
+	bsf		WREG,char_invalid_flag		; int_O_ceiling has its invalid flag on a char's position!
+	movff	WREG,int_O_ceiling+1
+
+restart_deco_engine_wo_ceiling:
+	; make more bank save copies and set more flags for invalid data
+	movff	char_O_deco_gas+0,WREG
+	bsf		WREG,char_invalid_flag
+	movff	WREG,char_O_deco_gas+0
+
+	movff	int_O_ascenttime+1,WREG
+	bsf		WREG,int_invalid_flag
+	movff	WREG,int_O_ascenttime+1
+
+	movff	int_O_alternate_ascenttime+1,WREG
+	bsf		WREG,int_invalid_flag
+	movff	WREG,int_O_alternate_ascenttime+1
+
+	movff	int_O_normal_CNS_fraction+1,WREG
+	bsf		WREG,int_invalid_flag
+	movff	WREG,int_O_normal_CNS_fraction+1
+
+	movff	int_O_alternate_CNS_fraction+1,WREG
+	bsf		WREG,int_invalid_flag
+	movff	WREG,int_O_alternate_CNS_fraction+1
+
+	movff	int_O_tank_pres_need+1,WREG
+	bsf		WREG,int_invalid_flag
+	movff	WREG,int_O_tank_pres_need+1
+	
+	; restart deco engine
+	movff	char_O_deco_status,WREG			; get current deco engine configuration
+	bcf		WREG,DECO_STATUS_0_FLAG			; set status flags to...
+	bcf		WREG,DECO_STATUS_1_FLAG			; ... DECO_STATUS_START
+	bsf		WREG,DECO_PLAN_FLAG				; fake we came from alternative plan to force normal plan to be done next
+	movff   WREG,char_O_deco_status 		; write back new configuration to restart deco computations
+
+    return
+	
+	
  END

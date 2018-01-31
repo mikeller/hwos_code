@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File gaslist.asm
+;   File gaslist.asm												## V2.95
 ;
 ;   Managing OSTC gas list
 ;
@@ -58,12 +58,12 @@ gaslist_strcat_gas_0:
 ; Append current mix to current string (For divemode)
 ; Input: FSR2 : Current string position.
 ; Output: Text appended into buffer pointed by FSR2.
-    global  gaslist_strcat_gasx
-gaslist_strcat_gasx:        ; Show current O2/He mix
+    global  gaslist_strcat_gas6
+gaslist_strcat_gas6:        ; Show current O2/He mix
         STRCAT_TEXT tGas
         STRCAT  ": "
-        movff   char_I_O2_ratio,lo
-        movff   char_I_He_ratio,hi
+        movff   gas6_O2_ratio,lo
+        movff   gas6_He_ratio,hi
         goto	customview_show_mix     ; Put "Nxlo", "Txlo/hi", "Air" or "O2" into Postinc2, and RETURN
 
     global  gaslist_show_type
@@ -556,7 +556,7 @@ gaslist_spdepthminus:
         return
 
 ;----------------------------------------------------------------------------
-; Compute MOD from opt_ppO2_max/opt_ppO2_max_deco and current O2 Ratio.
+; Compute MOD from char_I_ppO2_max/char_I_ppO2_max_deco and current O2 Ratio.
 ;
 ; Input:  gaslist_gas = current gas index.
 ;         opt_gas_O2_ratio[gaslist_gas] = current O2 ratio
@@ -578,10 +578,10 @@ gaslist_calc_mod:
 	lfsr	FSR1,opt_gas_type	; 0=Disabled, 1=First, 2=Travel, 3=Deco for OC gases and 0=Disabled, 1=First, 2=Normal for diluents
 	movff   PLUSW1,xA+0		; xA+0 used as temp here -> holds type
 	
-	movff   opt_ppO2_max_deco,xB+1	; xB+1 used as temp here
+	movff   char_I_ppO2_max_deco,xB+1	; xB+1 used as temp here
 	movlw	.3			
 	cpfseq	xA+0			; Deco?
-	movff   opt_ppO2_max,xB+1	; No, overwrite with travel/bottom max
+	movff   char_I_ppO2_max,xB+1	; No, overwrite with travel/bottom max
 	movf	xB+1,W			; Result in WREG
 	
 	clrf	xB+1			; Clear for div16x16
@@ -599,7 +599,7 @@ gaslist_calc_mod_divemode:
     extern  TFT_color_code1
         movwf   hi                          ; Copy O2%
         movlw	warn_gas_in_gaslist
-        call	TFT_color_code1             ; Color-code current row in Gaslist (%O2 in hi), opt_ppO2_max/opt_ppO2_max_deco as threshold
+        call	TFT_color_code1             ; Color-code current row in Gaslist (%O2 in hi), char_I_ppO2_max/char_I_ppO2_max_deco as threshold
         return
 ;----------------------------------------------------------------------------
 

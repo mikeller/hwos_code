@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File start.asm
+;   File start.asm									REFACTORED VERSION	V2.95a1
 ;
 ;   Startup subroutines
 ;
@@ -34,7 +34,7 @@
 ;
 reset_v code     0x00000
 ;    goto    start
-	goto	0x1FF00     ; Bootloader
+	goto	0x1FF00     	; Bootloader
 
 	ORG     0x00004			; Needed for second-level bootloader
 	goto	start
@@ -53,7 +53,7 @@ clear_rambank:
     call    init_ostc
 
     ; Get button type from Bootloader-Info
-        movlw   .16
+	movlw   .16
 	movff   WREG,analog_counter	; init averaging
 	bsf	analog_switches
 	movlw   0x7C
@@ -62,7 +62,7 @@ clear_rambank:
 	movwf   TBLPTRH
 	movlw   0x01
 	movwf   TBLPTRU
-	TBLRD*+			; Reads 0x07 for analog buttons
+	TBLRD*+							; Reads 0x07 for analog buttons
 	movlw	0x07
 	cpfseq	TABLAT
 	bcf	analog_switches
@@ -72,16 +72,16 @@ clear_rambank:
 	movwf	EEADR
 	movlw	HIGH	.897
 	movwf	EEADRH
-	call    read_eeprom                ; EEDATA into EEPROM@EEADR
-	clrf	EEADRH			    ; Reset EEADRH
-	movff	EEDATA,button_polarity	    ; 0xFF (Both normal), 0x00 (Both inverted), 0x01 (Left inverted only), 0x02 (Right inverted only) 
+	call    read_eeprom             ; EEDATA into EEPROM@EEADR
+	clrf	EEADRH			    	; Reset EEADRH
+	movff	EEDATA,button_polarity	; 0xFF (Both normal), 0x00 (Both inverted), 0x01 (Left inverted only), 0x02 (Right inverted only) 
 
 ; Air pressure compensation	after reset
 	call	get_calibration_data	; Get calibration data from pressure sensor
 	banksel common                  ; get_calibration_data uses isr_backup
 
-        call	TFT_DisplayOff			; display off
-        bsf     LEDr                    ; Status LED
+	call	TFT_DisplayOff			; display off
+	bsf     LEDr                    ; Status LED
 	bcf	pressure_refresh
 ; First pass will not have valid temperature!
 	btfss	pressure_refresh 		; Air pressure compensation
@@ -105,9 +105,9 @@ clear_rambank:
 	movff	WREG,sub_a+1				; max. "allowed" airpressure in mbar
 	movff	last_surfpressure+0,sub_b+0
 	movff	last_surfpressure+1,sub_b+1
-	call	subU16					; sub_c = sub_a - sub_b
-	btfss	neg_flag                ; Is 1080mbar < amb_pressure ?
-	bra		start_copy_pressure		; NO: current airpressure is lower then "allowed" airpressure, ok!
+	call	subU16						; sub_c = sub_a - sub_b
+	btfss	neg_flag                	; Is 1080mbar < amb_pressure ?
+	bra		start_copy_pressure			; NO: current airpressure is lower then "allowed" airpressure, ok!
 
     ; not ok! Overwrite with max. "allowed" airpressure
 	movlw	LOW		max_surfpressure
@@ -119,36 +119,44 @@ start_copy_pressure:
 	movff	last_surfpressure+0,last_surfpressure_15min+0
 	movff	last_surfpressure+1,last_surfpressure_15min+1
 	movff	last_surfpressure+0,last_surfpressure_30min+0
-	movff	last_surfpressure+1,last_surfpressure_30min+1	; Rests all airpressure registers
+	movff	last_surfpressure+1,last_surfpressure_30min+1	; resets all airpressure registers
 
 ; reset deco data for surface mode
-	movlw	d'79'
-	movff	WREG,char_I_N2_ratio            ; 79% N2
-    SAFE_2BYTE_COPY amb_pressure,int_I_pres_respiration ; copy for deco routine
-	movff	int_I_pres_respiration+0,int_I_pres_surface+0     ; copy for desat routine
+	movlw	.21												; 21%
+	movff	WREG,char_I_O2_ratio            				; ... oxygen
+	movlw	.0												;  0%
+	movff	WREG,char_I_He_ratio            				; ... helium
+
+	; initialize GF high (needed by deco engine for color-coding the GF value)
+	movff	opt_GF_high,char_I_GF_High_percentage
+
+    SAFE_2BYTE_COPY amb_pressure,int_I_pres_respiration 	; breathing at surface
+	movff	int_I_pres_respiration+0,int_I_pres_surface+0	; surface pressue
 	movff	int_I_pres_respiration+1,int_I_pres_surface+1		
 
-	extern	deco_reset
-	call	deco_reset
+	extern	deco_setup
+	call	deco_setup				; set up all model parameters.
+    call    deco_clear_tissue       ; Set all tissues to Pamb * N2_ratio (C-Code)
+    banksel common                  ; back to bank 1, needed after every return from C code
 
 	call	rtc_init						; init clock
 
-    movlw   HIGH .512           ; =2
+    movlw   HIGH .512           			; =2
     movwf   EEADRH
     read_int_eeprom .0
     clrf    EEADRH
     movlw   0xAA
-    cpfseq  EEDATA              ; =0xAA
-    bra     no_deco_restore     ; No
+    cpfseq  EEDATA              			; =0xAA
+    bra     no_deco_restore     			; No
 
     extern  restore_decodata_from_eeprom
     call    restore_decodata_from_eeprom    ; Reload deco data and date/time from eeprom
 
 no_deco_restore:
-	call	deco_calc_desaturation_time     ; calculate desaturation time
-	banksel common
 	call	deco_calc_wo_deco_step_1_min	; calculate deco in surface mode
+	call	deco_calc_desaturation_time     ; calculate desaturation and no-fly time
 	banksel common
+	
 	bcf		menubit							; clear menu flag
 
 ; Check for Power-on reset here
@@ -158,16 +166,16 @@ no_deco_restore:
     ; *****************************************************************************
 
     ; Try to migrate the old battery status from firmware 2.09 or earlier..
-    btfsc	RCON,POR					; Was this a power-on reset?
+    btfsc	RCON,POR						; Was this a power-on reset?
     call	use_old_prior_209				; No
 
     bcf		use_old_batt_flag	
-    btfsc	RCON,POR					; Was this a power-on reset?
+    btfsc	RCON,POR						; Was this a power-on reset?
     bsf		use_old_batt_flag				; No
     
     call    lt2942_get_status               ; Check for gauge IC
     btfss   battery_gauge_available         ; cR or 2 hardware?
-    bra	    power_on_return2		    ; no
+    bra	    power_on_return2		    	; no
 
     movlw   .30
     movff   WREG,opt_cR_button_right
@@ -223,8 +231,8 @@ check_firmware_new:
 	movwf	lo
 	output_99x
 	bcf		leftbind
-	STRCAT_PRINT	""					; Print second row
-    call    TFT_Display_FadeIn          ; Display resulting surface screen.
+	STRCAT_PRINT	""				; Print second row
+    call    TFT_Display_FadeIn      ; Display resulting surface screen.
 
 ; place "after-update reset" here...
 
@@ -273,7 +281,7 @@ restart:
 
     call    option_restore_all      ; Restore everything from EEPROM into RAM
     call    option_check_all        ; Check all options (and reset if not within their min/max boundaries)
-    call    option_save_all	    ; Save all settings into EEPROM after they have been checked
+    call    option_save_all	    	; Save all settings into EEPROM after they have been checked
 
     clrf	flag1					; clear all flags
     clrf	flag2
@@ -287,7 +295,7 @@ restart:
     clrf	flag10
     ; Do not clear flag11 (Sensor calibration and charger status)
     clrf	flag12
-;    ; Do not clear flag13 (Important hardware flags)
+    ; Do not clear flag13 (Important hardware flags)
     clrf	flag14
     clrf	hardware_flag           ; hardware descriptor flag
     bsf		tft_is_dimming          ; TFT is dimming up (soon), ignore ambient sensor!
@@ -298,24 +306,24 @@ restart:
     bsf     optical_input           ; Set flag
 
     call    lt2942_get_status       ; Check for gauge IC
-    btfss   battery_gauge_available            ; cR/2 hardware?
+    btfss   battery_gauge_available	; cR/2 hardware?
     bra     restart2                ; No
 
     call    lt2942_init             ; Yes, init battery gauge IC
     bcf     optical_input           ; Clear flag
     
     banksel 0xF16
-    bcf	    ANCON0,7		    ; AN7 Digital input
+    bcf	    ANCON0,7		    	; AN7 Digital input
     banksel common
-    bcf	    lightsen_power	    ; Power-down ambient light sensor
+    bcf	    lightsen_power	    	; Power-down ambient light sensor
     bcf     ambient_sensor          ; Clear flag
     nop
-    btfss   PORTF,2		    ; Light sensor available?
+    btfss   PORTF,2		    		; Light sensor available?
     bsf	    ambient_sensor          ; Yes.
     banksel 0xF16
-    bsf	    ANCON0,7		    ; AN7 Analog again
+    bsf	    ANCON0,7		    	; AN7 Analog again
     banksel common
-    bsf	    lightsen_power	    ; Power-up ambient light sensor again
+    bsf	    lightsen_power	    	; Power-up ambient light sensor again
     
 restart2:
     btfsc   vusb_in
@@ -361,15 +369,15 @@ restart4:
     TSTOSS  opt_flip_screen         ; =1: Flip the screen
     bcf     flip_screen             ; Normal orientation
 
-    btfsc   use_old_batt_flag   ; =1: load old battery information after power-on reset
-    goto    use_old_batteries	; Returns to "surfloop"!
+    btfsc   use_old_batt_flag   	; =1: load old battery information after power-on reset
+    goto    use_old_batteries		; Returns to "surfloop"!
 
-    btfsc   RCON,POR	    ; Was this a power-on reset?
-    goto    surfloop	    ; Jump to Surfaceloop!
-    bsf	    RCON,POR	    ; Set bit for next detection
+    btfsc   RCON,POR	   			; Was this a power-on reset?
+    goto    surfloop	    		; Jump to Surfaceloop!
+    bsf	    RCON,POR	    		; Set bit for next detection
     ; Things to do after a power-on reset
     extern  new_battery_menu,use_old_batteries
-    goto    new_battery_menu	; Returns to "surfloop"!
+    goto    new_battery_menu		; Returns to "surfloop"!
 
 ;=============================================================================
 ; Setup all flags and parameters for divemode and simulator computations.
@@ -386,20 +394,20 @@ restart_set_modes_and_flags:		    ; "Call"ed from divemode, as well!
     movlw   .10
     movwf   samplingrate
 restart_set_modes_and_flags1:
-    bcf	    twosecupdate		; to have divemode routines in sync
-    movlw   .3
-    movff   WREG,char_O_deco_status	; will init the deco_calc_hauptroutine on first invocation
+    bcf	    twosecupdate				; to have divemode routines in sync
+
     bcf	    FLAG_apnoe_mode
-    bcf     FLAG_ccr_mode		; =1: CCR mode (Fixed ppO2 or Sensor) active
-    bcf     FLAG_gauge_mode		; =1: In Gauge mode
+    bcf     FLAG_ccr_mode				; =1: CCR mode (Fixed ppO2 or Sensor) active
+    bcf     FLAG_gauge_mode				; =1: In Gauge mode
     bcf	    FLAG_pscr_mode
-    call    disable_ir_s8		; IR off
+    call    disable_ir_s8				; IR off
 
     movff   opt_dive_mode,lo            ; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
     
     tstfsz  lo
     bra     restart_set_modes_and_flags2
     ; OC Mode
+	
     return
 
 restart_set_modes_and_flags2:
@@ -419,15 +427,15 @@ restart_set_modes_and_flags2:
     clrf    opt_ccr_mode                    ; Yes, reset to Fixed SP
 restart_set_modes_and_flags2b:
     banksel common
-	bsf     FLAG_ccr_mode               ; =1: CCR mode (Fixed SP, Auto SP or Sensor) active
-    call    enable_ir_s8                ; Enable IR/S8-Port
+	bsf     FLAG_ccr_mode               	; =1: CCR mode (Fixed SP, Auto SP or Sensor) active
+    call    enable_ir_s8                	; Enable IR/S8-Port
     return
 
 restart_set_modes_and_flags3:
     decfsz  lo,F
     bra     restart_set_modes_and_flags4
     ; Gauge Mode
-    bsf     FLAG_gauge_mode           ; =1: In Gauge mode
+    bsf     FLAG_gauge_mode           		; =1: In Gauge mode
     return
 
 restart_set_modes_and_flags4:
@@ -435,13 +443,30 @@ restart_set_modes_and_flags4:
     bra     restart_set_modes_and_flags5
     ; Apnea Mode
     bsf		FLAG_apnoe_mode
-    return							    ; start in Surfacemode
+    return							    	; start in Surfacemode
 
 restart_set_modes_and_flags5:
-    ; PSCR Mode
-    bsf		FLAG_pscr_mode
-    return							    ; start in Surfacemode
-    
+	; PSCR Mode
+	btfsc	analog_o2_input					; cR?
+	bra		restart_set_modes_and_flags5b	; Yes, skip mode check
+	btfsc	optical_input					; 3
+	bra		restart_set_modes_and_flags5b	; Yes, skip mode check
+
+	; Make sure Sensor is not selected
+	; opt_ccr_mode must be <> 1 (=0: calculated ppO2, =1: Sensor, =2: Auto SP - not valid in pSCR, too)
+	banksel	opt_ccr_mode
+	movlw	.1
+	cpfseq	opt_ccr_mode					; = Sensor?
+	bra		restart_set_modes_and_flags5b	; No
+	clrf	opt_ccr_mode					; Yes, reset to calculated ppO2
+
+restart_set_modes_and_flags5b:
+	banksel	opt_ccr_mode
+	bcf		opt_ccr_mode,1					; in pSCR mode only calculated or Sensor, not 2 = Auto SP allowed
+	banksel	common
+	bsf		FLAG_pscr_mode
+	return									; start in Surfacemode
+
     
 backup_flash_page:       ; backup the first 128bytes from flash to EEPROM
     	; Start address in internal flash
@@ -451,20 +476,20 @@ backup_flash_page:       ; backup the first 128bytes from flash to EEPROM
         movwf   TBLPTRU
 
         movlw	.128
-        movwf	lo              ; Byte counter
+        movwf	lo              	; Byte counter
         clrf    EEADR
         movlw   .3
-        movwf   EEADRH          ; Setup backup address
+        movwf   EEADRH          	; Setup backup address
 
-        TBLRD*-					; Dummy read to be in 128 byte block
+        TBLRD*-						; Dummy read to be in 128 byte block
 backup_flash_loop:
-        tblrd+*					; Table Read with Pre-Increment
-        movff	TABLAT,EEDATA	; put 1 byte
-        call    write_eeprom    ; save it in EEPROM
+        tblrd+*						; Table Read with Pre-Increment
+        movff	TABLAT,EEDATA		; put 1 byte
+        call    write_eeprom    	; save it in EEPROM
         incf    EEADR,F
-        decfsz 	lo,F            ; 128byte done?
-        bra 	backup_flash_loop ; No
-        clrf    EEADRH          ; Reset EEADRH
-        return                  ; Done.
+        decfsz 	lo,F            	; 128byte done?
+        bra 	backup_flash_loop 	; No
+        clrf    EEADRH          	; Reset EEADRH
+        return                  	; Done.
 
 	END

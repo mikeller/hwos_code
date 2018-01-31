@@ -217,7 +217,7 @@ compass_calibration_gainset:            ; Reduce the gain, set bank here!
 
     banksel common
     call    I2C_init_accelerometer
-    call    I2C_init_compass_fast
+    call    I2C_init_compass
     
     btfsc   compass_type	    ; compass1?
     bra	    compass_calibration_loop1	; Yes, skip gain stuff

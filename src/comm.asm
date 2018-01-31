@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File comm.asm
+;   File comm.asm									REFACTORED VERSION 2.94
 ;
 ;   RS232 via USB
 ;
@@ -107,12 +107,12 @@ comm_mode2:
 	movlw	0xAA						; start byte=0xAA?
 	cpfseq	RCREG1
 	bra		comm_mode2a
-	bra		comm_mode2b             ; Startbyte for service mode found
+	bra		comm_mode2b					; Startbyte for service mode found
 comm_mode2a:
 	movlw	0xBB						; start byte=0xBB?
 	cpfseq	RCREG1
 	bra		comm_mode2c
-	bra		comm_download_mode		; Startbyte for download mode found
+	bra		comm_download_mode			; Startbyte for download mode found
 
 comm_mode2c:
     btfss   vusb_in                     ; USB plugged in?
@@ -124,33 +124,33 @@ comm_mode4a:
 	btfsc	onesecupdate
 	bra		comm_mode1
 
-    bra     comm_mode2				; Cycle
+    bra     comm_mode2					; Cycle
 
 comm_mode2b:
 	; Startbyte found
 	rcall	comm_rs232_wait_tx			; Wait for UART
 	movlw	0x4B
-	movwf	TXREG1					; Send Answer
+	movwf	TXREG1						; Send Answer
 	; Now, check comm command
 
-	rcall	comm_write_get_byte				; first byte
-	rcall	comm_rs232_wait_tx               ; Wait for UART
-    movff   RCREG1,TXREG1                 ; Echo
+	rcall	comm_write_get_byte			; first byte
+	rcall	comm_rs232_wait_tx			; Wait for UART
+    movff   RCREG1,TXREG1				; Echo
 	movlw	UPPER comm_service_key
 	cpfseq	RCREG1
-    bra     comm_mode1               ; Wrong -> Restart
-	rcall	comm_write_get_byte				; second byte
+    bra     comm_mode1					; Wrong -> Restart
+	rcall	comm_write_get_byte			; second byte
 	rcall	comm_rs232_wait_tx			; Wait for UART
-    movff   RCREG1,TXREG1                 ; Echo
+    movff   RCREG1,TXREG1				; Echo
 	movlw	HIGH (comm_service_key & 0xFFFF)
 	cpfseq	RCREG1
-    bra     comm_mode1               ; Wrong -> Restart
-	rcall	comm_write_get_byte				; third byte
+    bra     comm_mode1					; Wrong -> Restart
+	rcall	comm_write_get_byte			; third byte
 	rcall	comm_rs232_wait_tx			; Wait for UART
-    movff   RCREG1,TXREG1                 ; Echo
+    movff   RCREG1,TXREG1				; Echo
 	movlw	LOW comm_service_key
 	cpfseq	RCREG1
-    bra     comm_mode1               ; Wrong -> Restart
+    bra     comm_mode1					; Wrong -> Restart
 
 	; Enable comm service mode
 	WIN_SMALL	comm_status2_column, comm_status2_row
@@ -171,7 +171,7 @@ comm_service_exit:
 	WIN_SMALL	comm_status3_column, comm_status3_row
 	STRCPY_TEXT_PRINT	tUsbExit        ; Exited
 comm_service_exit_common:
-	rcall	comm_rs232_wait_tx				; Wait for UART
+	rcall	comm_rs232_wait_tx			; Wait for UART
 	movlw	0xFF                        ; Reply FF
 	movwf	TXREG1						; Send Answer
 
@@ -202,25 +202,25 @@ comm_service_ll_bootloader:
 ; send firmware to bootloader
 ;
 comm_send_firmware:
-    movlw   0x50                            ; send echo
+    movlw   0x50							; send echo
     movwf   TXREG1
-    rcall    comm_rs232_wait_tx                   ; Wait for UART
+    rcall    comm_rs232_wait_tx				; Wait for UART
 
     ; Read 5 bytes into buffer.
 	lfsr	FSR2,buffer
 	movlw	.5								; counter
 	movwf	lo
-	movlw   0x55                            ; 5'ft byte checksum.
+	movlw   0x55							; 5'ft byte checksum.
 	movwf   hi
 
 comm_send_firmware_loop:
 	rcall	comm_write_get_byte
 	btfsc	rs232_recieve_overflow			; Got byte?
-	bra		comm_send_firmware_abort   ; No, abort!
+	bra		comm_send_firmware_abort		; No, abort!
 	movf	RCREG1,W
-	movwf   POSTINC2                        ; Store checksum byte.
-	xorwf   hi,F                            ; Also xor into checksum
-	rlncf   hi,F                            ; And rotate it.
+	movwf   POSTINC2						; Store checksum byte.
+	xorwf   hi,F							; Also xor into checksum
+	rlncf   hi,F							; And rotate it.
 	decfsz	lo,F
 	bra		comm_send_firmware_loop
 	
@@ -228,14 +228,14 @@ comm_send_firmware_loop:
 	movf    hi,W
 	bnz     comm_send_firmware_failed
 
-    movlw   0x4C                            ; send OK
+    movlw   0x4C							; send OK
     movwf   TXREG1
-    rcall    comm_rs232_wait_tx                   ; Wait for UART
+    rcall    comm_rs232_wait_tx				; Wait for UART
 
 	; Passed: goto second stage verification.
 	; NOTE: Bootloader is Bank0. With buffer at address 0x200.
-    call    vault_decodata_into_eeprom      ; Store last deco data (And Time/Date) into EEPROM
-	goto    0x1FDF0                         ; And pray...
+    call    vault_decodata_into_eeprom		; Store last deco data (And Time/Date) into EEPROM
+	goto    0x1FDF0							; And pray...
 
 comm_send_firmware_failed:
 	WIN_SMALL	comm_string_column, comm_string_row
@@ -244,7 +244,7 @@ comm_send_firmware_failed:
 
 comm_send_firmware_abort:
 
-    movlw   0xFF                            ; send ABORTED byte.
+    movlw   0xFF							; send ABORTED byte.
 	movwf	TXREG1
 	bra		comm_download_mode0				; Done.
 
@@ -273,9 +273,9 @@ comm_reset_battery_gauge:           ; Resets battery gauge registers
 ; erases range in 4kB steps
 
 comm_erase_range4kb:
-    movlw   0x42                        ; send echo
+    movlw   0x42						; send echo
     movwf   TXREG1
-    rcall    comm_rs232_wait_tx               ; Wait for UART
+    rcall    comm_rs232_wait_tx			; Wait for UART
 
     bcf     INTCON,GIE	; All interrups off!
 
@@ -316,10 +316,10 @@ comm_erase_4kb:				; Get 3 bytes start address
 
 ;-----------------------------------------------------------------------------
 
-comm_write_range:				; Get 3 bytes start address
+comm_write_range:						; Get 3 bytes start address
     movlw   0x30                        ; send echo
 	movwf	TXREG1
-	rcall	comm_rs232_wait_tx               ; Wait for UART
+	rcall	comm_rs232_wait_tx			; Wait for UART
 
 	bcf		INTCON,GIE                  ; All interrups off!
 
@@ -330,41 +330,41 @@ comm_write_range:				; Get 3 bytes start address
 comm_write_range_loop:
 	rcall	comm_write_get_byte
 	btfsc	rs232_recieve_overflow      ; Got byte?
-	bra	comm_download_mode0         ; No, Done (and send OK byte too).
+	bra		comm_download_mode0         ; No, Done (and send OK byte too).
 	movf	RCREG1,W
 ;	bsf	NCTS	    ; Hold Bluetooth Chip (Requires PC/Android/iOS side to use flow control...)
-	call	ext_flash_byte_write_comms        ; write one byte
+	call	ext_flash_byte_write_comms	; write one byte
 ;	bcf	NCTS	    ; Release Bluetooth Chip (Requires PC/Android/iOS side to use flow control...)
 	call	incf_ext_flash_address_p1   ; increase address+1
 	bra	comm_write_range_loop
 
 ;-----------------------------------------------------------------------------
 
-comm_send_range:				; Get 3 bytes start address and 3 bytes amount
+comm_send_range:						; Get 3 bytes start address and 3 bytes amount
     movlw   0x20                        ; send echo
     movwf   TXREG1
-	rcall	comm_rs232_wait_tx               ; Wait for UART
+	rcall	comm_rs232_wait_tx			; Wait for UART
 
-	bcf		INTCON,GIE	; All interrups off!	
+	bcf		INTCON,GIE					; All interrups off!	
 
 	rcall	comm_get_flash_address		; Get three bytes address or return
-	btfsc	rs232_recieve_overflow			; Got Data?
-	bra		comm_download_mode0				; No, Done.
+	btfsc	rs232_recieve_overflow		; Got Data?
+	bra		comm_download_mode0			; No, Done.
 
 	rcall	comm_write_get_byte
-	btfsc	rs232_recieve_overflow			; Got byte?
-	bra		comm_download_mode0				; No, Done.
+	btfsc	rs232_recieve_overflow		; Got byte?
+	bra		comm_download_mode0			; No, Done.
     movff   RCREG1,up
 	rcall	comm_write_get_byte
-	btfsc	rs232_recieve_overflow			; Got byte?
-	bra		comm_download_mode0				; No, Done.
+	btfsc	rs232_recieve_overflow		; Got byte?
+	bra		comm_download_mode0			; No, Done.
 	movff	RCREG1,hi
 	rcall	comm_write_get_byte
-	btfsc	rs232_recieve_overflow			; Got byte?
-	bra		comm_download_mode0				; No, Done.
+	btfsc	rs232_recieve_overflow		; Got byte?
+	bra		comm_download_mode0			; No, Done.
 	movff	RCREG1,lo
 
-    ; If lo==0, we must precondition hi because there is to many bytes send !
+    ; If lo==0, we must precondition hi because there are to many bytes send !
     movf    lo,W    
     bnz     $+4
     decf    hi,F
@@ -379,12 +379,12 @@ comm_send_range:				; Get 3 bytes start address and 3 bytes amount
 	call	ext_flash_read_block_start
 	movwf	TXREG1
 
-	bra		comm_send_range24		; counter 24bit
+	bra		comm_send_range24			; counter 24bit
 comm_send_range24_loop:
 	call	ext_flash_read_block		; Read one byte
 	movwf	TXREG1						; Start new transmit
 comm_send_range24:
-	rcall	comm_rs232_wait_tx				; Wait for UART
+	rcall	comm_rs232_wait_tx			; Wait for UART
 	decfsz	lo,F
 	bra		comm_send_range24_loop
 	decf	hi,F
@@ -423,12 +423,12 @@ comm_download_mode:
 	WIN_SMALL	comm_status2_column, comm_status2_row
 	STRCPY_TEXT_PRINT	tUsbDownloadMode; Download mode enabled
 	bsf		INTCON,GIE					; All interrups on
-	rcall	comm_rs232_wait_tx				; Wait for UART
+	rcall	comm_rs232_wait_tx			; Wait for UART
 	movlw	0xBB                        ; Command Echo
 	movwf	TXREG1						; Send Answer
 comm_download_mode0:
     bsf		INTCON,GIE					; All interrups on
-	rcall	comm_rs232_wait_tx				; Wait for UART
+	rcall	comm_rs232_wait_tx			; Wait for UART
     movlw   0x4C                        ; 4C in service mode
     btfss   comm_service_enabled
 	movlw	0x4D                        ; 4D in download mode
@@ -441,7 +441,7 @@ comm_download_mode1:
 	dcfsnz 	timeout_counter,F
 	bra		comm_service_exit           ; Timeout -> Exit
 comm_download_mode2:
-	rcall	comm_write_get_byte              ; Check for a byte
+	rcall	comm_write_get_byte         ; Check for a byte
     btfsc   comm_service_enabled
 	btg     LEDr                        ; Blink in Service mode
     btfss   vusb_in                     ; USB plugged in?
@@ -451,7 +451,7 @@ comm_download_mode2:
 	btfsc	onesecupdate
 	bra		comm_download_mode1
 	btfsc	rs232_recieve_overflow
-	bra		comm_download_mode2	; Wait for command byte
+	bra		comm_download_mode2			; Wait for command byte
 
 	; command received!
 	bcf		LEDr
@@ -547,7 +547,7 @@ comm_download_mode2:
 ;	movlw	"t"
 ;	cpfseq	RCREG1
 ;	bra		$+4
-;    goto    testloop                    ; Start raw-data testloop
+;    goto    testloop                   ; Start raw-data testloop
 	movlw	0xC1
 	cpfseq	RCREG1
 	bra		$+4
@@ -557,7 +557,7 @@ comm_download_mode2:
 ;-----------------------------------------------------------------------------
 
 comm_send_compact_headers:
-	movlw	"m"								; send echo
+	movlw	"m"							; send echo
 	movwf	TXREG1
 	; Send 13 bytes/dive (Compact Header)
 	; 1st: 200009h-200016h
@@ -580,14 +580,14 @@ comm_send_compact_headers2:
 	addwfc	ext_flash_address+2
 
 	movlw	0x30
-	cpfseq	ext_flash_address+2				; All 256 dive send?
-	bra		comm_send_compact_headers4			; No, continue
-	bra		comm_download_mode0		; Done. Loop with timeout reset
+	cpfseq	ext_flash_address+2			; All 256 dive send?
+	bra		comm_send_compact_headers4	; No, continue
+	bra		comm_download_mode0			; Done. Loop with timeout reset
 
 comm_send_compact_headers4:
     movlw   .13
 	movwf	lo							; Counter
-	rcall	comm_rs232_wait_tx				; Wait for UART
+	rcall	comm_rs232_wait_tx			; Wait for UART
 	call	ext_flash_read_block_start	; 1st byte
 	movwf	TXREG1
 	bra		comm_send_compact_headers3	; counter 24bit
@@ -595,7 +595,7 @@ comm_send_compact_headers_loop:
 	call	ext_flash_read_block		; Read one byte
 	movwf	TXREG1						; Start new transmit
 comm_send_compact_headers3:
-	rcall	comm_rs232_wait_tx				; Wait for UART
+	rcall	comm_rs232_wait_tx			; Wait for UART
 	decfsz	lo,F
 	bra		comm_send_compact_headers_loop
 	call	ext_flash_read_block_stop
@@ -609,21 +609,21 @@ comm_send_compact_headers3:
 	call	ext_flash_read_block		; 2nd byte
 	movwf	TXREG1
     call	ext_flash_read_block_stop
-    rcall	comm_rs232_wait_tx				; Wait for UART
+    rcall	comm_rs232_wait_tx			; Wait for UART
 
     ; Offset to Logbook-Profile version
 	movlw	.8
 	movwf	ext_flash_address+0
-    call	ext_flash_byte_read         	; Get byte
+    call	ext_flash_byte_read         ; Get byte
     movwf	TXREG1
-    rcall	comm_rs232_wait_tx				; Wait for UART
-	bra		comm_send_compact_headers2		; continue
+    rcall	comm_rs232_wait_tx			; Wait for UART
+	bra		comm_send_compact_headers2	; continue
 
 
 ;-----------------------------------------------------------------------------
 
 comm_send_headers:
-	movlw	"a"								; send echo
+	movlw	"a"							; send echo
 	movwf	TXREG1
 	; Send 256 bytes/dive (Header)
 	; 1st: 200000h-2000FFh
@@ -637,8 +637,7 @@ comm_send_headers:
 	movwf	ext_flash_address+1
 
 comm_send_headers2:
-	movlw	0x00
-	movwf	ext_flash_address+0
+	clrf	ext_flash_address+0
 	; Adjust address for next dive
 	movlw	0x10
 	addwf	ext_flash_address+1
@@ -646,33 +645,33 @@ comm_send_headers2:
 	addwfc	ext_flash_address+2
 
 	movlw	0x30
-	cpfseq	ext_flash_address+2				; All 256 dive send?
+	cpfseq	ext_flash_address+2			; All 256 dive send?
 	bra		comm_send_headers4			; No, continue
-	bra		comm_download_mode0		; Done. Loop with timeout reset
+	bra		comm_download_mode0			; Done. Loop with timeout reset
 
 comm_send_headers4:
 	clrf	lo							; Counter	
-	rcall	comm_rs232_wait_tx				; Wait for UART
+	rcall	comm_rs232_wait_tx			; Wait for UART
 	call	ext_flash_read_block_start	; 1st byte
 	movwf	TXREG1
-	bra		comm_send_headers3		; counter 24bit
+	bra		comm_send_headers3			; counter 24bit
 comm_send_headers_loop:
 	call	ext_flash_read_block		; Read one byte
 	movwf	TXREG1						; Start new transmit
 comm_send_headers3:
-	rcall	comm_rs232_wait_tx				; Wait for UART
+	rcall	comm_rs232_wait_tx			; Wait for UART
 	decfsz	lo,F
 	bra		comm_send_headers_loop
 	call	ext_flash_read_block_stop
-	bra		comm_send_headers2		; continue
+	bra		comm_send_headers2			; continue
 
 ;-----------------------------------------------------------------------------
 
-comm_option_reset_all:       ; Reset all options to factory default.
-	movlw	"x"								; send echo
+comm_option_reset_all:       			; Reset all options to factory default.
+	movlw	"x"							; send echo
 	movwf	TXREG1
     call    option_reset_all
-    bra		comm_download_mode0             ; Done. back to loop with timeout reset
+    bra		comm_download_mode0			; Done. back to loop with timeout reset
 
 ;-----------------------------------------------------------------------------
 
@@ -686,7 +685,7 @@ comm_set_time:
 	movlw	"b"								; send echo
 	movwf	TXREG1
 
-	rcall	comm_rs232_wait_tx					; wait for UART
+	rcall	comm_rs232_wait_tx				; wait for UART
 	rcall	comm_write_get_byte
 	btfsc	rs232_recieve_overflow			; Got byte?
 	bra		comm_download_mode0             ; No, abort
@@ -737,7 +736,7 @@ comm_set_time:
 comm_set_custom_text:
     movlw	"c"								; send echo
     movwf	TXREG1
-    rcall	comm_rs232_wait_tx					; wait for UART
+    rcall	comm_rs232_wait_tx				; wait for UART
     lfsr	FSR2,opt_name
     movlw	opt_name_length
     movwf	lo								; counter
@@ -765,7 +764,7 @@ comm_set_ctext_loop_done2:
 comm_identify:
     movlw	"i"								; send echo
     movwf	TXREG1
-    rcall	comm_rs232_wait_tx					; wait for UART
+    rcall	comm_rs232_wait_tx				; wait for UART
 
     ;---- Read serial from internal EEPROM address 0000
 	clrf	EEADRH
@@ -810,25 +809,25 @@ common_identify_loop:
 comm_hardware_descriptor:
     movlw	"j"								; send echo
     movwf	TXREG1
-    rcall	comm_rs232_wait_tx					; wait for UART
+    rcall	comm_rs232_wait_tx				; wait for UART
     movff   hardware_flag,TXREG1
     bra     comm_download_mode0             ; Done.
 
 comm_feature_and_hardware:
-    movlw	0x60								; send echo
+    movlw	0x60							; send echo
     movwf	TXREG1
-    rcall	comm_rs232_wait_tx					; wait for UART
+    rcall	comm_rs232_wait_tx				; wait for UART
     movlw	0x00	; Hardware high byte
     movwf	TXREG1
-    rcall	comm_rs232_wait_tx					; wait for UART
+    rcall	comm_rs232_wait_tx				; wait for UART
     movff	hardware_flag,TXREG1
-    rcall	comm_rs232_wait_tx					; wait for UART
+    rcall	comm_rs232_wait_tx				; wait for UART
     movlw	0x00	; Feature high Byte
     movwf	TXREG1
-    rcall	comm_rs232_wait_tx					; wait for UART
+    rcall	comm_rs232_wait_tx				; wait for UART
     movlw	0x00	; Feature low Byte
     movwf	TXREG1
-    rcall	comm_rs232_wait_tx					; wait for UART
+    rcall	comm_rs232_wait_tx				; wait for UART
     movlw	0x00	; Model descriptor byte
     movwf	TXREG1
     bra     comm_download_mode0             ; Done.
@@ -841,7 +840,7 @@ comm_send_dive:
 	
 	rcall	comm_write_get_byte
 	btfsc	rs232_recieve_overflow			; Got byte?
-	bra		comm_download_mode0		; No, abort!
+	bra		comm_download_mode0				; No, abort!
 	movff	RCREG1,lo						; Store dive number (0-255)
 ; First, send the header (again)
 	; Set ext_flash_address:3 to TOC entry of this dive
@@ -854,7 +853,7 @@ comm_send_dive:
 	movlw	0x20
 	movwf	ext_flash_address+2
 	movlw	.16
-	mulwf	lo				; lo*16 = offset to 0x2000 (up:hi)
+	mulwf	lo								; lo*16 = offset to 0x2000 (up:hi)
 	movf	PRODL,W
 	addwf	ext_flash_address+1,F
 	movf	PRODH,W
@@ -892,16 +891,16 @@ comm_send_dive:
 
 comm_send_dive1:
 	; Send header
-	clrf	hi				; Counter	
-	rcall	comm_rs232_wait_tx		; Wait for UART
-	call	ext_flash_read_block_start	; 1st byte
+	clrf	hi									; Counter	
+	rcall	comm_rs232_wait_tx					; Wait for UART
+	call	ext_flash_read_block_start			; 1st byte
 	movwf	TXREG1
 	bra	comm_send_dive_header
 comm_send_dive_header2:
-	call	ext_flash_read_block		; Read one byte
-	movwf	TXREG1				; Start new transmit
+	call	ext_flash_read_block				; Read one byte
+	movwf	TXREG1								; Start new transmit
 comm_send_dive_header:
-	rcall	comm_rs232_wait_tx		; Wait for UART
+	rcall	comm_rs232_wait_tx					; Wait for UART
 	decfsz	hi,F
 	bra	comm_send_dive_header2
 	call	ext_flash_read_block_stop
@@ -911,15 +910,15 @@ comm_send_dive_header:
 	movff	ext_flash_log_pointer+1,ext_flash_address+1
 	movff	ext_flash_log_pointer+2,ext_flash_address+2
 
-	movlw	.6				; Skip 6byte short header in profile - only for internal use
-	call	incf_ext_flash_address0_0x20	; increases bytes in ext_flash_address:3 with 0x200000 bank switching
+	movlw	.6									; Skip 6byte short header in profile - only for internal use
+	call	incf_ext_flash_address0_0x20		; increases bytes in ext_flash_address:3 with 0x200000 bank switching
 
 	; Set address for short header/compact header, Byte 0
 	
 comm_send_dive_profile:
-	call	ext_flash_byte_read_plus_0x20	; Read one byte into temp1, takes care of banking at 0x200000
-	rcall	comm_rs232_wait_tx		; Wait for UART
-	movff	temp1,TXREG1			; Send a byte
+	call	ext_flash_byte_read_plus_0x20		; Read one byte into temp1, takes care of banking at 0x200000
+	rcall	comm_rs232_wait_tx					; Wait for UART
+	movff	temp1,TXREG1						; Send a byte
 	
 	; 24bit compare with end address
 	movff	convert_value_temp+0,WREG
@@ -932,8 +931,8 @@ comm_send_dive_profile:
 	cpfseq	ext_flash_address+2
 	bra	comm_send_dive_profile
 	
-	rcall   comm_read_setting_wait          ; Wait for UART
-	bra	comm_download_mode0		; Done. Loop with timeout reset
+	rcall   comm_read_setting_wait          	; Wait for UART
+	bra	comm_download_mode0						; Done. Loop with timeout reset
 
 ;-----------------------------------------------------------------------------
 
@@ -985,9 +984,9 @@ comm_read_setting:
     dcfsnz  WREG
     movff   char_I_deco_model, TXREG1       ; RCREG1=0x21
     dcfsnz  WREG
-    movff   opt_ppO2_max, TXREG1            ; RCREG1=0x22
+    movff   char_I_ppO2_max, TXREG1         ; RCREG1=0x22		MODIFIED ## V2.94
     dcfsnz  WREG
-    movff   opt_ppO2_min, TXREG1            ; RCREG1=0x23
+    movff   char_I_ppO2_min, TXREG1         ; RCREG1=0x23		MODIFIED ## V2.94
     dcfsnz  WREG
     movff   char_I_extra_time, TXREG1       ; RCREG1=0x24
     dcfsnz  WREG
@@ -1017,7 +1016,7 @@ comm_read_setting:
     dcfsnz  WREG
     movff   opt_dive_color_scheme, TXREG1   ; RCREG1=0x31
     dcfsnz  WREG
-    movff   opt_language, TXREG1            ; RCREG1=0x32
+    movff	opt_language, TXREG1            ; RCREG1=0x32
     dcfsnz  WREG
     movff   opt_dateformat, TXREG1          ; RCREG1=0x33
     dcfsnz  WREG
@@ -1029,7 +1028,7 @@ comm_read_setting:
     dcfsnz  WREG
     movff   opt_calibration_O2_ratio, TXREG1; RCREG1=0x37
     dcfsnz  WREG
-    movff   opt_sensor_fallback, TXREG1     ; RCREG1=0x38
+    clrf    TXREG1				            ; RCREG1=0x38   NOT USED ANYMORE (opt_sensor_fallback)	## voting logic
     dcfsnz  WREG
     movff   opt_flip_screen, TXREG1         ; RCREG1=0x39
     dcfsnz  WREG
@@ -1059,26 +1058,61 @@ comm_read_setting:
     dcfsnz  WREG
     movff   opt_safety_stop_reset, TXREG1   ; RCREG1=0x46
     dcfsnz  WREG
-    clrf    TXREG1			    ; RCREG1=0x47, ignore conservatism for standard hwOS
+    clrf    TXREG1			    			; RCREG1=0x47, ignore conservatism for standard hwOS
     dcfsnz  WREG
-    movff   opt_diveTimeout, TXREG1	    ; RCREG1=0x48
+    movff   opt_diveTimeout, TXREG1	    	; RCREG1=0x48
     dcfsnz  WREG
-    movff   button_polarity, TXREG1	    ; RCREG1=0x49
+    movff   button_polarity, TXREG1	    	; RCREG1=0x49
     dcfsnz  WREG
-    movff   opt_PSCR_drop, TXREG1	    ; RCREG1=0x4A
+    movff   char_I_PSCR_drop, TXREG1	    ; RCREG1=0x4A
     dcfsnz  WREG
-    movff   opt_PSCR_lungratio, TXREG1	    ; RCREG1=0x4B
+    movff   char_I_PSCR_lungratio, TXREG1	; RCREG1=0x4B
     dcfsnz  WREG
-    movff   opt_ppO2_max_deco, TXREG1       ; RCREG1=0x4C
-
-
+    movff   char_I_ppO2_max_deco, TXREG1    ; RCREG1=0x4C	MODIFIED ## V2.94
+	
+	; NEW
+    dcfsnz  WREG
+    movff   char_I_ppO2_min_loop, TXREG1	; RCREG1=0x4D	## CCR/pSCR min ppO2	MODIFIED ## V2.94
+    dcfsnz  WREG
+    movff   char_I_tank_size+0, TXREG1		; RCREG1=0x4E	## bailout gas needs
+	dcfsnz  WREG
+    movff   char_I_tank_size+1, TXREG1		; RCREG1=0x4F	## bailout gas needs
+	dcfsnz  WREG
+    movff   char_I_tank_size+2, TXREG1		; RCREG1=0x50	## bailout gas needs
+	dcfsnz  WREG
+    movff   char_I_tank_size+3, TXREG1		; RCREG1=0x51	## bailout gas needs
+	dcfsnz  WREG
+    movff   char_I_tank_size+4, TXREG1		; RCREG1=0x52	## bailout gas needs
+	dcfsnz  WREG
+    movff   char_I_tank_pres_fill+0, TXREG1	; RCREG1=0x53	## bailout gas needs
+	dcfsnz  WREG
+    movff   char_I_tank_pres_fill+1, TXREG1	; RCREG1=0x54	## bailout gas needs
+	dcfsnz  WREG
+    movff   char_I_tank_pres_fill+2, TXREG1	; RCREG1=0x55	## bailout gas needs
+	dcfsnz  WREG
+    movff   char_I_tank_pres_fill+3, TXREG1	; RCREG1=0x56	## bailout gas needs
+	dcfsnz  WREG
+    movff   char_I_tank_pres_fill+4, TXREG1	; RCREG1=0x57	## bailout gas needs
+	dcfsnz  WREG
+    movff   char_I_cc_max_frac_o2, TXREG1	; RCREG1=0x58	## CCR max ppO2 limiter
+	dcfsnz  WREG
+    movff   opt_sim_setpoint_number, TXREG1	; RCREG1=0x59	## deco calculator enhancement
+	dcfsnz  WREG
+    movff   opt_calc_asc_gasvolume, TXREG1	; RCREG1=0x5A	## bailout gas needs 
+	dcfsnz  WREG
+    movff   opt_sim_use_aGF, TXREG1			; RCREG1=0x5B	## deco calculator enhancement
+	dcfsnz  WREG
+    movff   char_I_altitude_wait, TXREG1	; RCREG1=0x5C	## no fly altitude
+	dcfsnz  WREG
+    movff   opt_enable_IBCD, TXREG1			; RCREG1=0x5D	## IBCD
+	
     
 comm_read_abort:
 comm_read_done:
     bra		comm_download_mode0             ; Done. Loop with timeout reset
 
 comm_read_setting_wait:
-    bra    comm_rs232_wait_tx					; Wait for UART (and return!)
+    bra    comm_rs232_wait_tx				; Wait for UART (and return!)
 
 comm_read_gas1:
     movff   opt_gas_O2_ratio+0, TXREG1
@@ -1297,9 +1331,9 @@ comm_write_setting:
     dcfsnz  WREG
     movff   RCREG1, char_I_deco_model       ; RCREG1=0x21
     dcfsnz  WREG
-    movff   RCREG1, opt_ppO2_max            ; RCREG1=0x22
+    movff   RCREG1, char_I_ppO2_max         ; RCREG1=0x22	MODIFIED ## V2.94
     dcfsnz  WREG
-    movff   RCREG1, opt_ppO2_min            ; RCREG1=0x23
+    movff   RCREG1, char_I_ppO2_min         ; RCREG1=0x23	MODIFIED ## V2.94
     dcfsnz  WREG
     movff   RCREG1, char_I_extra_time       ; RCREG1=0x24
     dcfsnz  WREG
@@ -1329,7 +1363,7 @@ comm_write_setting:
     dcfsnz  WREG
     movff   RCREG1, opt_dive_color_scheme   ; RCREG1=0x31
     dcfsnz  WREG
-    movff   RCREG1, opt_language            ; RCREG1=0x32
+    movff   RCREG1, opt_language			; RCREG1=0x32
     dcfsnz  WREG
     movff   RCREG1, opt_dateformat          ; RCREG1=0x33
     dcfsnz  WREG
@@ -1341,7 +1375,7 @@ comm_write_setting:
     dcfsnz  WREG
     movff   RCREG1, opt_calibration_O2_ratio; RCREG1=0x37
     dcfsnz  WREG
-    movff   RCREG1, opt_sensor_fallback     ; RCREG1=0x38
+    nop									    ; RCREG1=0x38    NOT USED ANYMORE (opt_sensor_fallback)	## voting logic	
     dcfsnz  WREG
     movff   RCREG1, opt_flip_screen         ; RCREG1=0x39
     dcfsnz  WREG
@@ -1371,19 +1405,55 @@ comm_write_setting:
     dcfsnz  WREG
     movff   RCREG1, opt_safety_stop_reset   ; RCREG1=0x46
     dcfsnz  WREG
-    nop					    ; RCREG1=0x47, ignore conservatism for standard hwOS
+    nop					    				; RCREG1=0x47, ignore conservatism for standard hwOS
     dcfsnz  WREG
-    movff   RCREG1, opt_diveTimeout	    ; RCREG1=0x48
+    movff   RCREG1, opt_diveTimeout	    	; RCREG1=0x48
     dcfsnz  WREG
     bra	    comm_write_button_polarity	    ; RCREG1=0x49
     dcfsnz  WREG
-    movff   RCREG1, opt_PSCR_drop	    ; RCREG1=0x4A
+    movff   RCREG1, char_I_PSCR_drop	    ; RCREG1=0x4A
     dcfsnz  WREG
-    movff   RCREG1, opt_PSCR_lungratio	    ; RCREG1=0x4B
+    movff   RCREG1, char_I_PSCR_lungratio	; RCREG1=0x4B
     dcfsnz  WREG
-    movff   RCREG1, opt_ppO2_max_deco	    ; RCREG1=0x4C
+    movff   RCREG1, char_I_ppO2_max_deco    ; RCREG1=0x4C	MODIFIED V2.94
 
-
+	; NEW
+    dcfsnz  WREG
+    movff   RCREG1, char_I_ppO2_min_loop	; RCREG1=0x4D	## CCR/pSCR min ppO2 limiter	MODIFIED ## V2.94
+    dcfsnz  WREG
+    movff   RCREG1, char_I_tank_size+0		; RCREG1=0x4E	## bailout gas needs
+	dcfsnz  WREG
+    movff   RCREG1, char_I_tank_size+1		; RCREG1=0x4F	## bailout gas needs
+	dcfsnz  WREG
+    movff   RCREG1, char_I_tank_size+2		; RCREG1=0x50	## bailout gas needs
+	dcfsnz  WREG
+    movff   RCREG1, char_I_tank_size+3		; RCREG1=0x51	## bailout gas needs
+	dcfsnz  WREG
+    movff   RCREG1, char_I_tank_size+4		; RCREG1=0x52	## bailout gas needs
+	dcfsnz  WREG
+    movff   RCREG1, char_I_tank_pres_fill+0	; RCREG1=0x53	## bailout gas needs
+	dcfsnz  WREG
+    movff   RCREG1, char_I_tank_pres_fill+1	; RCREG1=0x54	## bailout gas needs
+	dcfsnz  WREG
+    movff   RCREG1, char_I_tank_pres_fill+2	; RCREG1=0x55	## bailout gas needs
+	dcfsnz  WREG
+    movff   RCREG1, char_I_tank_pres_fill+3	; RCREG1=0x56	## bailout gas needs
+	dcfsnz  WREG
+    movff   RCREG1, char_I_tank_pres_fill+4	; RCREG1=0x57	## bailout gas needs
+	dcfsnz  WREG
+    movff   RCREG1, char_I_cc_max_frac_o2	; RCREG1=0x58	## CCR max ppO2 limiter
+	dcfsnz  WREG
+    movff   RCREG1, opt_sim_setpoint_number	; RCREG1=0x59	## deco calculator enhancement
+	dcfsnz  WREG
+    movff   RCREG1, opt_calc_asc_gasvolume	; RCREG1=0x5A	## bailout gas needs
+	dcfsnz  WREG
+    movff   RCREG1, opt_sim_use_aGF			; RCREG1=0x5B	## deco calculator enhancement
+	dcfsnz  WREG
+    movff   RCREG1, char_I_altitude_wait	; RCREG1=0x5C	## no fly altitude
+	dcfsnz  WREG
+    movff   RCREG1, opt_enable_IBCD			; RCREG1=0x5D	## TBCD
+	
+	
 comm_write_abort:
     ; Check Options, gases and diluents
     call    option_check_all                ; Check all options (and reset if not within their min/max boundaries)
@@ -1393,7 +1463,7 @@ comm_write_abort:
     call    gaslist_cleanup_list            ; Takes care that only one gas can be first and first has 0m change depth
     call    get_first_gas_to_WREG           ; Makes sure at least one Gas is "First"
     call    get_first_dil_to_WREG           ; Makes sure at least one Diluent is "First"
-    bra		comm_download_mode0             ; Done. Loop with timeout reset
+    goto    comm_download_mode0             ; Done. Loop with timeout reset
 
 comm_write_dil1:
     movff   RCREG1,opt_dil_O2_ratio+0
@@ -1403,7 +1473,7 @@ comm_write_dil1:
     movff   RCREG1,opt_dil_type+0
     rcall	comm_write_get_byte
     movff   RCREG1,char_I_dil_change+0
-    bra		comm_write_abort             ; Done. Loop with timeout reset
+    bra		comm_write_abort             	; Done. Loop with timeout reset
 comm_write_dil2:
     movff   RCREG1,opt_dil_O2_ratio+1
     rcall	comm_write_get_byte
@@ -1412,7 +1482,7 @@ comm_write_dil2:
     movff   RCREG1,opt_dil_type+1
     rcall	comm_write_get_byte
     movff   RCREG1,char_I_dil_change+1
-    bra		comm_write_abort             ; Done. Loop with timeout reset
+    bra		comm_write_abort             	; Done. Loop with timeout reset
 comm_write_dil3:
     movff   RCREG1,opt_dil_O2_ratio+2
     rcall	comm_write_get_byte
@@ -1421,7 +1491,7 @@ comm_write_dil3:
     movff   RCREG1,opt_dil_type+2
     rcall	comm_write_get_byte
     movff   RCREG1,char_I_dil_change+2
-    bra		comm_write_abort             ; Done. Loop with timeout reset
+    bra		comm_write_abort             	; Done. Loop with timeout reset
 comm_write_dil4:
     movff   RCREG1,opt_dil_O2_ratio+3
     rcall	comm_write_get_byte
@@ -1430,7 +1500,7 @@ comm_write_dil4:
     movff   RCREG1,opt_dil_type+3
     rcall	comm_write_get_byte
     movff   RCREG1,char_I_dil_change+3
-    bra		comm_write_abort             ; Done. Loop with timeout reset
+    bra		comm_write_abort             	; Done. Loop with timeout reset
 comm_write_dil5:
     movff   RCREG1,opt_dil_O2_ratio+4
     rcall	comm_write_get_byte
@@ -1439,40 +1509,40 @@ comm_write_dil5:
     movff   RCREG1,opt_dil_type+4
     rcall	comm_write_get_byte
     movff   RCREG1,char_I_dil_change+4
-    bra		comm_write_abort             ; Done. Loop with timeout reset
+    bra		comm_write_abort             	; Done. Loop with timeout reset
 
 comm_write_sp1:
     movff   RCREG1,char_I_setpoint_cbar+0
     rcall	comm_write_get_byte
     movff   RCREG1,char_I_setpoint_change+0
-    bra		comm_write_abort             ; Done. Loop with timeout reset
+    bra		comm_write_abort             	; Done. Loop with timeout reset
 comm_write_sp2:
     movff   RCREG1,char_I_setpoint_cbar+1
     rcall	comm_write_get_byte
     movff   RCREG1,char_I_setpoint_change+1
-    bra		comm_write_abort             ; Done. Loop with timeout reset
+    bra		comm_write_abort             	; Done. Loop with timeout reset
 comm_write_sp3:
     movff   RCREG1,char_I_setpoint_cbar+2
     rcall	comm_write_get_byte
     movff   RCREG1,char_I_setpoint_change+2
-    bra		comm_write_abort             ; Done. Loop with timeout reset
+    bra		comm_write_abort             	; Done. Loop with timeout reset
 comm_write_sp4:
     movff   RCREG1,char_I_setpoint_cbar+3
     rcall	comm_write_get_byte
     movff   RCREG1,char_I_setpoint_change+3
-    bra		comm_write_abort             ; Done. Loop with timeout reset
+    bra		comm_write_abort             	; Done. Loop with timeout reset
 comm_write_sp5:
     movff   RCREG1,char_I_setpoint_cbar+4
     rcall	comm_write_get_byte
     movff   RCREG1,char_I_setpoint_change+4
-    bra		comm_write_abort             ; Done. Loop with timeout reset
+    bra		comm_write_abort             	; Done. Loop with timeout reset
 
 ;-----------------------------------------------------------------------------
 
 comm_send_string:
 	movlw	"n"								; send echo
 	movwf	TXREG1
-	rcall	comm_rs232_wait_tx					; Wait for UART
+	rcall	comm_rs232_wait_tx				; Wait for UART
 	WIN_SMALL	comm_string_column, comm_string_row
 	movlw	.16
 	movwf	lo								; counter
@@ -1516,9 +1586,9 @@ comm_check_day:
 	movlw	.30
 	dcfsnz	lo,F
 	movlw	.31
-	cpfsgt	day						; day ok?
-	return							; OK
-	movlw	.1						; not OK, set to 1st
+	cpfsgt	day				; day ok?
+	return					; OK
+	movlw	.1				; not OK, set to 1st
 	movwf	day
 	return	
 
@@ -1531,7 +1601,7 @@ comm_write_button_polarity:
 	movff	RCREG1,EEDATA
 	movff	EEDATA,button_polarity	    ; 0xFF (Both normal), 0x00 (Both inverted), 0x01 (Left inverted only), 0x02 (Right inverted only) 
 	call    write_eeprom                ; EEDATA into EEPROM@EEADR
-	clrf	EEADRH			    ; Reset EEADRH
+	clrf	EEADRH			    		; Reset EEADRH
 	goto	comm_download_mode0         ; Done. Loop with timeout reset
 	
 ;----------------------------------------------------------------------------

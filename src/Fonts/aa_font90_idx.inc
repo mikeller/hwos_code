@@ -1,9 +1,9 @@
 ;==========================================================================
 ; Font index exported ven. janv. 13 2012 by FontIO.cpp 110 2011-06-07 11:26:40Z gascuel $ 
 ;==========================================================================
-aa_font90_chars		EQU	.14
+aa_font90_chars		EQU	.12
 aa_font90_firstChar	EQU	'.'
-aa_font90_lastChar	EQU	';'
+aa_font90_lastChar	EQU	':'
 ;
 aa_font90_idx:
 			DW	aa_font90_bits + 0x0000	; . dot
@@ -18,6 +18,5 @@ aa_font90_idx:
 			DW	aa_font90_bits + 0x061F	; 7 7
 			DW	aa_font90_bits + 0x06D3	; 8 8
 			DW	aa_font90_bits + 0x080F	; 9 9
-			DW	aa_font90_bits + 0x0925	; : colon
-			DW	aa_font90_bits + 0x09A7	; ; semicolon
-			DW	aa_font90_bits + 0x0A71	; END OF INDEX
+			DW	aa_font90_bits + 0x0925	; END OF INDEX
+

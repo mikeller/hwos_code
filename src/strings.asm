@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File strings.asm
+;   File strings.asm									Version 2.92 = 2.26
 ;
 ;   Implementation code various string functions.
 ;
@@ -101,7 +101,7 @@ strcat_text_print:
         global  text_get_tblptr
 text_get_tblptr:
         extern  text_1_base
-        movlw   UPPER(text_1_base); Complete 12bits to 24bits address.
+        movlw   UPPER(text_1_base)		; Complete 12bits to 24bits address.
         movwf   TBLPTRU
         movlw   HIGH(text_1_base)
         andlw   0xF0
@@ -109,10 +109,11 @@ text_get_tblptr:
         movwf   TBLPTRH
         movff   FSR1L,TBLPTRL
 
-        movff   opt_language,WREG       ; Get lang
-        bz      text_get_lang1        ; 0 == English
-        dcfsnz  WREG                    ; 1 == German
-        bra     text_get_lang2
+
+		movff   opt_language,WREG       ; Get lang
+		bz      text_get_lang1        	; 0 == English
+		dcfsnz  WREG                    ; 1 == German
+		bra     text_get_lang2
 ; Other ??? Keep language 1
 
 ; Read 2-byte pointer to string
@@ -126,21 +127,21 @@ text_get_lang1:
 
 ; Add correction for German table:
 text_get_lang2:
-        extern  text_2_base
-        movlw   LOW(text_2_base)
-        addwf   TBLPTRL
-        movlw   HIGH(text_2_base)
-        addwfc  TBLPTRH
-        movlw   UPPER(text_2_base)
-        addwfc  TBLPTRU
+       extern  text_2_base
+       movlw   LOW(text_2_base)
+       addwf   TBLPTRL
+       movlw   HIGH(text_2_base)
+       addwfc  TBLPTRH
+       movlw   UPPER(text_2_base)
+       addwfc  TBLPTRU
 
-        movlw   LOW(text_1_base)
-        subwf   TBLPTRL
-        movlw   HIGH(text_1_base)
-        subwfb  TBLPTRH
-        movlw   UPPER(text_1_base)
-        subwfb  TBLPTRU
-        bra     text_get_lang1
+       movlw   LOW(text_1_base)
+       subwf   TBLPTRL
+       movlw   HIGH(text_1_base)
+       subwfb  TBLPTRH
+       movlw   UPPER(text_1_base)
+       subwfb  TBLPTRU
+       bra     text_get_lang1
         
 ;=============================================================================
 ; Copy a null-terminated string from TBLPTR to buffer.
@@ -183,33 +184,29 @@ strcat_prom_print:
         global      start_tiny_block
 start_tiny_block:
         clrf        WREG
-        movff       WREG, win_font      ; Need a bank-safe move here !
         bra         start_common
 
         global      start_small_block
 start_small_block:
         movlw       1
-        movff       WREG, win_font      ; Need a bank-safe move here !
         bra         start_common
 
         global      start_std_block
 start_std_block:
         movlw       2
-        movff       WREG, win_font      ; Need a bank-safe move here !
         bra         start_common
 
         global      start_medium_block
 start_medium_block:
         movlw       3
-        movff       WREG, win_font      ; Need a bank-safe move here !
         bra         start_common
 
         global      start_large_block
 start_large_block:
         movlw       4
-        movff       WREG, win_font      ; Need a bank-safe move here !
 ;        bra         start_common
 start_common:
+        movff       WREG, win_font      ; Need a bank-safe move here !
         VARARGS_BEGIN
             VARARGS_GET8    win_leftx2
             VARARGS_GET8    win_top

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File text_multilang.asm
+;   File text_multilang.asm								Version 2.92 = 2.26
 ;
 ;   Implementation text in various selectable languages.
 ;
@@ -20,7 +20,7 @@ texts       code    0x009000
             global  text_1_base
 text_1_base:
     IFNDEF	    french_italian
-    MESSG "hwOS code in English and German!"
+	MESSG "hwOS code in English and German!"
 ;---- PASS 1 : generate description block ------------------------------------
 tcode_idx   set     0
 LANG        set     0
@@ -35,7 +35,9 @@ tcode_idx   set     0
 #undefine   TCODE
 
 ;=============================================================================
-            global  text_2_base
+
+
+	global  text_2_base
 text_2_base:
 
 ;---- PASS 1 : generate description block ------------------------------------
@@ -51,8 +53,8 @@ tcode_idx   set     0
 #include    "text_german.inc"
 #undefine   TCODE
 
-    ELSE
-   MESSG "hwOS code in French and Italian!"
+	ELSE
+	MESSG "hwOS code in French and Italian!"
 ;=============================================================================
 ;---- PASS 1 : generate description block ------------------------------------
 tcode_idx   set     0

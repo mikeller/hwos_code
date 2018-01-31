@@ -1,6 +1,6 @@
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ;
-;    shared_definitions.h
+;    shared_definitions.h							REFACTORED VERSION	V2.95a1
 ;
 ;    Declare variables used both in C and ASM code
 ;
@@ -67,20 +67,12 @@
 #define TAB_UINT(n,size)   n    res     2*size
 #endif
 
-#ifdef __18CXX
-    //---- BANK 3 DATA -------------------------------------------------------
-    // Gather all data C-code --> ASM-code
-#   pragma udata overlay bank3=0x300
-#else
-bank3   udata_ovr  0x300
-#endif
-
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
     Define model dimensions.
     NUM_COMP  is the number of compartiments in the Bühlmann ZH-L16 model, ie 16.
     NUM_STOPS is the maximum number of stops computed by decoplanning. 
-              Note that the deapest stop is roughly limited to 3m * NUM_STOPS
+              Note that the deepest stop is roughly limited to 3m * NUM_STOPS
                    (this is assuming all stops up to the surface are used).
               Note also that if the table overflow, extra stops are ignored,
                    and not reported in TTS summing.
@@ -91,34 +83,64 @@ bank3   udata_ovr  0x300
 #define NUM_STOPS   0x20
 #define NUM_GAS     5
 
-VAR_UINT  (int_O_gtissue_press);
-VAR_UINT  (int_O_desaturation_time);       // 
-VAR_UINT  (int_O_ascenttime);              // TTS (in minutes)
-VAR_UINT  (int_O_extra_ascenttime);        // TTS for @+5min variant (in minutes)
-VAR_UINT  (int_O_CNS_fraction);            // new in v.101
 
-VAR_UCHAR (char_O_nullzeit);               // 
-VAR_UCHAR (char_O_deco_status);            // Deko state-machine state.
-VAR_UCHAR (char_O_deco_last_stop);         // Depth reached during deko planning.
-VAR_UCHAR (char_O_gradient_factor);        // 
-VAR_UCHAR (char_O_gtissue_no);             // 
-VAR_UCHAR (char_O_diluent);                // new in v.101
-VAR_UCHAR (char_O_flush_ppO2);             // 2011-05-01: ppO2 from diluant (CCR mode).
-VAR_UCHAR (char_O_EAD);                    // 2011-05-01: Added EAD/END in deco model.
-VAR_UCHAR (char_O_END);                    // 2011-05-01: Added EAD/END in deco model.
+#ifdef __18CXX
+    //---- BANK 3 DATA -------------------------------------------------------
+    // Gather all data C-code --> ASM-code
+#   pragma udata overlay bank3=0x300
+#else
+    ; In ASM, put the same bank, in overlay mode, at the same address
+bank3   udata_ovr  0x300
+#endif
 
-VAR_UCHAR (char_O_first_deco_depth);        // Depth of first stop.
-VAR_UCHAR (char_O_first_deco_time) ;        // Duration of first stop.
-TAB_UCHAR (char_O_deco_depth, NUM_STOPS);   // Fusionned decompression table:
-TAB_UCHAR (char_O_deco_time,  NUM_STOPS);   // Both ZH-L16 and L16-GF models.
-TAB_UCHAR (char_O_deco_gas,   NUM_STOPS);   // Both ZH-L16 and L16-GF models.
-TAB_UCHAR (char_O_deco_time_for_log, NUM_STOPS); // For logging the full decoplan
+VAR_UINT  (int_O_gtissue_press);					// pressure of leading compartment
 
-TAB_UCHAR (char_O_tissue_N2_saturation, NUM_COMP); // Nitrogen compartiment desaturation time, in min.
-TAB_UCHAR (char_O_tissue_He_saturation, NUM_COMP); // Helium compartiment desaturation time, in min.
+VAR_UINT  (int_O_desaturation_time);       			// time until tissues desaturated to 5% remains, in minutes
+VAR_UINT  (int_O_nofly_time);			   			// altitude / no-fly waiting time time in minutes
 
-TAB_UINT (int_O_gas_volumes, 5);            // Volumes evaluation for each gas tank, in 0.1 liters.
-VAR_UINT (int_O_ceiling);                  // in mbar
+VAR_UINT  (int_O_ascenttime);              			// time-to-surface (TTS) in minutes
+VAR_UINT  (int_O_alternate_ascenttime);    			// TTS for the alternative dive plan
+
+VAR_UINT  (int_O_CNS_fraction);            			// current CNS%
+VAR_UINT  (int_O_normal_CNS_fraction); 	   			// CNS% at end of dive in normal dive plan
+VAR_UINT  (int_O_alternate_CNS_fraction);  			// CNS% at end of dive in alternative plan
+
+VAR_UINT  (int_O_gradient_factor);        			// current gradient factor in %
+
+VAR_UCHAR (char_O_nullzeit);               			// remaining NDL time in minutes
+VAR_UCHAR (char_O_alternate_nullzeit);	   			// remaining NDL time for the alternative dive plan
+
+VAR_UCHAR (char_O_main_status);						// setup of the deco engine regarding the real tissue   computations
+VAR_UCHAR (char_O_deco_status);            			// setup of the deco engine regarding the decompression computations
+
+VAR_UCHAR (char_O_gtissue_no);             			// number of the leading compartment
+
+VAR_UCHAR (char_O_EAD);                    			// equivalent air      depth (EAD) of breathed gas
+VAR_UCHAR (char_O_END);                    			// equivalent narcosis depth (END) of breathed gas
+
+VAR_UCHAR (char_O_first_deco_depth);        		// depth of first stop (deco or gas change)
+VAR_UCHAR (char_O_first_deco_time) ;        		// duration of first stop
+
+TAB_UCHAR (char_O_deco_depth, NUM_STOPS);   		// stops table: depth, ...
+TAB_UCHAR (char_O_deco_time,  NUM_STOPS);   		// ... duration, and
+TAB_UCHAR (char_O_deco_gas,   NUM_STOPS);   		// ... gas breathed
+
+TAB_UCHAR (char_O_deco_time_for_log, NUM_STOPS); 	// variant of the stops table for logging purpose
+
+TAB_UCHAR (char_O_tissue_N2_saturation, NUM_COMP); 	// nitrogen tissue pressures for display purpose
+TAB_UCHAR (char_O_tissue_He_saturation, NUM_COMP); 	// helium   tissue pressures for display purpose
+
+VAR_UCHAR (char_O_deco_warnings);					// vector of warnings generated by the deco engine
+
+TAB_UINT  (int_O_gas_volumes,    NUM_GAS);			// gas volumes    needed in liters
+TAB_UINT  (int_O_tank_pres_need, NUM_GAS);			// tank pressures needed in bar
+VAR_UINT  (int_O_ceiling);							// ultimate ascent bound in mbar relative pressure
+
+VAR_UINT  (int_O_O2_ppO2);				   			// ppO2 of pure O2 at current depth
+VAR_UINT  (int_O_pure_ppO2);						// ppO2 of the current gas or dil if breathed pure
+VAR_UINT  (int_O_pSCR_ppO2);			   			// ppO2 calculated in pSCR loop
+VAR_UINT  (int_O_breathed_ppO2);					// ppO2 actually breathed (= char_O_pure_ppO2 if in OC)
+
 
 #ifdef __18CXX
     //---- BANK 4 DATA -------------------------------------------------------
@@ -129,42 +151,72 @@ VAR_UINT (int_O_ceiling);                  // in mbar
 bank4   udata_ovr  0x400
 #endif
 
-VAR_UCHAR (char_I_step_is_1min);           // Use 1min integration for tissue and CNS.
+VAR_UINT  (int_I_pres_respiration);        // absolute pressure breathed
+VAR_UINT  (int_I_pres_surface);            // absolute pressure at surface
 
-VAR_UINT  (int_I_pres_respiration);        // 
-VAR_UINT  (int_I_pres_surface);            // 
-VAR_UINT  (int_I_temp);                    // new in v101
-VAR_UINT  (int_I_divemins);                // Dive time (minutes)
-VAR_UCHAR (char_I_temp);                   // new in v101
-VAR_UCHAR (char_I_actual_ppO2);            // 
-VAR_UCHAR (char_I_first_gas);              // Gas used at start of dive (bottom mix)
-VAR_UCHAR (char_I_current_gas);            // Current gas breathed (1..6).
-VAR_UCHAR (char_I_N2_ratio);               //
-VAR_UCHAR (char_I_He_ratio);               //
-VAR_UCHAR (char_I_O2_ratio);               //
-VAR_UCHAR (char_I_saturation_multiplier);  // for conservatism/safety values 1.0  no conservatism to 1.5  50% faster saturation
-VAR_UCHAR (char_I_desaturation_multiplier);// for conservatism/safety values 0.66  50% slower desaturation to 1.0  no conservatism// consveratism used in calc_tissue , calc_tissue_step_1_min  and sim_tissue_1min 
-VAR_UCHAR (char_I_GF_High_percentage);     // new in v.102
-VAR_UCHAR (char_I_GF_Low_percentage);      // new in v.102
-VAR_UCHAR (char_I_deco_distance);          // 
-VAR_UCHAR (char_I_depth_last_deco);        // new in v.101 unit: [m]
-VAR_UCHAR (char_I_deco_model);             // new in v.102. 0 == ZH-L16, 1 = ZH-L16-GF (Gradiant factor)
-VAR_UCHAR (char_I_bottom_depth);           // Bottom depth for planning (used in gas volume evaluation).
-VAR_UCHAR (char_I_bottom_time);            // Bottom time for planning (used in gas volume evaluation).
-VAR_UCHAR (char_I_dive_interval);          // Delay before next dive simulation.
-VAR_UCHAR (char_I_const_ppO2);             // new in v.101
+VAR_UCHAR (char_I_current_gas);            // number of gas currently breathed (1..5 for configured gases, 6 for the manual gas)
+VAR_UCHAR (char_I_He_ratio);               // helium   ratio of the currently breathed gas
+VAR_UCHAR (char_I_O2_ratio);               // oxygen   ratio of the currently breathed gas
 
-TAB_UCHAR (char_I_deco_gas_change,NUM_GAS); // new in v.101
-TAB_UCHAR (char_I_dil_change,NUM_GAS);      // Must be placed after char_I_deco_gas_change!
+VAR_UCHAR (char_I_saturation_multiplier);  // safety factor, 100 = no conservatism, 150 = 50% faster saturation
+VAR_UCHAR (char_I_desaturation_multiplier);// safety factor, 100 = no conservatism,  66 = 50% slower desaturation 
 
-TAB_UCHAR (char_I_setpoint_change,NUM_GAS); // Change depths in m
-TAB_UCHAR (char_I_deco_N2_ratio, NUM_GAS);  // new in v.101
-TAB_UCHAR (char_I_deco_He_ratio, NUM_GAS);  // new in v.101
+VAR_UCHAR (char_I_GF_High_percentage);     // GF model high value
+VAR_UCHAR (char_I_GF_Low_percentage);      // GF model low value
 
-TAB_UCHAR (char_I_setpoint_cbar,NUM_GAS);         // Setpoints in cbar
+VAR_UCHAR (char_I_deco_distance);          // assumed extra depth below required depth for CNS and gas volumes calculations
+VAR_UCHAR (char_I_depth_last_deco);        // depth of the last deco stop in meters
 
-VAR_UCHAR (char_I_bottom_usage);            // [l/min]
-VAR_UCHAR (char_I_deco_usage);              // [l/min]
+VAR_UCHAR (char_I_deco_model);             // deco model selection: 0 = ZH-L16, 1 = ZH-L16-GF (with gradient factors)
 
-VAR_UCHAR (char_I_extra_time);              // [min]
-VAR_UCHAR (temp_bankx400);                  // temp
+VAR_UCHAR (char_I_bottom_depth);           // bottom depth, used for gas volume calculations
+VAR_UCHAR (char_I_bottom_time);            // bottom time,  used for gas volume calculations
+
+VAR_UCHAR (char_I_dive_interval);          // duration of surface break before next dive in minutes, used in simulation
+VAR_UCHAR (char_I_sim_advance_time);	   // 'fast forward' of dive time, used in simulation (+5 min function)
+
+VAR_UCHAR (char_I_const_ppO2);             // ppO2 reported from sensors or by setpoint
+
+TAB_UCHAR (char_I_deco_gas_change,NUM_GAS); // change depths of the OC gases
+TAB_UCHAR (char_I_dil_change,     NUM_GAS); // change depths of the diluent gases. Attention: must be placed after char_I_deco_gas_change!	Remark: not used by C code, only by ASM code
+
+TAB_UCHAR (char_I_setpoint_change,NUM_GAS); // change depth for the setpoints in meter
+TAB_UCHAR (char_I_setpoint_cbar,  NUM_GAS); // setpoints in cbar
+
+TAB_UCHAR (char_I_deco_O2_ratio,  NUM_GAS); // oxygen ratios of the configured gases, used for deco calculations
+TAB_UCHAR (char_I_deco_He_ratio,  NUM_GAS); // helium ratios of the configured gases, used for deco calculations
+
+TAB_UCHAR (char_I_tank_size,      NUM_GAS);	// tank sizes, used for pressure needs calculation
+TAB_UCHAR (char_I_tank_pres_fill, NUM_GAS);	// tank fill pressures, used for generating warnings
+
+VAR_UCHAR (char_I_cc_max_frac_o2);	 		// limiter for maximum O2% in loop
+VAR_UCHAR (char_I_PSCR_drop);				// pSCR parameter drop [%]
+VAR_UCHAR (char_I_PSCR_lungratio);			// pSCR parameter lung ratio [1/x]
+
+VAR_UCHAR (char_I_altitude_wait);			// selector for altitude / no-fly waiting time calculation
+
+VAR_UCHAR (char_I_bottom_usage);            // gas consumption during bottom part and initial ascent   in liters/minute
+VAR_UCHAR (char_I_deco_usage);              // gas consumption during deco stops and following ascents in liters/minute
+
+VAR_UCHAR (char_I_extra_time);              // extra bottom time for fTTs and delayed ascent calculation in minutes
+
+VAR_UCHAR (char_I_ppO2_max);				// warning threshold for maximum ppO2 during working phase of the dive
+VAR_UCHAR (char_I_ppO2_max_deco);			// warning threshold for maximum ppO2 during deco phase of the dive
+VAR_UCHAR (char_I_ppO2_min);				// warning threshold for maximum ppO2 when breathing OC
+VAR_UCHAR (char_I_ppO2_min_loop);			// warning threshold for maximum ppO2 when breathing from CCR or pSCR
+
+VAR_UCHAR (char_I_ascent_speed);			// ascent speed in meters/minute
+VAR_UCHAR (char_I_gas_change_time);			// extra time spent during a stop for doing a gas change, in minutes
+
+
+#ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+// VAR_UCHAR (char_I_step_is_1min);        // Use 1min integration for tissue and CNS.	DELETED ## V2.95 - made local to p2_deco.c
+// VAR_UINT  (int_I_temp);                 // new in v101								DELETED ## no fly
+// VAR_UINT  (int_I_divemins);             // Dive time (minutes)					 	DELETED ## V2.95 - not used by p2_deco.c
+// VAR_UCHAR (char_I_temp);                // new in v101							 	DELETED ## no fly
+// VAR_UCHAR (char_I_actual_ppO2);         //										 	DELETED ## V2.94
+// VAR_UCHAR (char_I_first_gas);           // Gas used at start of dive (bottom mix) 	DELETED ## V2.95 - made local to p2_deco.c
+// VAR_UCHAR (char_I_N2_ratio);            // N2 ratio of the currently breathed gas	DELETED ## V2.95 - not read from ASM, but actually computed by p2_deco.c from H2 and O2 ratio
+// VAR_UCHAR (char_O_deco_last_stop);      // Depth reached during deco planning.		DELETED ## V2.95 - not used in ASM
+// VAR_UCHAR (temp_bankx400);              // reserved space for temporary variables
+#endif

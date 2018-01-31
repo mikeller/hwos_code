@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File isr.asm
+;   File isr.asm									REFACTORED VERSION V2.92
 ;
 ;   INTERUPT subroutines
 ;
@@ -19,7 +19,7 @@
 
 	extern start
 
-isr_high    CODE    0x0008              ;High Priority Interrups
+isr_high    CODE    0x0008              ; High Priority Interrups
 		bra		HighInt
 		nop	
 		nop
@@ -29,7 +29,7 @@ isr_high    CODE    0x0008              ;High Priority Interrups
 		nop
 		bra		HighInt
 
-isr_low     CODE    0x00018             ;Low Priority Interrups
+isr_low     CODE    0x00018             ; Low Priority Interrups
 ;	*** low priority interrupts not used
 		retfie FAST						; Restores BSR, STATUS and WREG
 
@@ -45,7 +45,7 @@ HighInt:
 		btfsc	INTCON3,INT1IF			; Buttons
 		rcall	isr_switch_left
 
-; IR/S8-Link
+; IR/S8-Linktimer1int
         btfsc   PIR3,RC2IF              ; UART2
         rcall   isr_uart2               ; IR/S8-Link
 		btfsc	PIR2,TMR3IF				; Timer 3
@@ -104,7 +104,7 @@ isr_restore CODE    0x00080             ; Restore first flash page from EEPROM
 restore_flash_0x00080:
         goto    restore_flash
 
-
+isr_routines;	CODE
 ;=============================================================================
 
 isr_uart2:               ; IR/S8-Link
@@ -838,24 +838,56 @@ timer1int_common:
 ;=============================================================================
 
 check_nofly_desat_time:
-    	movf    nofly_time+0,W              ; Is nofly null ?
-    	iorwf   nofly_time+1,W
-    	bz     	check_nofly_desat_time2     ; yes...
 
-		movlw	d'1'
-		subwf	nofly_time+0,F
-		movlw	d'0'
-		subwfb	nofly_time+1,F               ; reduce by one
+	; DELETE - no-fly time is now re-computed every second	## no fly
+		; ; REPLACE	## no fly
+    	; ; movf    nofly_time+0,W            ; Is nofly null ?
+    	; ; iorwf   nofly_time+1,W
+		; ; BY
+		; banksel	int_O_nofly_time
+		; movf    int_O_nofly_time+0,W		; Is nofly null ?
+		; iorwf   int_O_nofly_time+1,W
+		
+    	; bz     	check_nofly_desat_time2     ; yes...
+
+		; movlw	d'1'
+		; ; REPLACE	## no fly
+		; ; subwf	nofly_time+0,F
+		; ; BY
+		; subwf	int_O_nofly_time+0,F
+		
+		; movlw	d'0'
+
+		; ; REPLACE	## no fly
+		; ; subwfb	nofly_time+1,F          ; reduce by one
+		; ; BY
+		; subwfb	int_O_nofly_time+1,F		; reduce by one
 
 check_nofly_desat_time2:
-    	movf    desaturation_time+0,W        ; Is Desat null ?
-    	iorwf   desaturation_time+1,W
-    	bz     	check_nofly_desat_time3      ; yes...
+		; REPLACE
+    	; movf    desaturation_time+0,W     ; Is Desat null ?
+    	; iorwf   desaturation_time+1,W
+		; BY
+		banksel	int_O_desaturation_time
+		movf    int_O_desaturation_time+0,W	; Is Desat null ?
+		iorwf   int_O_desaturation_time+1,W
+		
+    	bz     	check_nofly_desat_time3		; yes...
 
-		movlw	d'1'
-		subwf	desaturation_time+0,F
-		movlw	d'0'
-		subwfb	desaturation_time+1,F	   	; reduce by one...
+	; DELETE - desat-time is now re-computed every second	## no fly
+		; movlw	d'1'
+		; ; REPLACE	## no fly
+		; ; subwf	desaturation_time+0,F
+		; ; BY
+		; subwf	int_O_desaturation_time+0,F
+		
+		; movlw	d'0'
+		
+		; ; REPLACE	## no fly
+		; ; subwfb	desaturation_time+1,F	   	; reduce by one...
+		; ; by
+		; subwfb	int_O_desaturation_time+1,F		; reduce by one...
+		banksel	common
 
 	; Increase surface interval timer
         infsnz  surface_interval+0,F
@@ -863,6 +895,9 @@ check_nofly_desat_time2:
 		return								; Done
 
 check_nofly_desat_time3:
+		; NEW	## no fly
+		banksel	common
+		
 		clrf	surface_interval+0
 		clrf	surface_interval+1			; Clear surface interval timer
 		return								; Done.

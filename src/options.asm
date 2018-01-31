@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File options.asm
+;   File options.asm								REFACTORED VERSION V2.91
 ;
 ;   Manage all options data.
 ;
@@ -376,30 +376,41 @@ option_restore_string:
 ; OUTPUT: none
 ; TRASH:  TBLPTR, TABLAT, WREG, FSR0, FSR1
 option_inc:
-        ; Read type, default and register from table
-        rcall   option_read
+    ; Read type, default and register from table
+    rcall   option_read
         
-        ; Switch on type
-        movf    opt_type,W
-        bz      option_inc_uint8
-        dcfsnz  WREG
-        bra     option_inc_enum8
-        dcfsnz  WREG
-        bra     option_inc_string
+    ; Switch on type
+    movf    opt_type,W
+    bz      option_inc_uint8
+    dcfsnz  WREG
+    bra     option_inc_enum8
+    dcfsnz  WREG
+    bra     option_inc_string
 
-option_inc_uint8:                       ; Defaults type too...
-        movf    INDF1,W
-        addwf   opt_inc,W
-        cpfslt  opt_max
-        bra     option_inc_1
-        movf    opt_min,W
-option_inc_1:
-        movwf   INDF1
 	
+option_inc_uint8:                       ; Defaults type too...
+	movf    INDF1,W
+	addwf   opt_inc,W
+	cpfslt  opt_max
+	bra     option_inc_1
+	movf    opt_min,W
+option_inc_1:
+    movwf   INDF1
+		
+	; NEW FROM HERE...	## voting logic (allow sensors for pSCR)
+	; Now some rather crude hack into this routine to unify CCR & pSCR mode setting:
+	movlw	.25				; eeprom address of option oCCRMode
+	cpfseq	opt_eeprom		; skip next line if we deal with this option right now
+    bra		option_inc_2
+	btfsc	FLAG_pscr_mode	; skip next line if we are not in PSCR mode
+	bcf		opt_ccr_mode,1	; in pSCR mode, opt_ccr_mode may only be 0 or 1
+
+option_inc_2:
+; ...UNTILL HERE	
 	; Now some rather crude hack into this routine to make CCR Calibration more convenient:
 	movlw	.149			; eeprom address of option CalGasO2 
 	cpfseq	opt_eeprom		; skip next line if we deal with this option right now
-        return
+    return
 	
 	btfsc	FLAG_pscr_mode		; skip next line if we are not in PSCR mode 
 	return 
