@@ -393,15 +393,24 @@ restart_set_modes_and_flags:		    ; "Call"ed from divemode, as well!
     movwf   samplingrate
 restart_set_modes_and_flags1:
     bcf	    twosecupdate				; to have divemode routines in sync
-
+    
     bcf	    FLAG_apnoe_mode
     bcf     FLAG_ccr_mode				; =1: CCR mode (Fixed ppO2 or Sensor) active
     bcf     FLAG_gauge_mode				; =1: In Gauge mode
     bcf	    FLAG_pscr_mode
     call    disable_ir_s8				; IR off
 
-    movff   opt_dive_mode,lo            ; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
+    ; Setup char_I_saturation_multiplier and char_I_desaturation_multiplier
+    movff   opt_sat_multiplier_gf,char_I_saturation_multiplier
+    movff   opt_desat_multiplier_gf,char_I_desaturation_multiplier
+    movff   char_I_deco_model,lo           ; 0 = ZH-L16, 1 = ZH-L16-GF
+    tstfsz  lo
+    bra	    restart_set_modes_and_flags1b
+    movff   opt_sat_multiplier_non_gf,char_I_saturation_multiplier
+    movff   opt_desat_multiplier_non_gf,char_I_desaturation_multiplier
     
+restart_set_modes_and_flags1b:    
+    movff   opt_dive_mode,lo            ; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
     tstfsz  lo
     bra     restart_set_modes_and_flags2
     ; OC Mode

@@ -320,17 +320,32 @@ do_ppo2_menu:
 
 do_return_decoparameters_menu:
     	rcall	menu_tree_double_pop	; drop exit line and back to last line
-do_decoparameters_menu:
-    MENU_BEGIN  tDecoparameters, .7
-        MENU_OPTION  tGF_low,   oGF_low,        0
-        MENU_OPTION  tGF_high,  oGF_high,       0
-        MENU_CALL    taGFMenu,                  do_aGF_menu
+do_decoparameters_menu: 
+    movff   char_I_deco_model,lo           ; 0 = ZH-L16, 1 = ZH-L16-GF
+    tstfsz  lo
+    bra	    do_decoparameters_menugf	   ; <> 0 -> GF menu!
+    ; NON-GF menu
+    MENU_BEGIN  tDecoparameters, .4
         MENU_OPTION  tSaturationMult,osatmult,  0
         MENU_OPTION  tDesaturationMult,odesatmult,0
         MENU_OPTION  tLastDecostop,oLastDeco,   0
         MENU_CALL    tExit,                  	do_return_divemode_menu
     MENU_END
+    
+do_decoparameters_menugf:
+    ; GF menu
+    MENU_BEGIN  tDecoparameters, .7
+        MENU_OPTION  tGF_low,   oGF_low,        0
+        MENU_OPTION  tGF_high,  oGF_high,       0
+        MENU_CALL    taGFMenu,                  do_aGF_menu
+        MENU_OPTION  tSaturationMult,osatmultgf,  0
+        MENU_OPTION  tDesaturationMult,odesatmultgf,0
+        MENU_OPTION  tLastDecostop,oLastDeco,   0
+        MENU_CALL    tExit,                  	do_return_divemode_menu
+    MENU_END
 
+    
+    
 
 do_return_2nd_deco_plan_menu:
     	rcall	menu_tree_double_pop	; drop exit line and back to last line
@@ -396,7 +411,7 @@ do_settings_menu:
         MENU_CALL   tInfoMenu,      do_info_menu
         MENU_CALL   tSetTimeDate,   do_date_time_menu
         MENU_CALL   tDispSets,      do_dispsets_menu
-	MENU_OPTION tAltMode,	    oAltMode,	    0		
+	MENU_OPTION tLanguage,      oLanguage,			0
         MENU_CALL   tMore,          do_settings_menu_more
         MENU_CALL   tExit,          do_continue_main_menu
     MENU_END
@@ -407,7 +422,7 @@ do_settings_menu_ble:
         MENU_CALL   tBleTitle,      comm_mode0
         MENU_CALL   tSetTimeDate,   do_date_time_menu
         MENU_CALL   tDispSets,      do_dispsets_menu
-	MENU_OPTION tAltMode,	    oAltMode,	    0		
+	MENU_OPTION tLanguage,      oLanguage,			0
         MENU_CALL   tMore,          do_settings_menu_more
         MENU_CALL   tExit,          do_continue_main_menu
     MENU_END
@@ -424,7 +439,7 @@ do_settings_menu_more:
 		MENU_CALL   tCompassMenu,   do_compass_menu
 		MENU_CALL	tLogOffset,		do_log_offset_menu
 		MENU_OPTION tUnits,    		oUnits,				0
-		MENU_OPTION tLanguage,      oLanguage,			0        
+		MENU_OPTION tAltMode,	    oAltMode,	    0		
 		MENU_OPTION tDvSalinity,	oDiveSalinity,		0
 		MENU_CALL   tResetMenu,     do_reset_menu
 		MENU_CALL   tExit,          do_return_settings
@@ -440,7 +455,7 @@ do_settings_menu_more_piezo:
         MENU_CALL   tCompassMenu,	do_compass_menu
 		MENU_CALL	tLogOffset,		do_log_offset_menu
         MENU_OPTION tUnits,			oUnits,				0
-        MENU_OPTION tLanguage,      oLanguage,			0        
+       	MENU_OPTION tAltMode,	    oAltMode,	    0		
         MENU_OPTION tDvSalinity,	oDiveSalinity,		0
         MENU_CALL   tMore,			do_settings_piezo_menu
         MENU_CALL   tExit,			do_return_settings
@@ -462,7 +477,7 @@ do_settings_menu_more_ostc3p:  ; Menu with BLE feature
         MENU_CALL   tCompassMenu,	do_compass_menu
 		MENU_CALL	tLogOffset,		do_log_offset_menu
         MENU_OPTION tUnits,			oUnits,				0
-        MENU_OPTION tLanguage,      oLanguage,			0        
+       	MENU_OPTION tAltMode,	    oAltMode,	    0		
         MENU_OPTION tDvSalinity,	oDiveSalinity,		0
         MENU_CALL   tResetMenu,     do_reset_menu
         MENU_CALL   tExit,          do_return_settings
@@ -699,10 +714,9 @@ do_dispsets_menu_3stack:
     call	menu_tree_double_pop	; drop exit line and back to last line
 
 do_dispsets_menu:
-	MENU_BEGIN  tDispSets, .6
+	MENU_BEGIN  tDispSets, .5
         MENU_OPTION tBright,       oBrightness,   0
         MENU_CALL   tColorScheme,                 do_color_scheme
-		MENU_OPTION tLanguage,     oLanguage,     0
         MENU_OPTION tFlip,         oFlipScreen,   0
         MENU_CALL   tMore,                        do_dispsets_menu_more
         MENU_CALL   tExit,                        do_return_settings

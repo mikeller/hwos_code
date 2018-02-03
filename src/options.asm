@@ -84,11 +84,14 @@ option_reset_all2:
         movlw   HIGH(option_table_begin)
         movwf   FSR0H
 option_reset_all_1:
-        movf    FSR0L,W                 ; Reached end of table ?
-        xorlw   LOW(option_table_end)   ; (8bit test -> 10 bytes x 128 options max)
-        btfsc   STATUS,Z                ; YES: done.
-        return
-
+	movlw	LOW(option_table_end)
+	cpfseq	FSR0L
+	bra	option_reset_all_2	; Not yet done...
+	movlw	HIGH(option_table_end)
+	cpfseq	FSR0H
+	bra	option_reset_all_2	; Not yet done...
+        return				; All done.
+option_reset_all_2:
         rcall   option_reset            ; Reset one option.
         bra     option_reset_all_1      ; and loop.
 
@@ -106,11 +109,14 @@ option_check_all:
         movwf   FSR0H
 
 option_check_all_1:
-        movf    FSR0L,W                 ; Reached end of table ?
-        xorlw   LOW(option_table_end)   ; (8bit test -> 10 bytes x 128 options max)
-        btfsc   STATUS,Z                ; YES: done.
-        return
-
+    	movlw	LOW(option_table_end)
+	cpfseq	FSR0L
+	bra	option_check_all_2	; Not yet done...
+	movlw	HIGH(option_table_end)
+	cpfseq	FSR0H
+	bra	option_check_all_2	; Not yet done...
+        return				; All done.
+option_check_all_2:
         rcall   option_check            ; check one option.
         bra     option_check_all_1      ; and loop
 
@@ -254,11 +260,14 @@ option_save_all:
         movwf   FSR0H
 
 option_save_all_1:
-        movf    FSR0L,W                 ; Reached end of table ?
-        xorlw   LOW(option_table_end)   ; (8bit test -> 10 bytes x 128 options max)
-        btfsc   STATUS,Z                ; YES: done.
-        return
-
+    	movlw	LOW(option_table_end)
+	cpfseq	FSR0L
+	bra	option_save_all_2	; Not yet done...
+	movlw	HIGH(option_table_end)
+	cpfseq	FSR0H
+	bra	option_save_all_2	; Not yet done...
+        return				; All done.
+option_save_all_2:
         rcall   option_save             ; Save one option.
         bra     option_save_all_1       ; and loop.
 
@@ -328,14 +337,16 @@ option_restore_ok:
         movwf   FSR0H
 
 option_restore_all_1:
-        movf    FSR0L,W                 ; Reached end of table ?
-        xorlw   LOW(option_table_end)   ; (8bit test -> 10 bytes x 128 options max)
-        btfsc   STATUS,Z                ; YES: done.
-        return
-
+    	movlw	LOW(option_table_end)
+	cpfseq	FSR0L
+	bra	option_restore_all_2	; Not yet done...
+	movlw	HIGH(option_table_end)
+	cpfseq	FSR0H
+	bra	option_restore_all_2	; Not yet done...
+        return				; All done.
+option_restore_all_2:
         rcall   option_restore          ; Restore one option.
         bra     option_restore_all_1    ; and loop.
-        return
 
 option_restore:
         rcall   option_read

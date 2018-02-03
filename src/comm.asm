@@ -1000,9 +1000,9 @@ comm_read_setting:
     dcfsnz  WREG
     movff   opt_enable_aGF, TXREG1          ; RCREG1=0x29
     dcfsnz  WREG
-    movff   char_I_saturation_multiplier, TXREG1; RCREG1=0x2A
+    movff   opt_sat_multiplier_non_gf, TXREG1; RCREG1=0x2A
     dcfsnz  WREG
-    movff   char_I_desaturation_multiplier, TXREG1; RCREG1=0x2B
+    movff   opt_desat_multiplier_non_gf, TXREG1; RCREG1=0x2B
     dcfsnz  WREG
     movff   opt_last_stop, TXREG1           ; RCREG1=0x2C
     dcfsnz  WREG
@@ -1105,6 +1105,11 @@ comm_read_setting:
     movff   char_I_altitude_wait, TXREG1	; RCREG1=0x5C	## no fly altitude
 	dcfsnz  WREG
     movff   opt_enable_IBCD, TXREG1			; RCREG1=0x5D	## IBCD
+        dcfsnz  WREG
+    movff   opt_sat_multiplier_gf, TXREG1; RCREG1=0x5E
+        dcfsnz  WREG
+    movff   opt_desat_multiplier_gf, TXREG1; RCREG1=0x5F
+
 	
     
 comm_read_abort:
@@ -1347,9 +1352,9 @@ comm_write_setting:
     dcfsnz  WREG
     movff   RCREG1, opt_enable_aGF          ; RCREG1=0x29
     dcfsnz  WREG
-    movff   RCREG1, char_I_saturation_multiplier; RCREG1=0x2A
+    movff   RCREG1, opt_sat_multiplier_non_gf; RCREG1=0x2A
     dcfsnz  WREG
-    movff   RCREG1, char_I_desaturation_multiplier; RCREG1=0x2B
+    movff   RCREG1, opt_desat_multiplier_non_gf; RCREG1=0x2B
     dcfsnz  WREG
     movff   RCREG1, opt_last_stop           ; RCREG1=0x2C
     dcfsnz  WREG
@@ -1447,11 +1452,16 @@ comm_write_setting:
 	dcfsnz  WREG
     movff   RCREG1, opt_calc_asc_gasvolume	; RCREG1=0x5A	## bailout gas needs
 	dcfsnz  WREG
-    movff   RCREG1, opt_sim_use_aGF			; RCREG1=0x5B	## deco calculator enhancement
+    movff   RCREG1, opt_sim_use_aGF		; RCREG1=0x5B	## deco calculator enhancement
 	dcfsnz  WREG
     movff   RCREG1, char_I_altitude_wait	; RCREG1=0x5C	## no fly altitude
 	dcfsnz  WREG
-    movff   RCREG1, opt_enable_IBCD			; RCREG1=0x5D	## TBCD
+    movff   RCREG1, opt_enable_IBCD		; RCREG1=0x5D	## TBCD
+        dcfsnz  WREG
+    movff   RCREG1, opt_sat_multiplier_gf	; RCREG1=0x5E
+	dcfsnz  WREG
+    movff   RCREG1, opt_desat_multiplier_gf	; RCREG1=0x5F
+
 	
 	
 comm_write_abort:
@@ -1547,7 +1557,7 @@ comm_send_string:
 	movlw	.16
 	movwf	lo								; counter
 comm_send_string_loop:
-	rcall	comm_write_get_byte
+	call	comm_write_get_byte
 	btfsc	rs232_recieve_overflow			; Got byte?
 	bra		comm_send_string_abort          ; No, abort!
 	movff	RCREG1,POSTINC2					; Store character

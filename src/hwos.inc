@@ -677,6 +677,10 @@ opt_sim_setpoint_number	res 1	; NEW setpoint to use for deco calculation
 opt_calc_asc_gasvolume	res 1	; NEW calculate OC gas volume needs for ascent
 opt_sim_use_aGF			res 1	; NEW use GF (no) or aGF (yes) for deco calculation
 opt_enable_IBCD			res 1	; NEW enable IBCD warning
+opt_sat_multiplier_gf		res 1	; Bühlmann safety factor for GF deco
+opt_desat_multiplier_gf		res 1	; Bühlmann safety factor for GF deco
+opt_sat_multiplier_non_gf	res 1	; Bühlmann safety factor for NON-GF deco
+opt_desat_multiplier_non_gf	res 1	; Bühlmann safety factor for NON-GF deco
 
 ;-----------------------------EEPROM DATA ------------------------------------
 ; Automatic reset of all options when this is changed:

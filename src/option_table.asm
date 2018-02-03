@@ -93,7 +93,7 @@ lbl:    db      2, LOW(defText)         ; Type2 = STRING
         extern  tPercent, tMeters, tMinutes, tGasDisabled, tbar
         extern  char_I_deco_gas_change, char_I_setpoint_change, char_I_setpoint_cbar, char_I_dil_change
         extern  char_I_dive_interval, char_I_bottom_time, char_I_bottom_depth
-        extern  char_I_deco_model, char_I_saturation_multiplier, char_I_desaturation_multiplier
+        extern  char_I_deco_model
         extern  char_I_extra_time
         extern  tDefName, tblank
         extern  char_I_bottom_usage, char_I_deco_usage, tLitersMinute
@@ -134,8 +134,8 @@ option_table_begin:
         OPTION_UINT8    oLastDeco,      .3,  .6, .3,  tMeters,      .11,    opt_last_stop
         OPTION_UINT8    oGF_low,       .10,  .100, .30,  tPercent,  .12,    opt_GF_low
         OPTION_UINT8    oGF_high,      .45,  .110, .85, tPercent,   .13,    opt_GF_high
-        OPTION_UINT8p5 osatmult,      .100,  .140, .110,tPercent,  .14,    char_I_saturation_multiplier
-        OPTION_UINT8p5 odesatmult,    .60,  .100,  .90,tPercent,   .15,    char_I_desaturation_multiplier
+        OPTION_UINT8p5 osatmultgf,      .100,  .140, .100,tPercent,  .14,    opt_sat_multiplier_gf	    ; For GF Mode
+        OPTION_UINT8p5 odesatmultgf,    .60,  .100,  .100,tPercent,   .15,    opt_desat_multiplier_gf   ; For GF Mode
         OPTION_UINT8p10 oPPO2Min,       .16, ppo2_warning_low, .19,   0,         .16,    char_I_ppO2_min
         OPTION_UINT8    oaGF_low,      .10,  .100, .30,  tPercent,  .17,    opt_aGF_low
         OPTION_UINT8    oaGF_high,     .45,  .110, .85, tPercent,   .18,    opt_aGF_high
@@ -262,11 +262,13 @@ option_table_begin:
 	OPTION_UINT8	oCCmaxFracO2,  .80, .100,  .90, tPercent,.183, char_I_cc_max_frac_o2	; max. O2 % in Loop
 	OPTION_UINT8    oSimSetpoint,   .1,   .5,   .1, tblank,  .184, opt_sim_setpoint_number	; setpoint to use for deco calculation
 	OPTION_BOOL     oCalcAscGas,                 0,          .185, opt_calc_asc_gasvolume	; calculate OC gas volume needs for ascent
-    OPTION_BOOL     oSimAGF,                     0,            -1, opt_sim_use_aGF			; use GF (no) or aGF (yes) for deco calculation
+	OPTION_BOOL     oSimAGF,                     0,            -1, opt_sim_use_aGF			; use GF (no) or aGF (yes) for deco calculation
 	OPTION_ENUM8    oAltMode,      	4,  	 0, tAltModeFly, .186, char_I_altitude_wait     ; 0=no-fly, 1=1000m, 2=2000m, 3=3000m
 	OPTION_BOOL     oEnable_IBCD,   0,                       .187, opt_enable_IBCD          ; =1: IBCD warning activated
 	OPTION_UINT8	oAscentSpeed,  .5, .10, .10,tMeterMinute,.188, char_I_ascent_speed		; ascent speed - Attention: proper operation with other values than the default of 10m/min has not been validated yet! Do not deviate from the default until further notice!
-	OPTION_UINT8	oGasChangeTime,.0, .3,  .1, tmin		,.198, char_I_gas_change_time	; (extra) time at a stop to change the gas
+	OPTION_UINT8	oGasChangeTime,.0, .3,  .1, tmin	,.189, char_I_gas_change_time	; (extra) time at a stop to change the gas
+        OPTION_UINT8p5	osatmult,      .100,  .140, .110,tPercent,.190, opt_sat_multiplier_non_gf    ; For NON-GF Mode
+        OPTION_UINT8p5	odesatmult,    .60,  .100,  .90,tPercent,.191,  opt_desat_multiplier_non_gf  ; For NON-GF Mode
 	
 ;=============================================================================
 ; Set Time/Set Date (RAM only)
