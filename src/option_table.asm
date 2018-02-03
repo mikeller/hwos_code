@@ -276,7 +276,7 @@ option_table_begin:
 		OPTION_UINT8    oSetMinutes,	.0,	.59, .0,	0, -1,		mins
 		OPTION_UINT8    oSetDay,		.1,	.31, .0,	0, -1,		day
 		OPTION_UINT8    oSetMonth,		.1,	.12, .0,	0, -1,		month
-		OPTION_UINT8    oSetYear,		.13,.20, .0,	0, -1,		year
+		OPTION_UINT8    oSetYear,		.18,.24, .0,	0, -1,		year
 
         global  option_table_end
 option_table_end:
