@@ -242,8 +242,6 @@ check_firmware_new:
     lfsr    FSR0,oPressureAdjust
     call    option_save             ; Save in EEPROM
 
-    call    fix_180_dives           ; fix dives made with the 1.80
-
     rcall   backup_flash_page       ; backup the first 128bytes from flash to EEPROM
 
 	movlw	d'1'					; store current version in EEPROM

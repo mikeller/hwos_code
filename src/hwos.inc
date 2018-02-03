@@ -239,8 +239,8 @@
 #DEFINE compass_averaging           .10         ; numbers of extra averaging
 
 ; Hardware defines
-#DEFINE battery_gauge_available	hardware_flag,0	; OSTC has rechargeable battery with battery management chip
-#DEFINE ambient_sensor			hardware_flag,1	; OSTC has an ambient sensor
+#DEFINE battery_gauge_available		hardware_flag,0	; OSTC has rechargeable battery with battery management chip
+#DEFINE ambient_sensor			hardware_flag,1	; OSTC has an ambient light sensor
 #DEFINE analog_o2_input			hardware_flag,2	; OSTC has analog inputs and S8 digital
 #DEFINE optical_input			hardware_flag,3	; OSTC has an digital optical input
 #DEFINE ble_available			hardware_flag,4	; OSTC has an BLE module
@@ -248,6 +248,17 @@
 ;unused
 ;unused
 
+; Hardware flag byte:
+; BIT0 = OSTC has rechargeable battery with battery management chip
+; BIT1 = OSTC has an ambient light sensor
+; BIT2 = OSTC has analog inputs and S8 digital
+; BIT3 = OSTC has an digital optical input
+; BIT4 = OSTC has an BLE module
+; BIT5 = OSTC_RX circuity present
+; BIT6 = unused
+; BIT7 = unused
+	
+	
 ;---------------------------- Macros ------------------------------------
 
 TSTOSS  macro opt_reg           ; TeST Option Skip if not Zero
