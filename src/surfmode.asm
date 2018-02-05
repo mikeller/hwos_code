@@ -147,10 +147,6 @@ surfloop:
 	call	TFT_temp_surfmode			; Displays temperature
 	call	TFT_display_decotype_surface
 	
-; REPLACE	## voting logic
-;	call    compute_ppo2                ; compute mv_sensorX and ppo2_sensorX arrays
-;	call    check_sensors               ; Set enable/disable flags
-; BY
 	call	calc_deko_divemode_sensor
 
     movff   opt_dive_mode,lo            ; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
@@ -237,12 +233,7 @@ surfloop_loop2:
 
     bcf     quarter_second_update
     
-    ; Update Sensors
-	; REPLACE	## voting logic
-	; call    compute_ppo2                ; compute mv_sensorX and ppo2_sensorX arrays
-	; call    check_sensors               ; Set enable/disable flags
-	; BY
-	call	calc_deko_divemode_sensor
+    call	calc_deko_divemode_sensor
 	
     btfsc   FLAG_ccr_mode               ; In CCR mode?
     bra	    surfloop_loop2a1			; Yes.

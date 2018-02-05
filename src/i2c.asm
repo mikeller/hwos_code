@@ -1067,30 +1067,6 @@ I2C_probe_OSTC_rx:
 
 	global	I2C_get_tankdata
 I2C_get_tankdata:
-;    
-;	movlw	.1
-;	movff	WREG,rx_buffer+0
-;	movlw	.125
-;	movff	WREG,rx_buffer+1
-;	movlw	HIGH	.1500
-;	movff	WREG,rx_buffer+2
-;	movlw	LOW	.1500		; 150,0bar
-;	movff	WREG,rx_buffer+3
-;
-;	movlw	.1
-;	movff	WREG,rx_buffer+6
-;	movlw	.140
-;	movff	WREG,rx_buffer+7
-;	movlw	HIGH	.2251
-;	movff	WREG,rx_buffer+8
-;	movlw	LOW	.2251		; 225,1bar
-;	movff	WREG,rx_buffer+9
-;
-;	
-;    
-;	return	;mH
-    
-    
     	bsf	SSP1CON2,SEN		; Start condition
 	rcall	WaitMSSP
     	movlw	0x50			; Address byte + Write bit

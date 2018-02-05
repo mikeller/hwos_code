@@ -103,43 +103,9 @@ check_sensor2:
     btfss   sensor3_calibrated_ok
     bcf     use_O2_sensor3
 check_sensor3:                      ; Check for voting logic
-	; DELETE - voting is done in calc_deko_divemode_sensor 	## voting logic
-    ; bsf     voting_logic_sensor1
-    ; movff   o2_ppo2_sensor1,temp1
-    ; rcall   check_sensor_voting_common
-    ; incfsz  WREG                    ; Was Wreg=255?
-    ; bcf     voting_logic_sensor1    ; Yes, ignore this sensor
-    ; bsf     voting_logic_sensor2
-    ; movff   o2_ppo2_sensor2,temp1
-    ; rcall   check_sensor_voting_common
-    ; incfsz  WREG                    ; Was Wreg=255?
-    ; bcf     voting_logic_sensor2    ; Yes, ignore this sensor
-    ; bsf     voting_logic_sensor3
-    ; movff   o2_ppo2_sensor3,temp1
-    ; ;rcall   check_sensor_voting_common
-    ; incfsz  WREG                    ; Was Wreg=255?
     ; bcf     voting_logic_sensor3    ; Yes, ignore this sensor
     return
 
-; DELETE COMPLETE FUNTION, PARTS  OF THE CODE HAVE MIGRATED TO calc_deko_divemode_sensor	## voting logic
-; check_sensor_voting_common:
-    ; movf    temp1,W
-    ; cpfsgt  sensor_setpoint
-    ; bra     check_sensor_voting_common2     ; temp1<sensor_setpoint
-    ; ; temp1>sensor_setpoint
-    ; movf    temp1,W
-    ; subwf   sensor_setpoint,W
-    ; movwf   temp1
-; check_sensor_voting_common1:
-    ; movlw   sensor_voting_logic_threshold   ; Threshold in 0.01bar
-    ; cpfsgt  temp1
-    ; retlw   .255                            ; Within range
-    ; retlw   .0                              ; Out of range
-; check_sensor_voting_common2:
-    ; ; temp1<sensor_setpoint
-    ; movf    sensor_setpoint,W
-    ; subwf   temp1,F
-    ; bra     check_sensor_voting_common1
 
 	global	calibrate_mix
 calibrate_mix:
@@ -264,75 +230,6 @@ calibrate_mix2_helper:
 	movlw	HIGH	.100
 	movwf	xB+1
 	goto	div32x16		; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder (And return)
-
-
-; DELETE COMPLETE FUNTION, PARTS  OF THE CODE HAVE MIGRATED TO calc_deko_divemode_sensor	## voting logic	
-; compute_ppo2_analog:
-    ; call    get_analog_inputs
-    ; bra     compute_ppo2_common
-
-	; global	compute_ppo2			; compute mv_sensorX and ppo2_sensorX arrays
-; compute_ppo2:
-    ; btfss   analog_o2_input             ; cR hardware?
-    ; return                              ; No
-
-    ; btfss   s8_digital                  ; =1: Digital I/O
-    ; bra     compute_ppo2_analog         ; use analog
-
-    ; ; use digital
-    ; btfss   new_s8_data_available       ; =1: New data frame recieved
-    ; return
-	; rcall	compute_mvolts_for_all_sensors
-
-; compute_ppo2_common:
-	; ; o2_mv_sensor1:2 * opt_x_s1:2 = o2_ppo2_sensor1/10000
-	; movff	o2_mv_sensor1+0,xA+0
-	; movff	o2_mv_sensor1+1,xA+1
-	; movff	opt_x_s1+0,xB+0
-	; movff	opt_x_s1+1,xB+1
-	; rcall	compute_ppo2_common_helper
-	; movff	xC+0,o2_ppo2_sensor1		; result in 0.01bar
-; ;    ; Set to zero if sensor is not active!
-; ;	btfss	use_O2_sensor1
-; ;	clrf	o2_ppo2_sensor1
-
-	; ; o2_mv_sensor2:2 * opt_x_s1:2 = o2_ppo2_sensor2/10000
-	; movff	o2_mv_sensor2+0,xA+0
-	; movff	o2_mv_sensor2+1,xA+1
-	; movff	opt_x_s2+0,xB+0
-	; movff	opt_x_s2+1,xB+1
-	; rcall	compute_ppo2_common_helper
-	; movff	xC+0,o2_ppo2_sensor2		; result in 0.01bar
-; ;	; Set to zero if sensor is not active!
-; ;	btfss	use_O2_sensor2
-; ;	clrf	o2_ppo2_sensor2
-
-	; ; o2_mv_sensor3:2 * opt_x_s1:2 = o2_ppo2_sensor3/10000
-	; movff	o2_mv_sensor3+0,xA+0
-	; movff	o2_mv_sensor3+1,xA+1
-	; movff	opt_x_s3+0,xB+0
-	; movff	opt_x_s3+1,xB+1
-	; rcall	compute_ppo2_common_helper
-	; movff	xC+0,o2_ppo2_sensor3		; result in 0.01bar
-; ;	; Set to zero if sensor is not active!
-; ;	btfss	use_O2_sensor3
-; ;	clrf	o2_ppo2_sensor3
-	; return							; Done.
-
-; compute_ppo2_common_helper:
-	; call	mult16x16		;xA:2*xB:2=xC:4
-	; movlw	LOW		.1000
-	; movwf	xB+0
-	; movlw	HIGH		.1000
-	; movwf	xB+1
-	; call	div32x16  ; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
-	; movlw	d'1'
-	; addwf	xC+0,F
-	; movlw	d'0'
-	; addwfc	xC+1,F
-        ; tstfsz  xC+1                        ; ppO2 is higher then 2.55bar?
-        ; setf    xC+0                        ; Yes.
-        ; return
 
 
 	global	compute_mvolts_for_all_sensors

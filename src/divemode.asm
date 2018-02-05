@@ -504,12 +504,12 @@ calc_deko_divemode3:
 	global	calc_deko_divemode_sensor
 calc_deko_divemode_sensor:
 	; sensor acquisition code
-	btfss   s8_digital							; check if we have digital interface to the sensors
+	btfss   s8_digital				; check if we have digital interface to the sensors
 	bra     calc_deko_divemode_sensor_analog	; NO  - use analog interface
-	btfss   new_s8_data_available				; YES - check if a new data frame was received
-	bra		calc_deko_divemode_sensor_common	; NO  - use old values
+	btfss   new_s8_data_available			; YES - check if a new data frame was received
+	bra	calc_deko_divemode_sensor_common	; NO  - use old values
 	call	compute_mvolts_for_all_sensors		; YES - compute mV values from digital data
-	bra		calc_deko_divemode_sensor_common
+	bra	calc_deko_divemode_sensor_common
 
 calc_deko_divemode_sensor_analog:
 	call    get_analog_inputs					; TODO: abort when OSTC model does not have analog inputs

@@ -135,6 +135,10 @@ do_reset_average:
 do_switch_sensor:						; entry point when coming from switch to sensor
     movlw   .1                      	; Switch to Sensor
     movff   WREG,opt_ccr_mode       	; =0: Fixed SP (CCR) / calculated (pSCR), =1: Sensor,  =2: Auto SP
+    ; enable all sensors
+    bsf	    use_O2_sensor1
+    bsf	    use_O2_sensor2
+    bsf	    use_O2_sensor3
 	bra     do_switch_sp_com			; continue with common part
 	
 do_switch_sp:							; entry point when coming from manual setpoint selection (CCR)
@@ -362,7 +366,7 @@ do_divemode_sensor_loop:
     MENU_BEGIN  tGaslist, .6
         MENU_CALL       tDivemenu_UseSensor,    do_switch_sensor
 		MENU_CALL		tBack,					do_divemode_splist
-        MENU_CALL       tExit,                  do_continue_main_divemenu
+        MENU_CALL       tExit,                  do_exit_divemode_menu
 		MENU_CALL		tDiveHudMask1,			do_toggle_sensor
 		MENU_CALL		tDiveHudMask2,			do_toggle_sensor
 		MENU_CALL		tDiveHudMask3,			do_toggle_sensor
@@ -381,17 +385,17 @@ do_divemode_setpoint_pscr:
     MENU_END
 
 do_toggle_sensor:
+	movff   menupos,lo	    ; backup position
 	decf	menupos,f					; 4, 5, 6 ->  3, 4, 5
 	decf	menupos,f					; 3, 4, 5 ->  2, 3, 4
 	decf	menupos,f					; 2, 3, 4 ->  1, 2, 3
-    dcfsnz	menupos						; 1, 2, 3 ->  0, 1, 2
+	dcfsnz	menupos						; 1, 2, 3 ->  0, 1, 2
 	btg		use_O2_sensor1				;             = 
 	dcfsnz	menupos						; 0, 1, 2 -> -1, 0, 1
 	btg		use_O2_sensor2				;                =
 	dcfsnz	menupos						; -1,0, 1 -> -2,-1, 0
 	btg		use_O2_sensor3				;                   =
-    movlw   .1
-    movwf   menupos
+	movff   lo,menupos	    ; reload position
 	bra		do_divemode_sensor_loop
 
 	

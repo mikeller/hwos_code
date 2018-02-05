@@ -1623,11 +1623,11 @@ TFT_sensor_mV4:
 TFT_menu_calibrate:     				; update mV data in calibration menu
 	btfss   s8_digital					; =1: Digital I/O
 	bra     TFT_menu_calibrate_analog	; use analog
-TFT_menu_calibrate_wait:
-	btfss   new_s8_data_available       ; =1: New data frame recieved
-    bra		TFT_menu_calibrate_wait
+	btfss   new_s8_data_available       ; New data frame recieved?
+	bra	TFT_menu_calibrate_common   ; No, use old values...
+	; Yes. Update the values
 	call	compute_mvolts_for_all_sensors
-	bra		TFT_menu_calibrate_common
+	bra	TFT_menu_calibrate_common
 TFT_menu_calibrate_analog:
 	call    get_analog_inputs
 TFT_menu_calibrate_common:
