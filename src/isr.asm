@@ -360,7 +360,7 @@ isr_tmr7_c:
         btfss   s8_digital
         bra     isr_tmr7_2              ; only when digital
 isr_tmr7_1a:
-        clrf    o2_mv_sensor1+0
+        clrf    o2_mv_sensor1+0		; S8/IR timeout clears all analog input readings to zero -> Fallback will be triggered when sensor mode was used
         clrf    o2_mv_sensor1+1
         clrf    o2_mv_sensor2+0
         clrf    o2_mv_sensor2+1
@@ -371,7 +371,7 @@ isr_tmr7_1a:
         clrf    hud_battery_mv+1
         banksel hud_status_byte
         clrf    hud_status_byte
-        clrf    o2_ppo2_sensor1
+        clrf    o2_ppo2_sensor1		; For IR/S8 HUD
         clrf    o2_ppo2_sensor2
         clrf    o2_ppo2_sensor3
 

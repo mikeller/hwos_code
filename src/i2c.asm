@@ -29,6 +29,7 @@
 ;=============================================================================
 ; HISTORY
 ;  2012-08-22 : [mH] Creation
+;  2018-02-18 : [mH] Sync with hwOS Sport release
 
 
 #include "hwos.inc"                ; Mandatory header

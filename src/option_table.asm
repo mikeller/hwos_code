@@ -231,8 +231,8 @@ option_table_begin:
     OPTION_BOOL     oSafetyStop,    0,                            .148,    opt_enable_safetystop            ; =1: A safety stop is shown
     OPTION_UINT8    oCalGasO2,      .21,.100,   .21,    tPercent, .149,    opt_calibration_O2_ratio         ; Calibration gas %O2 (Do not move in EEPROM, must stay at .149!)
     OPTION_BOOL     oFlipScreen,    0,                            .151,    opt_flip_screen                  ; =1: Flip the screen
-    OPTION_UINT8p10 ocR_button_left, .20, .100,   .40,  tPercent, .152,    opt_cR_button_left               ; left button sensitivity
-    OPTION_UINT8p10 ocR_button_right,.20, .100,   .40,  tPercent, .153,    opt_cR_button_right              ; right button sensitivity
+    OPTION_UINT8p10 ocR_button_left, .20, .80,   .40,  tPercent, .152,    opt_cR_button_left               ; left button sensitivity
+    OPTION_UINT8p10 ocR_button_right,.20, .80,   .40,  tPercent, .153,    opt_cR_button_right              ; right button sensitivity
     OPTION_UINT8    obottom_usage,  .5,.50,   .20,tLitersMinute,  .154,    char_I_bottom_usage              ; l/min
     OPTION_UINT8    odeco_usage,    .5,.50,   .20,tLitersMinute,  .155,    char_I_deco_usage                ; l/min
     OPTION_BOOL     oMODwarning,    0,                            .156,    opt_modwarning                   ; =1: red depth blinking warning

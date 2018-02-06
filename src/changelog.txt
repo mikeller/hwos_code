@@ -1,6 +1,6 @@
-[2.96]
-- Beta Version -
-
+[2.97]
+- Stable Version -
+CHANGE: Limit button sensitivity to 80%
 
 [2.27]
 - Beta Version -
