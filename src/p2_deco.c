@@ -1378,6 +1378,7 @@ static void calc_hauptroutine(void)
 	// check for safe range of breathed gas
 	if		( int_O_breathed_ppO2 <=           int_ppO2_min    ) int_O_breathed_ppO2 |= INT_FLAG_WARNING + INT_FLAG_LOW;
 	else if ( int_O_breathed_ppO2 >=           int_ppO2_max    ) int_O_breathed_ppO2 |= INT_FLAG_WARNING + INT_FLAG_HIGH;
+	else if ( char_O_main_status  &            DECO_MODE_LOOP  ) ; // no attention generated in loop modes
 	else if ( int_O_breathed_ppO2 >= ppO2_prewarn_threshold    ) int_O_breathed_ppO2 |= INT_FLAG_PREWARNING;
 		
 	// check for safe range of pure diluent
@@ -2377,9 +2378,10 @@ static void calc_limit(void)
 		char_O_deco_warnings |= (DECO_WARNING_IBCD + DECO_WARNING_IBCD_lock);
 	}
 	
-	// check if is any tissue off-gassing
-	if	(deco_tissue_vector) char_O_deco_warnings |=  DECO_FLAG;	// yes,  set deco flag
-	else                     char_O_deco_warnings &= ~DECO_FLAG;	// no, clear deco flag 
+	// set   deco flag if we are in deco and at least one of the real tissues is off-gassing
+	// clear deco flag if all of the real tissues are on-gassing
+	if      ( (NDL_time == 0) &&  deco_tissue_vector ) char_O_deco_warnings |=  DECO_FLAG;
+	else if (                    !deco_tissue_vector ) char_O_deco_warnings &= ~DECO_FLAG; 
 
 
     assert( char_O_gtissue_no < NUM_COMP );
