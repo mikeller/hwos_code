@@ -2380,7 +2380,7 @@ static void calc_limit(void)
 	
 	// set   deco flag if we are in deco and at least one of the real tissues is off-gassing
 	// clear deco flag if all of the real tissues are on-gassing
-	if      ( (NDL_time == 0) &&  deco_tissue_vector ) char_O_deco_warnings |=  DECO_FLAG;
+	if      ( (char_O_nullzeit == 0) &&  deco_tissue_vector ) char_O_deco_warnings |=  DECO_FLAG;
 	else if (                    !deco_tissue_vector ) char_O_deco_warnings &= ~DECO_FLAG; 
 
 
