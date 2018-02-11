@@ -374,7 +374,9 @@ isr_tmr7_1a:
         clrf    o2_ppo2_sensor1		; For IR/S8 HUD
         clrf    o2_ppo2_sensor2
         clrf    o2_ppo2_sensor3
-
+	banksel	common
+	bsf     new_s8_data_available   ; set flag to update in surface mode
+	
 isr_tmr7_2:
         banksel common
 		btfss	no_sensor_int			; No sensor interrupt (because it's addressed during sleep)
