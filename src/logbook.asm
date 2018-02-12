@@ -472,6 +472,7 @@ display_profile2:
 	call        TFT_display_decotype_surface1	; "strcat_print"s divemode (OC, CC, APNEA or GAUGE)
 	
 	WIN_SMALL	logbook_time_column, logbook_time_row
+	LOG_POINT_TO	log_time
 	call		ext_flash_byte_read_plus		; hour
 	movff		temp1,lo
 	call		ext_flash_byte_read_plus		; Minutes
