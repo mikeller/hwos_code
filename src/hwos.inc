@@ -15,7 +15,7 @@
 
 ;#DEFINE __DEBUG
 
-#DEFINE french_italian	    	; If defined, use french and italian instead of english and german	
+;#DEFINE french_italian	    	; If defined, use french and italian instead of english and german	
 	
 #include <p18f87k22.inc>
 #include <ports.inc>                        ; Portmap
@@ -23,7 +23,7 @@
 ; Firmware definition
 #DEFINE	softwareversion_x		d'2'		; Software version  XX.YY
 #DEFINE	softwareversion_y		d'97'		; Software version  XX.YY
-#DEFINE softwareversion_beta 	1 			; (and 0 for release)
+#DEFINE softwareversion_beta 	0 			; (and 0 for release)
 
 ; Firmware version will appear in "Change Firmware" style
 #DEFINE firmware_expire_year    .18
@@ -80,7 +80,7 @@
 #DEFINE warn_stop			.9
 
 ; External O2 cell input parameters
-#DEFINE	min_mv				.80			; = 8mV
+#DEFINE	min_mv		    .80		; = 8mV
 #DEFINE max_mv              .2500       ; = 250mV
 #DEFINE ignore_mv           .3500       ; = 350mV (To suppress ghost readings for long, open cables)
 
