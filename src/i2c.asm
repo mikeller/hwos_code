@@ -591,9 +591,22 @@ I2C_init_compass1:
     movlw	b'01100100'	; CTRL5 HIGH res, 6,25Hz
     rcall       I2C_TX
 init_compass1_common:
+    movff       opt_compass_gain,i2c_temp    ; 0-7 (230LSB/Gauss to 1370LSB/Gauss)
     movlw	b'01100000'	; CTRL6 Full scale (+/-12 Gauss -> 2730LSB/Gauss)
-    ;movlw	b'00000000'	; CTRL6 (+/-2 Gauss)
-    ;movlw	b'00100000'	; CTRL6 (+/-4 Gauss)
+    dcfsnz	i2c_temp,F	; = 1?
+    movlw	b'01100000'	; Yes, CTRL6 Full scale (+/-12 Gauss -> 2730LSB/Gauss)
+    dcfsnz	i2c_temp,F	; = 2?
+    movlw	b'01000000'	; Yes, CTRL6 (+/-8 Gauss)
+    dcfsnz	i2c_temp,F	; = 3?
+    movlw	b'01000000'	; Yes, CTRL6 (+/-8 Gauss)
+    dcfsnz	i2c_temp,F	; = 4?
+    movlw	b'00100000'	; Yes, CTRL6 (+/-4 Gauss)
+    dcfsnz	i2c_temp,F	; = 5?
+    movlw	b'00100000'	; Yes, CTRL6 (+/-4 Gauss)
+    dcfsnz	i2c_temp,F	; = 6?
+    movlw	b'00000000'	; Yes, CTRL6 (+/-2 Gauss)
+    dcfsnz	i2c_temp,F	; = 7?
+    movlw	b'00000000'	; Yes, CTRL6 (+/-2 Gauss)
     rcall       I2C_TX
     movlw	b'00000000'	; CTRL7 Continuous Mode
     rcall       I2C_TX
@@ -751,12 +764,12 @@ I2C_init_accelerometer2:
     rcall       I2C_TX
     movlw	b'00000000'	; CTRL_REG2_A
     rcall       I2C_TX
-    movlw	b'00000000'	; CTRL_REG3_A
-    rcall       I2C_TX
-    movlw	b'00000000'	; CTRL_REG4_A (BDU=0, +/-2g, 
-    rcall       I2C_TX
-    movlw	b'00000000'	; CTRL_REG5_A
-    rcall       I2C_TX
+;    movlw	b'00000000'	; CTRL_REG3_A
+;    rcall       I2C_TX
+;    movlw	b'00000000'	; CTRL_REG4_A (BDU=0, +/-2g, 
+;    rcall       I2C_TX
+;    movlw	b'00000000'	; CTRL_REG5_A
+;    rcall       I2C_TX
     bsf		SSP1CON2,PEN		; Stop condition
     bra		WaitMSSP	; (And return)
 
@@ -1001,10 +1014,9 @@ I2C_TX_GAUGE:					; Sends a byte to the LT2942 Gauge IC
 	movwf	SSP1BUF				; control byte
 	rcall	WaitMSSP
 	rcall	I2C_WaitforACK
-	movff	i2c_temp+1, SSP1BUF	; Data Byte
-	rcall	WaitMSSP
-	bra	I2C_WaitforACK ; (and return)
-
+	movf	i2c_temp+1,W
+	bra	I2C_TX		; (and return)
+	
 I2C_RX_GAUGE:
 	bsf		SSP1CON2,SEN		; Start condition
 	rcall	WaitMSSP

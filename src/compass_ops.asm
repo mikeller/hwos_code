@@ -219,12 +219,13 @@ compass_calibration_gainset:            ; Reduce the gain, set bank here!
     call    I2C_init_accelerometer
     call    I2C_init_compass
     
-    btfsc   compass_type	    ; compass1?
-    bra	    compass_calibration_loop1	; Yes, skip gain stuff
+;    btfsc   compass_type	    ; compass1?
+;    bra	    compass_calibration_loop1	; Yes, skip gain stuff
 
-;    rcall   TFT_compass_show_gain       ; Show the current compass gain
+    rcall   TFT_compass_show_gain       ; Show the current compass gain
 
-    WAITMS  d'100'
+    WAITMS  d'250'
+    WAITMS  d'250'		; Wait for first reading...
 
  	clrf	timeout_counter2
 	clrf 	timeout_counter3
@@ -276,8 +277,8 @@ compass_calibration_loop2:
     rcall   compass_filter              ; Filter compass raw data
     banksel common
     
-    btfsc   compass_type	    ; compass1?
-    bra	    compass_calibration_loop3	; Yes, skip gain stuff
+;    btfsc   compass_type	    ; compass1?
+;    bra	    compass_calibration_loop3	; Yes, skip gain stuff
 
     ; Test all axes for +4096 (Hi byte=16)
     banksel compass_DX+1
@@ -387,16 +388,16 @@ TFT_show_timeout_testmode:              ; With timeout in WREG...
     
 
 TFT_compass_show_gain:       ; Show the current compass gain
-    movff   opt_compass_gain,lo    ; 0-7 (230LSB/Gauss to 1370LSB/Gaus)
-    tstfsz  lo
-    return                         ; Do not show unless gain=0
+;    movff   opt_compass_gain,lo    ; 0-7 (230LSB/Gauss to 1370LSB/Gaus)
+;    tstfsz  lo
+;    return                         ; Do not show unless gain=0
 	WIN_TINY	.20,.86
     STRCPY_TEXT  tCompassGain
     movff   opt_compass_gain,lo    ; 0-7 (230LSB/Gauss to 1370LSB/Gaus)
     bsf     leftbind
     output_8
     bcf     leftbind
-    STRCAT_PRINT "!"
+    STRCAT_PRINT ""
     return
 
 TFT_surface_compass_bearing:

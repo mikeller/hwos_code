@@ -73,7 +73,8 @@ TFT_warnings_color_dive:
 
     global  TFT_disabled_color
 TFT_disabled_color:
-    movlw   color_grey          			; Default to OSTC grey (dark blue)
+    ;movlw   color_grey          			; Default to OSTC grey (dark blue)
+    movlw   color_lightblue
     btfsc   divemode            			; in Divemode?
     rcall   TFT_disabled_color_dive
     bra		TFT_standard_color0

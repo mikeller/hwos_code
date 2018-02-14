@@ -1,6 +1,10 @@
 [2.97]
 - Stable Version -
 CHANGE: Limit button sensitivity to 80%
+BUGFIX: Auto-Gain for newer compass versions did not work (Which decreased accuracy of heading)
+CHANGE: Make disabled gases darker in surface mode (Common issue for color-blind divers)
+CHANGE: French and Italien language updates
+NEW: Independent saturation/desaturation multipliers for GF and non-GF Deco modes
 
 [2.27]
 - Beta Version -

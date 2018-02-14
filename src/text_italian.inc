@@ -119,7 +119,7 @@
     TCODE   tDvMode,    "Modo Dive:"
     TCODE   tDvOC,      "OC"
 	TCODE	tDvCCR,		"CCR"
-    TCODE   tDvGauge,   "Manom."
+    TCODE   tDvGauge,   "Gauge"
     TCODE   tDvApnea,   "Apnea"
     TCODE   tDvPSCR,	"pSCR"
     TCODE   tDvCC,      "CC"
@@ -165,14 +165,14 @@
     TCODE   tMedium,    "Media"
     TCODE   tHigh,      "Alta"
     TCODE   tDvSalinity,"Salinita':"            ; Salinity
-	TCODE   tShowppO2,  "Mostra sempre ppO2:"     ; Always show ppO2:
+	TCODE   tShowppO2,  "ppO2 Permanente:"     ; Always show ppO2:
     TCODE   tFlip,      "Ruotare schermo:"      ; Rotate Screen
     TCODE   tMODwarning,"Avvertimento MOD:"          ; MOD warning
-	TCODE	tIBCDwarning,	"Avvertimento IBCD :"	; IBCD Warning					## NEW IBCD
-    TCODE   tTimeoutDive,"Dive Timeout:"	; Dive Timeout
+	TCODE	tIBCDwarning,	"Avvertimento IBCD:"	; IBCD Warning					## NEW IBCD
+    TCODE   tTimeoutDive,"Timeout Immsni:"	; Dive Timeout
 
 ; VSI display Settings
-    TCODE   tVSItext2,  "Velocita' Variabile:"     ; Variable speed:
+    TCODE   tVSItext2,  "Velox Variabile:"     ; Variable speed:
     TCODE   tVSIgraph,  "Grafico Velocita':"        ; Speed graph:
 
 ; Setup Menu
@@ -194,8 +194,8 @@
 
     TCODE   tDefName,   "HW OSTC"
 
-    TCODE   tButtonleft,"Bottone sinistra:"      ; Left button
-    TCODE   tButtonright,"Bottone destra:"    ; Right button
+    TCODE   tButtonleft,"Bottone Sx:"      ; Left button
+    TCODE   tButtonright,"Bottone Dx:"    ; Right button
 
 	TCODE	tAltMode,		"Attesa:"		;								## NEW no fly altitude
 	TCODE	tAltModeFly,	"Volo"			;								## NEW no fly altitude
@@ -230,7 +230,7 @@
     TCODE   tBtTm_short,"Tempo:"               ; Bot. Time: (max. 6 chars)
     TCODE   tMxDep, 	"Profond. Max:"        ; Max Depth: (10 chars)
     TCODE   tIntvl, 	"Int.Superf. :"        ; Interval : (10 chars)
-	TCODE	tDecoSetup,	"Calculator Setup"	;									## NEW (layout)
+	TCODE	tDecoSetup,	"Setta Calcoli"	;									## NEW (layout)
     TCODE   tDeco,  	"Calcola Deco"         ; Calculate Deco
     TCODE   tDivePlan,  "Pianificat:"          ; Dive Plan:
     TCODE   tNoDeco,    "No Deco"              ; No Deco
@@ -242,7 +242,7 @@
 ; Information menu
     TCODE   tFirmware,  "Firmware: "        ; Firmware: (space)
     TCODE   tSerial,    "Seriale : "        ; Serial  : (space)
-	TCODE	tTotalDives,"Totale Immersioni:"		; Total Dives:
+	TCODE	tTotalDives,"Tot Immersioni:"		; Total Dives:
     TCODE   tBatteryV,  "Batteria: "        ; Battery:
     TCODE   tUptime,	"Uptime: "	    ; Uptime: 
 
@@ -259,9 +259,9 @@
     TCODE   tDepth,      "Prof."            ; Depth
     TCODE   tMaxDepth,   "Prof. Max"        ; Max. Depth - max 10chars!
     TCODE   tDivetime,   "Divetime"         ; Divetime
-    TCODE   tDiveHudMask1,  "Sensor 1"
-    TCODE   tDiveHudMask2,  "Sensor 2"
-    TCODE   tDiveHudMask3,  "Sensor 3"
+    TCODE   tDiveHudMask1,  "Sensore 1"
+    TCODE   tDiveHudMask2,  "Sensore 2"
+    TCODE   tDiveHudMask3,  "Sensore 3"
     TCODE   tDiveTotalAvg,  "Media"
     TCODE   tDiveStopwatch, "Cronometro"
     TCODE   tDiveStopAvg,   "Media Inter"   ; 11chars max
@@ -283,10 +283,10 @@
     TCODE   tDiveSafetyStop,"Stop"			; Stop (Four chars, right alligned)
     TCODE   tDiveFallback,  "Fallback!"     ; Fallback! (max. nine chars)
 	TCODE	tDecoInfo,		"Zona Deco"		; Deco info
-    TCODE   tSensorCheck,   "Sensor Check"  ; Sensor Check
+    TCODE   tSensorCheck,   "Testa Sensori"  ; Sensor Check
     TCODE   tdil,	    "Dil:"	    ; Diluent ppO2 Warning
 	TCODE	tmix,			"Mix:"			; Pre-Mix ppO2 Warning
-    TCODE   tSensorDisagree,"Sensors<>"	    ; Sensors disagree Warning		## NEW voting logic
+    TCODE   tSensorDisagree,"Sensori<>"	    ; Sensors disagree Warning		## NEW voting logic
     TCODE   tGasNeedsWarn,  "Gas Necess."	    ;					## NEW bailout gas needs
     TCODE   tGasNeedsBar,   "Gas Necess. (bar)"	;				## NEW bailout gas needs
     TCODE   tCNSsurf,	    "CNS Surf."	    ;					## NEW CNS at end-of-dive
