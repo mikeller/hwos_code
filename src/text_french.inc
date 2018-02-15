@@ -130,7 +130,7 @@
     TCODE   tPPO2DECO,	"PpO2 Déco:"
     TCODE   tPPO2MIN,   "PpO2 Min :"
     TCODE   tPPO2MINCC, 	"Min Loop :"			; 								## NEW ppO2 min cc
-    TCODE   tLastDecostop, "Dern. Palier:"
+    TCODE   tLastDecostop, "Dern.Palier:"
     TCODE   tDecoparameters, "Paramètres Déco"
     TCODE   tGF_low,    "GF Bas:"
     TCODE   tGF_high,   "GF Haut:"
@@ -230,7 +230,7 @@
     TCODE   tBtTm_short,"Temps:"				; Bot. Time: (max. 6 chars)
     TCODE   tBtDep, 	"Prof. Max:"			; Max Depth: (10 chars)
     TCODE   tIntvl, 	"Intervalle:"			; Interval :  (10 chars)
-	TCODE	tDecoSetup,	"Config.Calculatrice"		;								## NEW (layout)
+	TCODE	tDecoSetup,	"Réglage Ordinateur"		;								## NEW (layout)
     TCODE   tDeco,  	"Calcul Déco"			; Calculate Deco
     TCODE   tDivePlan,  "Runtime:"				; Dive Plan:
     TCODE   tNoDeco,    "Pas de Déco"			; No Deco
@@ -244,7 +244,7 @@
     TCODE   tSerial,    "N° Série:"			; Serial  : (space)
 	TCODE	tTotalDives,"Nbre Plongées:"		; Total Dives: (space)
     TCODE   tBatteryV,  "Batterie:"			; Battery:
-    TCODE   tUptime,	"Mise à Jour:"				; Uptime: 
+    TCODE   tUptime,	"Mise a Jour:"				; Uptime: 
 
 ; Divemode screen
     TCODE   tNDL,       "NDL"
@@ -282,7 +282,7 @@
     TCODE   tCeiling,       "Plafond"			; Ceiling
     TCODE   tDiveSafetyStop,"Stop"				; Stop (Four chars, right alligned)
     TCODE   tDiveFallback,  "Fallback!"			; Fallback! (max. nine chars)
-	TCODE	tDecoInfo,		"Info Déco"			; Deco info
+	TCODE	tDecoInfo,		"Zone Déco"			; Deco info
     TCODE   tSensorCheck,   "Ctrl Cell. "		; Sensor Check
     TCODE   tdil,	    	"Dil:"				; Diluent ppO2 Warning
 	TCODE	tmix,			"Mix:"				; Pre-Mix ppO2 Warning

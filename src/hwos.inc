@@ -15,7 +15,7 @@
 
 ;#DEFINE __DEBUG
 
-;#DEFINE french_italian	    	; If defined, use french and italian instead of english and german	
+#DEFINE french_italian	    	; If defined, use french and italian instead of english and german	
 	
 #include <p18f87k22.inc>
 #include <ports.inc>                        ; Portmap
