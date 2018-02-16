@@ -17,12 +17,12 @@
 	TCODE	tMenu,		"<Menu" 		; <Menu
     TCODE   tView,      "Vedi>"         ; View>
     TCODE   tHeading,   "Direzione:"    ; Heading:
-    TCODE   tLastDive,	"UltimaDive"	; Last Dive (Max 10 chars)
+    TCODE   tLastDive,	"UltimaImm."	; Last Dive (Max 10 chars)
     TCODE   tSensorMilliVolt, "CCR Sensori mV" ; CCR Sensors mV
 
 ; Divemode Menu
     TCODE   tDivemenu_Gaslist,  "Lista Gas"       ; Gaslist
-    TCODE   tDivemenu_ResetAvg, "Azzera Media"  ; Reset Avg.
+    TCODE   tDivemenu_ResetAvg, "AzzeraMed"  ; Reset Avg.
     TCODE   tDivemenu_Setpoint, "Setpoint"      ; Setpoint
     TCODE   tDivemenu_UseSensor,"Usa Sensori"    ; Use Sensor
     TCODE   tDivemenu_ToggleGF, "Alterna GF"     ; Toggle GF
@@ -40,8 +40,8 @@
 	TCODE	tSetDate,	"Imposta Data"		; Set Date
 	TCODE	tSetTimeDate,"Imp. Ora e Data"; Set Time & Date
     TCODE   tDispSets,  "Visualizzazione" ; Display Settings
-    TCODE   tExit,      "Uscita"          ; Exit
-	TCODE	tResetMenu, "Menu Reset"	; Reset Menu
+    TCODE   tExit,      "Esci"          ; Exit
+	TCODE	tResetMenu, "Resetta Menu"	; Reset Menu
 	TCODE	tDiveModeMenu,"Modalita' Deco"	; Deco Mode
 	TCODE	tInfoMenu,	"Informazioni"	; Information
     TCODE   tCCRSetup,  "Imposta CCR"     ; CCR Setup
@@ -116,7 +116,7 @@
     TCODE   tUsbLlBld,      "Livello-basso Bootloader"
 
 ; Dive Settings
-    TCODE   tDvMode,    "Modo Dive:"
+    TCODE   tDvMode,    "Tipo Dive:"
     TCODE   tDvOC,      "OC"
 	TCODE	tDvCCR,		"CCR"
     TCODE   tDvGauge,   "Gauge"
@@ -132,23 +132,23 @@
 	TCODE	tPPO2MINCC, 	"Min Loop:"			; 								## NEW ppO2 min cc
     TCODE   tLastDecostop, "Ultima Deco:"
     TCODE   tDecoparameters, "Parametri Deco"
-    TCODE   tGF_low,    "GF basso:"
-    TCODE   tGF_high,   "GF alto:"
+    TCODE   tGF_low,    "GF Basso:"
+    TCODE   tGF_high,   "GF Alto:"
     TCODE   tSaturationMult,    "Saturazione:"
     TCODE   tDesaturationMult,  "Desaturazione:"
     TCODE   tFTTSMenu,  "TTS Futuro:"            ; Future TTS
     TCODE   taGFMenu,   "GF Alternativo"         ; Alternative GF
-    TCODE   taGF_low,   "aGF basso:"               ; aGF low
-    TCODE   taGF_high,  "aGF alto:"              ; aGF high
+    TCODE   taGF_low,   "aGF Basso:"               ; aGF low
+    TCODE   taGF_high,  "aGF Alto:"              ; aGF high
     TCODE   taGF_enable,"aGF Selezionabile:"        ; aGF Selectable
     TCODE   tDiveaGF_active,"aGF!"          ; aGF!
     TCODE   tppO2settings,"Menu ppO2"        ; ppO2 Settings (max. 18 chars)
-    TCODE   tsafetystopmenu,"Usa tappa sicur:"       ; Safety Stop: (max. 16 chars)
+    TCODE   tsafetystopmenu,"Tappa Sicurezza:"       ; Safety Stop: (max. 16 chars)
 	TCODE   tGasUsage,  	"Utilizzo Gas"         ; Gas Usage
-    TCODE   tSetBotUse, 	"Gas di Fondo: "      ; Bottom Gas: (space)
-    TCODE   tSetDecoUse,	"Gas Deco: "      ; Deco   Gas: (space)			## MODIFIED (layout)
+    TCODE   tSetBotUse, 	"Gas Fondo: "      ; Bottom Gas: (space)
+    TCODE   tSetDecoUse,	"Gas Deco : "      ; Deco   Gas: (space)			## MODIFIED (layout)
 	TCODE	tCalcAscGas,	 "Calc.Gas (B/O):"	;								## NEW bailout gas needs
-	TCODE	tTankSizes,		 "Volume Bombola"		;								## NEW bailout gas needs
+	TCODE	tTankSizes,		 "Capac. Bombola"		;								## NEW bailout gas needs
 	TCODE   tLiter,			 " l"				;								## NEW bailout gas needs 
 	TCODE	tTankFillPress,	 "Press. Bombola";								## NEW bailout gas needs
 	TCODE	tGas1,			 "Gas 1:"			;								## NEW bailout gas needs
@@ -166,7 +166,7 @@
     TCODE   tHigh,      "Alta"
     TCODE   tDvSalinity,"Salinita':"            ; Salinity
 	TCODE   tShowppO2,  "ppO2 Permanente:"     ; Always show ppO2:
-    TCODE   tFlip,      "Ruotare schermo:"      ; Rotate Screen
+    TCODE   tFlip,      "Ruota schermo:"      ; Rotate Screen
     TCODE   tMODwarning,"Avvertimento MOD:"          ; MOD warning
 	TCODE	tIBCDwarning,	"Avvertimento IBCD:"	; IBCD Warning					## NEW IBCD
     TCODE   tTimeoutDive,"Timeout Immsni:"	; Dive Timeout
@@ -222,7 +222,7 @@
 	TCODE	tDateformat2,"AAMMGG"
 
 ; Simulator menu
-    TCODE   tInter, 	"Start Simulatore"     ; Start Simulator
+    TCODE   tInter, 	"Avvia Simulatore"     ; Start Simulator
     TCODE   tPlan,  	"Simulatore"           ; Simulator
 
 ; Decoplanner submenu
@@ -300,7 +300,7 @@
 	
 ; Divemode menu
     TCODE   tDivePreMenu,   "Menu?"         ; Menu?
-    TCODE   tSetHeading,    "Direz."        ; Bearing (Max. seven chars)
+    TCODE   tSetHeading,    "Salva"        ; Bearing (Max. seven chars)
 
 ; Simulator menu
 	TCODE	tQuitSim,	 "Uscire"            ; Quit Simulation?
@@ -355,7 +355,7 @@
     TCODE   tNW,            "NO"                ; North-West,293°-337°
 
 ; Color Scheme menu
-    TCODE   tColorScheme,   "Schema di colori"  ; Colour scheme
+    TCODE   tColorScheme,   "Schema colori"  ; Colour scheme
     TCODE   tColorSetDive,  "Immersione:"       ; Divemode:
     TCODE   tColorSetName0, "Standard"          ; Standard
     TCODE   tColorSetName1, "Rosso"             ; Red

@@ -299,7 +299,7 @@ menuview_toggle_reset:                      ; Timeout occurred
     clrf    menupos2
     bcf     menuview
 menuview_mask:
-    WIN_BOX_BLACK   dm_simtext_row, dm_simtext_row+.23, dm_simtext_column, dm_simtext_column+.45 ; top, bottom, left, right - old value was .49
+    WIN_BOX_BLACK   dm_simtext_row, dm_simtext_row+.23, dm_simtext_column, dm_simtext_column+.49 ; top, bottom, left, right
     btfss   FLAG_gauge_mode
     bra     menuview_mask2
     ; Clear some more in gauge mode  -- "Reset Avg." text is longer than normal simtext
