@@ -144,7 +144,7 @@
     TCODE   tDiveaGF_active,"aGF!"          ; aGF!
     TCODE   tppO2settings,"Menu ppO2"        ; ppO2 Settings (max. 18 chars)
     TCODE   tsafetystopmenu,"Tappa Sicurezza:"       ; Safety Stop: (max. 16 chars)
-	TCODE   tGasUsage,  	"Utilizzo Gas"         ; Gas Usage
+	TCODE   tGasUsage,  	"Util.Gas"         ; Gas Usage
     TCODE   tSetBotUse, 	"Gas Fondo: "      ; Bottom Gas: (space)
     TCODE   tSetDecoUse,	"Gas Deco : "      ; Deco   Gas: (space)			## MODIFIED (layout)
 	TCODE	tCalcAscGas,	 "Calc.Gas (B/O):"	;								## NEW bailout gas needs
