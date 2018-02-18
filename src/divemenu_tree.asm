@@ -181,7 +181,6 @@ do_divemode_gaslist_bail:				; entry point from CCR/pSCR to bailout to OC gases
 do_divemode_gaslist:					; entry point for switching: OC -> gases, loop -> diluents
 	btfsc	is_bailout              	; in bailout mode?
 	bcf		ccr_diluent_setup       	; yes - for safety reasons, redirect to OC (bailout) gases
-do_divemode_gaslist_com:    
 	bsf		short_gas_decriptions
 	movlw	.1
 	movwf	menupos						; Set to first option in divemode menu
@@ -252,29 +251,33 @@ do_toggle_active:
 	call	restart_deco_engine_wo_ceiling
     movlw   .5
     btfsc   ccr_diluent_setup			; diluents?
-    addwf   menupos,F					; yes 1-5 -> 6-10
-    decf    menupos,W					; -> 0-4 for gases / 5-9 for diluents
+    addwf   menupos,F				; yes 1-5 -> 6-10
+    decf    menupos,W				; -> 0-4 for gases / 5-9 for diluents
     lfsr    FSR1,opt_gas_type+0
     movff   PLUSW1,lo
-    tstfsz  lo							; Already disabled?
+    tstfsz  lo					; Already disabled?
     bra     do_toggle_active2			; No, disable now!
-    lfsr    FSR1,opt_gas_type_backup+0	; copy opt_gas_type_backup+W back to opt_gas_type+W
+    lfsr    FSR1,opt_gas_type_backup+0		; copy opt_gas_type_backup+W back to opt_gas_type+W
     movff   PLUSW1,lo
     lfsr    FSR1,opt_gas_type+0
     movff   lo,PLUSW1
+;    btfsc   ccr_diluent_setup			; diluents?
+;    bra	    do_toggle_active3			; Yes, ignore restoring change depth (Work-around for potential issue) mH
     lfsr    FSR1,opt_OC_bail_gas_change_backup+0 ; copy opt_OC_bail_gas_change_backup+W back to opt_OC_bail_gas_change+W
     movff   PLUSW1,lo
-	lfsr    FSR1,opt_OC_bail_gas_change+0
-    movff   lo,PLUSW1
-	bra		do_toggle_active3
-do_toggle_active2:
-    clrf    PLUSW1						; 0=Disabled, 1=First, 2=Travel, 3=Deco
     lfsr    FSR1,opt_OC_bail_gas_change+0
-    clrf    PLUSW1						; also delete change depth here to have the menu updated immediately
+    movff   lo,PLUSW1
+    bra	    do_toggle_active3
+do_toggle_active2:
+;    btfsc   ccr_diluent_setup			; diluents?
+;    bra	    do_toggle_active3			; Yes, ignore restoring change depth (Work-around for potential issue) mH
+    clrf    PLUSW1				; 0=Disabled, 1=First, 2=Travel, 3=Deco
+    lfsr    FSR1,opt_OC_bail_gas_change+0
+    clrf    PLUSW1				; also delete change depth here to have the menu updated immediately
 do_toggle_active3:
     movlw   .5
     btfsc   ccr_diluent_setup			; use OC gases?
-    subwf   menupos,F					; Back to 1-5 
+    subwf   menupos,F				; Back to 1-5 
     bra     do_lost_gas_loop			; Return to list and show updated result
 
 

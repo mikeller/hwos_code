@@ -15,7 +15,7 @@
 
 ;#DEFINE __DEBUG
 
-#DEFINE french_italian	    	; If defined, use french and italian instead of english and german	
+;#DEFINE french_italian	    	; If defined, use french and italian instead of english and german	
 	
 #include <p18f87k22.inc>
 #include <ports.inc>                        ; Portmap
@@ -643,7 +643,7 @@ opt_salinity            res 1	; 0-5%
 opt_name                res opt_name_length
 opt_language            res 1   ; Current language. 0=EN, 1=DE, 2=FR, 3=SP
 opt_units               res 1   ; 0:m/°C, 1:ft/°F
-opt_dateformat			res	1	; =0:MMDDYY, =1:DDMMYY, =2:YYMMDD
+opt_dateformat		res 1	; =0:MMDDYY, =1:DDMMYY, =2:YYMMDD
 opt_last_stop           res 1   ; =3:3m, =4:4m, =5:5m, =6:6m
 opt_aGF_high            res 1   ; Alternative GF HIGH
 opt_aGF_low             res 1   ; Alternative GF LOW
@@ -656,9 +656,9 @@ opt_dive_color_scheme   res 1   ; 0-3
 opt_pressure_adjust     res 1   ; SIGNED int (two's complement), -20/+20mbar max.
 opt_enable_safetystop   res 1   ; =1: A safety stop is shown
 opt_calibration_O2_ratio    res 1   ; %O2 of calibration gas
-opt_x_s1                res	2	; calibration factor (Not stored in EEPROM)
-opt_x_s2                res	2	; calibration factor (Not stored in EEPROM)
-opt_x_s3                res	2	; calibration factor (Not stored in EEPROM)
+opt_x_s1                res 2	; calibration factor (Not stored in EEPROM)
+opt_x_s2                res 2	; calibration factor (Not stored in EEPROM)
+opt_x_s3                res 2	; calibration factor (Not stored in EEPROM)
 opt_sensor_fallback     res 1   ; NOT USED ANY MORE, KEPT FOR COMPATIBILITY WITH EEPROM IMAGE
 opt_flip_screen         res 1   ; =1: Flip the screen
 opt_cR_button_left      res 1   ; Left button sensitivity (cR hardware)
