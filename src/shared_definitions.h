@@ -178,7 +178,6 @@ VAR_UCHAR (char_I_sim_advance_time);	   // 'fast forward' of dive time, used in 
 VAR_UCHAR (char_I_const_ppO2);             // ppO2 reported from sensors or by setpoint
 
 TAB_UCHAR (char_I_deco_gas_change,NUM_GAS); // change depths of the OC gases
-TAB_UCHAR (char_I_dil_change,     NUM_GAS); // change depths of the diluent gases. Attention: must be placed after char_I_deco_gas_change!	Remark: not used by C code, only by ASM code
 
 TAB_UCHAR (char_I_setpoint_change,NUM_GAS); // change depth for the setpoints in meter
 TAB_UCHAR (char_I_setpoint_cbar,  NUM_GAS); // setpoints in cbar

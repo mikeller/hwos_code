@@ -91,7 +91,7 @@ lbl:    db      2, LOW(defText)         ; Type2 = STRING
 
 ;=============================================================================
         extern  tPercent, tMeters, tMinutes, tGasDisabled, tbar
-        extern  char_I_deco_gas_change, char_I_setpoint_change, char_I_setpoint_cbar, char_I_dil_change
+        extern  char_I_deco_gas_change, char_I_setpoint_change, char_I_setpoint_cbar
         extern  char_I_dive_interval, char_I_bottom_time, char_I_bottom_depth
         extern  char_I_deco_model
         extern  char_I_extra_time
