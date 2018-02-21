@@ -261,16 +261,12 @@ do_toggle_active:
     movff   PLUSW1,lo
     lfsr    FSR1,opt_gas_type+0
     movff   lo,PLUSW1
-;    btfsc   ccr_diluent_setup			; diluents?
-;    bra	    do_toggle_active3			; Yes, ignore restoring change depth (Work-around for potential issue) mH
     lfsr    FSR1,opt_OC_bail_gas_change_backup+0 ; copy opt_OC_bail_gas_change_backup+W back to opt_OC_bail_gas_change+W
     movff   PLUSW1,lo
     lfsr    FSR1,opt_OC_bail_gas_change+0
     movff   lo,PLUSW1
     bra	    do_toggle_active3
 do_toggle_active2:
-;    btfsc   ccr_diluent_setup			; diluents?
-;    bra	    do_toggle_active3			; Yes, ignore restoring change depth (Work-around for potential issue) mH
     clrf    PLUSW1				; 0=Disabled, 1=First, 2=Travel, 3=Deco
     lfsr    FSR1,opt_OC_bail_gas_change+0
     clrf    PLUSW1				; also delete change depth here to have the menu updated immediately

@@ -79,7 +79,7 @@
     TCODE   tDepthReset,		"Reset auf MOD:"
     TCODE   tSetup_mix, 		"Mix Einstellen"
     TCODE   tCCRMode,   		"Modus:"             	; Mode:
-    TCODE   tCCRModeFixedSP,  	"fixeSP/Berech."   		; Fixed SP
+    TCODE   tCCRModeFixedSP,  	"Feste SP"   		; Fixed SP
     TCODE   tCCRModeSensor,   	"Sensor"          		; Sensor
     TCODE   tCCRModeAutoSP,   	"Auto SP"         		; Auto SP
     TCODE   tSP,            	"SP"                	; SP (SetPoint)

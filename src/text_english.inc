@@ -79,7 +79,7 @@
     TCODE   tDepthReset,	"Reset to MOD:"
     TCODE   tSetup_mix, 	"Setup Mix"
 	TCODE   tCCRMode,   	"Mode:"             ; Mode:							## MODIFIED (layout)
-    TCODE   tCCRModeFixedSP,"Fixed SP/Calc."  	; Fixed for CCR / Calc.for pSCR	## MODIFIED (layout)
+    TCODE   tCCRModeFixedSP,"Fixed SP"  	; Fixed for CCR / Calc.for pSCR	## MODIFIED (layout)
     TCODE   tCCRModeSensor,	"Sensor"          	; Sensor
     TCODE   tCCRModeAutoSP,	"Auto SP"         	; Auto SP
     TCODE   tSP,            "SP"                ; SP (SetPoint)

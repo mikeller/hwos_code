@@ -5,6 +5,8 @@ BUGFIX: Auto-Gain for newer compass versions did not work (Which decreased accur
 CHANGE: Make disabled gases darker in surface mode (Common issue for color-blind divers)
 CHANGE: French and Italien language updates
 NEW: Independent saturation/desaturation multipliers for GF and non-GF Deco modes
+CHANGE: Non-updated values are shown in dark blue (e.g. after a gas change) until values are valid again
+
 
 [2.27]
 - Beta Version -

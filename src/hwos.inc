@@ -635,7 +635,8 @@ opt_dil_type            res 5   ; 0=Disabled, 1=First, 2=Normal -> ; Must be in 
 opt_dive_mode           res 1   ; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
 opt_ccr_mode            res 1   ; =0: Fixed SP, =1: Sensor
 opt_OC_bail_gas_change  res 5   ; Gas change depths OC/Bailout
-
+opt_CC_dil_gas_change	res 5	; Work-Around for 2.97 stable
+	
 ;---- Managing Settings
 opt_brightness          res 1   ; =0: Eco, =1:Medium, =2:Full
 opt_salinity            res 1	; 0-5%
