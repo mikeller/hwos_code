@@ -4156,7 +4156,7 @@ surf_tissue_saturation_graph_N2:
 	movwf	wait_temp                   		; 16 tissues
 	clrf	waitms_temp                 		; row offset
 surf_tissue_saturation_graph_He:
-    movlw   surf_tissue_diagram_top+.23+.56    	; surface mode
+    movlw   surf_tissue_diagram_top+.23+.57    	; surface mode
 	addwf	waitms_temp,W
 	movff	WREG,win_top                		; row top (0-239)
     rcall   surf_tissue_saturation_loop    		; show one tissue
