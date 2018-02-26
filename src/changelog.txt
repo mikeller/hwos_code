@@ -1,12 +1,18 @@
 [2.97]
 - Stable Version -
+NEW: Internal deco calculator shows deco plan and gas beeds for Bailout case
+NEW: CNS now, CNS in xx minutes, CNS if bailout plan is used and CNS when surfaced (Including all deco stops) is shown
+NEW: Bailout TTS is computed in CCR mode (optionally) with gas needs for all bailout gases and all deco stops
+NEW: Warning if an isobaric counter diffusion occurs (also in internal planner)
+NEW: Warning "X-ZHL16-X" if deco model is used beyond theoretical limits
+NEW: Show "Deco Zone" if we are in deco and at least one tissue is off-gassing
+CHANGE: Internal deco routines heavily optimised for speed and code size
 CHANGE: Limit button sensitivity to 80%
 BUGFIX: Auto-Gain for newer compass versions did not work (Which decreased accuracy of heading)
 CHANGE: Make disabled gases darker in surface mode (Common issue for color-blind divers)
 CHANGE: French and Italien language updates
 NEW: Independent saturation/desaturation multipliers for GF and non-GF Deco modes
 CHANGE: Non-updated values are shown in dark blue (e.g. after a gas change) until values are valid again
-
 
 [2.27]
 - Beta Version -

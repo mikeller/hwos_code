@@ -136,7 +136,7 @@
     TCODE   tGF_high,   	"GF high:"
     TCODE   tSaturationMult,  "Saturation  :"	; 								## MODIFIED (layout)
     TCODE   tDesaturationMult,"Desaturation:"
-	TCODE   tFTTSMenu,  	"fTTS/Delay:"		; Future TTS / Ascent Delay		## MODIFIED (layout)
+	TCODE   tFTTSMenu,  	"fTTS/fB/O:"		; Future TTS / Ascent Delay		## MODIFIED (layout)
     TCODE   taGFMenu,   	"Alternative GF"    ; Alternative GF
     TCODE   taGF_low,   	"aGF low :"         ; aGF low						## MODIFIED (layout)
     TCODE   taGF_high,  	"aGF high:"         ; aGF high
@@ -150,6 +150,7 @@
 	TCODE	tCalcAscGas,	 "Calc.Gas (B/O):"	;								## NEW bailout gas needs
 	TCODE	tTankSizes,		 "Tank Sizes"		;								## NEW bailout gas needs
 	TCODE   tLiter,			 " l"				;								## NEW bailout gas needs 
+	TCODE	tBarLiter,		"Bar Liter"
 	TCODE	tTankFillPress,	 "Tank Press Budget";
 	TCODE	tGas1,			 "Gas 1:"			;								## NEW bailout gas needs
 	TCODE	tGas2,			 "Gas 2:"			;								## NEW bailout gas needs

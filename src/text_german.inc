@@ -57,7 +57,7 @@
     TCODE   tGaslist,   		"OC Gas Liste"
     TCODE   tGaslistCC, 		"CC Gas Liste"  		; CC Diluents
     TCODE   tGasEdit,   		"Gas einstellen"
-    TCODE   tType,      		"Type: "
+    TCODE   tType,      		"Typ: "
     TCODE   tGasDisabled,		"Deaktiviert"  			; Disabled
     TCODE   tGasFirst,   		"Start"        			; First
     TCODE   tGasTravel,  		"Reise"        			; Travel
@@ -123,20 +123,20 @@
     TCODE   tDvApnea,   		"Apnoe"
     TCODE   tDvPSCR,			"pSCR"
     TCODE   tDvCC,      		"CC"
-    TCODE   tDkMode,    		"Decotype:ZH-L16"		;								## MODIFIED (memory needs)
+    TCODE   tDkMode,    		"Decotyp:ZH-L16"		;								## MODIFIED (memory needs)
     TCODE   tZHL16,     		" "						; keep order, enum from here...	## MODIFIED (memory needs)
     TCODE   tZHL16GF,   		"+GF"					; ...up to here!				## MODIFIED (memory needs)
     TCODE   tPPO2Max,   		"Max.     :"
     TCODE   tPPO2DECO,			"Max. Deko:"
     TCODE   tPPO2MIN,   		"Min.     :"
 	TCODE	tPPO2MINCC, 		"Min. Loop:"
-	TCODE   tLastDecostop, 		"Letzt.Stop:"
+	TCODE   tLastDecostop, 		"Letzt.Stopp:"
     TCODE   tDecoparameters, 	"Deko Parameter"
     TCODE   tGF_low,    		"GF low :"
     TCODE   tGF_high,   		"GF high:"
     TCODE   tSaturationMult,    "Sättigung   :"
     TCODE   tDesaturationMult,  "Entsättigung:"
-    TCODE   tFTTSMenu,  		"fTTS/Verz.:"	        ; Future TTS
+    TCODE   tFTTSMenu,  		"fTTS/fB/O:"	        ; Future TTS
     TCODE   taGFMenu,   		"Alternativ-GF"         ; Alternative GF
     TCODE   taGF_low,   		"aGF low :"             ; aGF low
     TCODE   taGF_high,  		"aGF high:"             ; aGF high
@@ -144,12 +144,13 @@
     TCODE   tDiveaGF_active,	"aGF aktiv"      		; aGF Active
     TCODE   tppO2settings,		"ppO2 Parameter"   		; ppO2 Settings
     TCODE   tsafetystopmenu,	"Sicherheitsstop:"      ; Safety Stop:
-	TCODE   tGasUsage,  		"Gas Usage"         	; Gas Usage
+	TCODE   tGasUsage,  		"Verbrauch"         	; Gas Usage
     TCODE   tSetBotUse, 		"Reise Gas: "      		; Bottom Gas: (space)
     TCODE   tSetDecoUse,		"Deko  Gas: "      		; Deco   Gas: (space)
 	TCODE	tCalcAscGas,	 	"Gasmenge(B/O):"
 	TCODE	tTankSizes,		 	"Tank Größen"
 	TCODE   tLiter,			 	" l"
+	TCODE	tBarLiter,			"Barliter"
 	TCODE	tTankFillPress,	 	"Tank Nutzmenge"
 	TCODE	tGas1,			 	"Gas 1:"
 	TCODE	tGas2,				"Gas 2:"
@@ -165,7 +166,7 @@
     TCODE   tMedium,    		"Mittel"
     TCODE   tHigh,      		"Hoch"
     TCODE   tDvSalinity,		"Salinität: "			; Salinity
-	TCODE   tShowppO2,  		"ständig zeigen:"		; Always show ppO2:
+	TCODE   tShowppO2,  		"Ständig zeigen:"		; Always show ppO2:
     TCODE   tFlip,      		"Anzeige drehen:"		; Rotate Screen
     TCODE   tMODwarning,		"MOD  Warnung:"			; MOD warning
 	TCODE	tIBCDwarning,		"IBCD Warnung:"			; IBCD Warning	
@@ -307,7 +308,7 @@
 
 ; Logbook
 	TCODE	tCNS2,				"ZNS:"
-	TCODE	tAVG,				"Mit:"
+	TCODE	tAVG,				"Mittel:"
 	TCODE	tGF,				"GF:"
 	TCODE	tSAT,				"Sät:"					; Sat:
 

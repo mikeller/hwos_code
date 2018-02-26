@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File start.inc														V2.95
+;   File start.inc														V2.97
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.

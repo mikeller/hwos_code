@@ -1,8 +1,8 @@
 ;=============================================================================
 ;
-;   File wait.asm
+;   File wait.asm														V2.98
 ;
-;  Wait routines
+;   Wait routines
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
 ;=============================================================================
@@ -10,14 +10,15 @@
 ;   2004-01-31 : [chsw] Initial version.
 ;   2007-05-11 : Updated (OSTC code).
 ;   2011-06-24 : [MH]  Added clock speeds.
-	
+
 ;=============================================================================
 
-WAITMS		macro	waitms_temp
-			movlw	waitms_temp
-			call    WAITMSX
-			endm
-            extern  WAITMSX
+WAITMS	macro	ms_to_wait
+	movlw	ms_to_wait
+	extern	WAITMSX
+	call	WAITMSX
+	endm
+
 
 ; asm routines in hwos.asm
 	extern	speed_eco			; SPEED_ECO: 4MHz

@@ -1,108 +1,111 @@
 ;=============================================================================
 ;
-;   File surfmode.asm								REFACTORED VERSION	V2.94
+;   File surfmode.asm								REFACTORED VERSION	V2.98
 ;
 ;   Surfacemode
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
 ;=============================================================================
 ; HISTORY
-;  2011-08-07 : [mH] moving from OSTC code
+; 2011-08-07 : [mH] moving from OSTC code
 
-#include    "hwos.inc"					; Mandatory header
-#include    "shared_definitions.h"      ; Mailbox from/to p2_deco.c
-#include    "start.inc"
-#include    "tft.inc"
-#include    "tft_outputs.inc"
-#include    "isr.inc"
-#include    "adc_lightsensor.inc"
-#include    "menu_processor.inc"
-#include    "strings.inc"
-#include    "sleepmode.inc"
-#include    "wait.inc"                  ; speed_*
-#include    "external_flash.inc"
-#include    "customview.inc"
-#include    "divemode.inc"
-#include    "mcp.inc"                   ; RX
-#include    "i2c.inc"
-#include    "comm.inc"
-#include    "eeprom_rs232.inc"
-#include    "calibrate.inc"
+#include "hwos.inc"					; Mandatory header
+#include "shared_definitions.h"		; Mailbox from/to p2_deco.c
+#include "start.inc"
+#include "tft.inc"
+#include "tft_outputs.inc"
+#include "isr.inc"
+#include "adc_lightsensor.inc"
+#include "menu_processor.inc"
+#include "strings.inc"
+#include "sleepmode.inc"
+#include "wait.inc"					; speed_*
+#include "external_flash.inc"
+#include "customview.inc"
+#include "divemode.inc"
+#include "mcp.inc"					; RX
+#include "i2c.inc"
+#include "comm.inc"
+#include "eeprom_rs232.inc"
+#include "calibrate.inc"
 
-   	extern   do_main_menu
+	extern	do_main_menu
+	extern	color_image
 
-#DEFINE	menu_pos_row		.215
-#DEFINE	menu_pos_column		.1
-#DEFINE	view_row            .215
-#DEFINE	view_column         .124
 
-gui     CODE
+	;---- Private local variables -------------------------------------------------
 
+		CBLOCK	local1						; max size is 16 Byte !!!
+											; currently not used
+		ENDC								; used: 0 byte, remaining: 16 byte
+
+
+#DEFINE menu_pos_row		.215
+#DEFINE menu_pos_column		.1
+#DEFINE view_row			.215
+#DEFINE view_column			.124
+
+gui	CODE
 
 ;=============================================================================
 ; Boot tasks for all modes
 	global	surfloop
 surfloop:
-    call    speed_normal
-    bcf     no_sensor_int           ; Normal pressure mode
+	call	speed_normal
+	bcf		no_sensor_int			; Normal pressure mode
 
-    bcf     LEDr
+	bcf		LEDr
 
-    clrf    CCP1CON					; stop PWM
-    bcf	    PORTC,2					; Pull PWM output to GND
-    call    TFT_boot                ; Initialize TFT (includes clear screen)
-    bcf	    restore_deco_data
+	clrf	CCP1CON					; stop PWM
+	bcf		PORTC,2					; Pull PWM output to GND
+	call	TFT_boot				; Initialize TFT (includes clear screen)
+	bcf		restore_deco_data
 
-    WIN_TOP     .50
-    WIN_LEFT    .10
-    movlw   LOW     0x1E000
-    movwf   TBLPTRL
-    movlw   HIGH    0x1E000
-    movwf   TBLPTRH
-    movlw   UPPER   0x1E000
-    movwf   TBLPTRU
-    extern  color_image
-    call    color_image             ; Show logo
+	WIN_TOP	 .50
+	WIN_LEFT .10
+	movlw	LOW   0x1E000
+	movwf	TBLPTRL
+	movlw	HIGH  0x1E000
+	movwf	TBLPTRH
+	movlw	UPPER 0x1E000
+	movwf	TBLPTRU
+	call	color_image				; Show logo
 
-    WIN_TOP     .100
-    WIN_LEFT    .34
-    extern  ostc_logo_block
-    movlw   LOW(ostc_logo_block)
-    movwf   TBLPTRL
-    movlw   HIGH ostc_logo_block;&0xFFFF
-    movwf   TBLPTRH
-    movlw   UPPER(ostc_logo_block)
-    movwf   TBLPTRU
-    call    color_image
-    call    TFT_Display_FadeIn      ; Show splash
-	call	TFT_serial              ; Show serial and firmware version
+	WIN_TOP	 .100
+	WIN_LEFT .34
+	extern	ostc_logo_block
+	movlw	LOW   ostc_logo_block
+	movwf	TBLPTRL
+	movlw	HIGH  ostc_logo_block	; &0xFFFF
+	movwf	TBLPTRH
+	movlw	UPPER ostc_logo_block
+	movwf	TBLPTRU
+	call	color_image
+	call	TFT_Display_FadeIn		; Show splash
+	call	TFT_serial				; Show serial and firmware version
 
-    ;---- Do any usefull initializes that takes time -------------------------
-	call	restart_set_modes_and_flags	; Sets decomode flags
+	;---- Do any useful initializes that takes time -------------------------
+	call	restart_set_modes_and_flags	; Sets deco mode flags
 	bcf		pressure_refresh
-    call    I2C_init_compass
-    call    I2C_init_accelerometer
+	call	I2C_init_compass
+	call	I2C_init_accelerometer
 	clrf	ext_flash_address+0
 	clrf	ext_flash_address+1
 	clrf	ext_flash_address+2
 
-    movlw   surface_sp                  ; in cbar
-    call    transmit_setpoint           ; Transmit current setpoint from WREG (in cbar) to external electronics
+	movlw	surface_sp				; in cbar
+	call	transmit_setpoint		; Transmit current setpoint from WREG (in cbar) to external electronics
 
 	clrf	timeout_counter2
-	clrf 	timeout_counter3
-	bcf		menubit						; clear menu flag
-    bcf     premenu
+;	clrf	timeout_counter3		; not used / required [rl]
+	bcf		menubit					; clear menu flag
+	bcf		premenu
 	clrf	last_pressure+0
 	clrf	last_pressure+1
-    bcf     is_bailout                  ; =1: Bailout
-    bcf     ccr_diluent_setup           ; Use OC gases for gaslist routine
+	bcf		is_bailout				; =1: Bailout
+	bcf		ccr_diluent_setup		; Use OC gases for gaslist routine
 
-	bcf		simulatormode_active		; Quit simulator mode (if active)
-
-	; MOVE from here to below ## V2.94
-	; bcf		switch_left
-	; bcf		switch_right
+	bcf		simulatormode_active	; Quit simulator mode (if active)
 
 	;---- Fade to standard surface view --------------------------------------
 	; Wait 1 second
@@ -114,80 +117,73 @@ surfloop:
 	btfss	onesecupdate
 	bra		$-2
 
-	call    TFT_Display_FadeOut         ; Go to black screen
-	call	TFT_ClearScreen             ; Then change everything
-	WIN_TOP		.0
-	WIN_LEFT	.0
-	WIN_FONT 	FT_SMALL
-	bcf     win_invert              ; Reset invert flag
+	call	TFT_Display_FadeOut		; Go to black screen
+	call	TFT_ClearScreen			; Then change everything
+	WIN_TOP	 .0
+	WIN_LEFT .0
+	WIN_FONT FT_SMALL
+	bcf		win_invert				; Reset invert flag
 
-    WIN_COLOR	color_lightblue
-	WIN_SMALL	menu_pos_column,menu_pos_row
-    STRCPY_TEXT_PRINT  tMenu		;"<Menu"
-	WIN_SMALL	view_column,view_row
-    STRCPY_TEXT_PRINT  tView        ;"View>"
-	call    TFT_standard_color
+	WIN_COLOR			color_lightblue
+	WIN_SMALL			menu_pos_column,menu_pos_row
+	STRCPY_TEXT_PRINT	tMenu		;"<Menu"
+	WIN_SMALL			view_column,view_row
+	STRCPY_TEXT_PRINT	tView		;"View>"
+	call				TFT_standard_color
 
 ; Logo
-    WIN_TOP     .0
-    WIN_LEFT    .70
-    movlw   LOW(ostc_logo_block)
-    movwf   TBLPTRL
-    movlw   HIGH ostc_logo_block;&0xFFFF
-    movwf   TBLPTRH
-    movlw   UPPER(ostc_logo_block)
-    movwf   TBLPTRU
-    call    color_image
+	WIN_TOP	 .0
+	WIN_LEFT .70
+	movlw	LOW   ostc_logo_block
+	movwf	TBLPTRL
+	movlw	HIGH  ostc_logo_block		; &0xFFFF
+	movwf	TBLPTRH
+	movlw	UPPER ostc_logo_block
+	movwf	TBLPTRU
+	call	color_image
 
 	call	TFT_clock					; display time
-    call    update_surfloop60
+	call	update_surfloop60
 	call	get_battery_voltage			; get battery voltage
 	call	TFT_update_batt_voltage		; display battery voltage
 	call	TFT_update_surf_press		; display surface pressure
 	call	TFT_temp_surfmode			; Displays temperature
 	call	TFT_display_decotype_surface
-	
 	call	calc_deko_divemode_sensor
 
-    movff   opt_dive_mode,lo            ; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
-    tstfsz  lo
-    bra     surfloop_no_oc              ; Not OC
-    call    TFT_show_OC_startgas_surface; Show first gas and "OSTC2-like" active gases
+	movff	opt_dive_mode,lo			; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
+	tstfsz	lo
+	bra		surfloop_no_oc				; Not OC
+	call	TFT_show_OC_startgas_surface; Show first gas and "OSTC2-like" active gases
 surfloop_no_oc:
-    movff   customview_surfmode,menupos3    ; Reload last customview
-    call    surf_customview_mask        ; Update #menupos3 view
+	movff	customview_surfmode,menupos3; Reload last customview
+	call	surf_customview_mask		; Update #menupos3 view
 
-    call    TFT_Display_FadeIn          ; Display resulting surface screen.
+	call	TFT_Display_FadeIn			; Display resulting surface screen.
 
-	; MOVED from above to here	## V2.94
 	bcf		switch_left
 	bcf		switch_right
-	
-    ;---- Late initialisations -----------------------------------------------    
-	movff	last_surfpressure_30min+0,int_I_pres_respiration+0		; copy surface air pressure to deco routine		## not used any more (!?)
-	movff	last_surfpressure_30min+1,int_I_pres_respiration+1		; 30min old values 								## not used any more (!?)
+
+	;---- Late initializations -----------------------------------------------
+	movff	last_surfpressure_30min+0,int_I_pres_respiration+0		; copy surface air pressure to deco routine
+	movff	last_surfpressure_30min+1,int_I_pres_respiration+1		; 30min old values
 	movff	last_surfpressure_30min+0,int_I_pres_surface+0			; copy surface air pressure to deco routine
-	movff	last_surfpressure_30min+1,int_I_pres_surface+1			; 30min old values 
-	movff	last_surfpressure_30min+0,last_surfpressure+0			; Use 30min old airpressure 
+	movff	last_surfpressure_30min+1,int_I_pres_surface+1			; 30min old values
+	movff	last_surfpressure_30min+0,last_surfpressure+0			; Use 30min old airpressure
 	movff	last_surfpressure_30min+1,last_surfpressure+1			; Use 30min old airpressure
 
-	; NEW	## no fly
 	movff	opt_GF_low,char_I_GF_Low_percentage
 	movff	opt_GF_high,char_I_GF_High_percentage
-	
-    ; Startup tasks for all modes
-    ; Desaturation time needs:
-    ;   int_I_pres_surface
-    ;   char_I_desaturation_multiplier
+
+	; Startup tasks for all modes
+	; Desaturation time needs:
+	;   int_I_pres_surface
+	;   char_I_desaturation_multiplier
 	call	deco_calc_desaturation_time ; calculate desaturation time
-	
-	; REPLACE	## (code unification)
-	; movlb	b'00000001'					; select ram bank 1
-	; BY
 	banksel	common
 
-    btfsc   enable_screen_dumps         ; =1: Ignore vin_usb, wait for "l" command (Screen dump)
-    call	enable_rs232				; Also sets to speed_normal ...
+	btfsc	enable_screen_dumps			; =1: Ignore vin_usb, wait for "l" command (Screen dump)
+	call	enable_rs232				; Also sets to speed_normal ...
 
 surfloop_loop:
 	btfss	onesecupdate				; do every second tasks?
@@ -201,12 +197,12 @@ surfloop_loop:
 	call	get_battery_voltage			; get battery voltage
 	call	TFT_update_batt_voltage		; display battery voltage
 	call	set_dive_modes				; tests if depth>threshold
-    btfss   secs,0                      ; Every two seconds...
+	btfss	secs,0						; Every two seconds...
 	call	TFT_temp_surfmode			; Displays temperature
-    btfss   secs,0                      ; Every two seconds...
-    call    surfmode_check_for_warnings ; ... check for warnings (and display/update) them
+	btfss	secs,0						; Every two seconds...
+	call	surfmode_check_for_warnings ; ... check for warnings (and display/update) them
 	bcf		onesecupdate				; every second tasks done
-	
+
 surfloop_loop2:	
 ; Tasks approx. every 50ms for all modes
 	call	test_switches_surfmode		; check switches
@@ -228,262 +224,187 @@ surfloop_loop2:
 	bcf		pressure_refresh			; until new pressure is available
 
 ; Updates every 1/4 second
-    btfss   quarter_second_update
-    bra     surfloop_loop2b
+	btfss	quarter_second_update
+	bra		surfloop_loop2b
 
-    bcf     quarter_second_update
-    
-    call	calc_deko_divemode_sensor
-	
-    btfsc   FLAG_ccr_mode               ; In CCR mode?
-    bra	    surfloop_loop2a1			; Yes.
-    btfss   FLAG_pscr_mode              ; In PSCR mode?
-    bra	    surfloop_loop2a				; No, skip
-        
-surfloop_loop2a1:    
-    movff   opt_ccr_mode,WREG           ; =0: Fixed SP, =1: Sensor,  =2: Auto SP
-    sublw   .1                          ; opt_ccr_mode = 1 (Sensor)?
-    bnz     surfloop_loop2a				; No, skip
+	bcf		quarter_second_update
 
-    call    TFT_surface_sensor          ; ...update sensor data in surface mode
-    call    TFT_sensor_surface_warning	; Show a warning arrow-down behind sensor readings when sensor is end-of-life
-    movlw   .9 
-    cpfseq  menupos3					; in Sensor mV surface custom view? 
-    bra	    surfloop_loop2a				; No
-    extern  TFT_sensor_mV 
-    call    TFT_sensor_mV		; Yes, update mV readings (Each 1/4 second and not each second as in customview.asm)
+	; Update Sensors
+	call	calc_deko_divemode_sensor
+
+	btfsc	FLAG_ccr_mode				; In CCR mode?
+	bra		surfloop_loop2a1			; Yes.
+	btfss	FLAG_pscr_mode				; In PSCR mode?
+	bra		surfloop_loop2a				; No, skip
+
+surfloop_loop2a1:
+	movff	opt_ccr_mode,WREG			; =0: Fixed SP, =1: Sensor,  =2: Auto SP
+	sublw	.1							; opt_ccr_mode = 1 (Sensor)?
+	bnz		surfloop_loop2a				; No, skip
+
+	call	TFT_surface_sensor			; ...update sensor data in surface mode
+	call	TFT_sensor_surface_warning	; Show a warning arrow-down behind sensor readings when sensor is end-of-life
+	movlw	.9 
+	cpfseq	menupos3					; in Sensor mV surface custom view? 
+	bra		surfloop_loop2a				; No
+	extern	TFT_sensor_mV 
+	call	TFT_sensor_mV				; Yes, update mV readings (Each 1/4 second and not each second as in customview.asm)
 
 surfloop_loop2a:
-    movlw   .6
-    cpfseq  menupos3                    ; in compass view?
-    bra     surfloop_loop2b             ; No
-    extern  TFT_surface_compass_heading
-    call    TFT_surface_compass_heading ; Yes, update compass heading value
+	movlw	.6
+	cpfseq	menupos3					; in compass view?
+	bra		surfloop_loop2b				; No
+	extern	TFT_surface_compass_heading
+	call	TFT_surface_compass_heading	; Yes, update compass heading value
 
 surfloop_loop2b:
 	btfsc	toggle_customview			; Next view?
-	call	surf_customview_toggle      ; Yes, show next customview (and delete this flag)
+	call	surf_customview_toggle		; Yes, show next customview (and delete this flag)
 
-    btfsc   enable_screen_dumps         ; =1: Ignore vin_usb, wait for "l" command (Screen dump)
-    bra     surfloop_loop3
-	
-	; DELETE - In surface mode, only charing is available now - but now you can see the charging status :-)	## USB
-	;          To do USB communication, you now need to be in menu or logbook mode
-    ;btfsc   vusb_in                     ; USB plugged in?
-    ;call    comm_mode                   ; Start COMM mode
-	
-    bra     surfloop_loop4
+	btfsc	enable_screen_dumps			; =1: Ignore vin_usb, wait for "l" command (Screen dump)
+	bra		surfloop_loop3
+
+	;btfsc	vusb_in						; USB plugged in?
+	;call	comm_mode					; Start COMM mode
+
+	bra		surfloop_loop4
+
 surfloop_loop3:
-    btfss   vusb_in                     ; USB (still) plugged in?
-    bcf     enable_screen_dumps         ; No, clear flag
-    call    rs232_get_byte
-    btfsc   rs232_recieve_overflow
-    bra     surfloop_loop4
-    movlw   "l"
-    cpfseq	RCREG1
-    bra     surfloop_loop4
-    call    TFT_dump_screen             	; Dump the screen contents
-surfloop_loop4:
-	btfsc	sleepmode						; Sleepmode active?
-	goto	sleeploop						; Yes, switch into sleepmode!
+	btfss	vusb_in						; USB (still) plugged in?
+	bcf		enable_screen_dumps			; No, clear flag
+	call	rs232_get_byte
+	btfsc	rs232_receive_overflow
+	bra		surfloop_loop4
+	movlw	"l"
+	cpfseq	RCREG1
+	bra		surfloop_loop4
+	call	TFT_dump_screen				; Dump the screen contents
 
-	bra		surfloop_loop					; loop surfacemode
+surfloop_loop4:
+	btfss	sleepmode					; shall we go into sleepmode?
+	bra		surfloop_loop				; NO  - loop in surfacemode
+	movff	menupos3,customview_surfmode; YES - save last customview
+	goto	sleeploop					;       switch into sleepmode
+
 
 update_surfloop60:
 ; One minute tasks for all modes
-	call	TFT_date						; Update date
-	
-	; REPLACE	## no fly 2
-	; call	calc_deko_surfmode				; calculate desaturation time every minute
-	; BY
-	call	deco_calc_wo_deco_step_1_min	; calculate deco in surface mode. int_I_pres_surface gets updated by
-	call	deco_calc_desaturation_time		; TFT_update_surf_press when amb_pressure has changed by >= 10 mbar
+	call	TFT_date					; Update date
+
+	call	deco_calc_dive_interval_1min; calculate deco in surface mode. int_I_pres_surface gets updated by
+	call	deco_calc_desaturation_time	; TFT_update_surf_press when amb_pressure has changed by >= 10 mbar
 	banksel	common
-	
-	; NEW	## deco engine
+
 	; update tissue diagram if it is on display
-	movlw	.5								; number of tissue custom view
-	cpfseq	menupos3						; is this the current customview?
-	bra		update_surfloop60_1				; NO	
-	call    TFT_standard_color				; YES - set standard color
-    call	TFT_surface_tissues				; 	    show tissue diagram
+	movlw	.5							; number of tissue custom view
+	cpfseq	menupos3					; is this the current customview?
+	bra		update_surfloop60_1			; NO
+	call	TFT_standard_color			; YES - set standard color
+	call	TFT_surface_tissues			;       show tissue diagram
+
 update_surfloop60_1:
-
-	; NEW	## no fly
 	; update last dive info if it is on display
-	movlw	.8								; number of the last dive info customview
-	cpfseq	menupos3						; is this the current customview?
-	bra		update_surfloop60_2				; NO	
-	call    TFT_standard_color				; YES - set standard color
-    call	TFT_surface_lastdive			; 	    show last dive infos
-update_surfloop60_2:
+	movlw	.8							; number of the last dive info customview
+	cpfseq	menupos3					; is this the current customview?
+	bra		update_surfloop60_2			; NO
+	call	TFT_standard_color			; YES - set standard color
+	call	TFT_surface_lastdive		;       show last dive infos
 
-	bcf		oneminupdate				
+update_surfloop60_2:
+	bcf		oneminupdate
 	return
 
-    extern  check_cns_violation,check_warn_battery,check_and_store_gf_violation
+	extern  check_cns_violation,check_warn_battery,check_and_store_gf_violation
 surfmode_check_for_warnings:
+	bcf		warning_active				; Clear flag
+	clrf	warning_counter				; Clear counter
 
-	; DELETE	## (screen flicker)
-	; movf	warning_counter_backup,W
-	; cpfseq	warning_counter						; warning_counter_backup = warning_counter?
-	; call	TFT_clear_warning_text              ; No, clear all warnings
-	; movff	warning_counter,warning_counter_backup	; copy warning_counter
+	; Warnings for all modes
+	call	check_warn_battery			; Check if the battery level should be displayed/warned
 
-	bcf		warning_active                      ; Clear flag
-	clrf	warning_counter						; Clear counter
+	btfsc	FLAG_apnoe_mode				; Done for Apnoe or Gauge mode
+	bra		surfmode_check_for_warnings2
+	btfsc	FLAG_gauge_mode				; Done for Apnoe or Gauge mode
+	bra		surfmode_check_for_warnings2
 
-    ; Warnings for all modes
-    call	check_warn_battery                  ; Check if the battery level should be displayed/warned
-	
-	; DELETE HERE...	## (general fix)
-    ; rcall   surfmode_check_for_nofly            ; Check if nofly time should be shown
-    ; rcall   surfmode_check_for_desat            ; Check if desat time should be shown
-	
-	; DELETE - surface interval is now shown in last dive custom view, not as "warning" any more	## no fly
-    ; rcall   surfmode_check_for_interval         ; Check if surface interval should be shown
+	; Warnings only in deco modes
+	rcall	surfmode_check_for_desat	; Check if desat time should be shown
+	rcall	surfmode_check_for_nofly	; Check if nofly time should be shown
+	call	check_cns_violation			; Check CNS value and display it, if required
+	call	check_and_store_gf_violation; Check GF value and display it, if required
 
-	btfsc	FLAG_apnoe_mode             		; Done for Apnoe or Gauge mode
-    bra     surfmode_check_for_warnings2
-	btfsc	FLAG_gauge_mode             		; Done for Apnoe or Gauge mode
-	bra     surfmode_check_for_warnings2
-
-    ; Warnings only in deco modes
-	
-	; ...INSERT HERE ## (general fix) - desat and no-fly time belong to deco modes
-	rcall   surfmode_check_for_desat            ; Check if desat time should be shown
-	rcall   surfmode_check_for_nofly            ; Check if nofly time should be shown
-	
-	call	check_cns_violation					; Check CNS value and display it, if required
-    call	check_and_store_gf_violation		; Check GF value and display it, if required
-
-	; NEW	## microbubbles
-	movff	char_O_deco_warnings,WREG			; bank-safe copy for deco warnings
-	btfsc	WREG,mbubble_warning_lock			; do we have a microbubbles warning?
+	movff	char_O_deco_warnings,WREG	; bank-safe copy for deco warnings
+	btfsc	WREG,mbubble_warning_lock	; do we have a microbubbles warning?
 	extern	warn_mbubbles
-	call	warn_mbubbles						; YES	
+	call	warn_mbubbles				; YES
 
 surfmode_check_for_warnings2:
-; Setup warning_page number
-    incf    warning_page,F
-    bcf     STATUS,C
-    rlcf    warning_page,W                      ; *2
-    cpfsgt  warning_counter                     ; > warning_counter
-    clrf    warning_page                        ; No, clear
-	
-	; NEW	## (screen flicker)
-; Clear both rows of warnings if there is nothing to show at all
-	tstfsz	warning_counter						; any warnings?
-	bra		surfmode_check_for_warnings3		; YES - look if second row needs to be cleared
-	call	TFT_clear_warning_text              ; NO  - clear complete warnings area
+	; Setup warning_page number
+	incf	warning_page,F
+	bcf		STATUS,C
+	rlcf	warning_page,W				; *2
+	cpfsgt  warning_counter				; > warning_counter
+	clrf	warning_page				; No, clear
+
+	; Clear both rows of warnings if there is nothing to show at all
+	tstfsz	warning_counter				; any warnings?
+	bra		surfmode_check_for_warnings3; YES - look if second row needs to be cleared
+	call	TFT_clear_warning_text		; NO  - clear complete warnings area
 	return
+
 surfmode_check_for_warnings3:
-
-; Clear 2nd row of warnings if there is nothing to show (on this page)
-    btfss   second_row_warning                  ; =1: The second row contains a warning
-    call    TFT_clear_warning_text_2nd_row      ; No, clear this row
-    return                                      ; Done.
-
-; DELETE - surface interval is now shown in last dive custom view, not as "warning" any more	## no fly
-;
-;surfmode_check_for_interval:
-;	movf    surface_interval+0,W           		; Is interval null ?
-;    iorwf   surface_interval+1,W
-;    bnz     surfmode_check_for_interval2		; No
-;    return
-;surfmode_check_for_interval2:
-;	incf    warning_counter,F					; increase counter
-;    call    TFT_interval
-;    return
-
+	; Clear 2nd row of warnings if there is nothing to show (on this page)
+	btfss	second_row_warning				; =1: The second row contains a warning
+	call	TFT_clear_warning_text_2nd_row	; No, clear this row
+	return									; Done.
 
 surfmode_check_for_desat:
-	; REPLACE	## no fly
-	; movf    desaturation_time+0,W           	; Is nofly null ?
-    ; iorwf   desaturation_time+1,W
-	; BY
 	banksel	int_O_desaturation_time
-	movf    int_O_desaturation_time+0,W			; Is nofly null ?
-	iorwf   int_O_desaturation_time+1,W
-	
-    bnz     surfmode_check_for_desat2			; No
-	
-	; NEW	## no fly
-	banksel common
-	
-    return
-
-surfmode_check_for_desat2:
-	; NEW	## no fly
-	banksel common
-	
-	incf	warning_counter,F					; increase counter
-    call    TFT_desaturation_time
-    return
+	movf	int_O_desaturation_time+0,W	; is nofly-time null ?
+	iorwf	int_O_desaturation_time+1,W
+	banksel	common
+	bnz		surfmode_check_for_desat_1	; NO
+	return
+surfmode_check_for_desat_1:				; YES
+	incf	warning_counter,F			; increase counter
+	call	TFT_desaturation_time		; show desaturation time
+	return
 
 surfmode_check_for_nofly:
-	; REPLACE	## no fly
- 	; movf    nofly_time+0,W              		; Is nofly null ?
-    ; iorwf   nofly_time+1,W
-	; BY
 	banksel	int_O_nofly_time
-	movf    int_O_nofly_time+0,W           		; Is nofly null ?
-	iorwf   int_O_nofly_time+1,W
-	
-    bnz     surfmode_check_for_nofly2   		; No...
-	
-	; NEW	## no fly
+	movf	int_O_nofly_time+0,W		; is nofly-time null ?
+	iorwf	int_O_nofly_time+1,W
 	banksel	common
-	
-    return
-
-surfmode_check_for_nofly2:
-	; NEW	## no fly
-	banksel	common
-	
-	incf	warning_counter,F					; increase counter
-    call    TFT_nofly_time
-    return
+	bnz		surfmode_check_for_nofly_1	; No...
+	return
+surfmode_check_for_nofly_1:				; YES
+	incf	warning_counter,F			; increase counter
+	call	TFT_nofly_time				; show nofly-time
+	return
 
 
 ;=============================================================================
 
-; DELETE - not used any more	## no fly
-;	global	calc_deko_surfmode
-;calc_deko_surfmode:
-;
-;	; DELETE - deco_calc_wo_deco_step_1_min uses int_I_pres_surface, not int_I_pres_respiration	## no fly
-;    ; SAFE_2BYTE_COPY amb_pressure,int_I_pres_respiration ; copy surface air pressure to deco routine
-;
-;	call	deco_calc_wo_deco_step_1_min    			; calculate deco in surface mode
-;	
-;	; NEW	## no fly
-;	; call	deco_calc_desaturation_time
-;	
-;	banksel		common
-;	return
-
-test_switches_surfmode:		; checks switches in surfacemode
+test_switches_surfmode:					; checks switches in surfacemode
 	btfsc	switch_right
 	bra		test_switches_surfmode2
 	btfsc	switch_left
-	bra		test_switches_surfmode3		
-	
-	; No button press
+	bra		test_switches_surfmode3
+	; No button pressed
 	return
 
 test_switches_surfmode3:
-    movlw   .6
-    cpfseq  menupos3                    ; in compass view?
-    bra     test_switches_surfmode3a    ; No
+	movlw	.6
+	cpfseq	menupos3					; in compass view?
+	bra	 test_switches_surfmode3a		; No
 
-    btfsc   premenu                     ; already shown "Bearing"
-    bra     test_switches_surfmode3b    ; Yes, remove it
+	btfsc	premenu						; already shown "Bearing"
+	bra		test_switches_surfmode3b	; Yes, remove it
 
-    extern  TFT_surf_set_bearing
-    call    TFT_surf_set_bearing        ; Yes.
-    bcf		switch_left
-    return
+	extern	TFT_surf_set_bearing
+	call	TFT_surf_set_bearing		; Yes.
+	bcf		switch_left
+	return
 
 test_switches_surfmode3a:
 	bcf		switch_left
@@ -491,51 +412,51 @@ test_switches_surfmode3a:
 	return
 
 test_switches_surfmode3b:
-    ; Clear "Heading?"
-    WIN_BOX_BLACK   .158,.190, .15, .99  ; top, bottom, left, right
-    bcf     premenu
-    bcf		switch_left
-    return
+	; Clear "Heading?"
+	WIN_BOX_BLACK	.158,.190, .15, .99	; top, bottom, left, right
+	bcf		premenu
+	bcf		switch_left
+	return
 
 test_switches_surfmode2:
-    movlw   .6
-    cpfseq  menupos3                    ; in compass view?
-    bra     test_switches_surfmode2a    ; No
-    btfss   premenu                     ; "Heading?" shown?
-    bra     test_switches_surfmode2a    ; No
-    ; Set new heading
-    bcf     premenu
-    bsf     compass_bearing_set
-    movff   compass_heading_shown+0,compass_bearing+0
-    movff   compass_heading_shown+1,compass_bearing+1
+	movlw	.6
+	cpfseq	menupos3					; in compass view?
+	bra		test_switches_surfmode2a	; No
+	btfss	premenu						; "Heading?" shown?
+	bra		test_switches_surfmode2a	; No
+	; Set new heading
+	bcf		premenu
+	bsf		compass_bearing_set
+	movff	compass_heading_shown+0,compass_bearing+0
+	movff	compass_heading_shown+1,compass_bearing+1
 	bcf		switch_right
-    return
+	return
 
 test_switches_surfmode2a:
 	bcf		switch_right
 	bsf		toggle_customview
-    bcf     premenu
-    clrf	timeout_counter2        ; and reset timeout
+	bcf		premenu
+	clrf	timeout_counter2			; and reset timeout
 	return
 
 	global	timeout_surfmode
 timeout_surfmode:
-	movlw	timeout_surfacemode		; [s] Default timeout
-    btfsc   menu_show_sensors2      ; In the "Calibrate" menu?
-    movlw   timeout_calibrate_menu  ; [s] CCR Calibrate Menu timeout
-    btfsc   menubit                 ; in Menu?
-    bra     timeout_testmode        ; No, done.
-    ; Must be in surface mode
-    btfss   FLAG_ccr_mode           ; =1: CCR mode (Fixed ppO2 or Sensor) active
-    bra     timeout_testmode        ; No, not CCR
-    movlw   timeout_ccr_surface     ; [s] CCR Surface mode timeout
+	movlw	timeout_surfacemode			; [s] Default timeout
+	btfsc	menu_show_sensors2			; In the "Calibrate" menu?
+	movlw	timeout_calibrate_menu		; [s] CCR Calibrate Menu timeout
+	btfsc	menubit						; in Menu?
+	bra		timeout_testmode			; No, done.
+	; Must be in surface mode
+	btfss	FLAG_ccr_mode				; =1: CCR mode (Fixed ppO2 or Sensor) active
+	bra		timeout_testmode			; No, not CCR
+	movlw	timeout_ccr_surface			; [s] CCR Surface mode timeout
 
 	global	timeout_testmode
 timeout_testmode:
-	incf	timeout_counter2,F		; increase timeout counter
-	cpfsgt	timeout_counter2		; Compare with timeout_counter2
-	return							; return, no timeout
-	bsf		sleepmode				; Set Flag
-	return							; Return
+	incf	timeout_counter2,F			; increase timeout counter
+	cpfsgt	timeout_counter2			; Compare with timeout limit
+	return								; return, no timeout
+	bsf		sleepmode					; Set Flag
+	return								; Return
 
- END
+	END

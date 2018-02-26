@@ -136,7 +136,7 @@
     TCODE   tGF_high,   "GF Alto:"
     TCODE   tSaturationMult,    "Saturazione:"
     TCODE   tDesaturationMult,  "Desaturazione:"
-    TCODE   tFTTSMenu,  "TTS Futuro:"            ; Future TTS
+    TCODE   tFTTSMenu,  "fTTS/fB/O:"            ; Future TTS
     TCODE   taGFMenu,   "GF Alternativo"         ; Alternative GF
     TCODE   taGF_low,   "aGF Basso:"               ; aGF low
     TCODE   taGF_high,  "aGF Alto:"              ; aGF high
@@ -210,6 +210,7 @@
     TCODE   tMinutes,   "'"
     TCODE   tPercent,   "%"
     TCODE   tLitersMinute, "l/min"
+    TCODE	tBarLiter,			"Bar Liter"
 	TCODE	tbar,		"bar"					; bar
 	TCODE	tbar10,		"0 bar"					; bar							## NEW 2.95
 	TCODE	tMeterMinute, "m/min"				; meter per minute				## NEW ascent speed
