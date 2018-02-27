@@ -525,9 +525,22 @@ calc_deko_divemode_sensor:
 	call	compute_mvolts_for_all_sensors	 ; YES - compute mV values from digital data
 	bra		calc_deko_divemode_sensor_common
 
+calc_deko_divemode_sensor_opt:
+	btfss	optical_input				; do we have an optical input?
+	return						; No, return (We have no sensors at all. Not analog, not S8 and not optical)
+	;o2_ppo2_sensor1, o2_ppo2_sensor2 and o2_ppo2_sensor3 are already filled in ISR
+	;clear use_O2_sensorX for timeout case
+	btfss	sensor1_active
+	bcf	use_O2_sensor1
+    	btfss	sensor2_active
+	bcf	use_O2_sensor2
+	btfss	sensor3_active
+	bcf	use_O2_sensor3
+	bra	calc_deko_divemode_sensor1
+	
 calc_deko_divemode_sensor_analog:
 	btfss	analog_o2_input				; do we have an analog input?
-	return								; NO  - return
+	bra	calc_deko_divemode_sensor_opt		; NO  - check if we have an optical interface
 	call	get_analog_inputs			; YES - get the analog voltages and continue with the common part
 
 calc_deko_divemode_sensor_common:
@@ -2049,6 +2062,17 @@ dive_boot_cc:
 	btfss	sensor3_calibrated_ok
 	bcf		use_O2_sensor3
 
+	btfss	optical_input				; do we have an optical input?
+	bra	dive_boot_cc_0				; No
+	; Copy (initial) valid flags from HUD/ppO2 Monitor
+	btfsc	sensor1_active
+	bsf	use_O2_sensor1
+    	btfsc	sensor2_active
+	bsf	use_O2_sensor2
+	btfsc	sensor3_active
+	bsf	use_O2_sensor3
+
+dive_boot_cc_0:
 	; In pSCR mode, only settings 0 (calculated ppO2) and 1 (ppO2 from sensors) are defined.
 	; In case we still have 3 (auto SP) selected out of previous ccr mode, we reset to 0.
 	btfss	FLAG_pscr_mode

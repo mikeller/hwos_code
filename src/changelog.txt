@@ -13,6 +13,7 @@ CHANGE: Make disabled gases darker in surface mode (Common issue for color-blind
 CHANGE: French and Italien language updates
 NEW: Independent saturation/desaturation multipliers for GF and non-GF Deco modes
 CHANGE: Non-updated values are shown in dark blue (e.g. after a gas change) until values are valid again
+CHANGE: USB OSTC (OSTC 3 and OSTC cR) will enter USB mode from Menu only
 
 [2.27]
 - Beta Version -

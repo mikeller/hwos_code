@@ -516,9 +516,12 @@ customview_init_view1:
 customview_init_view1a:
 	btfsc	analog_o2_input				; do we have an analog input?
 	bra		customview_init_view1b		; YES - show this view
-	btfss	s8_digital					; NO  - do we have a digital input?
-	bra		customview_toggle			;       NO  - call next view...
-										;       YES - show this view
+	btfsc	s8_digital				; NO  - do we have a digital input?
+	bra		customview_init_view1b		; YES - show this view
+	btfss	optical_input				; NO  - do we have an optical input?
+	bra		customview_toggle		; NO  - call next view...
+
+	;       YES - show this view
 customview_init_view1b:
 	call	TFT_hud_mask				; Setup HUD mask
 	call	TFT_update_ppo2_sensors		; Update Sensor data

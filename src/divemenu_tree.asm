@@ -63,10 +63,12 @@ main_divemenu_loop:
 	MENU_END
 
 main_divemenu_pscr:
-	btfsc	analog_o2_input				; do we have an analog input?
-	bra		main_divemenu_pscr_sensors	; YES
-	btfsc	s8_digital					; do we have a digital input?
-	bra		main_divemenu_pscr_sensors	; YES
+	btfsc	analog_o2_input			; do we have an analog input?
+	bra	main_divemenu_pscr_sensors	; YES
+	btfsc	s8_digital			; do we have a digital input?
+	bra	main_divemenu_pscr_sensors	; YES
+	btfsc	optical_input			; do we have an optical input?
+	bra	main_divemenu_pscr_sensors	; YES
 
 main_divemenu_pscr_no_sensors:
 	MENU_BEGIN	tMainMenu,	.6
@@ -323,7 +325,9 @@ do_divemode_splist:
 do_divemode_splist_common:
 	btfsc	analog_o2_input				; do we have an analog input?
 	bra		do_divemode_splist_sensor	; YES
-	btfsc	s8_digital					; do we have a digital input?
+	btfsc	s8_digital				; do we have a digital input?
+	bra		do_divemode_splist_sensor	; YES
+	btfsc	optical_input				; do we have an optical input?
 	bra		do_divemode_splist_sensor	; YES
 
 do_divemode_splist_no_sensor:

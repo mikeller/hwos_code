@@ -1392,6 +1392,8 @@ TFT_update_ppo2_sensors:
 	; sensor 1
 	btfsc	sensor1_calibrated_ok		; valid calibration?
 	bra	TFT_update_hud1b				; yes
+	btfsc	sensor1_active			; valid HUD data for this sensor
+	bra	TFT_update_hud1b				; yes
 	; no valid calibration
 	WIN_STD dm_custom_hud_sensor1_column+.7, dm_custom_hud_data_row+.5
 	call	TFT_standard_color
@@ -1432,6 +1434,8 @@ TFT_update_hud1e:
 TFT_update_hud2a:						; sensor 2
 	btfsc	sensor2_calibrated_ok		; valid calibration?
 	bra		TFT_update_hud2b			; yes
+	btfsc	sensor2_active			; valid HUD data for this sensor
+	bra	TFT_update_hud2b				; yes
 	; no valid calibration
 	WIN_STD dm_custom_hud_sensor2_column+.7, dm_custom_hud_data_row+.5
 	call	TFT_standard_color
@@ -1472,6 +1476,8 @@ TFT_update_hud2e:
 TFT_update_hud3a:						; sensor 3
 	btfsc	sensor3_calibrated_ok		; valid calibration?
 	bra		TFT_update_hud3b			; yes
+	btfsc	sensor3_active			; valid HUD data for this sensor
+    	bra	TFT_update_hud3b				; yes
 	; no valid calibration
 	WIN_STD dm_custom_hud_sensor3_column+.7, dm_custom_hud_data_row+.5
 	call	TFT_standard_color
@@ -1525,6 +1531,8 @@ TFT_surface_sensor:
 	WIN_SMALL surf_hud_sensor1_column,surf_hud_sensor1_row
 	btfsc	sensor1_calibrated_ok
 	bra		TFT_surface_sensor1			; Yes
+	btfsc	sensor1_active			; valid HUD data for this sensor
+    	bra		TFT_surface_sensor1			; Yes
 	call	TFT_standard_color
 	STRCPY_PRINT "--- "
 	bra		TFT_surface_sensor2			; Skip Sensor 1
@@ -1540,6 +1548,8 @@ TFT_surface_sensor2:
 	WIN_SMALL surf_hud_sensor2_column,surf_hud_sensor2_row
 	btfsc	sensor2_calibrated_ok
 	bra		TFT_surface_sensor3			; Yes
+	btfsc	sensor2_active			; valid HUD data for this sensor
+    	bra		TFT_surface_sensor3			; Yes
 	call	TFT_standard_color
 	STRCPY_PRINT "--- "
 	bra		TFT_surface_sensor4			; Skip Sensor 2
@@ -1555,6 +1565,9 @@ TFT_surface_sensor4:
 	WIN_SMALL surf_hud_sensor3_column,surf_hud_sensor3_row
 	btfsc	sensor3_calibrated_ok
 	bra	TFT_surface_sensor5				; Yes
+	btfsc	sensor3_active			; valid HUD data for this sensor
+    	bra	TFT_surface_sensor5			; Yes
+
 	call	TFT_standard_color
 	STRCPY_PRINT "--- "
 	bra		TFT_surface_sensor6			; Skip Sensor 3
