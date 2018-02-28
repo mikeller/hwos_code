@@ -1,5 +1,5 @@
 // ***************************************************************************
-// p2_deco.c                                         REFACTORED VERSION V2.98
+// p2_deco.c                                         REFACTORED VERSION V2.98+
 //
 //  Created on: 12.05.2009
 //  Author: heinrichs weikamp, contributions by Ralph Lembcke and others
@@ -1824,6 +1824,12 @@ static void calc_hauptroutine(void)
 			{
 				//---- alternative plan ----------------------------------------------------
 
+				// clear NDL time
+				char_O_alternate_nullzeit  = 0;
+
+				// output ascent time
+				int_O_alternate_ascenttime = ascent_time;
+
 				// shall the CNS at the end of the dive be calculated?
 				if( char_O_deco_status & DECO_CNS_CALCULATE )
 				{
@@ -1840,16 +1846,16 @@ static void calc_hauptroutine(void)
 					int_O_alternate_CNS_fraction = int_sim_CNS_fraction;
 				}
 
-				// clear NDL time
-				char_O_alternate_nullzeit  = 0;
-
-				// output ascent time
-				int_O_alternate_ascenttime = ascent_time;
-
 			} // alternative plan
 			else
 			{
 				//---- normal plan ---------------------------------------------------------
+
+				// clear NDL time
+				char_O_nullzeit  = 0;
+
+				// output ascent time
+				int_O_ascenttime = ascent_time;
 
 				// shall the CNS at the end of the dive be calculated?
 				if( char_O_deco_status & DECO_CNS_CALCULATE )
@@ -1866,12 +1872,6 @@ static void calc_hauptroutine(void)
 					// export result
 					int_O_normal_CNS_fraction = int_sim_CNS_fraction;
 				}
-
-				// clear NDL time
-				char_O_nullzeit  = 0;
-
-				// output ascent time
-				int_O_ascenttime = ascent_time;
 
 			} // normal plan
 		} // DECO
@@ -3129,7 +3129,7 @@ void calc_CNS_increment(void)
 
 	//------------------------------------------------------------------------
 	// Don't increase CNS below 0.5 bar, but keep it steady.
-	if      (char_ppO2 <  50) CNS_fraction_inc = 0;				// no CNS increase below 0.5 bar ppO2
+	if      (char_ppO2 <  50) CNS_fraction_inc = 0.0;		// no CNS increase below 0.5 bar ppO2
 	//------------------------------------------------------------------------
 	// Below (and including) 1.60 bar
 	else if (char_ppO2 <  61) CNS_fraction_inc = time_factor/(-533.07 * char_ppO2 + 54000.0);
@@ -3185,7 +3185,7 @@ void calc_CNS_planning(void)
 			sim_CNS_fraction += CNS_fraction_inc;		// sum up
 		}
 
-		// get the ascent time dependent on the current plan
+		// get the ascent time dependent on the current plan +++
 		t = (char_O_deco_status & DECO_PLAN_ALTERNATE) ? int_O_alternate_ascenttime : int_O_ascenttime;
 
 		// start simulating CNS% in chunks of 127 minutes
