@@ -1,5 +1,5 @@
 // ***************************************************************************
-// p2_deco.c                                         REFACTORED VERSION V2.97b
+// p2_deco.c                                         REFACTORED VERSION V2.98
 //
 //  Created on: 12.05.2009
 //  Author: heinrichs weikamp, contributions by Ralph Lembcke and others
@@ -69,6 +69,7 @@
 // 2017/08/04: [mH]  Switch to absolute GF everywhere and apply safety margin parameters to both models (GF and non-GF), fixes from Ralph Lembcke
 // 2017/10/31: [rl]  enhancements for pSCR mode and introduction of 2nd deco plan computation
 // 2017/12/31: [rl]  completion of 2nd deco plan computation and various up-fixes
+// 2018/02/17: [rl]  switch-over to new ceiling rounding (V2.98a)
 //
 //
 // Literature:
@@ -117,7 +118,7 @@
 #define GF_WARNING_THRESHOLD			100		// threshold for GF   warning (attention threshold is current GF_high)
 #define CNS_WARNING_THRESHOLD			100		// threshold for CNS  warning
 #define CNS_ATTENTION_THRESHOLD			 70		// threshold for CNS  attention
-#define ppO2_ATTENTION_THRESHOLD		120		// threshold for ppO2 attention (thresholds for warnings come by options_table.asm)
+#define ppO2_ATTENTION_THRESHOLD		130		// threshold for ppO2 attention (thresholds for warnings come by options_table.asm)
 #define ppO2_GAP_TO_SETPOINT			 10		// gap between setpoint and max. ppO2 of the pure diluent [cbar]
 #define GAS_NEEDS_ATTENTION_THRESHOLD	0.70	// threshold for gas needs attention
 
@@ -148,8 +149,8 @@
 #define DECO_BOTTOM_CALCULATE			0x40
 
 // deco engine states and modes - tissue_increment
-#define TIME_MASK						0x7F	// (127 decimal, bits 0-6)
-#define TISSUE_FLAG						0x80	// (128 decimal, bit   7 )
+#define TIME_MASK						0x7F	// (127 decimal, bits 0-6 set)
+#define TISSUE_FLAG						0x80	// (128 decimal, bit   7  set)
 
 // deco engine warnings
 #define	DECO_WARNING_IBCD				0x01
@@ -177,7 +178,6 @@
 
 static void calc_hauptroutine(void);
 static void calc_hauptroutine_data_input(void);
-static void calc_hauptroutine_update_tissues(void);
 static void calc_hauptroutine_calc_deco(void);
 static void calc_alveolar_pressures(void);
 static void calc_tissues(void);
@@ -517,7 +517,7 @@ rom const float e10min[2*16] = {
 // all new in v.102
 // moved from 0x0D000 to 0x0C000 in v.108
 #ifndef UNIX
-#   pragma code p2_deco = 0x0C000
+#	pragma code p2_deco = 0x0C000
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -539,30 +539,30 @@ void assert_failed(PARAMETER short int line)
 // frames should be reset. Bank8 is used by stack
 
 #ifdef CROSS_COMPILE
-#       define RESET_C_STACK
+#	define RESET_C_STACK
 #else
-#   ifdef __DEBUG
-#       define RESET_C_STACK fillDataStack();
-        void fillDataStack(void)
-        {
-            _asm
-                LFSR    1,C_STACK
-                MOVLW   0xCC
-        loop:   MOVWF   POSTINC1,0
-                TSTFSZ  FSR1L,0
-                BRA     loop
+#	ifdef __DEBUG
+#		define RESET_C_STACK fillDataStack();
+		void fillDataStack(void)
+		{
+			_asm
+				LFSR    1,C_STACK
+				MOVLW   0xCC
+		loop:	MOVWF   POSTINC1,0
+				TSTFSZ  FSR1L,0
+				BRA     loop
 
-                LFSR    1,C_STACK
-                LFSR    2,C_STACK
-            _endasm
-        }
-#   else
-#       define RESET_C_STACK    \
-        _asm                    \
-            LFSR    1, C_STACK  \
-            LFSR    2, C_STACK  \
-        _endasm
-#   endif
+				LFSR    1,C_STACK
+				LFSR    2,C_STACK
+			_endasm
+		}
+#	else
+#		define	RESET_C_STACK	\
+		_asm					\
+			LFSR	1, C_STACK	\
+			LFSR	2, C_STACK	\
+		_endasm
+#	endif
 #endif
 
 //////////////////////////////////////////////////////////////////////////////
@@ -571,12 +571,12 @@ void assert_failed(PARAMETER short int line)
 static unsigned short tmr5(void)
 {
 #ifndef CROSS_COMPILE
-    _asm
-        movff   0xf7c,PRODL     // TMR5L
-        movff   0xf7d,PRODH     // TMR5H
-    _endasm                     // result in PRODH:PRODL.
+	_asm
+		movff	0xf7c,PRODL		// TMR5L
+		movff	0xf7d,PRODH		// TMR5H
+	_endasm						// result in PRODH:PRODL.
 #else
-    return 0;
+	return 0;
 #endif
 }
 
@@ -586,27 +586,27 @@ static unsigned short tmr5(void)
 static void read_Buhlmann_coefficients(void)
 {
 #ifndef CROSS_COMPILE
-    // Note: we don't use far rom pointer, because the
-    //       24 bits is too complex, hence we have to set
-    //       the UPPER page ourself...
-    //       --> Set zero if tables are moved to lower pages !
-    _asm
-        movlw 1
-        movwf TBLPTRU,0
-    _endasm
+	// Note: we don't use far rom pointer, because the
+	//       24 bits is too complex, hence we have to set
+	//       the UPPER page ourself...
+	//       --> Set zero if tables are moved to lower pages !
+	_asm
+		movlw 1
+		movwf TBLPTRU,0
+	_endasm
 #endif
 
-    assert( ci < NUM_COMP );
+	assert( ci < NUM_COMP );
 
-    // Use an interleaved array (AoS) to access coefficients with a
-    // single addressing.
-    {
-        overlay rom const float* ptr = &Buhlmann_ab[4*ci];
-        var_N2_a = *ptr++;
-        var_N2_b = *ptr++;
-        var_He_a = *ptr++;
-        var_He_b = *ptr++;
-    }
+	// Use an interleaved array (AoS) to access coefficients with a
+	// single addressing.
+	{
+		overlay rom const float* ptr = &Buhlmann_ab[4*ci];
+		var_N2_a = *ptr++;
+		var_N2_b = *ptr++;
+		var_He_a = *ptr++;
+		var_He_b = *ptr++;
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -617,48 +617,48 @@ static void read_Buhlmann_coefficients(void)
 static void read_Buhlmann_times(PARAMETER char period)
 {
 #ifndef CROSS_COMPILE
-    // Note: we don't use far rom pointer, because the
-    //       24 bits is to complex, hence we have to set
-    //       the UPPER page ourself...
-    //       --> Set zero if tables are moved to lower pages !
-    _asm
-        movlw 1
-        movwf TBLPTRU,0
-    _endasm
+	// Note: we don't use far rom pointer, because the
+	//       24 bits is to complex, hence we have to set
+	//       the UPPER page ourself...
+	//       --> Set zero if tables are moved to lower pages!
+	_asm
+		movlw 1
+		movwf TBLPTRU,0
+	_endasm
 #endif
 
-    assert( ci < NUM_COMP );
+	assert( ci < NUM_COMP );
 
-    // Integration intervals.
-    switch(period)
-    {
-    case 0: //---- 2 sec -----------------------------------------------------
-        {
-            overlay rom const float* ptr = &e2secs[2*ci];
-            var_N2_e = *ptr++;
-            var_He_e = *ptr++;
-        }
-        break;
+	// Integration intervals
+	switch(period)
+	{
+	case 0: //---- 2 sec -----------------------------------------------------
+		{
+			overlay rom const float* ptr = &e2secs[2*ci];
+			var_N2_e = *ptr++;
+			var_He_e = *ptr++;
+		}
+		break;
 
-    case 1: //---- 1 min -----------------------------------------------------
-       {
-            overlay rom const float* ptr = &e1min[2*ci];
-            var_N2_e = *ptr++;
-            var_He_e = *ptr++;
-        }
-        break;
+	case 1: //---- 1 min -----------------------------------------------------
+		{
+			overlay rom const float* ptr = &e1min[2*ci];
+			var_N2_e = *ptr++;
+			var_He_e = *ptr++;
+		}
+		break;
 
-    case 2: //---- 10 min ----------------------------------------------------
-        {
-            overlay rom const float* ptr = &e10min[2*ci];
-            var_N2_e = *ptr++;
-            var_He_e = *ptr++;
-        }
-        break;
+	case 2: //---- 10 min ----------------------------------------------------
+		{
+			overlay rom const float* ptr = &e10min[2*ci];
+			var_N2_e = *ptr++;
+			var_He_e = *ptr++;
+		}
+	break;
 
-    default:
-        assert(0);  // Never go there...
-    }
+	default:
+		assert(0);  // Never go there...
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -668,25 +668,25 @@ static void read_Buhlmann_ht(void)
 {
 
 #ifndef CROSS_COMPILE
-    // Note: we don't use far rom pointer, because the
-    //       24 bits is to complex, hence we have to set
-    //       the UPPER page ourself...
-    //       --> Set zero if tables are moved to lower pages !
-    _asm
-        movlw 1
-        movwf TBLPTRU,0
-    _endasm
+	// Note: we don't use far rom pointer, because the
+	//       24 bits is to complex, hence we have to set
+	//       the UPPER page ourself...
+	//       --> Set zero if tables are moved to lower pages !
+	_asm
+		movlw 1
+		movwf TBLPTRU,0
+	_endasm
 #endif
 
-    assert( ci < NUM_COMP );
-    {
-        overlay rom const float* ptr = &Buhlmann_ht[2*ci];
-        var_N2_ht = *ptr++;
-        var_He_ht = *ptr++;
-    }
+	assert( ci < NUM_COMP );
+	{
+		overlay rom const float* ptr = &Buhlmann_ht[2*ci];
+		var_N2_ht = *ptr++;
+		var_He_ht = *ptr++;
+	}
 
-    assert( 4.0    <= var_N2_ht && var_N2_ht <= 635.0 );
-    assert( 1.5099 <= var_He_ht && var_He_ht <= 240.03 );
+	assert( 4.0    <= var_N2_ht && var_N2_ht <= 635.0 );
+	assert( 1.5099 <= var_He_ht && var_He_ht <= 240.03 );
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -1107,18 +1107,15 @@ static void gas_find_current(void)
 
 	if( char_I_current_gas <= NUM_GAS )					// Gas 1-5
 	{
-		sim_gas_last_used = sim_gas_first_used = char_I_current_gas;
-
-		// If current gas is a deco gas get it's change depth.
-		// Set change depth to 0 if the current gas is the first gas or 
-		// a travel/normal gas, i.e. if it can be breathed at "any" depth.
-		if( char_I_deco_gas_change[sim_gas_last_used-1] ) sim_gas_last_depth = char_I_deco_gas_change[sim_gas_last_used-1];
-		else                                              sim_gas_last_depth = 0;
+		sim_gas_last_used  = sim_gas_first_used = char_I_current_gas;
+		sim_gas_last_depth = char_I_deco_gas_change[sim_gas_last_used-1];	// > 0 for OC deco gases,
+																			// > 0 for first & normal diluents,
+																			// = 0 else
 	}
 	else
 	{
-		sim_gas_last_used = sim_gas_first_used = 0;		// Gas 6 (the manually set one) has number 0 here
-		sim_gas_last_depth                     = 0;		// handle it as a travel/normal gas
+		sim_gas_last_used  = sim_gas_first_used = 0;		// Gas 6 (the manually set one) has number 0 here
+		sim_gas_last_depth                      = 0;		// handle it as a travel/normal gas
 	}
 }
 
@@ -1255,6 +1252,7 @@ static void gas_set_ratios(void)
 //
 // Output: ppN2                   : respired N2 partial pressure
 //         ppHe                   : respired He partial pressure
+//         char_ppO2              : breathed ppO2 in %, to be used for CNS calculation
 //
 void calc_alveolar_pressures(void)
 {
@@ -1453,14 +1451,16 @@ static void calc_hauptroutine(void)
 	overlay unsigned int int_ppO2_min;
 	overlay unsigned int int_ppO2_max;
 	overlay unsigned int int_ppO2_max_dil;
+	overlay float        EAD;
+	overlay float        END;
 
-	//--- set-up part --------------------------------------------------------------------------------
+
+	//--- Set-up Part --------------------------------------------------------------------------------
 
 	// twosectimer:
 	// calc_hauptroutine is now invoked every second to speed up the deco planning.
-	// Because the tissue and CNS calculations are based on a 2 seconds period, the
-	// the following toggle-timer will be used by the respective routines to skip
-	// every 2nd invocation.
+	// Because the tissue and CNS calculations are based on a two seconds period, a
+	// toggle-timer is used by the respective routines to skip every 2nd invocation.
 	twosectimer = (twosectimer) ? 0 : 1;			// toggle the toggle-timer
 
 
@@ -1482,25 +1482,83 @@ static void calc_hauptroutine(void)
 	}
 
 
-	//---- calculate the real tissue's data -----------------------------------------------------------------
+	//---- Calculations Part ----------------------------------------------------------------------
 
 	// acquire current environment data
 	calc_hauptroutine_data_input();
 
-	// update tissue pressures, also sets char_ppO2 for calc_CNS_increment()
-	calc_hauptroutine_update_tissues();
+	// calculate ppN2 and ppHe
+	calc_alveolar_pressures();
 
-	// calculate CNS value increment for the real tissues
-	calc_CNS_increment();
+	// All deco code is invoked every second. But as the tissue and CNS updates are based
+	// on 2 seconds periods, each update is done only on each 2nd second.
+	// In case a "fast forward" of the tissues is commanded, the 2-seconds rule is over raided.
+	// To distribute computational load, updating of tissues and CNS is done in alternation.
+	if( twosectimer || (tissue_increment & TIME_MASK) )
+	{
+		// calculate the real tissues
+		calc_tissues();
 
-	// update the CNS value for the real tissues
-	CNS_fraction += CNS_fraction_inc;
+		// calculate ceiling (at GF_high) and current GF
+		calc_limit(GF_high);
+	}
 
-	// compute integer copy of CNS value for display purpose
-	convert_CNS_for_display();
+	if( !twosectimer || (tissue_increment & TIME_MASK) )
+	{
+		// calculate CNS value increment for the real tissues
+		calc_CNS_increment();
+
+		// increment CNS value of the real tissues
+		CNS_fraction += CNS_fraction_inc;
+
+		// compute integer copy of CNS value for display purpose
+		convert_CNS_for_display();
+	}
 
 
-	//---- compute ppO2 warnings ------------------------------------------------------------------------------
+	//---- Calculate and Export EAD and END ------------------------------------------------------
+
+	// calculate EAD (Equivalent Air Depth): equivalent depth for the same N2 level with plain air
+	EAD = (ppN2 / 0.7902 + ppWater - pres_surface) * BAR_TO_METER;
+
+	// calculate END (Equivalent Narcotic Depth): here O2 is treated as narcotic, too
+	// Source cited: The Physiology and Medicine of Diving by Peter Bennett and David Elliott,
+	//               4th edition, 1993, W.B.Saunders Company Ltd, London.
+	END = (pres_respiration - ppHe - pres_surface) * BAR_TO_METER;
+
+	// export EAD
+	if( (EAD < 0.0) || (EAD > 245.5) ) char_O_EAD = 0;
+	else                               char_O_EAD = (unsigned char)(EAD + 0.5);
+
+	// export END
+	if( (END < 0.0) || (END > 245.5) ) char_O_END = 0;
+	else                               char_O_END = (unsigned char)(END + 0.5);
+
+
+	//---- Compute ppO2 Values in [cbar] ---------------------------------------------------------
+
+	// pure oxygen ppO2
+	if		( O2_ppO2       <  0.01  ) int_O_O2_ppO2       =   0;
+	else if ( O2_ppO2       >= 9.995 ) int_O_O2_ppO2       = 999;
+	else                               int_O_O2_ppO2       = (unsigned int)(100 *   O2_ppO2 + 0.5);
+	
+	// pure gas ppO2
+	if      ( OC_ppO2       <  0.01  ) int_O_pure_ppO2     =   0;
+	else if ( OC_ppO2       >= 9.995 ) int_O_pure_ppO2     = 999;
+	else                               int_O_pure_ppO2     = (unsigned int)(100 *   OC_ppO2 + 0.5);
+	
+	// calculated pSCR ppO2
+	if		( pSCR_ppO2     <  0.01  ) int_O_pSCR_ppO2     =   0;
+	else if ( pSCR_ppO2     >= 9.995 ) int_O_pSCR_ppO2     = 999;
+	else                               int_O_pSCR_ppO2     = (unsigned int)(100 * pSCR_ppO2 + 0.5);
+
+	// breathed ppO2
+	if		( ppO2          <  0.01  ) int_O_breathed_ppO2 =   0;
+	else if ( ppO2          >= 9.995 ) int_O_breathed_ppO2 = 999;
+	else                               int_O_breathed_ppO2 = (unsigned int)(100 *      ppO2 + 0.5);
+
+
+	//---- Compute ppO2 Warnings ------------------------------------------------------------------
 
 	// compute conditional min/max values
 	int_ppO2_min = (char_O_main_status   & DECO_MODE_LOOP) ? (unsigned int)char_I_ppO2_min_loop : (unsigned int)char_I_ppO2_min;
@@ -1544,13 +1602,15 @@ static void calc_hauptroutine(void)
 	else if ( int_O_pSCR_ppO2 >=               int_ppO2_max     ) int_O_pSCR_ppO2     |= INT_FLAG_WARNING + INT_FLAG_HIGH;
 
 
-
-	//---- toggle between calculation for NDL (bottom time),  ------
-	//---- deco stops and more deco stops (continue)          ------
+	// done with the real tissues
 
 
-	// done with the real tissues, all following operations
-	// target the simulated tissues so clear flag in bit 7
+
+	//---- Toggle between Calculation for NDL (bottom time),  -------------------------------------
+	//---- Deco Stops, more Deco Stops and Results Gathering  -------------------------------------
+
+
+	// all following operations target the simulated tissues, so clear flag in bit 7
 	tissue_increment = 0;
 
 	// branch to the code for the current phase the deco calculations are in
@@ -1864,67 +1924,6 @@ void calc_hauptroutine_data_input(void)
 	pSCR_drop         = IG_ratio * float_pSCR_factor;
 }
 
-//////////////////////////////////////////////////////////////////////////////
-//
-//
-void calc_hauptroutine_update_tissues(void)
-{
-	overlay float EAD, END;
-
-	//---- calculations part ----------------------------------------------------------------------
-
-	// calculate ppN2 and ppHe
-	calc_alveolar_pressures();
-
-	// calculate the tissues
-	calc_tissues();
-
-	// calculate ceiling (at GF_high) and current GF
-	calc_limit(GF_high);
-
-	// calculate EAD (Equivalent Air Depth): equivalent depth for the same N2 level with plain air
-	EAD = (ppN2 / 0.7902 + ppWater - pres_surface) * BAR_TO_METER;
-
-	// calculate END (Equivalent Narcotic Depth): here O2 is treated as narcotic, too
-	// Source cited: The Physiology and Medicine of Diving by Peter Bennett and David Elliott,
-	//               4th edition, 1993, W.B.Saunders Company Ltd, London.
-	END = (pres_respiration - ppHe - pres_surface) * BAR_TO_METER;
-
-
-	//---- export ppO2 values in [cbar] for warning generation and display purpose ----------------
-
-	// pure oxygen ppO2
-	if		( O2_ppO2       <  0.01  ) int_O_O2_ppO2       =   0;
-	else if ( O2_ppO2       >= 9.995 ) int_O_O2_ppO2       = 999;
-	else                               int_O_O2_ppO2       = (unsigned int)(100 *   O2_ppO2 + 0.5);
-	
-	// pure gas ppO2
-	if      ( OC_ppO2       <  0.01  ) int_O_pure_ppO2     =   0;
-	else if ( OC_ppO2       >= 9.995 ) int_O_pure_ppO2     = 999;
-	else                               int_O_pure_ppO2     = (unsigned int)(100 *   OC_ppO2 + 0.5);
-	
-	// calculated pSCR ppO2
-	if		( pSCR_ppO2     <  0.01  ) int_O_pSCR_ppO2     =   0;
-	else if ( pSCR_ppO2     >= 9.995 ) int_O_pSCR_ppO2     = 999;
-	else                               int_O_pSCR_ppO2     = (unsigned int)(100 * pSCR_ppO2 + 0.5);
-
-	// breathed ppO2
-	if		( ppO2          <  0.01  ) int_O_breathed_ppO2 =   0;
-	else if ( ppO2          >= 9.995 ) int_O_breathed_ppO2 = 999;
-	else                               int_O_breathed_ppO2 = (unsigned int)(100 *      ppO2 + 0.5);
-
-
-	//---- export EAD and END ---------------------------------------------------------------------
-
-	// EAD
-	if( (EAD < 0.0) || (EAD > 245.5) ) char_O_EAD = 0;
-	else                               char_O_EAD = (unsigned char)(EAD + 0.5);
-
-	// END
-	if( (END < 0.0) || (END > 245.5) ) char_O_END = 0;
-	else                               char_O_END = (unsigned char)(END + 0.5);
-}
-
 
 //////////////////////////////////////////////////////////////////////////////
 // Compute stops.
@@ -2173,17 +2172,11 @@ static void calc_tissues()
 
 			if( tissue_increment & TISSUE_FLAG )
 			{
-				// The temp variable takes on purpose just the tissue increment from the last loop's iteration.
-				temp_tissue_N2 = temp_tissue;
-				
-				// Update the real tissues if either we are on the 2 seconds interval,
-				// or if we shall advance the tissues on a one or several minutes basis.
-				if( twosectimer || (tissue_increment & TIME_MASK) ) pres_tissue_N2[ci] += temp_tissue;
+				temp_tissue_N2      = temp_tissue;
+				pres_tissue_N2[ci] += temp_tissue;
 			}
 			else
 			{
-				// Updates of the sim-tissues always comes on a 1 minutes basis,
-				// so we do not need to check of the 2 seconds interval.
 				sim_pres_tissue_N2[ci] += temp_tissue;
 			}
 
@@ -2198,17 +2191,11 @@ static void calc_tissues()
 
 			if( tissue_increment & TISSUE_FLAG )
 			{
-				// The temp variable takes on purpose just the tissue increment from the last loop's iteration.
-				temp_tissue_He = temp_tissue;
-				
-				// Update the real tissues if either we are on the 2 seconds interval,
-				// or if we shall advance the tissues on a one or several minutes basis.
-				if( twosectimer || (tissue_increment & TIME_MASK) ) pres_tissue_He[ci] += temp_tissue;
+				temp_tissue_He      = temp_tissue;
+				pres_tissue_He[ci] += temp_tissue;
 			}
 			else
 			{
-				// Updates of the sim-tissues always comes on a 1 minutes basis,
-				// so we do not need to check of the 2 seconds interval.
 				sim_pres_tissue_He[ci] += temp_tissue;
 			}
 
@@ -2226,14 +2213,14 @@ static void calc_tissues()
 
 
 		// have the computations been done for the "real" tissues?
-		if( (tissue_increment & TISSUE_FLAG) && (twosectimer || (tissue_increment & TIME_MASK)) )
+		if( tissue_increment & TISSUE_FLAG )
 		{
 			// net tissue balance
 			temp_tissue = temp_tissue_N2 + temp_tissue_He;
 
 			// check tissue on-/off-gassing and IBCD with applying a threshold of +/-HYST
 			//
-			if      ( temp_tissue < -HYST )				// Check if the tissue is off-gassing
+			if      ( temp_tissue < -HYST )				// check if the tissue is off-gassing
 			{
 				deco_tissue_vector |=  (1 << ci);		// tag tissue as being in decompression
 				IBCD_tissue_vector &= ~(1 << ci);		// tag tissue as not experiencing mentionable IBCD
@@ -2371,7 +2358,7 @@ static void calc_limit(PARAMETER float GF_parameter)
 		{
 			overlay float supersat;
 			overlay float threshold;
-	
+
 			// calculate current supersaturation value (1.0 = 100%) of this tissue
 			supersat = (pres_tissue - pres_respiration) / (pres_tissue - pres_min);
 
@@ -2450,11 +2437,11 @@ static void calc_limit(PARAMETER float GF_parameter)
 		if      ( ceiling <=  0 ) int_O_ceiling = 0;
 		else if ( ceiling >  16 ) int_O_ceiling = 16000;
 	// Compatibility version
-		else                      int_O_ceiling = (short)(ceiling * 1000);
+	//	else                      int_O_ceiling = (short)(ceiling * 1000);
 
 	// New version: Rounds up to next 10 cm so that the ceiling disappears on the display only when the
 	// ceiling limit is really zero. This will coincident then with TTS switching back to NDL time.
-	//	else                      int_O_ceiling = (short)(ceiling * 1000 + 9);
+		else                      int_O_ceiling = (short)(ceiling * 1000 + 9);
 
 
 		// convert highest supersaturation found to int_O_gradient_factor in % (1.0 = 100%)
@@ -3137,16 +3124,8 @@ void calc_CNS_increment(void)
 
 	assert( char_ppO2 > 15 );
 
-	// All deco code is now invoked every second. But as the CNS update is based on
-	// 2 seconds periods, we skip every 2nd seconds-based invocation of this function.
-	// TISSUE_FLAG = 128 (flag for "real" CNS) + 0 (2 seconds period)
-	// To distribute computational load, the CNS% is calculated in "the other second"
-	// than the tissues.
-	if( (tissue_increment == TISSUE_FLAG) && (twosectimer) ) return;
-
 	// adjust time factor if minute-based stepping is commanded, mask out flag bit
 	if( tissue_increment & TIME_MASK ) time_factor = 30.0 * (float)(tissue_increment & TIME_MASK);
-
 
 	//------------------------------------------------------------------------
 	// Don't increase CNS below 0.5 bar, but keep it steady.
