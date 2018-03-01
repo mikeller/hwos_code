@@ -316,7 +316,7 @@
 	TCODE	tLogTunitC,	"°C"	
 	TCODE	tLogTunitF,	"°F"
 	TCODE	tKGL,		"kg/l"
-	TCODE	tMBAR,		"hPa"
+	TCODE	tMBAR,		"mbar"
 
 ; Logbook menu
 	TCODE	tNextLog, 	"Page Suivante"

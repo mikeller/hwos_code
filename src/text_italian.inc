@@ -150,6 +150,7 @@
 	TCODE	tCalcAscGas,	 "Calc.Gas (B/O):"	;								## NEW bailout gas needs
 	TCODE	tTankSizes,		 "Capac. Bombola"		;								## NEW bailout gas needs
 	TCODE   tLiter,			 " l"				;								## NEW bailout gas needs 
+	TCODE	tBarLiter,		"Bar Litri"
 	TCODE	tTankFillPress,	 "Press. Bombola";								## NEW bailout gas needs
 	TCODE	tGas1,			 "Gas 1:"			;								## NEW bailout gas needs
 	TCODE	tGas2,			 "Gas 2:"			;								## NEW bailout gas needs
@@ -210,7 +211,6 @@
     TCODE   tMinutes,   "'"
     TCODE   tPercent,   "%"
     TCODE   tLitersMinute, "l/min"
-    TCODE	tBarLiter,			"Bar Liter"
 	TCODE	tbar,		"bar"					; bar
 	TCODE	tbar10,		"0 bar"					; bar							## NEW 2.95
 	TCODE	tMeterMinute, "m/min"				; meter per minute				## NEW ascent speed
@@ -229,7 +229,7 @@
 ; Decoplanner submenu
     TCODE   tBtTm,  	"Tempo Fondo :"        ; Bot. Time: (10 chars)
     TCODE   tBtTm_short,"Tempo:"               ; Bot. Time: (max. 6 chars)
-    TCODE   tMxDep, 	"Profond. Max:"        ; Max Depth: (10 chars)
+    TCODE   tBtDep, 	"Profond. Max:"        ; Max Depth: (10 chars)
     TCODE   tIntvl, 	"Int.Superf. :"        ; Interval : (10 chars)
 	TCODE	tDecoSetup,	"Setta Calcoli"	;									## NEW (layout)
     TCODE   tDeco,  	"Calcola Deco"         ; Calculate Deco

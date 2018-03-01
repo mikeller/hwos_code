@@ -1,5 +1,6 @@
 [2.97]
 - Stable Version -
+NEW: On-the-fly Gas needs calculations for all active gases
 NEW: Internal deco calculator shows deco plan and gas beeds for Bailout case
 NEW: CNS now, CNS in xx minutes, CNS if bailout plan is used and CNS when surfaced (Including all deco stops) is shown
 NEW: Bailout TTS is computed in CCR mode (optionally) with gas needs for all bailout gases and all deco stops
