@@ -150,7 +150,7 @@
 	TCODE	tCalcAscGas,	 "Calc.Gaz (B/O):"	;								## NEW bailout gas needs
 	TCODE	tTankSizes,		 "Volumes Blocs"	; Tank Sizes					## NEW bailout gas needs
 	TCODE   tLiter,			 " l"				;								## NEW bailout gas needs 
-	TCODE	tBarLiter,		"Bar Litre"
+	TCODE	tBarLiter,		"Litre"
 	TCODE	tTankFillPress,	 "Pressions Blocs"	; Tank Press Budget				## NEW bailout gas needs
 	TCODE	tGas1,			 "Gaz 1:"			;								## NEW bailout gas needs
 	TCODE	tGas2,			 "Gaz 2:"			;								## NEW bailout gas needs

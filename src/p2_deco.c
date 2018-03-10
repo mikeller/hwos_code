@@ -1,5 +1,5 @@
 // ***************************************************************************
-// p2_deco.c                                         REFACTORED VERSION V2.98+
+// p2_deco.c                                         REFACTORED VERSION V2.97 SP1
 //
 //  Created on: 12.05.2009
 //  Author: heinrichs weikamp, contributions by Ralph Lembcke and others
@@ -1021,7 +1021,8 @@ done:
 	// After the first deco stop, gas changes are only done at deco stops now!
 
 	// check if a stop is found and there is a better gas to switch to
-	if( need_stop && gas_find_better() )
+	if( need_stop )
+	if( gas_find_better() )
 	{
 		// set the new calculation ratios for N2, He and O2
 		gas_set_ratios();
@@ -1165,7 +1166,7 @@ static unsigned char gas_find_better(void)
 		// Is the change depth of the gas shallower or equal to the change depth
 		// of the best gas found so far, or is it the first better gas found?
 		// If yes, we have a better gas
-		if( char_I_deco_gas_change[j] <= switch_depth )
+		if( char_I_deco_gas_change[j] < switch_depth )
 		{
 			switch_gas   = j+1;							// remember this gas (1..5)
 			switch_depth = char_I_deco_gas_change[j];	// remember its change depth
@@ -1971,8 +1972,8 @@ void calc_hauptroutine_calc_deco(void)
 		{
 			//---- no stop required --------------------------------------
 
-			// ascend by float_ascent_speed for 1 minute
-			sim_pres_respiration -= float_ascent_speed * METER_TO_BAR;
+			// convert next depth (without stop requirement) to absolute pressure
+			sim_pres_respiration = sim_depth_limit * METER_TO_BAR + pres_surface;
 
 			// finish deco calculation if surface is reached
 			if( sim_pres_respiration <= pres_surface )
@@ -2058,8 +2059,8 @@ void calc_ascent_to_first_stop(void)
 
 		// Check if there is a better gas to switch to, but only in alternative plan mode
 		// or if override is set. If yes, introduce a stop for the gas change.
-		if(    ((char_O_deco_status & DECO_PLAN_ALTERNATE) || (char_O_main_status & DECO_GASCHANGE_OVRD))
-			&& gas_find_better() )
+		if( (char_O_deco_status & DECO_PLAN_ALTERNATE) || (char_O_main_status & DECO_GASCHANGE_OVRD) )
+		if( gas_find_better() )
 		{
 			// depth in meters we came from
 			overlay unsigned char old_depth_limit = (unsigned char)((old_deco - pres_surface) * BAR_TO_METER);			

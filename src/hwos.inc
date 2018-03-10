@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File hwos.inc									REFACTORED VERSION V2.98
+;   File hwos.inc									REFACTORED VERSION V2.97 SP1
 ;
 ;   OSTC Platform definitions
 ;
@@ -23,7 +23,7 @@
 ; Firmware definition
 #DEFINE softwareversion_x		.2			; Software version  XX.YY
 #DEFINE softwareversion_y		.97			; Software version  XX.YY
-#DEFINE softwareversion_beta	.0			; (and 0 for release)
+#DEFINE softwareversion_beta	.2			; 0= release, 1=beta, 2=SP1, 3=SP2, ...
 
 ; Firmware version will appear in "Change Firmware" style
 #DEFINE firmware_expire_year	.19
@@ -418,7 +418,7 @@
 #DEFINE cc_active				flag11,6			; =1: Constant Current active (cR Hardware)
 #DEFINE cv_active				flag11,7			; =1: Constant Voltage active (cR Hardware)
 
-#DEFINE compass_bearing_set		flag12,0			; bearing set
+#DEFINE neg_flag_velocity		flag12,0			; neg_flag backup for velocity logic
 #DEFINE compass_bearing_eq		flag12,1			; bearing is in direction? do not show << or >> 
 #DEFINE compass_bearing_lft		flag12,2			; bearing is to the left/<< if set, otherwise to the right/>>
 #DEFINE compass_bearing_vis		flag12,3			; bearing is visible? (either ahead or behind/-180°)
@@ -427,7 +427,7 @@
 #DEFINE blinking_depth_prev		flag12,6			; set by the TFT_depth.   =1: prev display had warning color
 #DEFINE blinking_depth_toggle	flag12,7			; toggle to blink
 
-#DEFINE neg_flag_velocity		flag13,0			; neg_flag backup for velocity logic
+#DEFINE compass_bearing_set		flag13,0			; bearing set
 #DEFINE analog_sw1_pressed		flag13,1			; =1: Analog switch 1 pressed
 #DEFINE analog_sw2_pressed		flag13,2			; =1: Analog switch 2 pressed
 #DEFINE sp2_switched			flag13,3			; =1: This setpoint has been autoselected already

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft_outputs.asm							REFACTORED VERSION	V2.98
+;   File tft_outputs.asm							REFACTORED VERSION	V2.97 SP1
 ;
 ;   Startup subroutines
 ;
@@ -3027,7 +3027,7 @@ TFT_display_apnoe_descent:			; Descent divetime
 ; Writes ostc #Serial and Firmware version in splash screen
 
 	global	TFT_serial
-TFT_serial:		
+TFT_serial:
 	WIN_TINY	.5,.225
 	STRCPY	"OSTC"					; Won't translate that...
 
@@ -3041,7 +3041,7 @@ TFT_serial2:
 	cpfseq	hardware_flag
 	bra		TFT_serial3
 	STRCAT	" cR #"
-	bra	 TFT_serial_common
+	bra		TFT_serial_common
 TFT_serial3:
 	movlw	0x11
 	cpfseq	hardware_flag
@@ -3065,22 +3065,36 @@ TFT_serial_common:
 		movlw	color_grey				; Write header in blue when
 		call	TFT_set_color			; compiled in DEBUG mode...
 		STRCAT_PRINT "DEBUG"
-	else
-		STRCAT_PRINT ""
-		bcf		win_invert				; Reset invert flag
 		call	TFT_standard_color
-
-		movlw	softwareversion_beta	; =1: Beta, =0: Release
-		decfsz	WREG,F
-		return							; Release version -> Return
-
-		call	TFT_warnings_color
-		WIN_LEFT .160-4*9/2				; Right pad.
-		STRCPY_TEXT_PRINT tBeta
+		bcf		win_invert
+		return
+	else
+		movlw	softwareversion_beta	; =1: Beta, =0: Release, >= 2: Service Pack
+		tstfsz	WREG					; release?
+		bra		TFT_serial_6			; NO
+		bra		TFT_serial_8			; YES
+TFT_serial_6:
+		decfsz	WREG,F					; Beta?
+		bra		TFT_serial_7			; NO
+		STRCAT_PRINT ""					; YES
+		call	TFT_warnings_color		;
+		WIN_LEFT .160-4*9/2				; Right pad
+		STRCPY_TEXT tBeta
+		bra		TFT_serial_8
+TFT_serial_7:
+		STRCAT	" SP"
+		movlw	softwareversion_beta	; STRCAT destroyed WREG
+		decf	WREG,W
+		movwf	lo
+		bsf		leftbind
+		output_8
+		bcf		leftbind
+TFT_serial_8:
+		STRCAT_PRINT ""
+		call	TFT_standard_color
+		bcf		win_invert
+		return
 	endif
-	call	TFT_standard_color
-	bcf		win_invert
-	return
 
 
 ;=============================================================================
@@ -3125,7 +3139,7 @@ TFT_cat_firmware:
 
 	; Show in "change firmware" style
 	movlw	color_yellow
-	bcf	win_invert
+	bcf		win_invert
 	goto	TFT_set_color	; and return...
 
 ;-----------------------------------------------------------------------------

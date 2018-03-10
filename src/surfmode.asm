@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File surfmode.asm								REFACTORED VERSION	V2.98
+;   File surfmode.asm								REFACTORED VERSION	V2.97 SP1
 ;
 ;   Surfacemode
 ;
@@ -408,6 +408,7 @@ test_switches_surfmode3:
 
 test_switches_surfmode3a:
 	bcf		switch_left
+	bcf		compass_bearing_set			; clear bearing on entering menu
 	bsf		menubit						; Enter Menu!
 	return
 

@@ -150,7 +150,7 @@
 	TCODE	tCalcAscGas,	 	"Gasmenge(B/O):"
 	TCODE	tTankSizes,		 	"Tank Größen"
 	TCODE   tLiter,			 	" l"
-	TCODE	tBarLiter,			"Barliter"
+	TCODE	tBarLiter,			"Liter"
 	TCODE	tTankFillPress,	 	"Tank Nutzmenge"
 	TCODE	tGas1,			 	"Gas 1:"
 	TCODE	tGas2,				"Gas 2:"
