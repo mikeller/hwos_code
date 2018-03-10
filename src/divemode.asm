@@ -253,6 +253,8 @@ TFT_output1_alternative:				; beginning of any new second - only for deco modes
 	btfsc	FLAG_TFT_divemode_mask_alt
 	call	TFT_divemode_mask_alternative ; Alt. mask
 	call	customview_alternative_second ; Do every-second tasks for the custom view area (In sync with the divetime) mH
+	btfsc	FLAG_TFT_big_deco_alt
+	call	TFT_big_deco_alt			; Big deco and safety stop
 	return
 
 TFT_output2_normal:						; any new second - only for deco modes
@@ -291,8 +293,6 @@ TFT_output3_alternative:				; tasks any new second, any mode
 	call	TFT_max_depth_alternative	; big max. depth
 	btfsc	FLAG_TFT_dive_warning_text_clear
 	call	TFT_clear_warning_text		; clear complete warnings area (In alt mode only 2nd. row...)
-	btfsc	FLAG_TFT_big_deco_alt
-	call	TFT_big_deco_alt			; Big deco
 	return
 
 TFT_output4_normal:						; tasks any round, any mode
