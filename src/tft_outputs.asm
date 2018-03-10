@@ -1238,6 +1238,8 @@ TFT_update_avr_stopwatch_metric:
 	WIN_MEDIUM dm_custom_avr_stop_column1,dm_custom_avr_stop_row
 	bsf		ignore_digit5				; no cm
 	output_16dp .3						; yxz.a
+	clrf	WREG
+	movff	WREG,buffer+.4					; limit string length to 4 digits/chars
 	STRCAT_PRINT " "
 	; Stopped average depth
 	movff	avg_rel_pressure+0,lo
