@@ -288,7 +288,7 @@
     TCODE   tdil,	    "Dil:"	    ; Diluent ppO2 Warning
 	TCODE	tmix,			"Mix:"			; Pre-Mix ppO2 Warning
     TCODE   tSensorDisagree,"Sensori<>"	    ; Sensors disagree Warning		## NEW voting logic
-    TCODE   tGasNeedsWarn,  "Gas Necess."	    ;					## NEW bailout gas needs
+    TCODE   tGasNeedsWarn,  "Gas Neces"	    ;					## NEW bailout gas needs
     TCODE   tGasNeedsBar,   "Gas Necess. (bar)"	;				## NEW bailout gas needs
     TCODE   tCNSsurf,	    "CNS Surf."	    ;					## NEW CNS at end-of-dive
     TCODE   tCNSfTTS,	    "CNS fTTS"	    ;					## NEW CNS at end-of-dive
