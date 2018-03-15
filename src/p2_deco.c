@@ -1156,12 +1156,12 @@ static unsigned char gas_find_better(void)
 		//         as 'first' because these have their change depth set to 0.
 		if( sim_depth_limit > char_I_deco_gas_change[j] ) continue;
 
-		// Is the change depth of the gas deeper than the change depth of the
+		// Is the change depth of the gas deeper or equal than the change depth of the
 		// gas we are currently one?
 		// If yes, skip this gas as it is not better than the current one.
 		// Remark: if there is more than one gas with the same change depth,
 		//         the last one from the list will be taken.
-		if( sim_gas_last_depth && (char_I_deco_gas_change[j] > sim_gas_last_depth) ) continue;
+		if( sim_gas_last_depth && (char_I_deco_gas_change[j] >= sim_gas_last_depth) ) continue;
 
 		// Is the change depth of the gas shallower or equal to the change depth
 		// of the best gas found so far, or is it the first better gas found?
