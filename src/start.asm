@@ -478,6 +478,7 @@ restart_set_modes_and_flags5b:
 	bcf		opt_ccr_mode,1					; in pSCR mode only calculated or Sensor, not 2 = Auto SP allowed
 	banksel	common
 	bsf		FLAG_pscr_mode
+	call	enable_ir_s8					; Enable IR/S8-Port
 	return									; start in Surfacemode
 
 
