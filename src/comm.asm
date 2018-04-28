@@ -1004,7 +1004,7 @@ comm_read_setting:
 	dcfsnz	WREG
 	movff	opt_calibration_O2_ratio, TXREG1; RCREG1=0x37
 	dcfsnz	WREG
-	clrf	TXREG1						; RCREG1=0x38	NOT USED ANYMORE (ex opt_sensor_fallback)
+	clrf	TXREG1				; RCREG1=0x38	NOT USED ANYMORE (ex opt_sensor_fallback)
 	dcfsnz	WREG
 	movff	opt_flip_screen, TXREG1		; RCREG1=0x39
 	dcfsnz	WREG
@@ -1353,7 +1353,7 @@ comm_write_setting:
 	dcfsnz	WREG
 	movff	RCREG1, opt_calibration_O2_ratio; RCREG1=0x37
 	dcfsnz	WREG
-	nop										; RCREG1=0x38	NOT USED ANYMORE (ex opt_sensor_fallback)
+	nop						; RCREG1=0x38	NOT USED ANYMORE (ex opt_sensor_fallback)
 	dcfsnz	WREG
 	movff	RCREG1, opt_flip_screen			; RCREG1=0x39
 	dcfsnz	WREG
