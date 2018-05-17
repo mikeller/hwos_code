@@ -1,6 +1,10 @@
 [2.97 SP1]
 - Stable Version -
 BUGFIX: Re-enable Sensors after sleep in PSCR mode
+BUGFIX: handle two deco gases configured to the same change depth
+CHANGE: minor italian translation update
+CHANGE: Sync safety stop countdown output with divetime
+
 
 [2.97]
 - Stable Version -
