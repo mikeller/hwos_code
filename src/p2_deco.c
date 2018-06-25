@@ -2730,9 +2730,15 @@ static unsigned char update_deco_table(PARAMETER unsigned char time_increment)
 	// loop through internal deco table
 	for(x=0; x<NUM_STOPS; ++x)
 	{
-		// Make sure deco-stops are recorded in order:
-		assert( !internal_deco_depth[x] || sim_depth_limit <= internal_deco_depth[x] );
-
+                // In case the first deco stop is to be placed deeper than previously recorded
+        // stops for gas changes during the initial ascent (this may happen because the
+        // deco stops are placed at the next deeper multiple of 3 meters instead of the
+        // real stop's depth), relocate the deco stop to the depth of the last gas change.
+        // The resulting combined stop's duration will be the sum of the configured gas
+        // change time plus the duration of the deco stop itself.
+        if( internal_deco_depth[x] && (sim_depth_limit > internal_deco_depth[x]) )
+            sim_depth_limit = internal_deco_depth[x]; 
+        
 		// Is there already a stop entry for our current depth?
 		if( internal_deco_depth[x] == sim_depth_limit )
 		{
