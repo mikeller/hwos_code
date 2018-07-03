@@ -18,7 +18,7 @@
     TCODE   tView,      "Vedi>"         ; View>
     TCODE   tHeading,   "Direzione:"    ; Heading:
     TCODE   tLastDive,	"UltimaImm."	; Last Dive (Max 10 chars)
-    TCODE   tSensorMilliVolt, "CCR Sensori mV" ; CCR Sensors mV
+    TCODE   tSensorMilliVolt, "Sensori CCR mV" ; CCR Sensors mV
 
 ; Divemode Menu
     TCODE   tDivemenu_Gaslist,  "Lista Gas"       ; Gaslist
@@ -81,7 +81,7 @@
     TCODE   tCCRMode,   "Modo CCR:"             ; CCR Mode:
     TCODE   tCCRModeFixedSP,  "SP Fissi"        ; Fixed SP
     TCODE   tCCRModeSensor,   "Sensori"			; Sensor
-    TCODE   tCCRModeAutoSP,   "Auto SP"         ; Auto SP
+    TCODE   tCCRModeAutoSP,   "SP Auto"         ; Auto SP
     TCODE   tSP,            "SP"                ; SP (SetPoint)
     TCODE   tSPPlus,    "ppO2+"					; pO2+
     TCODE   tSensorFallback, "Fallback:"        ; Fallback:
@@ -116,7 +116,7 @@
     TCODE   tUsbLlBld,      "Livello-basso Bootloader"
 
 ; Dive Settings
-    TCODE   tDvMode,    "Tipo Dive:"
+    TCODE   tDvMode,    "Tipo Tuffo:"
     TCODE   tDvOC,      "OC"
 	TCODE	tDvCCR,		"CCR"
     TCODE   tDvGauge,   "Gauge"
@@ -129,7 +129,7 @@
     TCODE   tPPO2Max,   "ppO2 Max:"
     TCODE   tPPO2DECO,	"ppO2 Deco:"
     TCODE   tPPO2MIN,   "ppO2 Min:"
-	TCODE	tPPO2MINCC, 	"Min Loop:"			; 								## NEW ppO2 min cc
+	TCODE	tPPO2MINCC, 	"Loop Min:"			; 								## NEW ppO2 min cc
     TCODE   tLastDecostop, "Ultima Deco:"
     TCODE   tDecoparameters, "Parametri Deco"
     TCODE   tGF_low,    "GF Basso:"
@@ -157,7 +157,7 @@
 	TCODE	tGas3,			 "Gas 3:"			;								## NEW bailout gas needs
 	TCODE	tGas4,			 "Gas 4:"			;								## NEW bailout gas needs
 	TCODE	tGas5,			 "Gas 5:"			;								## NEW bailout gas needs
-	TCODE	tCCmaxFracO2,	 "Loop %O2 max.:"	;								## NEW CCR max ppO2 limiter
+	TCODE	tCCmaxFracO2,	 "%O2 max Loop:"	;								## NEW CCR max ppO2 limiter
 	TCODE	t2ndDecoPlanMenu,"2o Piano Deco"	;								## NEW deco engine
 
 ; Display Settings
@@ -236,7 +236,7 @@
     TCODE   tDivePlan,  "Pianificat:"          ; Dive Plan:
     TCODE   tNoDeco,    "No Deco"              ; No Deco
     TCODE   tMore,      "Dettagli.."           ; More...
-	TCODE	tSelectSetpoint,"CCR Setpoint: "	;								## NEW deco calculator enhancement
+	TCODE	tSelectSetpoint,"Setpoint CCR: "	;								## NEW deco calculator enhancement
 	TCODE	tuseAGF,		"usa aGF: "			;								## NEW deco calculator enhancement
 	TCODE	tCalculating,	"Calcolando..."	;								## NEW deco calculator enhancement
 
@@ -280,7 +280,7 @@
     TCODE   tGFactors,      "Valori GF"     ; GF Values
     TCODE   taGFactors,     "Valori aGF"    ; aGF Values
     TCODE   tGFInfo,        "Info GF"       ; GF Info
-    TCODE   tCeiling,       "Ceiling"       ; Ceiling
+    TCODE   tCeiling,       "Tetto"       ; Ceiling
     TCODE   tDiveSafetyStop,"Stop"			; Stop (Four chars, right alligned)
     TCODE   tDiveFallback,  "Fallback!"     ; Fallback! (max. nine chars)
 	TCODE	tDecoInfo,		"Zona Deco"		; Deco info
@@ -304,7 +304,7 @@
     TCODE   tSetHeading,    "Salva"        ; Bearing (Max. seven chars)
 
 ; Simulator menu
-	TCODE	tQuitSim,	 "Uscire"            ; Quit Simulation?
+	TCODE	tQuitSim,	 "Esci"            ; Quit Simulation?
 
 ; Logbook
 	TCODE	tCNS2,		"CNS:"
@@ -364,6 +364,6 @@
     TCODE   tColorSetName3, "Blu"               ; Blue
 
     ; PSCR Menu and Settings
-    TCODE   tPSCRMenu,	    "PSCR Menu"		; PSCR Menu
+    TCODE   tPSCRMenu,	    "Menu PSCR"		; PSCR Menu
     TCODE   tPSCR_O2_drop,  "O2 drop:"		; O2 drop
     TCODE   tPSCR_lungratio,"Lung ratio:"	; lung ratio
