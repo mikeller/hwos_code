@@ -2698,6 +2698,7 @@ static void clear_deco_table(void)
 	{
 		internal_deco_time [x] = 0;
 		internal_deco_depth[x] = 0;
+        internal_deco_gas[x]   = 0;
 	}
 
 	// clear stop table overflow warning
@@ -3540,7 +3541,10 @@ stops:
 
 	// get the next gas
 	stop_gas = internal_deco_gas[i];
-
+    
+    // in case of end-of-table, keep the last gas
+    if( !stop_gas ) stop_gas = stop_gas_last;
+    
 	// do we we have a gas change?
 	if( stop_gas_last && (stop_gas != stop_gas_last) )
 	{
