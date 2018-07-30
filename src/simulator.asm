@@ -266,6 +266,7 @@ deco_plan_show_stop:
 	TSTOSS	opt_units					; 0=Meters, 1=Feets
 	bra		deco_plan_show_nstd_stop_metric
 
+	movff	hi,up						; backup hi (minutes)
 	WIN_LEFT .85
 	movf	lo,W						; lo = m
 	mullw	.100						; PRODL:PRODH = mbar
@@ -296,6 +297,7 @@ deco_plan_show_stop:
 	output_16
 	bcf		leftbind
 	STRCAT_PRINT "ft "
+	movff	up,hi						; restore hi (minutes)
 	bra		deco_plan_show_nstd_stop_common
 
 deco_plan_show_nstd_stop_metric:

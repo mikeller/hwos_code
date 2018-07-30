@@ -1,3 +1,8 @@
+[2.97 SP2]
+- Stable Version -
+BUGFIX: "lost gas" was re-activated in rare cases
+BUGFIX: Internal deco planner did not display results in imperial units 
+
 [2.97 SP1]
 - Stable Version -
 BUGFIX: Re-enable Sensors after sleep in PSCR mode

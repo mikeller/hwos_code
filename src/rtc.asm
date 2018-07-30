@@ -25,7 +25,7 @@ rtc_init:
 	movwf	hours
 	movlw	.1
 	movwf	day
-	movlw	.3
+	movlw	.8
 	movwf	month
 	movlw	.18
 	movwf	year
