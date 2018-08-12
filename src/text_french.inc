@@ -94,11 +94,11 @@
 ; New batteries menu
 	TCODE   tNewBattTitle,      "Nouvelle Batterie?"
 	TCODE	tNewBattOld,		"Conserver"
-    TCODE	tNewBattNew36,		"Réinit. 3.6V Saft"
-	TCODE	tNewBattNew15,		"Réinit. 1.5V AA"
-	TCODE	tNewBattAccu,		"3.6V LiIon AA"
-	TCODE	tNew18650,		"18650 Interne"
-	TCODE	tNew16650,		"16650 Interne"
+	TCODE	tNewBattNew36,		"Réinit.3,6V Saft(T0)"  ; New 3,6V
+	TCODE	tNewBattNew15,		"Réinit.1,5V AA  (T1)"  ; New 1,5V
+	TCODE	tNewBattAccu,		"3,6V LiIon AA   (T2)"
+	TCODE	tNew18650,		"Internal 18650  (T3)"
+	TCODE	tNew16650,		"Internal 16650  (T4)"
 	
 ; Gaslist management
     TCODE   tGas,       "Gaz"					; Gas
