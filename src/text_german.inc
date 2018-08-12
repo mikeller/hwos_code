@@ -94,8 +94,8 @@
 ; New batteries menu
 	TCODE   tNewBattTitle,      "Neue Batterie?"
 	TCODE	tNewBattOld,		"Behalte alte"
-	TCODE	tNewBattNew36,		"Neue 3,6V Saft (T0)"
-	TCODE	tNewBattNew15,		"Neue 1,5V AA   (T1)"
+	TCODE	tNewBattNew36,		"Neue 3,6V Saft (T1)"
+	TCODE	tNewBattNew15,		"Neue 1,5V AA   (T0)"
 	TCODE	tNewBattAccu,		"3,6V AA Akku   (T2)"
 	TCODE	tNew18650,		"Interne 18650  (T3)"
 	TCODE	tNew16650,		"Interne 16650  (T4)"

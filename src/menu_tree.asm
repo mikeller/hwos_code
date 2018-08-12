@@ -853,8 +853,8 @@ do_new_battery_select:
 menu_new_battery_AA_16650:
 	MENU_BEGIN	tNewBattTitle, .5
 		MENU_CALL		tNewBattOld,				use_old_batteries
-		MENU_CALL		tNewBattNew36,				use_new_36V_batteries
 		MENU_CALL		tNewBattNew15,				use_new_15V_batteries
+		MENU_CALL		tNewBattNew36,				use_new_36V_batteries
 		MENU_CALL		tNewBattAccu,				use_36V_rechargeable
 		MENU_CALL		tNew16650,					use_16650_battery
 	MENU_END
@@ -863,8 +863,8 @@ menu_new_battery_AA_16650:
 menu_new_battery_AA:
 	MENU_BEGIN	tNewBattTitle, .4
 		MENU_CALL		tNewBattOld,				use_old_batteries
-		MENU_CALL		tNewBattNew36,				use_new_36V_batteries
 		MENU_CALL		tNewBattNew15,				use_new_15V_batteries
+		MENU_CALL		tNewBattNew36,				use_new_36V_batteries
 		MENU_CALL		tNewBattAccu,				use_36V_rechargeable
 	MENU_END
 
