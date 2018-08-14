@@ -2171,7 +2171,8 @@ diveloop_boot:
 
 	movff	int_O_CNS_fraction+0,CNS_start+0 ; save CNS value at beginning of dive
 	movff	int_O_CNS_fraction+1,WREG		 ; get high byte to WREG
-	bcf		WREG,int_warning_flag			 ; clear warning flag bit
+	bcf	WREG,int_warning_flag			 ; clear warning   flag
+	bcf	WREG,int_attention_flag			 ; clear attention flag
 	movff	WREG,CNS_start+1				 ; move high byte on
 	movff	int_O_gradient_factor+0,GF_start ; save GF value at beginning of dive (only lower byte used for value)
 

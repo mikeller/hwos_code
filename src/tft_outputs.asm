@@ -245,13 +245,13 @@ TFT_color_code_cns_1
 	btfss	hi,int_warning_flag			; is the warning flag set?
 	bra		TFT_color_code_cns_2		; NO
 	bcf		hi,int_warning_flag			; YES - clear warning	flag
-	bcf		hi,int_attention_flag		;		clear attention flag (it may be set)
+	bcf		hi,int_attention_flag		;	- clear attention flag (it may be set)
 	bra		TFT_warnings_color			;		set to warning color and return
 TFT_color_code_cns_2:
 	btfss	hi,int_attention_flag		; is the attention flag set?
 	bra		TFT_standard_color			; NO  - set to standard color and return
 	bcf		hi,int_attention_flag		; YES - clear attention flag
-	bra		TFT_attention_color			;		set to attention color and return
+	bra		TFT_attention_color		;	- set to attention color and return
 
 
 TFT_color_code_gf:

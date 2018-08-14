@@ -1655,12 +1655,16 @@ logbook_decomodel_common:
 	movff	ext_flash_rw,lo
 	call	ext_flash_byte_read_plus				; read cns high
 	movff	ext_flash_rw,hi
+	bcf	hi,int_warning_flag					; clear warning   flag (fix for cases were the flags already got stored to ext. Flash)
+	bcf	hi,int_attention_flag					; clear attention flag (fix for cases were the flags already got stored to ext. Flash)
 	output_16
 	LOG_POINT_TO log_cns_end
 	STRCAT	"->"
 	call	ext_flash_byte_read_plus				; read CNS low
 	movff	ext_flash_rw,lo
 	call	ext_flash_byte_read_plus				; read CNS high
+	bcf	hi,int_warning_flag					; clear warning   flag (fix for cases were the flags already got stored to ext. Flash)
+	bcf	hi,int_attention_flag					; clear attention flag (fix for cases were the flags already got stored to ext. Flash)
 	movff	ext_flash_rw,hi
 	output_16
 	STRCAT_PRINT "%"

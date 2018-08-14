@@ -279,6 +279,8 @@ store_dive_cns:
 	movff	int_O_CNS_fraction+0,WREG
 	rcall	ghostwrite_byte_profile		; WREG -> Profile in ext. Flash
 	movff	int_O_CNS_fraction+1,WREG
+	bcf	WREG,int_warning_flag			 ; clear warning   flag
+	bcf	WREG,int_attention_flag			 ; clear attention flag
 	rcall	ghostwrite_byte_profile		; WREG -> Profile in ext. Flash
 	movlw	div_cns
 	movwf	divisor_cns					; Reload divisor from CF
@@ -723,6 +725,8 @@ end_dive_oc_cc_common:
 	movff	int_O_CNS_fraction+0,WREG		; copy into bank1
 	rcall	ghostwrite_byte_header			; Stores CNS%
 	movff	int_O_CNS_fraction+1,WREG		; copy into bank1
+	bcf	WREG,int_warning_flag			 ; clear warning   flag
+	bcf	WREG,int_attention_flag			 ; clear attention flag
 	rcall	ghostwrite_byte_header			; Stores CNS%
 
 	movff	avg_rel_pressure_total+0,WREG	; Average Depth
