@@ -1312,7 +1312,7 @@ void calc_alveolar_pressures(void)
 	// capture failure condition in case pres_respiration is < ppWater (should never happen...)
 	if( O2_ppO2 < 0.0 ) O2_ppO2 = 0.0;
 
-	// calculate ppO2 of the pure gas (diluent)
+	// calculate ppO2 of the pure gas (OC, diluent)
 	OC_ppO2 = O2_ppO2 * calc_O2_ratio;
 
 	// calculate pSCR ppO2
@@ -1361,7 +1361,7 @@ void calc_alveolar_pressures(void)
 
 		// adjust diluent pressure (ppN2 + ppHe) for change
 		// in ppO2 due to setpoint (CCR) or drop (pSCR)
-		pres_diluent -= const_ppO2;
+		pres_diluent -= ppO2;
 		pres_diluent /= calc_N2_ratio + calc_He_ratio;
 
 		// capture all failure conditions, including div/0

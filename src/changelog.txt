@@ -1,7 +1,13 @@
-[2.97 SP2]
+[2.98]
 - Stable Version -
 BUGFIX: "lost gas" was re-activated in rare cases
-BUGFIX: Internal deco planner did not display results in imperial units 
+BUGFIX: Internal deco planner did not display results in imperial units
+BUGFIX: CNS display was out of scale (much too high) for some cases in the logbook
+BUGFIX: pSCR ppO2 fixed
+CHANGE: Battery names in "New Battery" menu (OSTC Plus and OSTC 3 only)
+BUGFIX: Internal deco planner did not display results in imperial units
+BUGFIX: "lost gas" was re-activated in rare cases
+
 
 [2.97 SP1]
 - Stable Version -

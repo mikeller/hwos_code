@@ -22,13 +22,13 @@
 
 ; Firmware definition
 #DEFINE softwareversion_x		.2			; Software version  XX.YY
-#DEFINE softwareversion_y		.97			; Software version  XX.YY
-#DEFINE softwareversion_beta	.3			; 0= release, 1=beta, 2=SP1, 3=SP2, ...
+#DEFINE softwareversion_y		.98			; Software version  XX.YY
+#DEFINE softwareversion_beta	.0			; 0= release, 1=beta, 2=SP1, 3=SP2, ...
 
 ; Firmware version will appear in "Change Firmware" style
 #DEFINE firmware_expire_year	.19
-#DEFINE firmware_expire_month	.2
-#DEFINE firmware_expire_day	.24
+#DEFINE firmware_expire_month	.8
+#DEFINE firmware_expire_day	.27
 
 #DEFINE comm_service_key		0xABCDEF
 
