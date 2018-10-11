@@ -64,7 +64,7 @@ get_battery_voltage_noretry:
 
 	btfsc	CHRG_IN
 	return
-	;cv_active:
+charge_cv_active:
 	decfsz	get_bat_volt_counter,F
 	return
 	movlw	.15
@@ -84,6 +84,13 @@ charge_cc_active:
 	bsf		LEDr							; Indicate charging
 	bcf		CHRG_OUT
 	bsf		TRISJ,2							; Chrg-Out high impedance
+	movlw	.15
+	cpfsgt	batt_voltage+1					; Batt Voltage >= 16*256mV (4,096V)?
+	bra	charge_cc_active2				; No
+	movlw	.81
+	cpfslt	batt_voltage+0					; Batt Voltage >= 80mV(+4096mV from batt_voltage+1)?
+	bra	charge_cv_active    				; Yes
+charge_cc_active2:
 	movlw	.10
 	movwf	get_bat_volt_counter
 	return
