@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File wait.asm														V2.98
+;   File wait.asm														V2.98b
 ;
 ;   Wait routines
 ;
@@ -23,5 +23,5 @@ WAITMS	macro	ms_to_wait
 ; asm routines in hwos.asm
 	extern	speed_eco			; SPEED_ECO: 4MHz
 	extern	speed_normal		; SPEED_NORMAL: 16MHz
-	extern	speed_fastest		; SPEED_FASTEST: 64MHz 
-
+	extern	speed_fastest		; SPEED_FASTEST: 64MHz
+	extern	wait_1s

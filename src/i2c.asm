@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File i2c.asm														V2.98
+;   File i2c.asm														V2.99c
 ;
 ;   I2C Interface
 ;
@@ -69,24 +69,24 @@ I2CFail:
 	bsf		i2c_error_flag				; set error flag
 	return
 
-I2CReset:								; Something went wrong (Slave holds SDA low?)
+I2CReset:								; something went wrong (slave holds SDA low?)
 	clrf	SSP1CON1					; wake-up slave and reset entire module
 	clrf	SSP1CON2
 	clrf	SSP1STAT
 	bcf		TRISC,3						; SCL OUTPUT
-	bsf		TRISC,4						; SDA Input
+	bsf		TRISC,4						; SDA input
 	bcf		PORTC,3
 	movlw	d'9'
 	movwf	i2c_temp1					; clock-out 9 clock cycles manually
 I2CReset_1:
-	bsf		PORTC,3						; SCL=1
+	bsf		PORTC,3						; SCL = 1
 	nop
 	nop
 	nop
 	nop
-	btfsc	PORTC,4						; SDA=1?
-	bra		I2CReset_2					; =1, SDA has been released from slave
-	bcf		PORTC,3						; SCL=0
+	btfsc	PORTC,4						; SDA = 1 ?
+	bra		I2CReset_2					; YES - =1, SDA has been released from slave
+	bcf		PORTC,3						; NO  - set SCL = 0
 	nop
 	nop
 	bcf		PORTC,3
@@ -96,8 +96,8 @@ I2CReset_1:
 	bra		I2CReset_1					; check for nine clock cycles
 I2CReset_2:
 	bsf		TRISC,3						; SCL Input
-	clrf	SSP1CON1					; setup I²C Mode
-	WAITMS	d'10'						; Reset-Timeout for I2C devices
+	clrf	SSP1CON1					; setup I²C mode
+	WAITMS	d'10'						; reset-timeout for I2C devices
 	movlw	b'00000000'					; with slew rate control
 	movwf	SSP1STAT
 	movlw	b'00101000'
@@ -111,32 +111,32 @@ I2CReset_2:
 I2C_TX:
 	movwf	SSP1BUF
 	rcall	WaitMSSP
-	bra		I2C_WaitforACK				; Returns...
+	bra		I2C_WaitforACK				; returns...
 
-I2C_TwoBytesRX_div16:					; Get two bytes and divide lo:hi/16 (signed)
-	rcall	I2C_OneByteRX				; Get one byte
-	movff	SSP1BUF,hi					; Data Byte
-	rcall	I2C_OneByteRX				; Get one byte
-	movff	SSP1BUF,lo					; Data Byte
+I2C_TwoBytesRX_div16:					; get two bytes and divide lo:hi/16 (signed)
+	rcall	I2C_OneByteRX				; get one byte
+	movff	SSP1BUF,hi					; data byte
+	rcall	I2C_OneByteRX				; get one byte
+	movff	SSP1BUF,lo					; data byte
 I2C_TwoBytesRX_div16_2:					; divide lo:hi/16 (signed) only
 	bcf		STATUS,C
-	btfsc	hi,7						; Copy sign bit to carry
+	btfsc	hi,7						; copy sign bit to carry
 	bsf		STATUS,C
 	rrcf	hi							; /2
 	rrcf	lo
 I2C_TwoBytesRX_div8_2:					; divide lo:hi/8 (signed) only
 	bcf		STATUS,C
-	btfsc	hi,7						; Copy sign bit to carry
+	btfsc	hi,7						; copy sign bit to carry
 	bsf		STATUS,C
 	rrcf	hi							; /4
 	rrcf	lo
 	bcf		STATUS,C
-	btfsc	hi,7						; Copy sign bit to carry
+	btfsc	hi,7						; copy sign bit to carry
 	bsf		STATUS,C
 	rrcf	hi							; /8
 	rrcf	lo
 	bcf		STATUS,C
-	btfsc	hi,7						; Copy sign bit to carry
+	btfsc	hi,7						; copy sign bit to carry
 	bsf		STATUS,C
 	rrcf	hi							; /16
 	rrcf	lo
@@ -144,46 +144,46 @@ I2C_TwoBytesRX_div8_2:					; divide lo:hi/8 (signed) only
 
 	global	I2C_RX_accelerometer
 I2C_RX_accelerometer:
-	btfsc	compass_type2					; compass2
-	bra		I2C_RX_accelerometer_compass2	; yes
-	btfsc	compass_type					; compass1?
-	bra		I2C_RX_accelerometer_compass1	; yes
+	btfsc	compass_type2					; compass2 ?
+	bra		I2C_RX_accelerometer_compass2	; YES
+	btfsc	compass_type					; compass1 ?
+	bra		I2C_RX_accelerometer_compass1	; YES
 I2C_RX_accelerometer_compass0:
-	bsf		SSP1CON2,SEN				; Start condition
+	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
 	movlw	0x38						; address
 	rcall	I2C_TX
 	movlw	0x00
 	rcall	I2C_TX
-	bsf		SSP1CON2,RSEN				; Repeated start condition (!)
+	bsf		SSP1CON2,RSEN				; repeated start condition
 	rcall	WaitMSSP
 	movlw	0x39						; address
 	rcall	I2C_TX
 
-	rcall	I2C_OneByteRX				; Get Status Byte
+	rcall	I2C_OneByteRX				; get status byte
 	movf	SSP1BUF,W
 
 	; Non-flipped screen:
 	; Chip orientation on the PCB requires
-	; Original = Corrected
+	; Original = corrected
 	; x = -x
 	; y = -y
 	; z = -z
 
 	; Flipped screen:
 	; Chip orientation on the PCB requires
-	; Original = Corrected
+	; Original = corrected
 	; x = x
 	; y = y
 	; z = -z
 
-	rcall	I2C_TwoBytesRX_div16		; Get two bytes and divide /16 (signed)
+	rcall	I2C_TwoBytesRX_div16		; get two bytes and divide /16 (signed)
 	btfsc	flip_screen					; 180° rotation ?
-	bra		I2C_RX_accelerometer2		; Yes
-	comf	hi							; 16bit sign change.
+	bra		I2C_RX_accelerometer2		; YES
+	comf	hi							; 16 bit sign change
 	negf	lo
-	btfsc	STATUS,C					; Carry to propagate ?
-	incf	hi,F						; YES: do it.
+	btfsc	STATUS,C					; carry to propagate ?
+	incf	hi,F						; YES - do it
 I2C_RX_accelerometer2:
 	movff	lo,accel_DX+0
 	movff	hi,accel_DX+1				; Copy result
@@ -983,7 +983,7 @@ lt2942_get_accumulated_charge:			; Read accumulated charge and compute percent
 	movff	sub_c+1,xA+1
 	movff	battery_capacity+0,xB+0
 	movff	battery_capacity+1,xB+1
-	call	div16x16					; xA/xB=xC with xA+0 as remainder, uses divB as temp variable
+	call	div16x16					; xC = xA / xB with xA as remainder
 	movff	xC+0,batt_percent
 	return
 
@@ -1036,15 +1036,23 @@ I2C_RX_GAUGE:
 	bra		WaitMSSP					; (and return)
 
 
+;-----------------------------------------------------------------------------
+; Transmitter Functions
+
+ IFDEF _rx_functions
+
 	global	I2C_probe_OSTC_rx
 I2C_probe_OSTC_rx:
+	movlw	.5
+	movwf	lo_temp
+I2C_probe_OSTC_rx_1:
 	bsf		SSP1CON2,SEN				; Start condition
 	rcall	WaitMSSP
 	movlw	0x50						; Address byte + Write bit
 	movwf	SSP1BUF						; control byte
 	rcall	WaitMSSP
 	btfss	SSP1CON2,ACKSTAT			; ACK?
-	bsf		ostc_rx_present				; ACK send. OSTC_RX present!
+	bsf		ostc_rx_present				; ACK sent - OSTC_RX present!
 	bsf		SSP1CON2,PEN				; Stop condition
 	rcall	WaitMSSP
 	btfss	ostc_rx_present				; Do we have the RX?
@@ -1075,7 +1083,7 @@ I2C_probe_OSTC_rx:
 	rcall	WaitMSSP
 
 	; last byte in read from RX circuity always with a NACK!
-	bsf	SSP1CON2, RCEN					; Enable receive mode
+	bsf		SSP1CON2, RCEN				; Enable receive mode
 	rcall	WaitMSSP
 	movff	SSP1BUF,rx_firmware+1
 	bsf		SSP1CON2,ACKDT
@@ -1083,7 +1091,35 @@ I2C_probe_OSTC_rx:
 	rcall	WaitMSSP
 	bcf		SSP1CON2,ACKDT				; Reset ACKDT flag
 	bsf		SSP1CON2,PEN				; Stop condition
-	bra		WaitMSSP ;(and return)
+	rcall	WaitMSSP
+
+	; test for RX part not being ready during this read
+	movff	rx_firmware+1,i2c_temp1
+	movlw	.147
+	cpfseq	i2c_temp1
+	bra		I2C_probe_OSTC_rx_2			; not equal
+	movff	rx_firmware+0,i2c_temp1
+	movlw	.27
+	cpfseq	i2c_temp1
+	bra		I2C_probe_OSTC_rx_2			; not equal
+	bsf		active_reset_ostc_rx
+	WAITMS	.5
+	bcf		active_reset_ostc_rx
+	WAITMS	.250
+	WAITMS	.250
+	WAITMS	.250
+	WAITMS	.250
+	WAITMS	.250
+	WAITMS	.250
+	WAITMS	.250
+	WAITMS	.250
+	clrf	i2c_temp1
+	decfsz	lo_temp,F					; try max. 5 times
+	bra		I2C_probe_OSTC_rx_1
+	bcf		ostc_rx_present				; Clear flag. Something is wrong
+I2C_probe_OSTC_rx_2:
+	clrf	i2c_temp1
+	return
 
 
 	global	I2C_get_tankdata
@@ -1215,5 +1251,7 @@ I2C_update_OSTC_loop_read:
 	btfss	i2c_error_flag
 	retlw	.0							; All ok
 	retlw	.255						; an error occurred
+
+ ENDIF
 
 	END

@@ -8,4 +8,4 @@
 ; HISTORY
 ;  2011-08-12 : [mH] moving from OSTC code
 
- extern sleeploop
+	extern	sleeploop

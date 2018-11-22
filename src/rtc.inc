@@ -9,4 +9,4 @@
 ;  2011-08-08 : [mH] moving from OSTC code
 
 	extern	rtc_init
-	extern 	rtc_set_rtc
+	extern	rtc_set_rtc

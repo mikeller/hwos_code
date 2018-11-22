@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File compass_ops.asm												V2.98
+;   File compass_ops.asm												V2.98a
 ;
 ;   Compass Operations
 ;
@@ -1444,19 +1444,6 @@ TFT_get_compass:
 	call	I2C_RX_accelerometer		; Test Accelerometer
 	call	compass_filter				; Filter Raw compass + accel readings.
 	banksel	common
-	return
-
-	global  TFT_surf_set_bearing
-TFT_surf_set_bearing:
-	btfsc	premenu
-	return								; Already shown, return
-	bsf		premenu						; set flag
-	WIN_BOX_BLACK surf_compass_bear_row,surf_warning1_row-1, surf_compass_bear_column, surf_decotype_column-.1 ; top, bottom, left, right
-	WIN_SMALL surf_compass_bear_column,surf_compass_bear_row
-	WIN_COLOR color_yellow
-	bsf		win_invert
-	STRCPY_TEXT_PRINT tSetHeading		; 7 chars
-	bcf		win_invert
 	return
 
 	END

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File rtc.asm													## V2.98
+;   File rtc.asm													## V2.98c
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -11,7 +11,7 @@
 #include "hwos.inc"
 #include "math.inc"
 
-sensors		CODE
+rtc		CODE
 
 ;=============================================================================
 
@@ -23,11 +23,11 @@ rtc_init:
 	movwf	mins
 	movlw	.12
 	movwf	hours
-	movlw	.1
+	movlw	.2
 	movwf	day
-	movlw	.8
+	movlw	.12
 	movwf	month
-	movlw	.18
+	movlw	.17
 	movwf	year
 ;	rcall	rtc_set_rtc			; writes mins,sec,hours,day,month and year to rtc module
 ;	return
@@ -39,9 +39,9 @@ rtc_set_rtc:
 	movwf	EECON2
 	movlw	0xAA
 	movwf	EECON2
-	bsf	RTCCFG,RTCWREN		; Unlock sequence for RTCWREN
-	bsf	RTCCFG,RTCPTR1
-	bsf	RTCCFG,RTCPTR0		; year
+	bsf		RTCCFG,RTCWREN		; Unlock sequence for RTCWREN
+	bsf		RTCCFG,RTCPTR1
+	bsf		RTCCFG,RTCPTR0		; year
 	movff	year,WREG
 	rcall	rtc_dec2bcd			; IN: WREG in decimal, OUT: WREG in BCD, also sets to bank16h!
 	movwf	RTCVALL				; year
@@ -68,7 +68,7 @@ rtc_set_rtc:
 	movwf	EECON2
 	movlw	0xAA
 	movwf	EECON2
-	bcf	RTCCFG,RTCWREN		; Lock sequence for RTCWREN
+	bcf		RTCCFG,RTCWREN		; Lock sequence for RTCWREN
 	banksel	common
 	return
 

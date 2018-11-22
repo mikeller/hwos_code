@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File convert.inc												## V2.98
+;   File convert.inc												## V2.98b
 ;
 ;   Converts register values to string
 ;
@@ -12,37 +12,42 @@
 
 
 	extern	output16_3_call
-output_16_3	macro				; displays only last three figures from a 16Bit value (0-999)
+output_16_3	macro				; displays only last three digits from a 16 bit value (0-999)
 	call	output16_3_call
 	endm
 
 	extern	output16_4_call
-output_16_4	macro				; displays only last four figures from a 16Bit value (0-9999)
+output_16_4	macro				; displays only last four digits from a 16 bit value (0-9999)
 	call	output16_4_call
 	endm
 
 	extern	output16
-output_16dp	macro dp_position	; 16 Bit with decimal point
+output_16dp	macro dp_position	; 16 bit with decimal point
 	movlw	dp_position
 	call	output16
 	endm
 
 	extern	output16_call
-output_16	macro				; 16Bit Normal
+output_16	macro				; 16 bit normal
 	call	output16_call
 	endm
 
 	extern	output8_call
-output_8	macro				; 8 Bit Normal
+output_8	macro				; 8 bit normal
 	call	output8_call
 	endm
 
 	extern	output99_call
-output_99	macro				; displays only last two figures from a 8Bit value (0-99)
+output_99	macro				; displays only last two digits from a 8 bit value (0-99)
 	call	output99_call
 	endm
 
 	extern	output99x_call
-output_99x	macro				; displays only last two figures from a 8Bit value with leading zero (00-99) 
+output_99x	macro				; displays only last two figures from a 8 bit value with leading zero (00-99)
 	call	output99x_call
+	endm
+
+	extern	outputHEX_call
+output_hex	macro				; displays 8 bit integer in hex, input via WREG
+	call	outputHEX_call
 	endm

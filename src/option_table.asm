@@ -1,8 +1,8 @@
 ;=============================================================================
 ;
-;   File option_table.asm							REFACTORED VERSION V2.98
+;   File option_table.asm							REFACTORED VERSION V2.99e
 ;
-;   The option table
+;   The Option Table
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
 ;=============================================================================
@@ -10,7 +10,7 @@
 ;   2014-08-03 : mH creation
 ;
 
-#include "hwos.inc"					; Mandatory header
+#include "hwos.inc"					; Mandatory Header
 #include "eeprom_rs232.inc"
 
 ;=============================================================================
@@ -20,7 +20,7 @@ option_table	CODE 0x00700
 
 OPTION_UINT8	MACRO lbl, min, max, default, unit, eeprom, register
 		global	lbl
-lbl:	db		0, default			; Type0 = INT8
+lbl:	db		0, default			; type0 = INT8
 		db		1, min
 		db		max, eeprom
 		dw		unit
@@ -29,7 +29,7 @@ lbl:	db		0, default			; Type0 = INT8
 
 OPTION_UINT8p2	MACRO lbl, min, max, default, unit, eeprom, register
 		global	lbl
-lbl:	db		0, default			; Type0 = INT8
+lbl:	db		0, default			; type0 = INT8
 		db		2, min
 		db		max, eeprom
 		dw		unit
@@ -38,7 +38,7 @@ lbl:	db		0, default			; Type0 = INT8
 
 OPTION_UINT8p3	MACRO lbl, min, max, default, unit, eeprom, register
 		global	lbl
-lbl:	db		0, default			; Type0 = INT8
+lbl:	db		0, default			; type0 = INT8
 		db		3, min
 		db		max, eeprom
 		dw		unit
@@ -47,7 +47,7 @@ lbl:	db		0, default			; Type0 = INT8
 
 OPTION_UINT8p5	MACRO lbl, min, max, default, unit, eeprom, register
 		global	lbl
-lbl:	db		0, default			; Type0 = INT8
+lbl:	db		0, default			; type0 = INT8
 		db		.5, min
 		db		max, eeprom
 		dw		unit
@@ -56,7 +56,7 @@ lbl:	db		0, default			; Type0 = INT8
 
 OPTION_UINT8p10	MACRO lbl, min, max, default, unit, eeprom, register
 		global	lbl
-lbl:	db		0, default			; Type0 = INT8
+lbl:	db		0, default			; type0 = INT8
 		db		.10, min
 		db		max, eeprom
 		dw		unit
@@ -66,10 +66,10 @@ lbl:	db		0, default			; Type0 = INT8
 OPTION_ENUM8	MACRO lbl, max, default, tValue, eeprom, register
 		global	lbl
 		extern	tValue
-lbl:	db		1, default			; Type1 = ENUM
+lbl:	db		1, default			; type1 = ENUM
 		db		LOW(tValue), HIGH(tValue)
 		db		max, eeprom
-		dw		0					; No unit
+		dw		0					; no unit
 		dw		register
 		ENDM
 
@@ -80,21 +80,20 @@ OPTION_BOOL		MACRO lbl, default, eeprom, register
 
 OPTION_STRING	MACRO lbl, length, defText, eeprom, register
 		global	lbl
-lbl:	db		2, LOW(defText)		; Type2 = STRING
+lbl:	db		2, LOW(defText)		; type2 = STRING
 		db		HIGH(defText), 0
 		db		length, eeprom
-		dw		0					; No unit
+		dw		0					; no unit
 		dw		register
 		ENDM
 
 
 ;=============================================================================
-	extern	tPercent, tMeters, tMinutes, tGasDisabled, tbar
-	extern	char_I_deco_gas_change, char_I_setpoint_change, char_I_setpoint_cbar, char_I_dil_change
+	extern	tPercent, tMeters, tMinutes, tGasDisabled, tbar, tNo, tTrModeOff, tTrPresNone, tDefName, tblank, tLogTunitC
+	extern	char_I_setpoint_change, char_I_setpoint_cbar
 	extern	char_I_dive_interval, char_I_bottom_time, char_I_bottom_depth
 	extern	char_I_deco_model
 	extern	char_I_extra_time
-	extern	tDefName, tblank
 	extern	char_I_bottom_usage, char_I_deco_usage, tLitersMinute
 	extern	char_I_PSCR_drop, char_I_PSCR_lungratio
 	extern	char_I_tank_size, char_I_tank_pres_fill, tLiter, tbar10
@@ -102,22 +101,28 @@ lbl:	db		2, LOW(defText)		; Type2 = STRING
 	extern	char_I_altitude_wait
 	extern	char_I_ppO2_max, char_I_ppO2_min, char_I_ppO2_max_deco, char_I_ppO2_min_loop
 	extern	char_I_ascent_speed, tMeterMinute
-	extern	char_I_gas_change_time, tmin
+	extern	char_I_gas_change_time
+	extern	char_I_max_pres_diff
 
-; Option table
-;	OPTION_UINT8	Label,				min,			max,		  default, text-string, EEPROM location, RAM location
+
+;	Option Table - Format:
+;	----------------------
+;	OPTION_UINT8	Label,				min,			max,		  default, unit text,	EEPROM location, RAM location
+;	OPTION_ENUM8	Label,				number of enums				  default, unit text,	EEPROM location, RAM location	; number of enums = 2, 3, ..., default starts with 0
+;	OPTION_BOOL		Label,											  default,				EEPROM location, RAM location
 
 #DEFINE notext		.0		; no text-string associated
 #DEFINE volatile	-1		; do not store to EEPROM
+
 
 	global	option_table_begin
 option_table_begin:
 ;=============================================================================
 ; Manage Decoplaner & Dive parameters
 	OPTION_UINT8p10	odiveInterval,		.0,				.240,			.0,		tMinutes,	volatile,	char_I_dive_interval
-	OPTION_UINT8p2	obottomTime,		.1,				.60,			.5,		tMinutes,	volatile,	char_I_bottom_time
+	OPTION_UINT8p2	obottomTime,		.2,				.60,			.10,	tMinutes,	volatile,	char_I_bottom_time
 	OPTION_UINT8p3	obottomDepth,		.12,			.120,			.21,	tMeters,	volatile,	char_I_bottom_depth
-	OPTION_ENUM8	oDiveMode,			.5,								.0,		tDvOC,			.8,		opt_dive_mode					; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR 
+	OPTION_ENUM8	oDiveMode,			.5,								.0,		tDvOC,			.8,		opt_dive_mode					; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
 	OPTION_ENUM8	oDecoMode,			.2,								.1,		tZHL16,			.9,		char_I_deco_model				; 0 = ZH-L16, 1 = ZH-L16-GF
 	;																							.10										; in use, see below
 	OPTION_UINT8	oLastDeco,			.3,				.6,				.3,		tMeters,		.11,	opt_last_stop
@@ -138,12 +143,7 @@ option_table_begin:
 	OPTION_ENUM8	oBrightness,		.3,								.0,		tEco,			.23,	opt_brightness					; =0: Eco, =1:Medium, =2:Full
 	OPTION_UINT8	oDiveSalinity,		.0,				.4,				.0,		tPercent,		.24,	opt_salinity					; 0-4%
 	OPTION_ENUM8	oCCRMode,			.3,								.0,		tCCRModeFixedSP,.25,	opt_ccr_mode					; =0: Fixed SP, =1: Sensor, =2: Auto SP
-
-	IFNDEF	french_italian
-	OPTION_ENUM8	oLanguage,			.2,								.0,		tEnglish,		.26,	opt_language					; 0=EN, 1=DE
-	ELSE
-	OPTION_ENUM8	oLanguage,			.2,								.0,		tFrench,		.26,	opt_language					; 0=FR, 1=IT
-	ENDIF
+	OPTION_ENUM8	oLanguage,			.2,								.0,		tLang1,			.26,	opt_language					; language selection
 	OPTION_ENUM8	oDateFormat,		.3,								.1,		tDateformat,	.27,	opt_dateformat					; =0:MMDDYY, =1:DDMMYY, =2:YYMMDD
 	OPTION_ENUM8	oUnits,				.2,								.0,		tMetric,		.28,	opt_units						; 0=Meter, 1=Feet
 
@@ -173,11 +173,11 @@ option_table_begin:
 	OPTION_UINT8	oGas4He,			.0,				gaslist_max_He,	.0,		tPercent,		.47,	opt_gas_He_ratio+3
 	OPTION_UINT8	oGas5O2,			gaslist_min_o2,	.100,			.21,	tPercent,		.48,	opt_gas_O2_ratio+4
 	OPTION_UINT8	oGas5He,			.0,				gaslist_max_He,	.0,		tPercent,		.49,	opt_gas_He_ratio+4
-	OPTION_UINT8	oGas1Depth,			.0,	gaslist_max_change_depth,	.0,		tMeters,		.50,	opt_OC_bail_gas_change+0
-	OPTION_UINT8	oGas2Depth,			.0,	gaslist_max_change_depth,	.0,		tMeters,		.51,	opt_OC_bail_gas_change+1
-	OPTION_UINT8	oGas3Depth,			.0,	gaslist_max_change_depth,	.0,		tMeters,		.52,	opt_OC_bail_gas_change+2
-	OPTION_UINT8	oGas4Depth,			.0,	gaslist_max_change_depth,	.0,		tMeters,		.53,	opt_OC_bail_gas_change+3
-	OPTION_UINT8	oGas5Depth,			.0,	gaslist_max_change_depth,	.0,		tMeters,		.54,	opt_OC_bail_gas_change+4
+	OPTION_UINT8	oGas1Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.50,	opt_gas_change+0
+	OPTION_UINT8	oGas2Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.51,	opt_gas_change+1
+	OPTION_UINT8	oGas3Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.52,	opt_gas_change+2
+	OPTION_UINT8	oGas4Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.53,	opt_gas_change+3
+	OPTION_UINT8	oGas5Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.54,	opt_gas_change+4
 	OPTION_UINT8	oDil1O2,			gaslist_min_o2,	.100,			.21,	tPercent,		.55,	opt_dil_O2_ratio+0
 	OPTION_UINT8	oDil1He,			.0,				gaslist_max_He,	.0,		tPercent,		.56,	opt_dil_He_ratio+0
 	OPTION_UINT8	oDil2O2,			gaslist_min_o2,	.100,			.21,	tPercent,		.57,	opt_dil_O2_ratio+1
@@ -203,11 +203,11 @@ option_table_begin:
 	OPTION_ENUM8	oDil3,				.2,								.0,		tDilDisabled,	.77,	opt_dil_type+2
 	OPTION_ENUM8	oDil4,				.2,								.0,		tDilDisabled,	.78,	opt_dil_type+3
 	OPTION_ENUM8	oDil5,				.2,								.0,		tDilDisabled,	.79,	opt_dil_type+4
-	OPTION_UINT8	oDil1Depth,			.0,				.99,			.0,		tMeters,		.80,	char_I_dil_change+0
-	OPTION_UINT8	oDil2Depth,			.0,				.99,			.0,		tMeters,		.81,	char_I_dil_change+1
-	OPTION_UINT8	oDil3Depth,			.0,				.99,			.0,		tMeters,		.82,	char_I_dil_change+2
-	OPTION_UINT8	oDil4Depth,			.0,				.99,			.0,		tMeters,		.83,	char_I_dil_change+3
-	OPTION_UINT8	oDil5Depth,			.0,				.99,			.0,		tMeters,		.84,	char_I_dil_change+4
+	OPTION_UINT8	oDil1Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.80,	opt_dil_change+0
+	OPTION_UINT8	oDil2Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.81,	opt_dil_change+1
+	OPTION_UINT8	oDil3Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.82,	opt_dil_change+2
+	OPTION_UINT8	oDil4Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.83,	opt_dil_change+3
+	OPTION_UINT8	oDil5Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.84,	opt_dil_change+4
 
 ;=============================================================================
 ; opt_name from 85 to 145
@@ -215,10 +215,10 @@ option_table_begin:
 
 ;=============================================================================
 ; Misc
-	OPTION_ENUM8	oColorSetDive,		.4,								.0,		tColorSetName0,	.146,	opt_dive_color_scheme			; Color scheme divemode
+	OPTION_ENUM8	oColorSetDive,		.4,								.0,		tColorSetName0,	.146,	opt_dive_color_scheme			; color scheme divemode
 	OPTION_UINT8	oPressureAdjust,	.0,				.255,			.0,		notext,			.147,	opt_pressure_adjust				; SIGNED int (-20/+20mbar max.)
 	OPTION_BOOL		oSafetyStop,		.0,														.148,	opt_enable_safetystop			; =1: A safety stop is shown
-	OPTION_UINT8	oCalGasO2,			.21,			.100,			.21,	tPercent,		.149,	opt_calibration_O2_ratio		; Calibration gas %O2 (Do not move in EEPROM, must stay at .149!)
+	OPTION_UINT8	oCalGasO2,			.21,			.100,			.21,	tPercent,		.149,	opt_calibration_O2_ratio		; calibration gas %O2 (Do not move in EEPROM, must stay at .149!)
 	OPTION_BOOL		oFlipScreen,		.0,														.151,	opt_flip_screen					; =1: Flip the screen
 	OPTION_UINT8p10	ocR_button_left,	.20,			.80,			.40,	tPercent,		.152,	opt_cR_button_left				; left button sensitivity
 	OPTION_UINT8p10	ocR_button_right,	.20,			.80,			.40,	tPercent,		.153,	opt_cR_button_right				; right button sensitivity
@@ -233,37 +233,83 @@ option_table_begin:
 	OPTION_UINT8	oSafetyStopStart,	.21,			.61,			.51,	notext,			.162,	opt_safety_stop_start			; [cbar], default 510mbar, min 210mbar, max 610mbar
 	OPTION_UINT8	oSafetyStopEnd,		.19,			.39,			.29,	notext,			.163,	opt_safety_stop_end				; [cbar], default 290mbar, min 190mbar, max 390mbar
 	OPTION_UINT8	oSafetyStopReset,	.81,			.151,			.101,	notext,			.164,	opt_safety_stop_reset			; [cbar], default 1010mbar, min 810mbar, max 1510mbar
-	OPTION_UINT8	oDiveTimeout,		.1,				.20,			.5,		tMinutes,		.168,	opt_diveTimeout					; Timeout for divemode in minutes
-	OPTION_UINT8	oPSCR_drop,			.0,				.15,			.4,		tPercent,		.169,	char_I_PSCR_drop				; PSCR Drop [%]
-	OPTION_UINT8	oPSCR_lungratio,	.5,				.20,			.10,	tPercent,		.170,	char_I_PSCR_lungratio			; PSCR Lung Ratio [1/x]
+	OPTION_UINT8	oDiveTimeout,		.1,				.20,			.5,		tMinutes,		.168,	opt_diveTimeout					; timeout for divemode in minutes
+	OPTION_UINT8	oPSCR_drop,			.0,				.15,			.4,		tPercent,		.169,	char_I_PSCR_drop				; pSCR Drop [%]
+	OPTION_UINT8	oPSCR_lungratio,	.5,				.20,			.10,	tPercent,		.170,	char_I_PSCR_lungratio			; pSCR Lung Ratio [1/x]
 ;																								.171									; in use, see below
 ;																								.172									; in use, see below
-	OPTION_UINT8	oTankSize1,			.1,				.40,			.11,	tLiter,			.173,	char_I_tank_size+0				; size of OC gas tank 1
-	OPTION_UINT8	oTankSize2,			.1,				.40,			.11,	tLiter,			.174,	char_I_tank_size+1				; size of OC gas tank 2
-	OPTION_UINT8	oTankSize3,			.1,				.40,			.11,	tLiter,			.175,	char_I_tank_size+2				; size of OC gas tank 3
-	OPTION_UINT8	oTankSize4,			.1,				.40,			.11,	tLiter,			.176,	char_I_tank_size+3				; size of OC gas tank 4
-	OPTION_UINT8	oTankSize5,			.1,				.40,			.11,	tLiter,			.177,	char_I_tank_size+4				; size of OC gas tank 5
-	OPTION_UINT8	oTankFillPres1,		.5,				.29,			.20,	tbar10,			.178,	char_I_tank_pres_fill+0			; fill press of OC gas tank 1
-	OPTION_UINT8	oTankFillPres2,		.5,				.29,			.20,	tbar10,			.179,	char_I_tank_pres_fill+1			; fill press of OC gas tank 2
-	OPTION_UINT8	oTankFillPres3,		.5,				.29,			.20,	tbar10,			.180,	char_I_tank_pres_fill+2			; fill press of OC gas tank 3
-	OPTION_UINT8	oTankFillPres4,		.5,				.29,			.20,	tbar10,			.181,	char_I_tank_pres_fill+3			; fill press of OC gas tank 4
-	OPTION_UINT8	oTankFillPres5,		.5,				.29,			.20,	tbar10,			.182,	char_I_tank_pres_fill+4			; fill press of OC gas tank 5
+	OPTION_UINT8	oTankSize1,			min_tank_size,	max_tank_size,	.11,	tLiter,			.173,	char_I_tank_size+0				; size of OC gas tank 1, in liters
+	OPTION_UINT8	oTankSize2,			min_tank_size,	max_tank_size,	.11,	tLiter,			.174,	char_I_tank_size+1				; size of OC gas tank 2, in liters
+	OPTION_UINT8	oTankSize3,			min_tank_size,	max_tank_size,	.11,	tLiter,			.175,	char_I_tank_size+2				; size of OC gas tank 3, in liters
+	OPTION_UINT8	oTankSize4,			min_tank_size,	max_tank_size,	.11,	tLiter,			.176,	char_I_tank_size+3				; size of OC gas tank 4, in liters
+	OPTION_UINT8	oTankSize5,			min_tank_size,	max_tank_size,	.11,	tLiter,			.177,	char_I_tank_size+4				; size of OC gas tank 5, in liters
+	OPTION_UINT8	oTankFillPres1,		min_fill_press,	max_fill_press,	.20,	tbar10,			.178,	char_I_tank_pres_fill+0			; fill press of OC gas tank 1, in multiples of 10 bars
+	OPTION_UINT8	oTankFillPres2,		min_fill_press,	max_fill_press,	.20,	tbar10,			.179,	char_I_tank_pres_fill+1			; fill press of OC gas tank 2, in multiples of 10 bars
+	OPTION_UINT8	oTankFillPres3,		min_fill_press,	max_fill_press,	.20,	tbar10,			.180,	char_I_tank_pres_fill+2			; fill press of OC gas tank 3, in multiples of 10 bars
+	OPTION_UINT8	oTankFillPres4,		min_fill_press,	max_fill_press,	.20,	tbar10,			.181,	char_I_tank_pres_fill+3			; fill press of OC gas tank 4, in multiples of 10 bars
+	OPTION_UINT8	oTankFillPres5,		min_fill_press,	max_fill_press,	.20,	tbar10,			.182,	char_I_tank_pres_fill+4			; fill press of OC gas tank 5, in multiples of 10 bars
 	OPTION_UINT8	oCCmaxFracO2,		.80,			.100,			.90,	tPercent,		.183,	char_I_cc_max_frac_o2			; max. O2 % in Loop
 	OPTION_UINT8	oSimSetpoint,		.1,				.5,				.1,		tblank,			.184,	opt_sim_setpoint_number			; setpoint to use for deco calculation
-	OPTION_BOOL		oCalcAscGas,		.0,														.185,	opt_calc_asc_gasvolume			; calculate OC gas volume needs for ascent
+ IFDEF _cave_mode
+	OPTION_ENUM8	oCalcAscGas,		.3,								.0,		tNo,			.185,	opt_calc_asc_gasvolume			; calculate OC gas volume needs for ascent
+ ELSE
+	OPTION_ENUM8	oCalcAscGas,		.2,								.0,		tNo,			.185,	opt_calc_asc_gasvolume			; calculate OC gas volume needs for ascent
+ ENDIF
 	OPTION_BOOL		oSimAGF,			.0,													volatile,	opt_sim_use_aGF					; use GF (no) or aGF (yes) for deco calculation
 	OPTION_ENUM8	oAltMode,			.4,								.0,		tAltModeFly,	.186,	char_I_altitude_wait			; 0=no-fly, 1=1000m, 2=2000m, 3=3000m
 	OPTION_BOOL		oEnable_IBCD,		.0,														.187,	opt_enable_IBCD					; =1: IBCD warning activated
-	OPTION_UINT8	oAscentSpeed,		.5,				.10,			.10,	tMeterMinute,	.188,	char_I_ascent_speed				; ascent speed - Attention: proper operation with other values than the default of 10m/min has not been validated yet! Do not deviate from the default until further notice!
-	OPTION_UINT8	oGasChangeTime,		.0,				.3,				.1,		tmin,			.189,	char_I_gas_change_time			; (extra) time at a stop to change the gas
+	OPTION_UINT8	oAscentSpeed,		.5,				.10,			.10,	tMeterMinute,	.188,	char_I_ascent_speed				; ascent speed
+	OPTION_UINT8	oGasChangeTime,		.0,				.3,				.1,		tMinutes,		.189,	char_I_gas_change_time			; (extra) time at a stop to change the gas
 	OPTION_UINT8p5	osatmult,			.100,			.140,			.110,	tPercent,		.190,	opt_sat_multiplier_non_gf		; for NON-GF Mode
 	OPTION_UINT8p5	odesatmult,			.60,			.100,			.90,	tPercent,		.191,	opt_desat_multiplier_non_gf		; for NON-GF Mode
+	OPTION_UINT8	oTransID1_0,		.0,				.255,			.0,		notext,			.192,	opt_transmitter_id_1+0			; ID of transmitter for gas 1 (LOW)
+	OPTION_UINT8	oTransID1_1,		.0,				.255,			.0,		notext,			.193,	opt_transmitter_id_1+1			; ID of transmitter for gas 1 (HIGH)
+	OPTION_UINT8	oTransID2_0,		.0,				.255,			.0,		notext,			.194,	opt_transmitter_id_2+0			; ID of transmitter for gas 2 (LOW)
+	OPTION_UINT8	oTransID2_1,		.0,				.255,			.0,		notext,			.195,	opt_transmitter_id_2+1			; ID of transmitter for gas 2 (HIGH)
+	OPTION_UINT8	oTransID3_0,		.0,				.255,			.0,		notext,			.196,	opt_transmitter_id_3+0			; ID of transmitter for gas 3 (LOW)
+	OPTION_UINT8	oTransID3_1,		.0,				.255,			.0,		notext,			.197,	opt_transmitter_id_3+1			; ID of transmitter for gas 3 (HIGH)
+	OPTION_UINT8	oTransID4_0,		.0,				.255,			.0,		notext,			.198,	opt_transmitter_id_4+0			; ID of transmitter for gas 4 (LOW)
+	OPTION_UINT8	oTransID4_1,		.0,				.255,			.0,		notext,			.199,	opt_transmitter_id_4+1			; ID of transmitter for gas 4 (HIGH)
+	OPTION_UINT8	oTransID5_0,		.0,				.255,			.0,		notext,			.200,	opt_transmitter_id_5+0			; ID of transmitter for gas 5 (LOW)
+	OPTION_UINT8	oTransID5_1,		.0,				.255,			.0,		notext,			.201,	opt_transmitter_id_5+1			; ID of transmitter for gas 5 (HIGH)
+	OPTION_UINT8	oTransID6_0,		.0,				.255,			.0,		notext,			.202,	opt_transmitter_id_6+0			; ID of transmitter for dil 1 (LOW)
+	OPTION_UINT8	oTransID6_1,		.0,				.255,			.0,		notext,			.203,	opt_transmitter_id_6+1			; ID of transmitter for dil 1 (HIGH)
+	OPTION_UINT8	oTransID7_0,		.0,				.255,			.0,		notext,			.204,	opt_transmitter_id_7+0			; ID of transmitter for dil 2 (LOW)
+	OPTION_UINT8	oTransID7_1,		.0,				.255,			.0,		notext,			.205,	opt_transmitter_id_7+1			; ID of transmitter for dil 2 (HIGH)
+	OPTION_UINT8	oTransID8_0,		.0,				.255,			.0,		notext,			.206,	opt_transmitter_id_8+0			; ID of transmitter for dil 3 (LOW)
+	OPTION_UINT8	oTransID8_1,		.0,				.255,			.0,		notext,			.207,	opt_transmitter_id_8+1			; ID of transmitter for dil 3 (HIGH)
+	OPTION_UINT8	oTransID9_0,		.0,				.255,			.0,		notext,			.208,	opt_transmitter_id_9+0			; ID of transmitter for dil 4 (LOW)
+	OPTION_UINT8	oTransID9_1,		.0,				.255,			.0,		notext,			.209,	opt_transmitter_id_9+1			; ID of transmitter for dil 4 (HIGH)
+	OPTION_UINT8	oTransID10_0,		.0,				.255,			.0,		notext,			.210,	opt_transmitter_id_10+0			; ID of transmitter for dil 5 (LOW)
+	OPTION_UINT8	oTransID10_1,		.0,				.255,			.0,		notext,			.211,	opt_transmitter_id_10+1			; ID of transmitter for dil 5 (HIGH)
+	OPTION_UINT8	oTankSize6,			min_tank_size,	max_tank_size,	.11,	tLiter,			.212,	char_I_tank_size+5				; size of DIL gas tank 1, in liters
+	OPTION_UINT8	oTankSize7,			min_tank_size,	max_tank_size,	.11,	tLiter,			.213,	char_I_tank_size+6				; size of DIL gas tank 2, in liters
+	OPTION_UINT8	oTankSize8,			min_tank_size,	max_tank_size,	.11,	tLiter,			.214,	char_I_tank_size+7				; size of DIL gas tank 3, in liters
+	OPTION_UINT8	oTankSize9,			min_tank_size,	max_tank_size,	.11,	tLiter,			.215,	char_I_tank_size+8				; size of DIL gas tank 4, in liters
+	OPTION_UINT8	oTankSize10,		min_tank_size,	max_tank_size,	.11,	tLiter,			.216,	char_I_tank_size+9				; size of DIL gas tank 5, in liters
+	OPTION_UINT8	oTankFillPres6,		min_fill_press,	max_fill_press,	.20,	tbar10,			.217,	char_I_tank_pres_fill+5			; fill press of DIL gas tank 1, in multiples of 10 bars
+	OPTION_UINT8	oTankFillPres7,		min_fill_press,	max_fill_press,	.20,	tbar10,			.218,	char_I_tank_pres_fill+6			; fill press of DIL gas tank 2, in multiples of 10 bars
+	OPTION_UINT8	oTankFillPres8,		min_fill_press,	max_fill_press,	.20,	tbar10,			.219,	char_I_tank_pres_fill+7			; fill press of DIL gas tank 3, in multiples of 10 bars
+	OPTION_UINT8	oTankFillPres9,		min_fill_press,	max_fill_press,	.20,	tbar10,			.220,	char_I_tank_pres_fill+8			; fill press of DIL gas tank 4, in multiples of 10 bars
+	OPTION_UINT8	oTankFillPres10,	min_fill_press,	max_fill_press,	.20,	tbar10,			.221,	char_I_tank_pres_fill+9			; fill press of DIL gas tank 5, in multiples of 10 bars
+	OPTION_ENUM8	oTrMode,			.4,								.1,		tTrModeOff,		.222,	opt_TR_mode						; TR functions - mode
+	OPTION_ENUM8	oTr1stPres,			.15,							.1,		tTrPresNone,	.223,	opt_TR_1st_pres					; TR functions - 1st pressure assignment
+	OPTION_ENUM8	oTr2ndPres,			.15,							.0,		tTrPresNone,	.224,	opt_TR_2nd_pres					; TR functions - 2nd pressure assignment
+	OPTION_ENUM8	oTrBailPres,		.15,							.1,		tTrPresNone,	.225,	opt_TR_Bail_pres				; TR functions - bailout pressure assignment
+	OPTION_UINT8p5	oTrMaxDeltaPres,	max_pres_diff_min,max_pres_diff_max,.5,	tbar,			.226,	char_I_max_pres_diff			; TR functions - maximum delta pressure in independent double mode
+	OPTION_BOOL		oRealGasFactorUse,	.0,														.227,	opt_ZfactorUse					; =1: figure in compression factor Z when converting gas volume <-> gas pressure [future option, not used yet]
+	OPTION_UINT8p5	oRealGasFactorTemp,	.0,				.30,			.15,	tLogTunitC,		.228,	opt_ZfactorTemp					; temperature setpoint for compression factor Z
+	OPTION_ENUM8	o2ndDepthDisp,		.2,								.0,		tMaxDepth,		.229,	opt_2ndDepthDisp				; =1: show average depth instead of max depth
+	;	+-----------------------+
+	;	| add new options here! |
+	;	+-----------------------+
 
 ; ppO2 warnings, sorted by ppO2 levels
-	OPTION_UINT8p10	oPPO2Min,		ppo2_warning_low_lowest,	ppo2_warning_low_highest,	ppo2_warning_low_default,	notext,	.16,	char_I_ppO2_min		; ppO2 min on OC
-	OPTION_UINT8p10	oPPO2MinCC,		ppo2_warning_loop_lowest,	ppo2_warning_loop_highest,	ppo2_warning_loop_default,	notext,	.172,	char_I_ppO2_min_loop	; ppO2 min on Loop
-	OPTION_UINT8p10	oPPO2Max,		ppo2_warning_high_lowest,	ppo2_warning_high_highest,	ppo2_warning_high_default,	notext,	.10,	char_I_ppO2_max		; ppO2 max when not in deco
+	OPTION_UINT8p10	oPPO2Min,		ppo2_warning_low_lowest,	ppo2_warning_low_highest,	ppo2_warning_low_default,	notext,	.16,	char_I_ppO2_min			; ppO2 min on OC   and for pure diluent in CCR
+	OPTION_UINT8p10	oPPO2MinCC,		ppo2_warning_loop_lowest,	ppo2_warning_loop_highest,	ppo2_warning_loop_default,	notext,	.172,	char_I_ppO2_min_loop	; ppO2 min on Loop and for pure diluent in pSCR
+	OPTION_UINT8p10	oPPO2Max,		ppo2_warning_high_lowest,	ppo2_warning_high_highest,	ppo2_warning_high_default,	notext,	.10,	char_I_ppO2_max			; ppO2 max when not in deco
 	OPTION_UINT8p10	oPPO2MaxDeco,	ppo2_warning_deco_lowest,	ppo2_warning_deco_highest,	ppo2_warning_deco_default,	notext,	.171,	char_I_ppO2_max_deco	; ppO2 max when in deco
+
 
 ;=============================================================================
 ; Set Time/Set Date (RAM only)

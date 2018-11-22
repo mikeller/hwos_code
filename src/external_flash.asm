@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File external_flash.asm											## V2.98
+;   File external_flash.asm											## V2.98c
 ;
 ;   External flash
 ;
@@ -12,7 +12,8 @@
 	#include "hwos.inc"
 	#include "wait.inc"
 
-basic	CODE
+ext_flash		CODE
+
 ;=============================================================================
 
 	global	incf_ext_flash_address_p1

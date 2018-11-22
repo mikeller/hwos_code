@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft.asm													## V2.97
+;   File tft.asm													## V2.99c
 ;
 ;   Managing the TFT screen
 ;
@@ -61,13 +61,13 @@ Index_out		macro low_b
 
 Parameter_out	macro high_b, low_b
 				movlw high_b
-				movwf PORTA		; Upper
+				movwf PORTA			; upper
 				movlw low_b
 				rcall TFT_DataWrite
 				endm
 
 
-basic	CODE
+tft		CODE
 
 ;;=============================================================================
 ;; TFT_write_flash_image
@@ -92,70 +92,70 @@ basic	CODE
 ;TFT_write_flash_image_addr:
 ;	call	ext_flash_read_block_start
 ;	movff	SSP2BUF,win_width+0
-;	movwf	SSP2BUF					; Write to buffer to initiate new read
-;	btfss	SSP2STAT, BF			; Next byte ready ?
-;	bra		$-2						; NO: wait...
+;	movwf	SSP2BUF					; write to buffer to initiate new read
+;	btfss	SSP2STAT, BF			; next byte ready ?
+;	bra		$-2						; NO - wait...
 ;	movff	SSP2BUF,win_width+1
-;	movwf	SSP2BUF					; Write to buffer to initiate new read
-;	btfss	SSP2STAT, BF			; Next byte ready ?
-;	bra		$-2						; NO: wait...
+;	movwf	SSP2BUF					; write to buffer to initiate new read
+;	btfss	SSP2STAT, BF			; next byte ready ?
+;	bra		$-2						; NO - wait...
 ;	movff	SSP2BUF,win_height
-;	movwf	SSP2BUF					; Write to buffer to initiate new read
-;	btfss	SSP2STAT, BF			; Next byte ready ?
-;	bra		$-2						; NO: wait...
-;	movff   SSP2BUF,WREG			; drop 4th byte.
-;	movwf	SSP2BUF					; Write to buffer to initiate new read
-;	btfss	SSP2STAT, BF			; Next byte ready ?
-;	bra		$-2						; NO: wait...
+;	movwf	SSP2BUF					; write to buffer to initiate new read
+;	btfss	SSP2STAT, BF			; next byte ready ?
+;	bra		$-2						; NO - wait...
+;	movff   SSP2BUF,WREG			; drop 4th byte
+;	movwf	SSP2BUF					; write to buffer to initiate new read
+;	btfss	SSP2STAT, BF			; next byte ready ?
+;	bra		$-2						; NO - wait...
 ;
 ;	; Sanity check on header to avoid badly uploaded images.
-;	iorwf	WREG					; Check height < 256
+;	iorwf	WREG					; check height < 256
 ;	bnz		TFT_write_flash_image_failed
-;	movf	win_width+1,W			; Check width < 512
+;	movf	win_width+1,W			; check width < 512
 ;	andlw	0xFE
 ;	bnz		TFT_write_flash_image_failed
 ;
 ;	; Center image on win_top, win_left values
-;	bcf		STATUS,C				; Clear carry
-;	rrcf	win_height,W			; And get height/2
+;	bcf		STATUS,C				; clear carry
+;	rrcf	win_height,W			; and get height/2
 ;	subwf	win_top,F				; top -= height/2
-;	rrcf	win_width+1,W			; Get 9th bit into carry
-;	rrcf	win_width+0,W			; Get width/2 (in 0..320 range)
+;	rrcf	win_width+1,W			; get 9th bit into carry
+;	rrcf	win_width+0,W			; get width/2 (in 0..320 range)
 ;	bcf		STATUS,C
-;	rrcf	WREG,W					; Get width/2 in 0..160 range
+;	rrcf	WREG,W					; get width/2 in 0..160 range
 ;	subwf	win_leftx2,F			; left -= width/2
 ;
-;	rcall	TFT_box_write			; Inputs : win_top, win_leftx2, win_height, win_width(in 1..320 range)
+;	rcall	TFT_box_write			; inputs : win_top, win_leftx2, win_height, win_width (in 1..320 range)
 ;
 ;	; Compute number of pixels to move (result on 17 bits !)
 ;	clrf	TBLPTRU
 ;	movf	win_width+0,W
-;	mulwf	win_height				; Result in PRODL:H
+;	mulwf	win_height				; result in PRODL:H
 ;	movf	win_width+1,W
 ;	bz		TFT_write_flash_image_1	; width > 8bits ?
-;	movf	win_height,W			; YES: add extra
+;	movf	win_height,W			; YES - add extra
 ;	addwf	PRODH,F
-;	rlcf	TBLPTRU					; And carry into upper register.
+;	rlcf	TBLPTRU					; and carry into upper register
 ;TFT_write_flash_image_1:
 ;	incf	PRODH,F					; pre-condition nested loops
 ;	incf	TBLPTRU,F
 ;
 ;	; Write pixels
-;	Index_out 0x22					; Frame Memory Data Write start
-;	RS_H							; Data
+;	Index_out 0x22					; frame memory data write start
+;	RS_H							; data
 ;
 ;TFT_write_flash_image_loop:
-;	btfss	SSP2STAT, BF			; Buffer full?
-;	bra		$-2						; NO: wait...
-;	movff	SSP2BUF,PORTH			; Read lo
-;	movwf	SSP2BUF					; Write to buffer to initiate new read
+;	btfss	SSP2STAT, BF			; buffer full?
+;	bra		$-2						; NO - wait...
+;	movff	SSP2BUF,PORTH			; read lo
+;	movwf	SSP2BUF					; write to buffer to initiate new read
 ;
-;	btfss	SSP2STAT, BF			; Buffer full?
-;	bra		$-2						; NO: wait...
-;	movff	SSP2BUF,PORTA			; And read hi
-;	movwf	SSP2BUF					; Write to buffer to initiate new read
+;	btfss	SSP2STAT, BF			; buffer full?
+;	bra		$-2						; NO - wait...
+;	movff	SSP2BUF,PORTA			; and read hi
+;	movwf	SSP2BUF					; write to buffer to initiate new read
 ;	WR_L
-;	WR_H							; Write 1 Pixel
+;	WR_H							; write 1 pixel
 ;
 ;	decfsz	PRODL,F
 ;	bra		TFT_write_flash_image_loop
@@ -164,13 +164,13 @@ basic	CODE
 ;	decfsz	TBLPTRU,F
 ;	bra		TFT_write_flash_image_loop
 ;
-;	btfss	SSP2STAT, BF			; Buffer full?
-;	bra		$-2						; No, wait
-;	movf	SSP2BUF,W				; Read dummy byte
+;	btfss	SSP2STAT, BF			; buffer full?
+;	bra		$-2						; NO - wait
+;	movf	SSP2BUF,W				; read dummy byte
 ;
 ;	bsf		flash_ncs				; CS=1
 ;	movlw	0x00					; NOP, to stop window mode
-;	bra		TFT_CmdWrite			; This routine "returns"
+;	bra		TFT_CmdWrite			; this routine "returns"
 ;
 ;	;---- Draw a 4x4 red square in place of missing images...
 ;TFT_write_flash_image_failed:
@@ -191,22 +191,22 @@ basic	CODE
 
 	global	TFT_CmdWrite
 TFT_CmdWrite:
-	RS_L							; Command
-	clrf	PORTA					; Upper
+	RS_L							; command
+	clrf	PORTA					; upper
 	bcf		INTCON,GIE
-	movwf	PORTH					; Lower
+	movwf	PORTH					; lower
 	WR_L
-	WR_H							; Tick
+	WR_H							; tick
 	bsf		INTCON,GIE
 	return
 
 	global	TFT_DataWrite
 TFT_DataWrite:
-	RS_H							; Data
+	RS_H							; data
 	bcf		INTCON,GIE
-	movwf 	PORTH					; Lower
+	movwf 	PORTH					; lower
 	WR_L
-	WR_H							; Tick
+	WR_H							; tick
 	bsf		INTCON,GIE
 	return
 
@@ -214,25 +214,25 @@ TFT_DataWrite:
 
 	global	TFT_ClearScreen
 TFT_ClearScreen:
-	Index_out 0x50					; Window Horizontal Start Address
+	Index_out 0x50					; window horizontal start address
 	Parameter_out 0x00, 0x00		; 0-239
-	Index_out 0x51					; Window Horizontal End Address
+	Index_out 0x51					; window horizontal end   address
 	Parameter_out 0x00, 0xEF		; 0-239
-	Index_out 0x52					; Window Vertical Start Address
+	Index_out 0x52					; window vertical   start address
 	Parameter_out 0x00, 0x00		; 0-319
-	Index_out 0x53					; Window Vertical End Address
+	Index_out 0x53					; window vertical   end   address
 	Parameter_out 0x01, 0x3F		; 0-319
-	Index_out 0x20					; Frame Memory Horizontal Address
+	Index_out 0x20					; frame memory horizontal address
 	Parameter_out 0x00, 0x00		; 0-239
-	Index_out 0x21					; Frame Memory Vertical Address
+	Index_out 0x21					; frame memory vertical   address
 	Parameter_out 0x01, 0x3F		; 0-319
 
-	Index_out 0x22					; Frame Memory Data Write start
+	Index_out 0x22					; frame memory data write start
 
-	RD_H							; Not Read
-	RS_H							; Data
-	NCS_L							; Not CS
-	clrf	PORTH					; Data Lower
+	RD_H							; not read
+	RS_H							; data
+	NCS_L							; not CS
+	clrf	PORTH					; data lower
 
 	movlw	d'10'
 	movwf	tft_temp3
@@ -240,11 +240,11 @@ TFT_ClearScreen2:
 	movlw	d'30'
 	movwf	tft_temp2
 TFT_ClearScreen3:
-	clrf	tft_temp1				; 30*10*256=76800 Pixels -> Clear complete 240*320
+	clrf	tft_temp1				; 30*10*256=76800 pixels -> clear complete 240*320
 	bcf		INTCON,GIE
 TFT_ClearScreen4:
 	WR_L
-	WR_H							; Tick
+	WR_H							; tick
 	decfsz	tft_temp1,F
 	bra		TFT_ClearScreen4
 	bsf		INTCON,GIE
@@ -254,7 +254,7 @@ TFT_ClearScreen4:
 	bra		TFT_ClearScreen2
 
 	movlw	0x00					; NOP, to stop window mode
-	bra		TFT_CmdWrite			; And return
+	bra		TFT_CmdWrite			; and return
 
 
 ;=============================================================================
@@ -306,7 +306,7 @@ TFT_boot:
 	WAITMS	d'5'
 	bsf		tft_nreset
 	WAITMS	d'150'
-	bsf		lightsen_power			; Supply power to light sensor
+	bsf		lightsen_power			; supply power to light sensor
 
 	; Data Transfer Synchronization
 	Parameter_out 0x00, 0x00
@@ -319,10 +319,10 @@ TFT_boot:
 	movwf	TBLPTRH
 	movlw	0x01
 	movwf	TBLPTRU
-	TBLRD*+							; Reads .110 for cR and USB OSTC3, .0 for BLE (2 and 3), and .2 for display1 OSTC
+	TBLRD*+							; reads .110 for cR and USB OSTC3, .0 for BLE (2 and 3), and .2 for display1 OSTC
 	movlw	0x02
 	cpfseq	TABLAT
-	bra		TFT_boot_0				; Display0
+	bra		TFT_boot_0				; display0
 
 TFT_boot_1:
 	; Init through config table...
@@ -350,10 +350,10 @@ TFT_boot_com:
 
 	Index_out 0x03
 	btfsc	flip_screen				; 180° rotation ?
-	bra		TFT_boot2				; Yes
+	bra		TFT_boot2				; YES
 
 	btfss	screen_type				; display1?
-	bra		TFT_boot1a				; no
+	bra		TFT_boot1a				; NO
 	Parameter_out 0x10, 0x00		; display1
 	bra		TFT_boot3
 TFT_boot1a:
@@ -361,7 +361,7 @@ TFT_boot1a:
 	bra		TFT_boot3
 TFT_boot2:
 	btfss	screen_type				; display1?
-	bra		TFT_boot2a				; no
+	bra		TFT_boot2a				; NO
 	Parameter_out 0x10, 0x30		; display1
 	bra		TFT_boot3
 TFT_boot2a:
@@ -396,26 +396,26 @@ display0_init_loop:
 	TBLRD*+
 	movlw	0xFF
 	cpfseq	TABLAT
-	bra		display0_config_write	; Write Config pair to Display
+	bra		display0_config_write	; write config pair to display
 	; Delay ms or quit (return)
 	TBLRD*+
-	tstfsz	TABLAT					; End of config?
-	bra		$+4						; No
-	return							; Done.
+	tstfsz	TABLAT					; end of config?
+	bra		$+4						; NO
+	return							; YES - done
 	movf	TABLAT,W
-	call	WAITMSX					; Wait WREG milliseconds
-	TBLRD*+							; Dummy read (Third byte of delay command)
-	bra		display0_init_loop		; Loop
+	call	WAITMSX					; wait WREG milliseconds
+	TBLRD*+							; dummy read (Third byte of delay command)
+	bra		display0_init_loop		; loop
 
-display0_config_write:				; With command in WREG
+display0_config_write:				; with command in WREG
 	movf	TABLAT,W
-	rcall	TFT_CmdWrite			; Write command
-	TBLRD*+							; Get config0
+	rcall	TFT_CmdWrite			; write command
+	TBLRD*+							; get config0
 	movff	TABLAT,PORTA
-	TBLRD*+							; Get config1
+	TBLRD*+							; get config1
 	movf	TABLAT,W
-	rcall	TFT_DataWrite			; Write config
-	bra		display0_init_loop		; Loop
+	rcall	TFT_DataWrite			; write config
+	bra		display0_init_loop		; loop
 
 
 ;=============================================================================
@@ -423,23 +423,23 @@ display0_config_write:				; With command in WREG
 ;
 ; Trashes: WREG, PRODL
 ; Typical usage:
-;	clrf	CCPR1L					; Backlight off
+;	clrf	CCPR1L					; backlight off
 ;	[draw splash screen]
 ;	call	TFT_DisplayFadeIn
 
 	global	TFT_Display_FadeIn
 TFT_Display_FadeIn:
-	movlw	CCP1CON_VALUE			; See hwos.inc
+	movlw	CCP1CON_VALUE			; see hwos.inc
 	movwf	CCP1CON
-	bsf		tft_is_dimming			; TFT is dimming, ignore ambient sensor!
-	clrf	CCPR1L					; Backlight off - to be sure
+	bsf		tft_is_dimming			; TFT is dimming, ignore ambient sensor
+	clrf	CCPR1L					; backlight off - to be sure
 	movff	max_CCPR1L,PRODL
 TFT_Display_FadeIn_0:
-	incf	CCPR1L,F				; Duty cycle
+	incf	CCPR1L,F				; duty cycle
 	WAITMS	d'2'
 	decfsz	PRODL,F
 	bra		TFT_Display_FadeIn_0 
-	bcf		tft_is_dimming			; dimming done.
+	bcf		tft_is_dimming			; dimming done
 	return
 
 ;=============================================================================
@@ -449,9 +449,9 @@ TFT_Display_FadeIn_0:
 	global	TFT_Display_FadeOut
 TFT_Display_FadeOut:
 	movff	max_CCPR1L,PRODL
-	bsf		tft_is_dimming			; TFT is dimming, ignore ambient sensor!
+	bsf		tft_is_dimming			; TFT is dimming, ignore ambient sensor
 TFT_Display_FadeOut_0:
-	movff	PRODL,CCPR1L			; Duty cycle
+	movff	PRODL,CCPR1L			; duty cycle
 	WAITMS	d'1'
 	decfsz	PRODL,F
 	bra		TFT_Display_FadeOut_0 
@@ -460,12 +460,12 @@ TFT_Display_FadeOut_0:
 
 ;=============================================================================
 
-	global  box_std_block, box_black_block, box_color_block
+	global	box_std_block, box_black_block, box_color_block
 
-box_std_block:						; Use white color
+box_std_block:						; use white color
 	setf	WREG
 	bra	box_common
-box_black_block:					; Use black color
+box_black_block:					; use black color
 	clrf	WREG
 box_common:
 box_color_block:
@@ -509,7 +509,7 @@ box_frame_color16:
 ;init_pixel_write:
 ;	movf	win_leftx2,W
 ;	mullw	2
-;	rcall	pixel_write_col320		; Start Address Vertical (.0 - .319)
+;	rcall	pixel_write_col320		; start address vertical (.0 - .319)
 ;	setf	WREG
 ;	bra	TFT_set_color
 
@@ -522,39 +522,39 @@ box_frame_color16:
 pixel_write:
 	movf	win_leftx2,W
 	mullw	2						; win_leftx2 x 2 -> PRODH:PRODL
-	rcall	pixel_write_col320		; Start Address Vertical (.0 - .319)
-	rcall	half_pixel_write		; Write this half-one.
-	movf	win_leftx2,W			; Address of next one
+	rcall	pixel_write_col320		; start address vertical (.0 - .319)
+	rcall	half_pixel_write		; write this half-one
+	movf	win_leftx2,W			; address of next one
 	mullw	2
 	infsnz	PRODL					; +1
 	incf	PRODH
 	rcall	pixel_write_col320
-	bra		half_pixel_write		; Note: Cmd 0x20 is mandatory, because
+	bra		half_pixel_write		; note: Cmd 0x20 is mandatory, because
 									; of the auto-increment going vertical
 
 	global	pixel_write_col320
 pixel_write_col320:
 	btfsc	screen_type				; display1?
-	bra		pixel_write_col320_d1	; Yes
+	bra		pixel_write_col320_d1	; YES
 	; Display0
 	btfss	flip_screen				; 180° rotation?
-	bra		pixel_write_noflip_H	; No
-	bra		pixel_write_flip_H		; Yes
+	bra		pixel_write_noflip_H	; NO
+	bra		pixel_write_flip_H		; YES
 pixel_write_col320_d1:				; Display1
 	btfsc	flip_screen				; 180° rotation?
-	bra	pixel_write_noflip_H		; Yes for d1
-pixel_write_flip_H:					; Flip d0
-	movf	PRODL,W					; 16bits 319 - PROD --> PROD
+	bra	pixel_write_noflip_H		; YES for d1
+pixel_write_flip_H:					; flip d0
+	movf	PRODL,W					; 16 bits 319 - PROD --> PROD
 	sublw	LOW(.319)				; 319-W --> W
 	movwf	PRODL
 	movf	PRODH,W
-	btfss	STATUS,C				; Borrow = /CARRY
+	btfss	STATUS,C				; borrow = /CARRY
 	incf	WREG
 	sublw	HIGH(.319)
 	movwf	PRODH
 
 pixel_write_noflip_H:
-	Index_out 0x21					; Frame Memory Vertical Address
+	Index_out 0x21					; frame memory vertical address
 	bra		TFT_DataWrite_PROD		; and return...
 
 ;-----------------------------------------------------------------------------
@@ -569,17 +569,17 @@ half_pixel_write:
 half_pixel_write_1:
 	btfss	flip_screen				; 180° rotation?
 	sublw	.239					; 239-Y --> Y
-	mullw	.1						; Copy row to PRODL (PRODH=0)
-	Index_out 0x20					; Frame Memory Horizontal Address
+	mullw	.1						; copy row to PRODL (PRODH=0)
+	Index_out 0x20					; frame memory horizontal address
 	rcall	TFT_DataWrite_PROD
 
-	Index_out 0x22					; Frame Memory Data Write start
-	RS_H							; Data
+	Index_out 0x22					; frame memory data write start
+	RS_H							; data
 	bcf		INTCON,GIE
-	movff	win_color1,PORTA		; Upper
-	movff	win_color2,PORTH		; Lower
+	movff	win_color1,PORTA		; upper
+	movff	win_color2,PORTH		; lower
 	WR_L
-	WR_H							; Tick
+	WR_H							; tick
 	bsf		INTCON,GIE
 	return
 
@@ -590,21 +590,21 @@ half_pixel_write_1:
 
 	global	half_vertical_line
 half_vertical_line:
-	clrf	TABLAT					; Loop index.
+	clrf	TABLAT					; loop index
 
 half_vertical_line_loop:
-	movf	win_leftx2,W			; Init X position.
+	movf	win_leftx2,W			; init X position
 	mullw	.2
-	movf	TABLAT,W				; Get loop index
-	andlw	.1						; Just low bit
-	xorwf	PRODL,F					; And use it to jitter current X position
-	rcall	pixel_write_col320		; Start Address Vertical (.0 - .319)
+	movf	TABLAT,W				; get loop index
+	andlw	.1						; just low bit
+	xorwf	PRODL,F					; and use it to jitter current X position
+	rcall	pixel_write_col320		; start address vertical (.0 - .319)
 
-	movf	win_height,W			; Index reached height (Bank0 read) ?
+	movf	win_height,W			; index reached height (bank0 read) ?
 	xorwf	TABLAT,W
-	btfsc	STATUS,Z				; Equals ?
-	return							; Yes: done.
-	movf	win_top,W				; Y = top + index (Bank0 read)
+	btfsc	STATUS,Z				; Equal ?
+	return							; YES - done
+	movf	win_top,W				; Y = top + index (bank0 read)
 	addwf	TABLAT,W
 	rcall	half_pixel_write_1
 	incf	TABLAT,F				; index++
@@ -617,17 +617,17 @@ half_vertical_line_loop:
 
 	global	half_horizontal_line
 half_horizontal_line:
-	clrf	TABLAT					; Loop index.
+	clrf	TABLAT					; loop index
 
 half_horizontal_line_loop:
-	movf	win_leftx2,W			; Init X position.
+	movf	win_leftx2,W			; init X position
 	mullw	.2
-	rcall	pixel_write_col320		; Start Address Vertical (.0 - .319)
-	movf	win_width,W				; Index reached height (Bank0 read) ?
+	rcall	pixel_write_col320		; start address vertical (.0 - .319)
+	movf	win_width,W				; index reached height (bank0 read) ?
 	xorwf	TABLAT,W
-	btfsc	STATUS,Z				; Equals ?
-	return							; Yes: done.
-	movf	win_top,W				; Y = top + index (Bank0 read)
+	btfsc	STATUS,Z				; equal ?
+	return							; YES - done
+	movf	win_top,W				; Y = top + index (bank0 read)
 	addwf	TABLAT,W
 	rcall	half_pixel_write_1
 	incf	TABLAT,F				; index++
@@ -639,72 +639,72 @@ half_horizontal_line_loop:
 
 	global	TFT_DataWrite_PROD
 TFT_DataWrite_PROD:
-;	RD_H							; Keep high
-	RS_H							; Data
+;	RD_H							; keep high
+	RS_H							; data
 	bcf		INTCON,GIE
-	movff	PRODH,PORTA				; Move high byte to PORTA
-	movff	PRODL,PORTH				; Move low byte to PORTH
+	movff	PRODH,PORTA				; move high byte to PORTA
+	movff	PRODL,PORTH				; move low byte to PORTH
 	WR_L
-	WR_H							; Tick
+	WR_H							; tick
 	bsf		INTCON,GIE
 	return
 
 TFT_DataRead_PROD:
-	Index_out 0x22					; Frame Memory Data Read start
+	Index_out 0x22					; frame memory data read start
 TFT_CmdRead_PROD:
-	setf	TRISA					; PortA as input.
-	setf	TRISH					; PortH as input.
-	RS_H							; Data
-	WR_H							; Not write
-	RD_L							; Read!
+	setf	TRISA					; port A as input
+	setf	TRISH					; port H as input
+	RS_H							; data
+	WR_H							; not write
+	RD_L							; read
 	nop
 	nop
 	nop
-	RD_H							; Tick
+	RD_H							; tick
 	nop
 	nop
 	nop
-	RD_L							; Read!
+	RD_L							; read
 	nop
 	;nop
 	;nop
 	movff	PORTA,PRODH
 	movff	PORTH,PRODL
-	RD_H							; Tick
+	RD_H							; tick
 	nop
-	clrf	TRISA					; PortA as output
-	clrf	TRISH					; PortH as output
+	clrf	TRISA					; port A as output
+	clrf	TRISH					; port H as output
 	return
 
 ;=============================================================================
-; Output TFT Window Address commands.
-; Inputs : win_top, win_leftx2, win_height, win_width.
-; Output : PortA/PortH commands.
+; Output TFT Window Address commands
+; Inputs : win_top, win_leftx2, win_height, win_width
+; Output : PortA/PortH commands
 ; Trashed: PROD
 
 	global	TFT_box_write
 TFT_box_write:
-	movf	win_leftx2,W			; Compute left = 2*leftx2 --> PROD
+	movf	win_leftx2,W			; compute left = 2 * leftx2 --> PROD
 	mullw	2
 
 	global	TFT_box_write_16bit_win_left
-TFT_box_write_16bit_win_left:					; With column in PRODL:PRODH
+TFT_box_write_16bit_win_left:					; Wwth column in PRODL:PRODH
 	btfsc	screen_type							; display1?
-	bra		TFT_box_write_16bit_win_left_d1		; Yes
+	bra		TFT_box_write_16bit_win_left_d1		; YES
 	; Display0
 	btfsc	flip_screen							; 180° rotation?
-	bra		DISP_box_flip_H						; Yes
-	bra		TFT_box_write_16bit_win_left_com	; No
+	bra		DISP_box_flip_H						; YES
+	bra		TFT_box_write_16bit_win_left_com	; NO
 TFT_box_write_16bit_win_left_d1:				; Display1
 	btfss	flip_screen							; 180° rotation?
-	bra		DISP_box_flip_H						; No for d1
+	bra		DISP_box_flip_H						; NO for d1
 	; Yes for d1
 TFT_box_write_16bit_win_left_com:
 	;---- Normal horizontal window ---------------------------------------
-	Index_out 0x52					; Window Vertical Start Address
-	rcall	TFT_DataWrite_PROD		; Output left
-	Index_out 0x21					; Frame Memory Vertical Address
-	rcall	TFT_DataWrite_PROD		; Output left
+	Index_out 0x52					; window vertical start address
+	rcall	TFT_DataWrite_PROD		; output left
+	Index_out 0x21					; frame memory vertical address
+	rcall	TFT_DataWrite_PROD		; output left
 
 	movf	win_width+0,W			; right = left + width - 1
 	addwf	PRODL,F
@@ -714,58 +714,58 @@ TFT_box_write_16bit_win_left_com:
 	btfss	STATUS,C
 	decf	PRODH,F
 
-	Index_out 0x53					; Window Vertical End Address
+	Index_out 0x53					; window vertical end address
 	rcall	TFT_DataWrite_PROD
 	bra		DISP_box_noflip_H
 
 	;---- Flipped horizontal window --------------------------------------
 DISP_box_flip_H:
-	movf	PRODL,W					; 16bits 319 - PROD --> PROD
-	sublw	LOW(.319)				; 319-W --> W
+	movf	PRODL,W					; 16 bits 319 - PROD --> PROD
+	sublw	LOW(.319)				; 319 - WREG --> WREG
 	movwf	PRODL
 	movf	PRODH,W
-	btfss	STATUS,C				; Borrow = /CARRY
+	btfss	STATUS,C				; borrow = /CARRY
 	incf	WREG
 	sublw	HIGH(.319)
 	movwf	PRODH
 
-	Index_out 0x53					; Window Vertical Start Address
-	rcall	TFT_DataWrite_PROD		; Output left
-	Index_out 0x21					; Frame Memory Vertical Address
-	rcall	TFT_DataWrite_PROD		; Output left
+	Index_out 0x53					; window vertical start address
+	rcall	TFT_DataWrite_PROD		; output left
+	Index_out 0x21					; frame memory vertical address
+	rcall	TFT_DataWrite_PROD		; output left
 
-	movf	win_width+0,W			; 16bits PROD - width --> PROD
+	movf	win_width+0,W			; 16 bits PROD - width --> PROD
 	subwf	PRODL,F					; PRODL - WREG --> PRODL
 	movf	win_width+1,W
 	subwfb	PRODH,F
-	infsnz	PRODL					; PROD+1 --> PROD
+	infsnz	PRODL					; PROD + 1 --> PROD
 	incf	PRODH
 
-	Index_out 0x52					; Window Vertical End Address
+	Index_out 0x52					; window vertical end address
 	rcall	TFT_DataWrite_PROD
 
 DISP_box_noflip_H:
 	btfss	flip_screen				; 180° rotation ?
-	bra		TFT_box_noflip_V		; No.
+	bra		TFT_box_noflip_V		; NO
 
 	;---- Flipped vertical window -----------------------------------------
 	movff	win_top,PRODH			; top --> PRODH (first byte)
 	movf	win_height,W
 	addwf	PRODH,W
 	decf	WREG
-	movwf	PRODL					; top+height-1 --> PRODL (second byte)
+	movwf	PRODL					; top + height - 1 --> PRODL (second byte)
 
-	Index_out 0x50					; Window Horizontal Start Address
+	Index_out 0x50					; window horizontal start address
 	movf	PRODH,W
-	rcall	TFT_DataWrite			; Lower (and tick)
+	rcall	TFT_DataWrite			; lower (and tick)
 
-	Index_out 0x51					; Window Horizontal End Address
+	Index_out 0x51					; window horizontal end address
 	movf	PRODL,W
-	rcall	TFT_DataWrite			; Lower (and tick)
+	rcall	TFT_DataWrite			; lower (and tick)
 
-	Index_out 0x20					; Frame Memory Horizontal Address
+	Index_out 0x20					; frame memory horizontal address
 	movf	PRODH,W
-	bra		TFT_DataWrite			; Lower (and tick) and return
+	bra		TFT_DataWrite			; lower (and tick) and return
 
 TFT_box_noflip_V:
 	;---- Normal vertical window ----------------------------------------
@@ -773,55 +773,55 @@ TFT_box_noflip_V:
 	movf	win_height,W
 	addwf	PRODL,W
 	sublw	.240					; 240 - top - height
-	movwf	PRODH					; First byte
+	movwf	PRODH					; first byte
 
 	movf	PRODL,W
-	sublw	.239					; 239-top
-	movwf	PRODL					; --> second byte.
+	sublw	.239					; 239 - top
+	movwf	PRODL					; --> second byte
 
-	Index_out 0x50					; Window Horizontal Start Address
+	Index_out 0x50					; window horizontal start address
 	movf	PRODH,W
-	rcall	TFT_DataWrite			; Lower (and tick)
+	rcall	TFT_DataWrite			; lower (and tick)
 
-	Index_out 0x51					; Window Horizontal End Address
+	Index_out 0x51					; window horizontal end address
 	movf	PRODL,W
-	rcall	TFT_DataWrite			; Lower (and tick)
+	rcall	TFT_DataWrite			; lower (and tick)
 
-	Index_out 0x20					; Frame Memory Horizontal Address
+	Index_out 0x20					; frame memory horizontal address
 	movf	PRODL,W
-	bra		TFT_DataWrite			; Lower (and tick) and return
+	bra		TFT_DataWrite			; lower (and tick) and return
 
 
 ;=============================================================================
-; TFT_frame : draw a frame around current box with current color.
+; TFT_frame : draw a frame around current box with current color
 ; Inputs:  win_top, win_leftx2, win_height, win_width, win_color1, win_color2
 ; Outputs: (none)
 ; Trashed: WREG, PROD, aa_start:2, aa_end:2
 
 	global	TFT_frame
 TFT_frame:
-	movff	win_top,save_top		; Backup everything.
+	movff	win_top,save_top		; backup everything
 	movff	win_height,save_height
 	movff	win_leftx2,save_left
 	movff	win_width,save_width
 
 	;---- TOP line -----------------------------------------------------------
-	movlw	.1						; row ~ height=1
+	movlw	.1						; row ~ height = 1
 	movwf	win_height
 	rcall	TFT_box
 
 	;---- BOTTOM line --------------------------------------------------------
-	movff	save_top,PRODL			; Get back top,
-	movff	save_height,WREG		; and height
-	addwf	PRODL,W					; top+height
-	decf	WREG					; top+height-1
-	movwf	win_top					; top+height-1 --> top
+	movff	save_top,PRODL			; get back top
+	movff	save_height,WREG		; get back height
+	addwf	PRODL,W					; top + height
+	decf	WREG					; top + height - 1
+	movwf	win_top					; top + height - 1 --> top
 	rcall	TFT_box
 
 	;---- LEFT column --------------------------------------------------------
-	movff	save_top,win_top		; Restore top/height.
+	movff	save_top,win_top		; restore top/height
 	movff	save_height,win_height
-	movlw	.1						; column ~ width=1
+	movlw	.1						; column ~ width = 1
 	movwf	win_width+0
 	rcall	TFT_box
 
@@ -839,8 +839,8 @@ TFT_frame:
 	return
 
 ;=============================================================================
-; TFT_box : fills current box with current color.
-; Inputs:  win_top, win_leftx2, win_height, win_width, win_color1, win_color2
+; TFT_box: fills current box with current color
+; Inputs : win_top, win_leftx2, win_height, win_width, win_color1, win_color2
 ; Outputs: (none)
 ; Trashed: WREG, PROD
 
@@ -850,7 +850,7 @@ TFT_box:
 	bcf		STATUS,C
 	rlcf	win_width+0,F
 	rlcf	win_width+1,F			; x2
-	rcall	TFT_box_write			; Setup box
+	rcall	TFT_box_write			; setup box
 
 	global	TFT_box_16bit_win_left
 TFT_box_16bit_win_left:
@@ -859,58 +859,57 @@ TFT_box_16bit_win_left:
 	rrcf	win_width+0,F
 
 	;---- Fill Window --------------------------------------------------------
-	Index_out 0x22					; Frame Memory Data Write start
+	Index_out 0x22					; frame memory data write start
 
-	clrf	PRODH					; Column counter.
-	RS_H							; Data
+	clrf	PRODH					; column counter
+	RS_H							; data
 
-TFT_box2:							; Loop height times
+TFT_box2:							; loop height times
 	movff	win_height,PRODL
 
 TFT_box3:							; loop width times
 	bcf	INTCON,GIE
-	movff	win_color1,PORTA		; Upper
-	movff	win_color2,PORTH		; Lower
+	movff	win_color1,PORTA		; upper
+	movff	win_color2,PORTH		; lower
 	WR_L
-	WR_H							; Tick
+	WR_H							; tick
 
-;	movff	win_color1,PORTA		; Upper
-;	movff	win_color2,PORTH		; Lower
+;	movff	win_color1,PORTA		; upper
+;	movff	win_color2,PORTH		; lower
 	WR_L
-	WR_H							; Tick
+	WR_H							; tick
 	bsf		INTCON,GIE
 	decfsz	PRODL,F					; row loop finished ?
-	bra		TFT_box3				; No: continue.
+	bra		TFT_box3				; NO - continue
 
 	incf	PRODH,F					; column count ++
 
 	movf	win_bargraph,W			; current column == bargraph ?
 	cpfseq	PRODH
-	bra		TFT_box4				; No: just loop.
-	; Yes: switch to black
-	clrf	win_color1
-	clrf	win_color2
+	bra		TFT_box4				; NO  - just loop
+	clrf	win_color1				; Yes - switch to black
+	clrf	win_color2				;     - ...
 TFT_box4:
 	movf	win_width+0,W			; compare ?
 	xorwf	PRODH,W
-	bnz		TFT_box2				; Loop not finished.
+	bnz		TFT_box2				; Loop not finished
 
 	movlw	0x00					; NOP, to stop window mode
 	rcall	TFT_CmdWrite
 
-	; Reset bargraph mode...
+	; reset bargraph mode...
 	setf	win_bargraph
 	return
 
 ;=============================================================================
-;Converts 8Bit RGB b'RRRGGGBB' into 16Bit RGB b'RRRRRGGGGGGBBBBB'
+; Converts 8 bit RGB b'RRRGGGBB' into 16 bit RGB b'RRRRRGGGGGGBBBBB'
 
 	global	TFT_set_color
 TFT_set_color:
-	movwf	tft_temp1				; Get 8Bit RGB b'RRRGGGBB'
-	movwf	tft_temp2				; Copy
+	movwf	tft_temp1				; get 8 Bit RGB b'RRRGGGBB'
+	movwf	tft_temp2				; copy
 
-	; Mask Bit 7,6,5,4,3,2
+	; mask bit 7,6,5,4,3,2
 	movlw	b'00000011'
 	andwf	tft_temp2,F
 
@@ -921,10 +920,10 @@ TFT_set_color:
 	movlw	b'10100000'
 	dcfsnz	tft_temp2,F
 	movlw	b'11111000'
-	movwf	tft_temp3				; Blue done.
+	movwf	tft_temp3				; blue done
 
-	movff	tft_temp1,tft_temp2		; Copy
-	; Mask Bit 7,6,5,1,0
+	movff	tft_temp1,tft_temp2		; copy
+	; mask bit 7,6,5,1,0
 	movlw	b'00011100'
 	andwf	tft_temp2,F
 	rrncf	tft_temp2,F
@@ -954,10 +953,10 @@ TFT_set_color:
 	rrcf	tft_temp3,F
 
 	rrcf	tft_temp4,F
-	rrcf	tft_temp3,W				; tft_temp3 (b'GGGBBBBB') done.
-	movwf	win_color2				; Set Color registers...
+	rrcf	tft_temp3,W				; tft_temp3 (b'GGGBBBBB') done
+	movwf	win_color2				; set color registers...
 
-	movff	tft_temp1,tft_temp2		; Copy
+	movff	tft_temp1,tft_temp2		; copy
 	clrf	tft_temp1
 
 	rrcf	tft_temp4,F
@@ -967,9 +966,9 @@ TFT_set_color:
 	rrcf	tft_temp1,F
 
 	rrcf	tft_temp4,F
-	rrcf	tft_temp1,F				; Green done.
+	rrcf	tft_temp1,F				; green done
 
-	; Mask Bit 4,3,2,1,0
+	; mask bit 4,3,2,1,0
 	movlw	b'11100000'
 	andwf	tft_temp2,F
 
@@ -1000,36 +999,49 @@ TFT_set_color:
 	rrcf	tft_temp1,F
 
 	rrcf	tft_temp4,F
-	rrcf	tft_temp1,F	
-
-	rrcf	tft_temp4,F
 	rrcf	tft_temp1,F
 
 	rrcf	tft_temp4,F
 	rrcf	tft_temp1,F
 
 	rrcf	tft_temp4,F
-	rrcf	tft_temp1,W				; Red done.
-	movwf	win_color1				; Set Color registers...
+	rrcf	tft_temp1,F
+
+	rrcf	tft_temp4,F
+	rrcf	tft_temp1,W				; red done
+	movwf	win_color1				; set color registers
 	return
 
 ;=============================================================================
 ; Dump screen contents to the UART
 
+ IFDEF _screendump
+
+	global	TFT_dump_screen_check
 	global	TFT_dump_screen
-TFT_dump_screen:
+TFT_dump_screen_check:
+	btfss	vusb_in					; USB (still) plugged in?
+	bcf		enable_screen_dumps		; NO - clear flag
+	call	rs232_get_byte			; try to read data from RS232
+	btfsc	rs232_receive_overflow	; anything received?
+	return							; NO  - return
+	movlw	"l"						; YES - load coding for screendump command
+	cpfseq	RCREG1					;       screendump command received?
+	return							;       NO  - return
+TFT_dump_screen:					;       YES
 	bsf		no_sensor_int
 	movlw	'l'
-	movwf	TXREG					; Send command echo.
+	movwf	TXREG					; send command echo
 	call	rs232_wait_tx			; wait for UART
+
 	;---- Send DISPLAY box command for the full screen window -------------------
-	Index_out 0x50					; Window Horizontal Start Address
+	Index_out 0x50					; window horizontal start address
 	Parameter_out 0x00, 0x00		; 0-239
-	Index_out 0x51					; Window Horizontal End Address
+	Index_out 0x51					; window horizontal end   address
 	Parameter_out 0x00, 0xEF		; 0-239
-	Index_out 0x52					; Window Vertical Start Address
+	Index_out 0x52					; window vertical   start address
 	Parameter_out 0x00, 0x00		; 0-319
-	Index_out 0x53					; Window Vertical End Address
+	Index_out 0x53					; window vertical   end   address
 	Parameter_out 0x01, 0x3F		; 0-319
 
 	clrf	ds_column
@@ -1037,17 +1049,17 @@ TFT_dump_screen:
 dump_screen_1:
 	btg		LEDr					; LED activity toggle
 	; Dump even column
-	movlw	.240					; 240 lines, once.
+	movlw	.240					; 240 lines, once
 	movwf	ds_line
 dump_screen_2:
-	Index_out	0x20				; Frame Memory Horizontal Address
+	Index_out	0x20				; frame memory horizontal address
 	movff	ds_line,WREG			; d'0' ... d'239'
-	mullw	.1						; Copy row to PRODH:L
+	mullw	.1						; copy row to PRODH:L
 	rcall	TFT_DataWrite_PROD
 
-	movff	ds_column,WREG			; Init X position.
+	movff	ds_column,WREG			; Init X position
 	mullw	2
-	rcall	pixel_write_col320		; Start Address Vertical (.0 - .319)
+	rcall	pixel_write_col320		; start address vertical (.0 - .319)
 
 	rcall	TFT_DataRead_PROD		; read pixel
 	rcall	dump_screen_pixel
@@ -1057,21 +1069,21 @@ dump_screen_2:
 	rcall	dump_screen_pixel_flush
 
 	; Dump odd column
-	movlw	.240					; 240 lines, twice.
+	movlw	.240					; 240 lines, twice
 	movwf	ds_line
 dump_screen_3:
-	Index_out	0x20				; Frame Memory Horizontal Address
+	Index_out	0x20				; frame memory horizontal address
 	movff	ds_line,WREG			; d'0' ... d'239'
-	mullw	1						; Copy row to PRODH:L
+	mullw	1						; copy row to PRODH:L
 	rcall	TFT_DataWrite_PROD
 
-	movff	ds_column,WREG			; Init X position.
+	movff	ds_column,WREG			; init X position
 	mullw	2
 	movlw	.1
 	addwf	PRODL,F
 	movlw	0
 	addwfc	PRODH,F					; +1
-	rcall	pixel_write_col320		; Start Address Vertical (.0 - .319)
+	rcall	pixel_write_col320		; start address vertical (.0 - .319)
 
 	rcall	TFT_DataRead_PROD		; read pixel
 	rcall	dump_screen_pixel
@@ -1086,55 +1098,59 @@ dump_screen_3:
 	bra		dump_screen_1
 
 	bcf		no_sensor_int
-	clrf	RCREG1					; Clear receive buffer
-	bcf		RCSTA1,CREN				; Clear receiver status
+	clrf	RCREG1					; clear receive buffer
+	bcf		RCSTA1,CREN				; clear receiver status
 	bsf		RCSTA1,CREN
-	bsf		enable_screen_dumps		; =1: Ignore vin_usb, wait for "l" command (Screen dump)
+	bsf		enable_screen_dumps		; =1: Ignore vin_usb, wait for "l" command (screen dump)
 	return
+
+ ENDIF
 
 
 ;=============================================================================
 ; Pixel compression
 ;
-; Input: PRODH:L = pixel.
+; Input : PRODH:L = pixel
 ; Output: Compressed stream on output.
 ; Compressed format:
-;       0ccccccc    : BLACK pixel, repeated ccccccc+1 times (1..128).
-;       11cccccc    : WHITE pixel, repeated cccccc+1 times (1..64).
-;       10cccccc HIGH LOW : color pixel (H:L) repeated ccccc+1 times (1..64).
+;       0ccccccc          : BLACK pixel,      repeated ccccccc+1 times (1..128)
+;       11cccccc          : WHITE pixel,      repeated  cccccc+1 times (1.. 64)
+;       10cccccc HIGH LOW : color pixel (H:L) repeated   ccccc+1 times (1.. 64)
+
+ IFDEF _screendump
 
 dump_screen_pixel:
-	movf	PRODH,W					; Compare pixel-high
+	movf	PRODH,W					; compare pixel-high
 	xorwf	ds_pixel+1,W
-	bnz		dump_screen_pixel_1		; Different -> dump.
+	bnz		dump_screen_pixel_1		; different -> dump
 
-	movf	PRODL,W					; Compare pixel-low
+	movf	PRODL,W					; compare pixel-low
 	xorwf	ds_pixel+0,W
-	bnz		dump_screen_pixel_1		; Different -> dump.
+	bnz		dump_screen_pixel_1		; different -> dump
 
-	incf	ds_count,F				; Same color: just increment.
+	incf	ds_count,F				; same color: just increment
 	return
 
-dump_screen_pixel_1:				; Send (pixel,count) tuple
-	movf	ds_count,W				; Is count zero ?
-	bz		dump_screen_pixel_2		; Yes: skip sending.
+dump_screen_pixel_1:				; send (pixel,count) tuple
+	movf	ds_count,W				; is count zero ?
+	bz		dump_screen_pixel_2		; YES - skip sending
 
-	movf	ds_pixel+1,W			; This is a BLACK pixel ?
+	movf	ds_pixel+1,W			; is this a BLACK pixel ?
 	iorwf	ds_pixel+0,W
-	bz		dump_screen_pix_black	; YES.
+	bz		dump_screen_pix_black	; YES
 
-	movf	ds_pixel+1,W			; This is a white pixel ?
+	movf	ds_pixel+1,W			; is this a white pixel ?
 	andwf	ds_pixel+0,W
 	incf	WREG
-	bz		dump_screen_pix_white	; YES.
+	bz		dump_screen_pix_white	; YES
 
 	; No: write the pixel itself...
-	movlw	.64						; Max color pixel on a single byte.
-	cpfsgt	ds_count				; Skip if count > 64
+	movlw	.64						; max color pixel on a single byte
+	cpfsgt	ds_count				; skip if count > 64
 	movf	ds_count,W				; W <- min(64,count)
 	subwf	ds_count,F				; ds_count <- ds_count-W
-	decf	WREG					; Save as 0..63
-	iorlw	b'10000000'				; MARK as a color pixel.
+	decf	WREG					; save as 0..63
+	iorlw	b'10000000'				; mark as a color pixel
 
 	movwf	TXREG
 	call	rs232_wait_tx			; wait for UART
@@ -1145,38 +1161,40 @@ dump_screen_pixel_1:				; Send (pixel,count) tuple
 	bra		dump_screen_pixel_1
 
 dump_screen_pixel_2:
-	movff	PRODH,ds_pixel+1		; Save new pixel color
+	movff	PRODH,ds_pixel+1		; save new pixel color
 	movff	PRODL,ds_pixel+0
 	movlw	1
-	movwf	ds_count				; And set count=1.
+	movwf	ds_count				; and set count=1
 	return
 
 dump_screen_pix_black:
-	movlw	.128					; Max black pixel on a single byte.
-	cpfsgt	ds_count				; Skip if count > 128
+	movlw	.128					; max black pixel on a single byte
+	cpfsgt	ds_count				; skip if count > 128
 	movf	ds_count,W				; W <- min(128,count)
 	subwf	ds_count,F				; ds_count <- ds_count-W
-	decf	WREG					; Save as 0..127
+	decf	WREG					; save as 0..127
 dump_screen_pix_3:
 	movwf	TXREG
 	call	rs232_wait_tx
-	bra		dump_screen_pixel_1		; More to dump ?
+	bra		dump_screen_pixel_1		; more to dump ?
 
 dump_screen_pix_white:
-	movlw	.64						; Max white pixel on a single byte.
-	cpfsgt	ds_count				; Skip if count > 64
+	movlw	.64						; max white pixel on a single byte
+	cpfsgt	ds_count				; skip if count > 64
 	movf	ds_count,W				; W <- min(64,count)
 	subwf	ds_count,F				; ds_count <- ds_count-W
 	decf	WREG					; Save as 0..63
-	iorlw	b'11000000'				; MARK as a compressed white.
+	iorlw	b'11000000'				; mark as a compressed white
 	bra		dump_screen_pix_3
 
 dump_screen_pixel_flush:
 	clrf	PRODH
 	clrf	PRODL
-	rcall	dump_screen_pixel_1		; Send it
+	rcall	dump_screen_pixel_1		; send it
 dump_screen_pixel_reset:
-	clrf	ds_count				; But clear count.
+	clrf	ds_count				; clear count
 	return
+
+ ENDIF
 
 	END

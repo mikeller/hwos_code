@@ -1,217 +1,231 @@
 ;=============================================================================
 ;
-;   File strings.asm									Version 2.92 = 2.26
+;   File strings.asm													V2.99c
 ;
 ;   Implementation code various string functions.
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
 ;=============================================================================
 ; HISTORY
-;  2010-12-02 : [jDG] Creation...
+;  2010-12-02 : [jDG] Creation
 ;
 ; See strings.inc for doc and public calling macros.
 
 #include "hwos.inc"
 #include "varargs.inc"
 
-        extern  aa_wordprocessor
+	extern	aa_wordprocessor
 
-basic   CODE
+strings		CODE
+
 ;=============================================================================
-; Variants that call word_processor at the end:
-        global  strcpy_block_print
+; Variants that call word_processor at the end
+
+	global	strcpy_block_print
 strcpy_block_print:
-        lfsr    FSR2, buffer
-        global  strcat_block_print
+	lfsr	FSR2,buffer
+	global	strcat_block_print
 strcat_block_print:
-        clrf    PRODL,A
-        bra     strings_common
+	clrf	PRODL,A
+	bra		strings_common
 
-; Variants that do not call word_processor at end:
-        global  strcpy_block
+
+; Variants that do not call word_processor at end
+
+	global	strcpy_block
 strcpy_block:
-        lfsr    FSR2, buffer
-        global  strcat_block
+	lfsr	FSR2,buffer
+	global	strcat_block
 strcat_block:
-        setf    PRODL,A
-        
-; Common part: append the string from PROM return address:
+	setf	PRODL,A
+
+
+; Common part: append the string from PROM return address
+
 strings_common:
-        VARARGS_BEGIN
+	VARARGS_BEGIN
+		rcall	strcat_prom
+		VARARGS_ALIGN
+	VARARGS_END
 
-        rcall   strcat_prom
-
-        VARARGS_ALIGN
-        VARARGS_END
-		
-		btfsc   PRODL,0,A               ; Should we print afterward ?
-		return                          ; NO: then return straight away.
-		goto    aa_wordprocessor        ; ELSE: print it...
+	btfsc	PRODL,0,A				; ahall we print afterwards?
+	return							; NO  - then return straight away
+	goto	aa_wordprocessor        ; YES - print it...
 
 ;=============================================================================
-; Copy multi-lingual text from FSR1 12bit pointers, to buffer.
+; Copy multi-lingual text from FSR1 12 bit pointer to buffer
 ;
-; Input: FSR1 = 12bit pointer to multi-lingual text.
-; Output: FSR2 points to closing null byte in buffer.
-; Trashed: TBLPTR, TABLAT.
-        global  strcpy_text
+; Input:   FSR1 = 12 bit pointer to multi-lingual text
+; Output:  FSR2 pointing to closing null byte in buffer
+; Trashed: TBLPTR, TABLAT
+
+	global	strcpy_text
 strcpy_text:
-        rcall   text_get_tblptr
-        bra     strcpy_prom
+	rcall	text_get_tblptr
+	bra		strcpy_prom
 
-; Copy then print multi-lingual text from FSR1 12bit pointers, to buffer.
+; Copy and print multi-lingual text from FSR1 12 bit pointer to buffer
 ;
-; Input: FSR1 = 12bit pointer to multi-lingual text.
-; Output: FSR2 points to closing null byte in buffer.
-; Trashed: TBLPTR, TABLAT.
-        global  strcpy_text_print
+; Input:   FSR1 = 12 bit pointer to multi-lingual text
+; Output:  FSR2 pointing to closing null byte in buffer
+; Trashed: TBLPTR, TABLAT
+
+	global	strcpy_text_print
 strcpy_text_print:
-        rcall   text_get_tblptr
-        bra     strcpy_prom_print
+	rcall	text_get_tblptr
+	bra		strcpy_prom_print
 
-; Append multi-lingual text from FSR1 12bit pointers, to buffer at FRS2.
+; Append multi-lingual text from FSR1 12 bit pointers to buffer at FRS2
 ;
-; Input: FSR1 = 12bit pointer to multi-lingual text.
-;        FSR2 = Current position in buffer.
-; Output: FSR2 points to closing null byte in buffer.
-; Trashed: TBLPTR, TABLAT.
-        global  strcat_text
+; Input:  FSR1 = 12 bit pointer to multi-lingual text
+;         FSR2 = current position in buffer
+; Output: FSR2 pointing to closing null byte in buffer
+; Trashed: TBLPTR, TABLAT
+
+	global	strcat_text
 strcat_text:
-        rcall   text_get_tblptr
-        bra     strcat_prom
+	rcall	text_get_tblptr
+	bra		strcat_prom
 
-; Append then print multi-lingual text from FSR1 12bit pointers, to buffer at FRS2.
+; Append and print multi-lingual text from FSR1 12 bit pointers to buffer at FRS2
 ;
-; Input: FSR1 = 12bit pointer to multi-lingual text.
-;        FSR2 = Current position in buffer.
-; Output: FSR2 points to closing null byte in buffer.
-; Trashed: TBLPTR, TABLAT.
-        global  strcat_text_print
+; Input:   FSR1 = 12 bit pointer to multi-lingual text
+;          FSR2 = current position in buffer
+; Output:  FSR2 pointing to closing null byte in buffer
+; Trashed: TBLPTR, TABLAT
+
+	global	strcat_text_print
 strcat_text_print:
-        rcall   text_get_tblptr
-        bra     strcat_prom_print
+	rcall	text_get_tblptr
+	bra	strcat_prom_print
 
 ;=============================================================================
-; Get pointer to multilingual texl in TBLPTR
+; Get pointer to multilingual text in TBLPTR
 ;
-; Input:  FSR1 = 12bits of text handle.
-;         opt_language = current language.
-; Output: TBLPTR = 24bits of PROM address.
-;
-        global  text_get_tblptr
+; Input:  FSR1         = 12 bit text handle
+;         opt_language = current language
+; Output: TBLPTR       = 24 bit PROM address
+
+	global	text_get_tblptr
 text_get_tblptr:
-        extern  text_1_base
-        movlw   UPPER(text_1_base)		; Complete 12bits to 24bits address.
-        movwf   TBLPTRU
-        movlw   HIGH(text_1_base)
-        andlw   0xF0
-        iorwf   FSR1H,W
-        movwf   TBLPTRH
-        movff   FSR1L,TBLPTRL
+	extern	text_1_base
+	movlw	UPPER(text_1_base)		; complete 12 bit address to 24 bit address
+	movwf	TBLPTRU
+	movlw	HIGH(text_1_base)
+	andlw	0xF0
+	iorwf	FSR1H,W
+	movwf	TBLPTRH
+	movff	FSR1L,TBLPTRL
 
+ IF _language_2!=none
+	movff	opt_language,WREG		; get language selection
+	bz		text_get_lang1			; 0: language 1
+	dcfsnz	WREG
+	bra		text_get_lang2			; 1: language 2
+ ENDIF
 
-		movff   opt_language,WREG       ; Get lang
-		bz      text_get_lang1        	; 0 == English
-		dcfsnz  WREG                    ; 1 == German
-		bra     text_get_lang2
-; Other ??? Keep language 1
+text_get_lang1:						; read 2-byte pointer to string
+	tblrd*+
+	movff	TABLAT,WREG
+	tblrd*+
+	movff	WREG,TBLPTRL
+	movff	TABLAT,TBLPTRH
+	return
 
-; Read 2-byte pointer to string
-text_get_lang1:
-        tblrd*+
-        movff   TABLAT,WREG
-        tblrd*+
-        movff   WREG,TBLPTRL
-        movff   TABLAT,TBLPTRH
-        return
+ IF _language_2!=none
+text_get_lang2:						; add offset for second language
+	extern	text_2_base
+	movlw	LOW(text_2_base)
+	addwf	TBLPTRL
+	movlw	HIGH(text_2_base)
+	addwfc	TBLPTRH
+	movlw	UPPER(text_2_base)
+	addwfc	TBLPTRU
 
-; Add correction for German table:
-text_get_lang2:
-       extern  text_2_base
-       movlw   LOW(text_2_base)
-       addwf   TBLPTRL
-       movlw   HIGH(text_2_base)
-       addwfc  TBLPTRH
-       movlw   UPPER(text_2_base)
-       addwfc  TBLPTRU
+	movlw	LOW(text_1_base)
+	subwf	TBLPTRL
+	movlw	HIGH(text_1_base)
+	subwfb	TBLPTRH
+	movlw	UPPER(text_1_base)
+	subwfb	TBLPTRU
+	bra		text_get_lang1
+ ENDIF
 
-       movlw   LOW(text_1_base)
-       subwf   TBLPTRL
-       movlw   HIGH(text_1_base)
-       subwfb  TBLPTRH
-       movlw   UPPER(text_1_base)
-       subwfb  TBLPTRU
-       bra     text_get_lang1
-        
 ;=============================================================================
-; Copy a null-terminated string from TBLPTR to buffer.
+; Copy a null-terminated string from TBLPTR to buffer
 ;
-; Input:  TBLPTR : string pointer into PROM.
-; Output: string in buffer, FSR2 pointer on the closing null byte.
+; Input:  TBLPTR : string pointer into PROM
+; Output: string in buffer, FSR2 pointing to the closing null byte
 ;
-        global  strcpy_prom
+	global	strcpy_prom
 strcpy_prom:
-        lfsr    FSR2,buffer
+	lfsr	FSR2,buffer
+	;bra	strcat_prom
 
-; Append a null-terminated string from TBLPTR to buffer.
+; Append a null-terminated string from TBLPTR to buffer
 ;
-; Input:  TBLPTR : string pointer into PROM.
-;         FRS2   : current character position.
-; Output: string in buffer, FSR2 pointer on the closing null byte.
+; Input:  TBLPTR : string pointer into PROM
+;         FRS2   : current character position
+; Output: string in buffer, FSR2 pointing to the closing null byte
 ;
-        global  strcat_prom
+	global	strcat_prom
 strcat_prom:
-        tblrd*+
-        movf    TABLAT,W
-        movwf   POSTINC2
-        bnz     strcat_prom
-        movf    POSTDEC2,W               ; rewind one char in string buffer.
-        return
+	tblrd*+
+	movf	TABLAT,W
+	movwf	POSTINC2
+	bnz		strcat_prom
+	movf	POSTDEC2,W				; step back one char
+	return
 
 ;=============================================================================
 ; Variant that calls word processor right-away...
-        global  strcpy_prom_print
-        global  strcat_prom_print
 
+	global	strcpy_prom_print
+	global	strcat_prom_print
 strcpy_prom_print:
-        lfsr    FSR2,buffer
+	lfsr	FSR2,buffer
 strcat_prom_print:
-        rcall   strcat_prom
-        goto    aa_wordprocessor
+	rcall	strcat_prom
+	goto	aa_wordprocessor
 
 ;=============================================================================
 
-        global      start_tiny_block
+	global	start_tiny_block
 start_tiny_block:
-        clrf        WREG
-        bra         start_common
+	clrf	WREG
+	movff	WREG, win_font			; needs a bank-safe move here !
+	bra		start_common
 
-        global      start_small_block
+	global	start_small_block
 start_small_block:
-        movlw       1
-        bra         start_common
+	movlw	1
+	movff	WREG, win_font			; needs a bank-safe move here !
+	bra		start_common
 
-        global      start_std_block
+	global	start_std_block
 start_std_block:
-        movlw       2
-        bra         start_common
+	movlw	2
+	movff	WREG, win_font			; needs a bank-safe move here !
+	bra		start_common
 
-        global      start_medium_block
+	global	start_medium_block
 start_medium_block:
-        movlw       3
-        bra         start_common
+	movlw	3
+	movff	WREG, win_font			; needs a bank-safe move here !
+	bra		start_common
 
-        global      start_large_block
+	global	start_large_block
 start_large_block:
-        movlw       4
-;        bra         start_common
-start_common:
-        movff       WREG, win_font      ; Need a bank-safe move here !
-        VARARGS_BEGIN
-            VARARGS_GET8    win_leftx2
-            VARARGS_GET8    win_top
-        VARARGS_END
-        lfsr    FSR2,buffer             ; point to buffer here
-        return
+	movlw	4
+	movff	WREG, win_font			; needs a bank-safe move here !
+	;bra	start_common
 
-        END
+start_common:
+	VARARGS_BEGIN
+		VARARGS_GET8	win_leftx2
+		VARARGS_GET8	win_top
+	VARARGS_END
+	lfsr	FSR2,buffer				; point to buffer
+	return
+
+	END

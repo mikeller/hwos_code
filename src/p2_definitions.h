@@ -1,8 +1,8 @@
-// *********************************************************
-// ** Common definitions for the OSTC decompression code  **
-// *********************************************************
+// ****************************************************************************
+// **          Common definitions for the OSTC decompression code            **
+// ****************************************************************************
 
-//									REFACTORED VERSION	V2.97
+//													REFACTORED VERSION	V2.99d
 
 //////////////////////////////////////////////////////////////////////////////
 // OSTC - diving computer code
@@ -25,20 +25,18 @@
 
 
 
-// *************************
-// ** P R O T O T Y P E S **
-// *************************
+// ***********************************************
+// **         P R O T O T Y P E S               **
+// ***********************************************
 
 extern void deco_calc_hauptroutine(void);
 extern void deco_clear_tissue(void);
-extern void deco_calc_dive_interval_1min(void);
 extern void deco_calc_dive_interval(void);
+extern void deco_calc_dive_interval_1min(void);
+extern void deco_calc_dive_interval_10min(void);
 extern void deco_calc_desaturation_time(void);
-extern void calc_CNS_fraction(void);
-extern void calc_CNS_planning(void);
-extern void push_tissues_to_vault(void);
-extern void pull_tissues_from_vault(void);
-extern void gas_volumes(void);
+extern void deco_push_tissues_to_vault(void);
+extern void deco_pull_tissues_from_vault(void);
 
 
 // ***********************************************

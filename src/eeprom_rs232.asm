@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File eeprom_rs232.asm												V2.98
+;   File eeprom_rs232.asm												V2.99a
 ;
 ;   Internal EEPROM, RS232
 ;
@@ -25,8 +25,8 @@ read_int_eeprom		macro	eeprom_address
 	endm
 
 ;=============================================================================
-eeprom	code	0xF00000+0x10
-; Skip SERIAL number. Should not be overwritten.
+eeprom		code	0xF00000+0x10
+; skip SERIAL number - it should not be overwritten
 
 	global	eeprom_serial_save
 	global	eeprom_opt_backup
@@ -35,56 +35,56 @@ eeprom_serial_save	res 2
 eeprom_opt_backup	res 0x3E
 
 ;=============================================================================
-basic	CODE
+ee_rs232		CODE
 
 	global	write_int_eeprom_1
 write_int_eeprom_1:
 	movwf	EEADR
-;	bra		write_eeprom				; writes and "returns" after write
-	
-;=============================================================================
-; writes into internal eeprom
-; Input:   EEADRH:EEADR = EEPROM address.
-;          EEDATA = byte to write.
-; Trashed: WREG.
-	global	write_eeprom
-write_eeprom:
-	bcf	EECON1,EEPGD
-	bcf	EECON1,CFGS
-	bsf	EECON1,WREN
-
-	bcf	INTCON,GIE					; Disable interrupts for the next 5 instructions
-	movlw	0x55
-	movwf	EECON2
-	movlw	0xAA
-	movwf	EECON2
-	bsf	EECON1,WR
-	bsf	INTCON,GIE					; ...but the flag for the ISR routines were still set, so they will interrupt now!
-
-write_eep2:
-	btfsc	EECON1,WR
-	bra	write_eep2					; wait about 4ms...
-	bcf	EECON1,WREN
-	return
-
+	bra		write_eeprom				; writes and "returns" after write
 
 
 	global read_int_eeprom_1
 read_int_eeprom_1:
 	movwf	EEADR
-;	bra		read_eeprom					; reads and "returns" after write
+	bra		read_eeprom					; reads and "returns" after write
 
 ;=============================================================================
-; reads from internal eeprom
-; Input:   EEADRH:EEADR = EEPROM address.
-; Output:  EEDATA.
-; Trashed: NONE.
+; reads from internal EEPROM
+; Input:   EEADRH:EEADR = EEPROM address
+; Output:  EEDATA
+; Trashed: NONE
 	global	read_eeprom
 read_eeprom:
 	bcf		EECON1,EEPGD
 	bcf		EECON1,CFGS
 	bsf		EECON1,RD
 	return
+
+;=============================================================================
+; writes into internal EEPROM
+; Input:   EEADRH:EEADR = EEPROM address
+;          EEDATA = byte to write
+; Trashed: WREG
+	global	write_eeprom
+write_eeprom:
+	bcf		EECON1,EEPGD
+	bcf		EECON1,CFGS
+	bsf		EECON1,WREN
+
+	bcf		INTCON,GIE					; disable interrupts for the next 5 instructions
+	movlw	0x55
+	movwf	EECON2
+	movlw	0xAA
+	movwf	EECON2
+	bsf		EECON1,WR
+	bsf		INTCON,GIE					; ...but the flag for the ISR routines were still set, so they will interrupt now!
+
+write_eep2:
+	btfsc	EECON1,WR
+	bra		write_eep2					; wait about 4ms...
+	bcf		EECON1,WREN
+	return
+
 
 	global	disable_ir_s8
 disable_ir_s8:
@@ -93,8 +93,8 @@ disable_ir_s8:
 	clrf	RCSTA2
 	banksel	common
 	bcf		ir_power					; IR off
-	bcf		mcp_power					; Power-down instrumentation amp
-	bsf		s8_npower					; Power-down S8 HUD
+	bcf		mcp_power					; power-down instrumentation amp
+	bsf		s8_npower					; power-down S8 HUD
 	return
 
 
@@ -102,28 +102,28 @@ disable_ir_s8:
 enable_ir_s8:
 ;init serial port2 (TRISG2)
 	btfsc	analog_o2_input
-	bra		enable_s8					; Start S8
+	bra		enable_s8					; start S8
 
 	banksel	BAUDCON2
 	movlw	b'00100000'					; BRG16=0			; inverted for IR
 	movwf	BAUDCON2
 	movlw	b'00100000'					; BRGH=0, SYNC=0
 	movwf	TXSTA2
-	movlw	.102						; SPBRGH:SPBRG = .102 : 2403 BAUD @ 16MHz
+	movlw	.102						; SPBRGH:SPBRG = .102 : 2403 BAUD @ 16 MHz
 	movwf	SPBRG2
 	movlw	b'10010000'
 	movwf	RCSTA2
 	banksel	common
-	bsf		ir_power					; Power-up IR
+	bsf		ir_power					; power-up IR
 	btfss	ir_power
 	bra		$-6
 	return
 
 enable_s8:
 	; Check for Digital/Analog
-	bsf		s8_npower					; Power-down S8 HUD
-	WAITMS	d'1'						; Very short delay
-	bsf		mcp_power					; Power-up instrumentation amp
+	bsf		s8_npower					; power-down S8 HUD
+	WAITMS	d'1'						; very short delay
+	bsf		mcp_power					; power-up instrumentation amp
 	btfss	mcp_power
 	bra		$-6
 	banksel	TXSTA2
@@ -132,21 +132,21 @@ enable_s8:
 	banksel	common
 
 	; It may be digital, check for voltage when isolator is powered
-	bcf		s8_npower					; Power S8 HUD
-	WAITMS	d'1'						; Very short delay
+	bcf		s8_npower					; power S8 HUD
+	WAITMS	d'1'						; very short delay
 
 	btfsc	PORTG,2						; RX2=1?
-	bra	enable_s8_2						; Yes, digital
+	bra	enable_s8_2						; YES - digital
 	WAITMS	d'30'
 	btfsc	PORTG,2						; RX2=1?
-	bra		enable_s8_2					; Yes, digital
+	bra		enable_s8_2					; YES - digital
 
 	; Not found, set to analog (fail-safe)
 
 enable_s8_analog:
 	; S8 Analog
-	bsf		s8_npower					; Power-down S8 HUD
-	bcf		s8_digital					; Clear flag
+	bsf		s8_npower					; power-down S8 HUD
+	bcf		s8_digital					; clear flag
 	return
 
 enable_s8_2:							; S8 Digital
@@ -155,24 +155,24 @@ enable_s8_2:							; S8 Digital
 	movwf	BAUDCON2
 	movlw	b'00100000'					; BRGH=0, SYNC=0
 	movwf	TXSTA2
-	movlw	.25							; SPBRGH:SPBRG = .25 : 9615 BAUD @ 16MHz
+	movlw	.25							; SPBRGH:SPBRG = .25 : 9615 BAUD @ 16 MHz
 	movwf	SPBRG2
 	movlw	b'10010000'
 	movwf	RCSTA2
 	banksel	common
-	bsf		s8_digital					; Set flag
+	bsf		s8_digital					; set flag
 	return
 
 ;=============================================================================
 
 	global	enable_rs232
 enable_rs232:
-	call	speed_normal				; 16MHz
+	call	speed_normal				; 16 MHz
 enable_rs232_2:
 	movlw	T2CON_NORMAL
 	cpfseq	T2CON
-	bra		enable_rs232_2				; Wait until speed is normal
-	bcf		PORTE,0						; Start comms
+	bra		enable_rs232_2				; wait until speed is normal
+	bcf		PORTE,0						; start comms
 ;init serial port1 (TRISC6/7)
 	movlw	b'00100100'					; BRGH=1, SYNC=0
 	movwf	TXSTA1
@@ -186,42 +186,43 @@ disable_rs232:
 	clrf	RCSTA1
 	clrf	TXSTA1						; UART disable
 	bcf		PORTC,6						; TX hard to GND
-	bsf		PORTE,0						; Stop comms
+	bsf		PORTE,0						; stop comms
 	return
 
 
 	global	rs232_wait_tx
 rs232_wait_tx:
 	btfss	TXSTA1,TRMT					; RS232 Busy?
-	bra		rs232_wait_tx				; yes, wait...
+	bra		rs232_wait_tx				; YES - wait...
 
 	btfss	ble_available				; ble available?
-	return								; No, done.
+	return								; NO - done
 
-	btfsc	NRTS						; Wait for Bluetooth module
-	bra		rs232_wait_tx				; yes, wait...
-	return								; Done.
+	btfsc	NRTS						; wait for Bluetooth module
+	bra		rs232_wait_tx				; YES - wait...
+	return								; done
 
 
 	global	rs232_wait_tx2
 rs232_wait_tx2:
 	banksel	TXSTA2
 rs232_wait_tx2_1:
-	btfss	TXSTA2,TRMT					; RS232 Busy?
-	bra		rs232_wait_tx2_1			; yes, wait...
+	btfss	TXSTA2,TRMT					; RS232 busy?
+	bra		rs232_wait_tx2_1			; YES - wait...
 	banksel	common
-	return								; Done.
+	return								; done
 
 	global	rs232_get_byte
 rs232_get_byte:
 	bcf		rs232_receive_overflow		; clear flag
-	movlw	.10
-	movwf	uart1_temp
+	clrf	uart1_temp					; set uart1_temp to .10 without using WREG: first clear to 0, then...
+	bsf		uart1_temp,1				; set bit 1 (value 2),
+	bsf		uart1_temp,3				; and bit 3 (value 8).
 	clrf	uart2_temp
 	clrf	uart3_temp
 rs232_get_byte2:
 	btfsc	PIR1,RCIF					; data arrived?
-	return								; Yes
+	return								; YES
 	decfsz	uart3_temp,F
 	bra		rs232_get_byte2
 	decfsz	uart2_temp,F
@@ -231,7 +232,7 @@ rs232_get_byte2:
 										; timeout occurred (about 400ms)
 	bsf		rs232_receive_overflow		; set flag
 rs232_get_byte3:
-	bcf		RCSTA1,CREN					; Clear receiver status
+	bcf		RCSTA1,CREN					; clear receiver status
 	bsf		RCSTA1,CREN
 	return								; and return anyway
 
@@ -239,12 +240,10 @@ rs232_get_byte3:
 
 	global	do_logoffset_common_write
 do_logoffset_common_write:
-	; TODO: limit [lo:hi] to 9999 ? may arrive here as >= 10000 because of +10 increment option 
-	; SIMPLER WAY: return without writing to eeprom if hi == 0x27 -> 0x2700 = 9984, this is within 
-	; the save range for a +10 increment, shall do it...
-	; mH
-
-	movff	lo,EEDATA
+	movlw	0x26
+	cpfslt	hi								; is offset < 0x26?? (decimal 9983 at max, hence save for another +10) ?
+	return									; NO  - abort
+	movff	lo,EEDATA						; YES - proceed writing offset to EEPROM
 	write_int_eeprom 0x0D
 	movff	hi,EEDATA
 	write_int_eeprom 0x0E
@@ -256,7 +255,7 @@ do_logoffset_common_read:
 	read_int_eeprom 0x0D
 	movff	EEDATA,lo
 	read_int_eeprom 0x0E
-	movff	EEDATA,hi						; Existing logbook offset into lo:hi
+	movff	EEDATA,hi						; existing logbook offset into lo:hi
 	return
 
 
@@ -335,8 +334,8 @@ vault_decodata_into_eeprom2:
 	movff	POSTINC1,EEDATA
 	call	write_eeprom					; EEDATA into EEPROM@EEADR
 	incf	EEADR,F
-	decfsz	lo,F							; All done?
-	bra		vault_decodata_into_eeprom2		; No
+	decfsz	lo,F							; all done?
+	bra		vault_decodata_into_eeprom2		; NO
 	clrf	EEADRH
 	return
 
@@ -386,13 +385,13 @@ restore_decodata_from_eeprom:
 	movwf	EEADR
 	movlw	.128
 	movwf	lo
-	lfsr	FSR1,0x700						; pres_tissue_N2+0, 32*4Byte Float = 128Bytes
+	lfsr	FSR1,0x700						; pres_tissue_N2+0, 32*4Byte Float = 128 Bytes
 restore_decodata_from_eeprom2:
 	call	read_eeprom						; EEPROM@EEADR into EEDATA
 	movff	EEDATA,POSTINC1
 	incf	EEADR,F
-	decfsz	lo,F							; All done?
-	bra		restore_decodata_from_eeprom2	; No
+	decfsz	lo,F							; all done?
+	bra		restore_decodata_from_eeprom2	; NO
 	clrf	EEADRH
 	return
 
@@ -400,7 +399,7 @@ restore_decodata_from_eeprom2:
 	global	reset_battery_internal_only
 reset_battery_internal_only:
 	clrf	EEADRH
-	clrf	EEDATA							; Delete to zero
+	clrf	EEDATA							; delete to zero
 	write_int_eeprom 0x07
 	write_int_eeprom 0x08
 	write_int_eeprom 0x09
@@ -422,15 +421,15 @@ reset_battery_internal_only:
 
 	global	eeprom_reset_logbook_pointers
 eeprom_reset_logbook_pointers:
-	clrf	EEADRH							; Make sure to select EEPROM bank 0
+	clrf	EEADRH							; make sure to select EEPROM bank 0
 	clrf	EEDATA
 	write_int_eeprom .4
 	write_int_eeprom .5
 	write_int_eeprom .6
-	write_int_eeprom .2						; Also, delete total dive counter
+	write_int_eeprom .2						; also delete total dive counter
 	write_int_eeprom .3
 	write_int_eeprom .16
-	write_int_eeprom .17					; And the backup counter, too
+	write_int_eeprom .17					; ...and the backup counter, too
 	return
 
 	END

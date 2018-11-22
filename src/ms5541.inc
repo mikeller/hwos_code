@@ -13,4 +13,4 @@
 	extern	get_pressure_value
 	extern	get_temperature_start
 	extern	get_temperature_value
-	extern 	get_calibration_data
+	extern	get_calibration_data

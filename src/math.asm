@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File math.asm
+;   File math.asm									REFACTORED VERSION V2.99d
 ;
 ;   Math subroutines
 ;
@@ -10,316 +10,265 @@
 ;  2011-08-03 : [mH] moving from OSTC code
 
 
-#include    "hwos.inc"                  ; Mandatory header
+#include "hwos.inc"					; mandatory header
 
-basic   CODE
+math		CODE
+
 ;=============================================================================
-	global	convert_time
-convert_time:							; converts hi:lo in minutes to hours (hi) and minutes (lo)
-	movff	lo,xA+0						; divide by 60...
-	movff	hi,xA+1						; 
-	movlw	d'60'						; 
-	movwf	xB+0						; 
+
+	global	convert_time				; converts hi:lo in minutes to hours (up:hi) and minutes (lo)
+										; also usable for conversion of seconds to minutes and seconds
+										; trashes xA, xB, xC
+convert_time:
+	movff	lo,xA+0						; copy hi:lo to xA
+	movff	hi,xA+1						;
+	movlw	d'60'						; set divisor to 60
+	movwf	xB+0						; write 60 to xB
 	clrf	xB+1						; 
-	rcall	div16x16					; xA/xB=xC with xA as remainder
-	movff	xC+0,hi						; Hours
-	movff	xA+0,lo						; =remaining minutes (0.....59)
+	rcall	div16x16					; xC = xA / xB with xA as remainder
+	movff	xC+1,up						; result    is hours   / minutes, copy to up (high byte)
+	movff	xC+0,hi						; result    is hours   / minutes, copy to hi (low  byte)
+	movff	xA+0,lo						; remainder is minutes / seconds, copy to lo
 	return
 
-	global	div16
+
+	global	div16						; divA:2 = divA:2 / 2^WREG
+										; trashes WREG
 div16:
-; divA=divA/2^divB (divB: 8Bit only!)
-	bcf		STATUS,C
-	rrcf	divA+1
-	rrcf	divA+0
-	decfsz	divB
-	bra		div16
-	return
+	bcf		STATUS,C					; clear carry
+	rrcf	divA+1						; rotate right high byte, carry into MSB, LSB into carry
+	rrcf	divA+0						; rotate right low  byte, carry into MSB, LSB into carry
+	decfsz	WREG						; decrement counter, done?
+	bra		div16						; NO  - loop
+	return								; YES - done
 
-	global	sub16
+
+	global	mult16						; xA:2 = xA:2 * 2^WREG
+										; trashes WREG
+mult16:
+	bcf		STATUS,C					; clear carry
+	rlcf	divA+0,F					; rotate left low  byte, carry into LSB, MSB into carry
+	rlcf	divA+1,F					; rotate left high byte, carry into LSB, MSB into carry
+	decfsz	WREG						; decrement counter, done?
+	bra		mult16						; NO  - loop
+	return								; YES - done
+
+
+	global	sub16						; sub_c:2 = sub_a:2 - sub_b:2   with SIGNED values
+										; sets neg_flag if result is < 0
+										; trashes WREG
 sub16:
-;  sub_c = sub_a - sub_b (with signed values)
-	bcf		neg_flag
-	movf   	sub_b+0, W             	; Get Value to be subtracted
-	subwf  	sub_a+0, W             	; Do the High Byte
-	movwf  	sub_c+0
-	movf   	sub_b+1, W              ; Get the Value to be Subbed
-	subwfb 	sub_a+1, W
-	movwf  	sub_c+1
+	bcf		neg_flag					; clear flag which will indicate if result is negative
+	movf	sub_b+0,W					; get value to be subtracted, low byte
+	subwf	sub_a+0,W					; execute subtraction on low byte
+	movwf	sub_c+0						; copy result to output variable, low byte
+	movf	sub_b+1,W					; get value to be subtracted, high byte
+	subwfb	sub_a+1,W					; execute subtraction on high byte, considering borrow flag
+	movwf	sub_c+1						; copy result to output variable, high byte
+	btfss	STATUS,N					; result negative ?
+	return								; NO  - result positive, done
+	bsf		neg_flag					; YES - set flag
+	comf	sub_c+1						;     - do a 16 bit sign change
+	negf	sub_c+0						;
+	btfsc	STATUS,C					;     - carry to be propagated ?
+	incf	sub_c+1,F					;       YES - do it
+	return								;     - done
 
-	btfss	STATUS,N                ; Negativ result ?
-	return							; NO: result positive done.
 
-	bsf		neg_flag				; MARK result negative
-
-    comf    sub_c+1                 ; 16bit sign change.
-    negf    sub_c+0
-    btfsc   STATUS,C                ; Carry to propagate ?
-    incf    sub_c+1,F               ; YES: do it.
-
-    return        
-
-	global	subU16
+	global	subU16						; sub_c:2 = sub_a:2 - sub_b:2   with UNSIGNED values
+										; sets neg_flag if result is < 0
+										; trashes WREG
 subU16:
-;  sub_c = sub_a - sub_b (with UNSIGNED values)
-	bcf		neg_flag
-	movf   	sub_b+0, W             	; Get Value to be subtracted
-	subwf  	sub_a+0, W             	; Do the High Byte
-	movwf  	sub_c+0
-	movf   	sub_b+1, W              ; Get the Value to be Subbed
-	subwfb 	sub_a+1, W
-	movwf  	sub_c+1
-	btfsc	STATUS,C                ; Borrow to propagate ? (B == /CARRY)
-	return							; NO: result positive done.
-	bsf		neg_flag				; MARK result negative
-    comf    sub_c+1                 ; 16bit sign change.
-    negf    sub_c+0
-    btfsc   STATUS,C                ; Carry to propagate ?
-    incf    sub_c+1,F               ; YES: do it.
-    return        
+	bcf		neg_flag					; clear flag which will indicate if result is negative
+	movf	sub_b+0,W					; get Value to be subtracted, low byte
+	subwf	sub_a+0,W					; execute subtraction on low byte
+	movwf	sub_c+0						; copy result to output variable, low byte
+	movf	sub_b+1,W					; get value to be subtracted, high byte
+	subwfb	sub_a+1,W					; execute subtraction on high byte, considering borrow flag
+	movwf	sub_c+1						; copy result to output variable, high byte
+	btfsc	STATUS,C					; borrow to propagate (B == /CARRY) ?
+	return								; NO  - result positive, done
+	bsf		neg_flag					; YES - set flag
+	comf	sub_c+1						;     - do a 16 bit sign change
+	negf	sub_c+0						;
+	btfsc	STATUS,C					;     - carry to be propagated ?
+	incf	sub_c+1,F					;       YES - do it
+	return								;     - done
 
-	global	mult16x16
-mult16x16:		;xA*xB=xC
-	clrf    xC+2        	  ;  Clear the High-Order Bits
-	clrf    xC+3
-	movf    xA, w               ;  Do the "L" Multiplication first
-	mulwf   xB
-	movf    PRODL, w            ;  Save result
-	movwf   xC
-	movf    PRODH, w
-	movwf   xC+1
-	movf    xA, w               ;  Do the "I" Multiplication
-	mulwf   xB+1
-	movf    PRODL, w            ;  Save the Most Significant Byte First
-	addwf   xC+1, f
-	movf    PRODH, w
-	addwfc  xC+2, f    	 		 ;  Add to the Last Result
-	movf    xA+1, w               ;  Do the "O" Multiplication
-	mulwf   xB
-	movf    PRODL, w            ;  Add the Lower Byte Next
-	addwf   xC+1, f
-	movf    PRODH, w            ;  Add the High Byte First
-	addwfc  xC+2, f
-	btfsc   STATUS, C           ;  Add the Carry
-	incf    xC+3, f
-	movf    xA+1, w               ;  Do the "F" Multiplication
-	mulwf   xB+1
-	movf    PRODL, w
-	addwf   xC+2, f
-	movf    PRODH, w
-	addwfc  xC+3, f
+
+	global	mult16x16					; xC:4 = xA:2 * xB:2   with UNSIGNED values
+										; trashes PRODL, PRODH, WREG
+mult16x16:
+	clrf	xC+2						; clear the high-order bits
+	clrf	xC+3
+	;
+	movf	xA+0,W						; do the "L" multiplication
+	mulwf	xB+0
+	movff	PRODL,xC+0					; copy result to xC
+	movff	PRODH,xC+1
+	;
+	movf	xA+0,W						; do the "I" multiplication
+	mulwf	xB+1
+	movf	PRODL,W						; get the product's low byte...
+	addwf	xC+1,F						; ... and add it to xC+1
+	movf	PRODH,W						; get the product's high byte...
+	addwfc	xC+2,F						; ... and add it to xC+2 obeying carry bit from xC+1
+	;
+	movf	xA+1,W						; do the "O" multiplication
+	mulwf	xB+0
+	movf	PRODL,W						;  get the product's low byte...
+	addwf	xC+1,F						; ... and add it to xC+1
+	movf	PRODH,W						; get the product's high byte...
+	addwfc	xC+2,F						; ... and add it to xC+2 obeying carry bit from xC+1
+	clrf	WREG						; clear WREG...
+	addwfc	xC+3,F						; ... add add it to xC+3 obeying carry bit from xC+2 (can only happen in "O" multiplication)
+	;
+	movf	xA+1,W						; do the "F" multiplication
+	mulwf	xB+1
+	movf	PRODL,W						;   get the product's low byte...
+	addwf	xC+2,F						; ... and add it to xC+2
+	movf	PRODH,W						; get the product's high byte...
+	addwfc	xC+3,F						; ... and add it to xC+3 obeying carry bit from xC+2
 	return
 
-	global	div16x16
-div16x16:						;xA/xB=xC with xA+0 as remainder 	
-								;uses divB as temp variable
-		clrf	xC+0
-		clrf	xC+1
-        MOVF    xB+0,W       	; Check for zero
-        IORWF   xB+1,W     		; 
-        BTFSC   STATUS,Z        ; Check for zero
-        RETLW   H'FF'           ; return 0xFF if illegal
-        MOVLW   1               ; Start count at 1
-        MOVWF   divB	       ; Clear Count
+
+	global	div16x16					; xC:2 = xA:2 / xB:2 with xA as remainder
+										; trashes WREG
+div16x16:
+	movlw		.16						; process 16 bits ...
+	movwf		math_loop				; ... initialize loop counter
+	movff		xA+0,xC+0				; copy xA to xC
+	movff		xA+1,xC+1				; ...
+	clrf		xA+0					; clear xA, will now be used to hold the remainder
+	clrf		xA+1					; ...
 div16x16_1:
-    	BTFSC   xB+1,7     		; High bit set ?
-        bra	    div16x16_2      ; Yes then continue
-        INCF    divB,F     		; Increment count
-
-		bcf		STATUS,C
-		rlcf	xB+0,F
-		rlcf	xB+1,F
-        bra	    div16x16_1
+	bcf			STATUS,C				; clear carry flag to shift in a zero bit
+	rlcf		xC+0,F					; shift left xC
+	rlcf		xC+1,F					; ... shifting MSB out of xC...
+	rlcf		xA+0,F					; ... and into LSB of     xA
+	rlcf		xA+1,F					; ...
+	btfsc		STATUS,C				; did the remainder overflow (carry set)?
+	bra			div16x16_2				; YES - directly generate a result bit = 1
+	movf		xB+0,W					; NO  - compute remainder - divisor = xA - xB, trash result to WREG
+	subwf		xA+0,W					;     - ...
+	movf		xB+1,W					;     - ...
+	subwfb		xA+1,W					;     - ...
+	btfss		STATUS,C				;     - remainder < divisor (-> borrow flag set, equals carry flag cleared) ?
+	bra			div16x16_3				;       YES - result bit = 0, keep LSB of xC+0 being 0
 div16x16_2:
-								; Shift result left
-		bcf		STATUS,C
-		rlcf	xC+0,F
-		rlcf	xC+1,F
-
- 			; Reduce Divisor		
-
-        MOVF    xB,W         ; Get low byte of subtrahend
-        SUBWF   xA,F         ; Subtract DST(low) - SRC(low)
-        MOVF    xB+1,W       ; Now get high byte of subtrahend
-        BTFSS   STATUS,C     ; If there was a borrow, rather than
-        INCF    xB+1,W       ; decrement high byte of dst we inc src
-        SUBWF   xA+1,F       ; Subtract the high byte and we're done
-
-
-        BTFSC   STATUS, C       ; Did it reduce?        
-        bra	    div16x16_3      ; No, so it was less than
-
-		movf	xB+0,W			; Reverse subtraction
-		addwf	xA+0,F
-		movf	xB+1,W
-		addwfc	xA+1,F
-
-        bra	    div16x16_4      ; Continue the process
+	bsf			xC+0,0					;       NO  - result bit = 1, set  LSB of xC+0 to 1
+	movf		xB+0,W					;           - subtract divisor from remainder "for real": xA = xA - xB
+	subwf		xA+0,F					;           - ...
+	movf		xB+1,W					;           - ...
+	subwfb		xA+1,F					;           - ...
 div16x16_3:
-	     BSF     xC+0,0        	; Yes it did, this gets a 1 bit
-div16x16_4:
-	     DECF    divB,F 		    ; Decrement N_COUNT
-        BTFSC   STATUS,Z        ; If its not zero then continue
-        return
+	decfsz		math_loop,F				; decrement loop counter, all bits done?
+	bra			div16x16_1				; NO  - loop
+	return								; YES - done
 
-		bcf		STATUS,C
-		rrcf	xB+1,F
-		rrcf	xB+0,F
 
-        bra    div16x16_2              ; Next bit.
-
-	global	div32x16
-div32x16:  ; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
-	; Setup
-	movlw		.32		; setup shift counter
-	movwf		divB
-	movff		xC+3,xA+1		; move ACCb to ACCf
-	movff		xC+2,xA+0
-	movff		xC+1,sub_a+1	; move ACCc to ACCe
-	movff		xC+0,sub_a+0
-	clrf		xC+3
-	clrf		xC+2
-	clrf		xC+1
-	clrf		xC+0
-	clrf		sub_b+1
-	clrf		sub_b+0
+	global	div32x16					; xC:4 = xC:4 / xB:2 with xA as remainder
+										; trashes WREG
+div32x16:
+	movlw		.32						; process 32 bits ...
+	movwf		math_loop				; ... initialize loop counter
+	clrf		xA+0					; clear xA, will be used to hold the remainder
+	clrf		xA+1					; ...
+div32x16_1:
+	bcf			STATUS,C				; clear carry flag to shift in a zero bit
+	rlcf		xC+0,F					; shift left xC
+	rlcf		xC+1,F					; ...
+	rlcf		xC+2,F					; ...
+	rlcf		xC+3,F					; ... shifting MSB out of xC...
+	rlcf		xA+0,F					; ... and into LSB of     xA
+	rlcf		xA+1,F					; ...
+	btfsc		STATUS,C				; did the remainder overflow (carry set)?
+	bra			div32x16_2				; YES - directly generate a result bit = 1
+	movf		xB+0,W					; NO  - compute remainder - divisor = xA - xB, trash result to WREG
+	subwf		xA+0,W					;     - ...
+	movf		xB+1,W					;     - ...
+	subwfb		xA+1,W					;     - ...
+	btfss		STATUS,C				;     - remainder < divisor (-> borrow flag set, equals carry flag cleared) ?
+	bra			div32x16_3				;       YES - result bit = 0, keep LSB of xC+0 being 0
 div32x16_2:
-	bcf			STATUS,C
-	rlcf		sub_a+0,F
-	rlcf		sub_a+1,F
-	rlcf		xA+0,F
-	rlcf		xA+1,F
-	rlcf		sub_b+0,F
-	rlcf		sub_b+1,F
-	movf		xB+1,W
-	subwf		sub_b+1,W	; check if a>d
-	btfss		STATUS,Z
-	bra			div32x16_3
-	movf		xB+0,W
-	subwf		sub_b+0,W	; if msb equal then check lsb
+	bsf			xC+0,0					;       NO  - result bit = 1, set  LSB of xC+0 to 1
+	movf		xB+0,W					;           - subtract divisor from remainder "for real": xA = xA - xB
+	subwf		xA+0,F					;           - ...
+	movf		xB+1,W					;           - ...
+	subwfb		xA+1,F					;           - ...
 div32x16_3:
-	btfss		STATUS,C	; carry set if d>a
-	bra			div32x16_4
-	movf		xB+0,W		; d-a into d
-	subwf		sub_b+0,F
-	btfss		STATUS,C
-	decf		sub_b+1,F
-	movf		xB+1,W
-	subwf		sub_b+1,F
-	bsf			STATUS,C	; shift a 1 into b (result)
-div32x16_4:
-	rlcf		xC+0,F
-	rlcf		xC+1,F
-	rlcf		xC+2,F
-	rlcf		xC+3,F
-	decfsz		divB,F	; loop until all bits checked
-	bra			div32x16_2
-	return
+	decfsz		math_loop,F				; decrement loop counter, all bits done?
+	bra			div32x16_1				; NO  - loop
+	return								; YES - done
 
-;;=============================================================================
-;; u16 * u16 --> 32bit multiply (xA * xB --> xC)
-;; Used in interupt service routines, to compute temperature and pressure.
-;;
-;	global	isr_mult16x16
-;isr_mult16x16:
-;	clrf    isr_xC+2        	  ;  Clear the High-Order Bits
-;	clrf    isr_xC+3
-;	movf    isr_xA, w               ;  Do the "L" Multiplication first
-;	mulwf   isr_xB
-;	movf    PRODL, w            ;  Save result
-;	movwf   isr_xC+0
-;	movf    PRODH, w
-;	movwf   isr_xC+1
-;	movf    isr_xA+0, w               ;  Do the "I" Multiplication
-;	mulwf   isr_xB+1
-;	movf    PRODL, w            ;  Save the Most Significant Byte First
-;	addwf   isr_xC+1, f
-;	movf    PRODH, w
-;	addwfc  isr_xC+2, f    	 		 ;  Add to the Last Result
-;	movf    isr_xA+1, w               ;  Do the "O" Multiplication
-;	mulwf   isr_xB
-;	movf    PRODL, w            ;  Add the Lower Byte Next
-;	addwf   isr_xC+1, f
-;	movf    PRODH, w            ;  Add the High Byte First
-;	addwfc  isr_xC+2, f
-;	btfsc   STATUS, C           ;  Add the Carry
-;	incf    isr_xC+3, f
-;	movf    isr_xA+1, w               ;  Do the "F" Multiplication
-;	mulwf   isr_xB+1
-;	movf    PRODL, w
-;	addwf   isr_xC+2, f
-;	movf    PRODH, w
-;	addwfc  isr_xC+3, f
-;	return
 
 ;=============================================================================
-; 24bit shift, repeted WREG times.
-; Because we shift less than 8bits, and keep only C[2:1], we don't care what
-; bit is inserted...
-;
-	global	isr_shift_C31
+
+; ISR math functions
+
+	global	isr_shift_C31				; 24 bit shift, repeated WREG times, dedicated to a specific usage:
+										; Because less than 8 bits are shifted and only C[2:1] is needed,
+										; we don't care what bit is inserted.
 isr_shift_C31:
-	rrcf    isr_xC+3,F                  ; Shift the three bytes...
-	rrcf    isr_xC+2,F
-	rrcf    isr_xC+1,F
-	decfsz  WREG
-	bra     isr_shift_C31
+	rrcf	isr_xC+3,F					; shift three bytes
+	rrcf	isr_xC+2,F
+	rrcf	isr_xC+1,F
+	decfsz	WREG						; decrement loop counter, done?
+	bra		isr_shift_C31				; NO  - loop
+	return								; YES - done
+
+
+	global	isr_unsigned_mult16x16		; isr_xC = isr_xA * _isr_xB   with UNSIGNED values
+										; trashes PRODL, PRODH, WREG
+isr_unsigned_mult16x16:
+	movf	isr_xA+0,W					; multiply a[0] * b[0]
+	mulwf	isr_xB+0
+	movff	PRODL,isr_xC+0				; store product to c[1]:c[0]
+	movff	PRODH,isr_xC+1
+	;
+	movf	isr_xA+1,W					; multiply a[1] * b[1]
+	mulwf	isr_xB+1
+	movff	PRODL, isr_xC+2				; store product to  c[3]:c[2]
+	movff	PRODH, isr_xC+3
+	;
+	movf	isr_xA+0,W					; multiply a[0] * b[1]
+	mulwf	isr_xB+1
+	movf	PRODL,W						; add cross product to c[3]:c[2]:c[1]
+	addwf	isr_xC+1,F
+	movf	PRODH,W
+	addwfc	isr_xC+2,F					; propagate carry
+	clrf	WREG
+	addwfc	isr_xC+3,F					; propagate carry
+	;
+	movf	isr_xA+1,W					; multiply a[1] * b[0]
+	mulwf	isr_xB+0
+	movf	PRODL,W						; add cross product
+	addwf	isr_xC+1,F
+	movf	PRODH,W
+	addwfc	isr_xC+2,F					; propagate carry
+	clrf	WREG
+	addwfc	isr_xC+3,F					; propagate carry
 	return
 
-;=============================================================================
-; s16 * s16 --> 32bit multiply (xA * xB --> xC)
-; Signed multiplication.
-; Code from... the Pic18F documentation ;-)
-	global	isr_unsigned_mult16x16
-isr_unsigned_mult16x16:
-        MOVF    isr_xA+0, W             ; Lowest is simply a[0] * b[0]
-        MULWF   isr_xB+0
-        MOVFF   PRODL, isr_xC+0
-        MOVFF   PRODH, isr_xC+1
-        ;
-        MOVF    isr_xA+1, W             ; And highest a[1] * b[1]
-        MULWF   isr_xB+1
-        MOVFF   PRODL, isr_xC+2
-        MOVFF   PRODH, isr_xC+3
-        ;
-        MOVF    isr_xA+0, W             ; Intermediates do propagate:
-        MULWF   isr_xB+1
-        MOVF    PRODL, W
-        ADDWF   isr_xC+1, F             ; Add cross products
-        MOVF    PRODH, W
-        ADDWFC  isr_xC+2, F             ; with propagated carry
-        CLRF    WREG
-        ADDWFC  isr_xC+3, F             ; on the three bytes.
-        ;
-        MOVF    isr_xA+1, W             ; And the second one, similarly.
-        MULWF   isr_xB+0
-        MOVF    PRODL, W
-        ADDWF   isr_xC+1, F             ; Add cross products
-        MOVF    PRODH, W
-        ADDWFC  isr_xC+2, F
-        CLRF    WREG
-        ADDWFC  isr_xC+3, F
-        return
 
-	global	isr_signed_mult16x16
+	global	isr_signed_mult16x16		; isr_xC = isr_xA * _isr_xB   with SIGNED values
+										; trashes PRODL, PRODH, WREG
 isr_signed_mult16x16:
-        rcall   isr_unsigned_mult16x16
+	rcall	isr_unsigned_mult16x16		; do an unsigned multiplication first
+	;									; manage sign extension of operand B
+	btfss	isr_xB+1,7					; is B negative ?
+	bra		isr_signed_mult_checkA		; NO  - continue checking operand A
+	movf	isr_xA+0,W					; Yes - add -65536 * A
+	subwf	isr_xC+2,F
+	movf	isr_xA+1,W
+	subwfb	isr_xC+3,F
+isr_signed_mult_checkA					; manage sign extension of operand B
+	btfss	isr_xA+1,7					; is A negative ?
+	return								; NO  - done
+	movf	isr_xB+0,W					; Yes - add -65536 * B
+	subwf	isr_xC+2,F
+	movf	isr_xB+1,W
+	subwfb	isr_xC+3,F
+	return
 
-        ; Manage sign extension of operand B
-        BTFSS   isr_xB+1,7              ; Is B negatif ?
-        BRA     isr_signed_mult_checkA  ; No: check ARG1
-        MOVF    isr_xA+0, W             ; Yes: add -65536 * A
-        SUBWF   isr_xC+2, F
-        MOVF    isr_xA+1, W
-        SUBWFB  isr_xC+3, F
-        ; And of operand A
-isr_signed_mult_checkA
-        BTFSS   isr_xA+1, 7             ; Is A negatif ?
-        RETURN                          ; No: done
-        MOVF    isr_xB+0, W
-        SUBWF   isr_xC+2, F
-        MOVF    isr_xB+1, W
-        SUBWFB  isr_xC+3, F
-        RETURN
-
- END
+	END

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File File color_processor.asm									## V2.98
+;   File File color_processor.asm									## V2.98c
 ;
 ;   Decompress and draw an image.
 ;
@@ -19,61 +19,52 @@
 ; Trashed: TBLPTR, TABLAT, FSR2, PROD, win_width, win_height
 ;
 ; ImageBloc:
-;       db  widthx2, height
-;       db  nbColors, 0     ; Unused yet... Should be 0 to keep packing happy.
+;       db  widthx2,  height
+;       db  nbColors, 0     ; 0 = unused yet, should remain 0 to keep packing happy
 ;       dw  color0, color1, color2, color3, ...
-;       db  ...packed pixels...
+;       db  packed pixels...
 ;
 ; Limitations:
-; * nbColors should be <= 15.
-; * image width should be even.
-; * image left border should be on even position too.
+; * nbColors <= 127
+; * image width should be even
+; * image left border should be on even position, too
+;
 ; Compressed format:
-; - Upper nibble = color, lower nibble = count-1.
-; - All bytes F* accumulates to make count larger than 16.
-; Eg. 00          is 1 pixel  color 0
-;     07          is 8 pixels color 0
-;     70          is 1 pixel  color 7
-;     bf          is 16 pixels of color .11
-;     F1 F2 F3 04 is 0x1235 pixels of color 0.
+; - 1-3 bytes pixel count, followed by 1 byte pixel color
+; - bit 7 = 1: byte holds pixel count in bits 6-0
+; - bit 7 = 0: byte holds pixel color in bits 6-0
+; - all pixel count bytes accumulate:
+;   - 1 byte  pixel count: 1xxxxxxx                   ->  7 bit pixel count
+;   - 2 bytes pixel count: 1yyyyyyy 1xxxxxxx          -> 14 bit pixel count
+;   - 3 bytes pixel count: 1zzzzzzz 1yyyyyyy 1xxxxxxx -> 21 bit pixel count
+;
+; Pixels are written column by column from left to right, with columns down first.
 ;
 ;-----------------------------------------------------------------------------
 
-#include "hwos.inc"
-#include "tft.inc"
+#include	"hwos.inc"
+#include	"tft.inc"
+
+color_proc		CODE
 
 ;-----------------------------------------------------------------------------
-;
-; Note: Some variables (win_width, win_height) are in BANK0 !
-basic	CODE
+; Note: some variables (win_width, win_height) are in BANK 0 !
+
 	global	color_image
 color_image:
-	banksel	common					; Bank1, just to be sure...
+	banksel	common					; Bank 1, just to be sure...
 
-	;---- Get image parameters -------------------------------------------
+	;---- Get image size -----------------------------------------------
 	tblrd*+
 	movff	TABLAT,win_width
 	tblrd*+
 	movff	TABLAT,win_height
-	tblrd*+
-	movff	TABLAT,lo				; image colors
-	tblrd*+							; Skip one byte (future flags ?)
-	;---- Copy color table -----------------------------------------------
-	movf	lo,W
-	lfsr	FSR2,buffer
-get_colors_loop:
-	tblrd*+
-	movff	TABLAT,POSTINC2
-	tblrd*+
-	movff	TABLAT,POSTINC2
-	decfsz	WREG
-	bra		get_colors_loop
 
 	; Compute width * height * 2 : the number of pixels to write.
 	clrf	img_pixels+2
 	movf	win_width,W				; Compute number of pixels to draw
 	mulwf	win_height				; 0 .. 160x240
-	bcf		STATUS,C				; BEWARE: mulwf does not reset carry flag !
+	bcf		STATUS,C				; BEWARE: mulwf does not reset carry flag!
 	rlcf	PRODL					; x2 --> 0 .. 320x240, might be > 0xFFFF
 	rlcf	PRODH
 	movff	PRODL, img_pixels+0
@@ -91,6 +82,9 @@ get_colors_loop:
 	rlcf	win_width+1
 	call	TFT_box_write
 	Index_out 0x22
+
+	;---- Read the colors ------------------------------------------------
+	rcall	get_colors
 
 	;---- Decode pixels --------------------------------------------------
 color_image_loop_xy:
@@ -132,7 +126,6 @@ color_image_decode_2:
 	movlw	0
 	subwfb	img_pixels+2,F
 
-color_image_not_over:
 	infsnz	img_count+0				; Increment count
 	incf	img_count+1
 
@@ -150,7 +143,7 @@ color_image_loop_pixel:
 	decfsz	img_count+1
 	bra		color_image_loop_pixel
 	bsf		INTCON,GIE
-	
+
 	; And count (on a 24bit counter)
 	clrf	WREG					; Make a 24bit decrement
 	decf	img_pixels+0
@@ -161,6 +154,27 @@ color_image_loop_pixel:
 
 	;---- Closeup --------------------------------------------------------	
 	Index_out 0x00
+	return
+
+
+	global	get_colors
+get_colors:
+	tblrd*+							; read number of image colors
+	movff	TABLAT,lo				; store in lo
+	tblrd*+							; skip one spare byte (future flags ?)
+	movf	lo,W
+	lfsr	FSR2,buffer				; set up buffer as storage for the colors
+get_colors_loop:
+	tblrd*+
+	btfss	use_custom_colors		; shall custom colors be used?
+	movff	TABLAT,POSTINC2			; NO
+	tblrd*+
+	btfss	use_custom_colors		; shall custom colors be used?
+	movff	TABLAT,POSTINC2			; NO
+	decfsz	WREG
+	bra		get_colors_loop
+
+	bcf		use_custom_colors		; clear custom colors request
 	return
 
 	END

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File customview.inc
+;   File customview.inc													V2.99d
 ;
 ;   Customview for divemode and surfacemode
 ;
@@ -9,21 +9,25 @@
 ; HISTORY
 ;   2011-08-10 : [mH] Import into hwOS sources
 
-    ; Dive mode
+; Dive mode
 	extern	customview_toggle
 	extern	customview_second
 	extern	customview_minute
-    extern  customview_show_mix             ; Put "Nxlo", "Txlo/hi", "Air" or "O2" into Postinc2
-    extern  customview_show_change_depth    ; Put " in lo m" or " in lo ft" into Postinc2
-    extern  menuview_toggle
-    extern  menuview_toggle_reset
-    extern  customview_mask
-    
-    extern  customview_alternative_second
+	extern	customview_show_mix				; put "Nxlo", "Txlo/hi", "Air" or "O2" into Postinc2
+	extern	menuview_toggle
+	extern	menuview_toggle_reset
+	extern	customview_mask
+	extern	customview_mask_alternative
+	extern	customview_alternative_second
+	extern	switch_layout_to_normal
 
-    ; Surface mode
-    extern  surf_customview_toggle
-    extern  surf_customview_mask
+; Surface mode
+	extern	surf_customview_toggle
+	extern	surf_customview_mask
 
-;	extern	surf_customview_second
-;	extern	surf_customview_minute
+
+
+
+
+
+

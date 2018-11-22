@@ -13,16 +13,14 @@
 #include "hwos.inc"
 #include "wait.inc"
 
-mcp code
+mcp	code
 
-    global  mcp_sleep
+	global	mcp_sleep
 mcp_sleep:
-    bcf     INTCON3,INT3IE          ; Disable INT3
-    bcf     mcp_power               ; RX off
-    btfsc   mcp_power
-    bra     $-4
-    return
+	bcf		INTCON3,INT3IE			; disable INT3
+	bcf		mcp_power				; RX off
+	btfsc	mcp_power
+	bra		$-4
+	return
 
-
-
-        END
+	END
