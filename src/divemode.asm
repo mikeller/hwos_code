@@ -200,8 +200,7 @@ diveloop_loop2:
 	btfsc	oneminupdate				; one minute tasks
 	rcall	update_divemode60			; update clock, etc.
 
-	btfss	FLAG_oc_mode				; are we in OC mode?
-	bsf		FLAG_TFT_active_gas_divemode; NO - have the gas and setpoint redrawn on every second to update setpoint display, animate the blinking, etc.
+	bsf		FLAG_TFT_active_gas_divemode; have the gas and setpoint redrawn on every second to update setpoint display, animate the blinking, etc.
 
 	btfss	alternative_divelayout
 	rcall	TFT_output3_normal
@@ -551,9 +550,6 @@ calc_deko_engine_cont:
 	clrf	TMR5H						;
 	call	deco_calc_hauptroutine		; invoke the deco engine (p2_deco.c)
 	banksel	common
-
-	; the displayed gas may need a different color-coding
-	bsf		FLAG_TFT_active_gas_divemode; redraw gas/setpoint/diluent
 
 	; check if display shall be updated due to deco engine restart
 	btfsc	FLAG_TFT_display_ndl_or_deko; shall update immediately?
