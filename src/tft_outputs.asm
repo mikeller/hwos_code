@@ -81,11 +81,10 @@ TFT_divemask_color_dive:
 
 	global	TFT_memo_color
 TFT_memo_color:							; information, values within normal range, things without a need to react upon
-    bra	TFT_standard_color  ; mH (Color schemes!)
 	movlw	color_white
 	bra		TFT_standard_color0
-;TFT_memo_color_dive:
-;	retlw	color_white
+TFT_memo_color_dive:
+	retlw	color_white
 
 	global	TFT_advice_color
 TFT_advice_color:						; advices to do something, but without essential need to actually do it
@@ -2052,7 +2051,7 @@ TFT_active_setpoint_bail:				; bailout case
 	tstfsz	menupos2					; any option shown?
 	bra		TFT_active_gas_divemode_oc	; YES - do not overwrite with bailout text
 	WIN_SMALL dm_active_dil_column, dm_active_dil_row
-	call	TFT_attention_color			; print plaint in yellow
+	call	TFT_attention_color			; print in yellow
 	STRCPY_TEXT_PRINT tDiveBailout		; "Bailout"
 TFT_active_gas_divemode_oc:				; common part for OC and bailout
 	movff	int_O_breathed_ppO2+0,lo	; color-code the output of the gas by the ppO2 it yields
@@ -4274,14 +4273,14 @@ TFT_sensor_check_exit:
 
 	global	TFT_surface_lastdive
 TFT_surface_lastdive:
-	call	TFT_divemask_color
+	call	TFT_standard_color
 	WIN_TINY surf_gaslist_column,surf_gaslist_row+.5
 	STRCAT_TEXT_PRINT	tLastDive			; "Last Dive:"
 	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.1)+.5
 	STRCAT_TEXT_PRINT	tDivetime			; "Divetime:"
 	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.2)+.5
 	STRCAT_TEXT_PRINT	tMaxDepth			; "Max. Depth"
-	call	TFT_standard_color
+
 	WIN_SMALL surf_gaslist_column+.48,surf_gaslist_row
 	movff	int_O_desaturation_time+0,lo	; bank-safe copies
 	movff	int_O_desaturation_time+1,WREG

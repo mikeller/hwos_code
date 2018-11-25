@@ -174,7 +174,7 @@ diveloop_loop1_deco:
 diveloop_loop1_deco1:
  ENDIF
 
-	call	calc_deko_divemode			; calculate decompression and set resulting display flags
+	call	calc_deco_divemode			; calculate decompression and set resulting display flags
 
 	btfss	alternative_divelayout
 	rcall	TFT_output2_normal
@@ -392,7 +392,7 @@ apnoe_calc_maxdepth:
 
 	; --------------------------------------------------------------------------------------
 
-calc_deko_divemode:
+calc_deco_divemode:
 	btfss	FLAG_gauge_mode				; in gauge mode?
 	rcall	calc_deko_engine			; NO - do deco calculations
 
@@ -552,6 +552,9 @@ calc_deko_engine_cont:
 	call	deco_calc_hauptroutine		; invoke the deco engine (p2_deco.c)
 	banksel	common
 
+	; the displayed gas may need a different color-coding
+	bsf		FLAG_TFT_active_gas_divemode; redraw gas/setpoint/diluent
+
 	; check if display shall be updated due to deco engine restart
 	btfsc	FLAG_TFT_display_ndl_or_deko; shall update immediately?
 	bra		calc_deko_engine_update		; YES
@@ -560,6 +563,7 @@ calc_deko_engine_cont:
 	movff	char_O_main_status,WREG		; get deco status of deco engine
 	btfss	WREG,DECO_COMPLETED_NORM	; new calculation results for normal plan available?
 	return								; NO  - done
+
 calc_deko_engine_update:
 	bcf		FLAG_TFT_display_ndl_or_deko; YES - reset flag for immediate update
 	movff	char_O_deco_info,WREG		;     - get deco info vector
@@ -1444,8 +1448,14 @@ gas_switched_common_OC:
 	rcall	setup_gas_registers			; with WREG = Gas 1-6
 	rcall	deco_setup_oc_gases			; with WREG = Gas 1-6
 gas_switched_common3:
-	bsf		FLAG_TFT_active_gas_divemode	; redraw gas/setpoint/diluent
-	call	restart_deco_engine_wo_ceiling	; abort any running deco calculations and restart the deco engine
+	banksel	int_O_breathed_ppO2
+	bcf		int_O_breathed_ppO2+1,int_low_flag			; | clear all flags that control color-coding
+	bcf		int_O_breathed_ppO2+1,int_high_flag			; | to have the new gas initially displayed in
+	bcf		int_O_breathed_ppO2+1,int_attention_flag	; | memo color instead of a warning or attention
+	bcf		int_O_breathed_ppO2+1,int_warning_flag		; | color that belonged to the previous gas
+	banksel	common
+	bsf		FLAG_TFT_active_gas_divemode				; redraw gas/setpoint/diluent
+	call	restart_deco_engine_wo_ceiling				; abort any running deco calculations and restart the deco engine
 	; set flags for profile recording
 	bsf		event_occured				; set event flag
 	btfsc	FLAG_bailout_mode			; choose OC Bailouts (OC Gases)
