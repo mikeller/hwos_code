@@ -42,12 +42,12 @@
 ; Firmware Version
 #DEFINE softwareversion_x		.2			; Software Version, major               (1 -   9)
 #DEFINE softwareversion_y		.99			; Software Version, minor               (1 -  99)
-#DEFINE softwareversion_beta	.0			; 0= Release, 1= Beta-1, 2= Beta-2, ... (0 - 255)
+#DEFINE softwareversion_beta	.5			; 0= Release, 1= Beta-1, 2= Beta-2, ... (0 - 255)
 
 ; Firmware Expiration Date, will cause version to be displayed in "Update Firmware" style after the following date:
-#DEFINE firmware_expire_year	.18
-#DEFINE firmware_expire_month	.12
-#DEFINE firmware_expire_day		.31
+#DEFINE firmware_expire_year	.19
+#DEFINE firmware_expire_month	.2
+#DEFINE firmware_expire_day		.1
 
 ; Magic Cookie Definition
 #DEFINE comm_service_key		0xABCDEF
