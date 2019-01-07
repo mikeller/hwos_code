@@ -67,7 +67,7 @@ customview_second:
 	dcfsnz	WREG,F						; 11:
 	goto	TFT_ppo2_ead_end_cns		; ppO2, END/EAD and CNS
 	dcfsnz	WREG,F						; 12:
-	goto	TFT_gf_factors				; GF factors
+	return								; GF factors - only static data
 	dcfsnz	WREG,F						; 13:
 	goto	TFT_clock_batt_surfpress	; clock, battery and surface pressure
 	return								; menupos3 = 0 -> do nothing
@@ -589,7 +589,6 @@ init_gf_factors:
 	TSTOSS	char_I_deco_model			; in GF mode (0 = ZH-L16, 1 = ZH-L16-GF)?
 	bra		customview_toggle			; NO - no GF info for non-GF modes
 	call	TFT_gf_factors_mask			; mask for GF factors
-	call	TFT_gf_factors				; data for GF factors
 	bra		customview_toggle_exit
 
 init_TFT_dive_compass:					; compass

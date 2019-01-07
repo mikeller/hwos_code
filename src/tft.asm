@@ -189,31 +189,11 @@ tft		CODE
 ;
 ;;=============================================================================
 
-	global	TFT_CmdWrite
-TFT_CmdWrite:
-	RS_L							; command
-	clrf	PORTA					; upper
-	bcf		INTCON,GIE
-	movwf	PORTH					; lower
-	WR_L
-	WR_H							; tick
-	bsf		INTCON,GIE
-	return
-
-	global	TFT_DataWrite
-TFT_DataWrite:
-	RS_H							; data
-	bcf		INTCON,GIE
-	movwf 	PORTH					; lower
-	WR_L
-	WR_H							; tick
-	bsf		INTCON,GIE
-	return
-
-;=============================================================================
 
 	global	TFT_ClearScreen
 TFT_ClearScreen:
+    	btfsc	screen_type2
+	bra	TFT_ClearScreen_display2
 	Index_out 0x50					; window horizontal start address
 	Parameter_out 0x00, 0x00		; 0-239
 	Index_out 0x51					; window horizontal end   address
@@ -256,25 +236,92 @@ TFT_ClearScreen4:
 	movlw	0x00					; NOP, to stop window mode
 	bra		TFT_CmdWrite			; and return
 
+TFT_ClearScreen_display2:	
+	    ; Column Address start
+	movlw	0x02
+	rcall	TFT_CmdWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+	movlw	0x03
+	rcall	TFT_CmdWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+
+; Column Address end
+	movlw	0x04
+	rcall	TFT_CmdWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+	movlw	0x05
+	rcall	TFT_CmdWrite
+	movlw	0xEF
+	rcall	TFT_DataWrite
+
+; Row address start
+	movlw	0x06
+	rcall	TFT_CmdWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+	movlw	0x07
+	rcall	TFT_CmdWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+
+; Row address end
+	movlw	0x08
+	rcall	TFT_CmdWrite
+	movlw	0x01
+	rcall	TFT_DataWrite
+	movlw	0x09
+	rcall	TFT_CmdWrite
+	movlw	0x3F
+	rcall	TFT_DataWrite
+
+	movlw	0x22                ; Start Writing Data to GRAM
+	rcall	TFT_CmdWrite
+
+	bsf		tft_rs            ; Data!
+
+	movlw	.160
+	movwf	PRODH
+	clrf	PORTH
+TFT_ClearScreen2_display2:
+	movlw	.240
+	movwf	PRODL
+TFT_ClearScreen3_display2:
+	bcf		tft_nwr
+	bsf		tft_nwr             ; Upper
+	bcf		tft_nwr
+	bsf		tft_nwr             ; High
+	bcf		tft_nwr
+	bsf		tft_nwr             ; Lower
+	bcf		tft_nwr
+	bsf		tft_nwr             ; Upper
+	bcf		tft_nwr
+	bsf		tft_nwr             ; High
+	bcf		tft_nwr
+	bsf		tft_nwr             ; Lower
+	decfsz	PRODL,F
+	bra		TFT_ClearScreen3_display2
+	decfsz	PRODH,F
+	bra		TFT_ClearScreen2_display2
+        return
 
 ;=============================================================================
 
 	global	TFT_DisplayOff
 TFT_DisplayOff:
-	clrf	CCPR1L					; PWM OFF
+        clrf    CCP1CON                     ; stop PWM
+	bcf     PORTC,2                     ; Pull PWM out to GND
 	clrf	PORTA
 	clrf	PORTH
-	RD_L							; LOW
-	nop
-	RS_L							; LOW
-	bcf		tft_nwr
-	nop
-	bcf		tft_cs
-	nop
-	bcf		tft_nreset
-	WAITMS	d'1'
-	bsf		tft_power				; inverted...
-	bcf		lightsen_power  		; power-down light sensor
+	RD_L	; LOW
+	RS_L	; LOW
+	bcf	tft_nwr
+	bcf	tft_cs
+	bcf	tft_nreset
+	bsf	tft_power				; inverted...
+	bcf	lightsen_power  		; power-down light sensor
 	return
 
 ; -----------------------------
@@ -283,6 +330,8 @@ TFT_DisplayOff:
 
 	global	TFT_boot
 TFT_boot:
+        clrf        CCP1CON                     ; stop PWM
+        bcf         PORTC,2                     ; Pull PWM out to GND
 	clrf	PORTA
 	clrf	PORTH
 	RD_L	; LOW
@@ -311,6 +360,9 @@ TFT_boot:
 	; Data Transfer Synchronization
 	Parameter_out 0x00, 0x00
 	Parameter_out 0x00, 0x00
+
+	btfsc	screen_type2		; Display 2
+	bra	TFT_boot_screen2
 
 	; Get screentype from Bootloader-Info
 	movlw	0x7B
@@ -417,8 +469,88 @@ display0_config_write:				; with command in WREG
 	rcall	TFT_DataWrite			; write config
 	bra		display0_init_loop		; loop
 
+TFT_boot_screen2:
+    bsf		tft_nwr             ; release bus.
+    rcall	display1_init       ; Init sequence
+    
+    btfss	flip_screen         ; 180° rotation ?
+    bra		TFT_ClearScreen	    ; No, done. Clearscreen and return
+    ; flip the GRAM
+    Index_out	0x16
+    movlw	0x48		    ; Flip image in the GRAM (Very elegant with display2...)
+    rcall	TFT_DataWrite       ; Write config
+    bra		TFT_ClearScreen	    ; Clearscreen and return
+
+
+display1_init:
+    movlw   LOW     0x1F8BC
+    movwf   TBLPTRL
+    movlw   HIGH    0x1F8BC
+    movwf   TBLPTRH
+    movlw   UPPER   0x1F8BC
+    movwf   TBLPTRU
+display1_init_loop:
+    TBLRD*+
+    movlw   0xFF
+    cpfseq  TABLAT
+    bra     display1_config_write    ; Write Config pair to Display
+    ; Delay ms or quit (return)
+    TBLRD*+
+    tstfsz  TABLAT                  ; End of config?
+    bra     $+4                     ; No
+    return                          ; Done.
+    movf    TABLAT,W
+    call    WAITMSX                 ; Wait WREG milliseconds
+    bra     display1_init_loop       ; Loop
+
+display1_config_write:               ; With command in WREG
+    movf    TABLAT,W
+    rcall	TFT_CmdWrite          ; Write command
+    TBLRD*+                         ; Get config
+    movf    TABLAT,W
+	rcall	TFT_DataWrite          ; Write config
+    bra     display1_init_loop       ; Loop
+
 
 ;=============================================================================
+    
+    	global	TFT_CmdWrite
+TFT_CmdWrite:
+	RS_L							; command
+	btfsc	screen_type2
+	bra	TFT_CmdWrite_screen2
+	clrf	PORTA					; upper
+	bcf		INTCON,GIE
+	movwf	PORTH					; lower
+	WR_L
+	WR_H							; tick
+	bsf		INTCON,GIE
+	return
+TFT_CmdWrite_screen2:	
+	movwf	PORTH		; Lower
+	WR_L
+	WR_H				; Tick
+	return;
+
+	global	TFT_DataWrite
+TFT_DataWrite:
+	RS_H							; data
+	btfsc	screen_type2
+	bra	TFT_DataWrite_screen2
+	bcf		INTCON,GIE
+	movwf 	PORTH					; lower
+	WR_L
+	WR_H							; tick
+	bsf		INTCON,GIE
+	return
+TFT_DataWrite_screen2:
+	movwf 	PORTH		; Lower
+	WR_L
+	WR_H				; Tick
+	return
+
+;=============================================================================
+
 ; Smooth lighting-up of the display:
 ;
 ; Trashes: WREG, PRODL
@@ -534,6 +666,8 @@ pixel_write:
 
 	global	pixel_write_col320
 pixel_write_col320:
+    	btfsc   screen_type2             ; display2?
+	bra     pixel_write_col320_d2   ; Yes
 	btfsc	screen_type				; display1?
 	bra		pixel_write_col320_d1	; YES
 	; Display0
@@ -557,6 +691,29 @@ pixel_write_noflip_H:
 	Index_out 0x21					; frame memory vertical address
 	bra		TFT_DataWrite_PROD		; and return...
 
+pixel_write_col320_d2:
+        movlw	0x06
+        rcall	TFT_CmdWrite
+        movf    PRODH,W
+        rcall	TFT_DataWrite
+        movlw	0x07
+        rcall	TFT_CmdWrite
+        movf    PRODL,W
+        rcall	TFT_DataWrite
+
+        incf    PRODL,F
+        movlw   .0
+        addwfc  PRODH,F             ;+1
+
+        movlw	0x08
+        rcall	TFT_CmdWrite
+        movf    PRODH,W
+        rcall	TFT_DataWrite
+        movlw	0x09
+        rcall	TFT_CmdWrite
+        movf    PRODL,W
+        bra 	TFT_DataWrite      ; And return...
+
 ;-----------------------------------------------------------------------------
 ; Writes one half-pixel at position (win_top,win_leftx2).
 ; Inputs: win_leftx2, win_top, win_color:2
@@ -567,6 +724,9 @@ half_pixel_write:
 	movf	win_top,W				; d'0' ... d'239'
 	; Variant with Y position in WREG.
 half_pixel_write_1:
+    	btfsc	screen_type2
+	bra     half_pixel_write_1_display1 ; Yes.
+
 	btfss	flip_screen				; 180° rotation?
 	sublw	.239					; 239-Y --> Y
 	mullw	.1						; copy row to PRODL (PRODH=0)
@@ -582,6 +742,47 @@ half_pixel_write_1:
 	WR_H							; tick
 	bsf		INTCON,GIE
 	return
+
+half_pixel_write_1_display1:
+        	mullw   1                       ; Copy row to PRODL (PRODH=0)
+    ; Row address start
+        movlw	0x02
+        rcall	TFT_CmdWrite
+        movlw   .0
+        rcall	TFT_DataWrite
+        movlw	0x03
+        rcall	TFT_CmdWrite
+        movf    PRODL,W
+        rcall 	TFT_DataWrite
+
+        incf    PRODL,F
+
+        movlw	0x04
+        rcall	TFT_CmdWrite
+        movlw   .0
+        rcall	TFT_DataWrite
+        movlw	0x05
+        rcall	TFT_CmdWrite
+        movf    PRODL,W
+        rcall 	TFT_DataWrite
+
+	movff	win_color1,PRODH
+	movff	win_color2,PRODL
+	rcall	convert_for_display2
+
+    	movlw	0x22					; Start Writing Data to GRAM
+    	rcall	TFT_CmdWrite
+    	RS_H				; Data
+    	movff	win_color5, PORTH
+	WR_L
+	WR_H				; Tick
+    	movff	win_color4, PORTH
+	WR_L
+	WR_H				; Tick
+    	movff	win_color3, PORTH
+	WR_L
+	WR_H				; Tick
+    	return
 
 ;-----------------------------------------------------------------------------
 ; Writes a vertical line of half-pixel at position (win_top,win_leftx2,win_height).
@@ -641,12 +842,26 @@ half_horizontal_line_loop:
 TFT_DataWrite_PROD:
 ;	RD_H							; keep high
 	RS_H							; data
+	btfsc	screen_type2
+	bra	TFT_DataWrite_PROD_display2
 	bcf		INTCON,GIE
 	movff	PRODH,PORTA				; move high byte to PORTA
 	movff	PRODL,PORTH				; move low byte to PORTH
 	WR_L
 	WR_H							; tick
 	bsf		INTCON,GIE
+	return
+
+TFT_DataWrite_PROD_display2:
+    	movff	PRODH,PORTH		; Move high byte to PORTH (DISPLAY is bigendian)
+	WR_L
+	WR_H
+	movff	PRODL,PORTH		; Move low byte to PORTH
+	WR_L
+	WR_H
+	movff   win_color3,PORTH        ; Move low(est) byte to PORTH
+	WR_L
+	WR_H
 	return
 
 TFT_DataRead_PROD:
@@ -686,6 +901,9 @@ TFT_CmdRead_PROD:
 TFT_box_write:
 	movf	win_leftx2,W			; compute left = 2 * leftx2 --> PROD
 	mullw	2
+
+	btfsc	screen_type2
+	bra	TFT_box_write_display2
 
 	global	TFT_box_write_16bit_win_left
 TFT_box_write_16bit_win_left:					; Wwth column in PRODL:PRODH
@@ -791,6 +1009,59 @@ TFT_box_noflip_V:
 	movf	PRODL,W
 	bra		TFT_DataWrite			; lower (and tick) and return
 
+TFT_box_write_display2:
+        movlw	0x06
+        rcall	TFT_CmdWrite
+        movf    PRODH,W
+        rcall	TFT_DataWrite
+        movlw	0x07
+        rcall	TFT_CmdWrite
+        movf    PRODL,W
+        rcall	TFT_DataWrite
+
+		movf	win_width+0,W	    ; right = left + width - 1
+		addwf	PRODL,F
+		movf	win_width+1,W
+		addwfc	PRODH,F
+		decf	PRODL,F,A	   ; decrement result
+		btfss   STATUS,C
+		decf	PRODH,F,A
+
+        movlw	0x08
+        rcall	TFT_CmdWrite
+        movf    PRODH,W
+        rcall	TFT_DataWrite
+        movlw	0x09
+        rcall	TFT_CmdWrite
+        movf    PRODL,W
+        rcall	TFT_DataWrite
+
+        ;---- Normal vertical window -----------------------------------------
+        ; Output  (top) (bottom)
+		movff	win_top,PRODH           ; top --> PRODH (first byte)
+		movff   win_height,WREG
+		addwf   PRODH,W
+		decf	WREG
+		movwf	PRODL                   ; top+height-1 --> PRODL (second byte)
+
+        movlw	0x02
+        rcall	TFT_CmdWrite
+        movlw   0x00
+        rcall	TFT_DataWrite
+        movlw	0x03
+        rcall	TFT_CmdWrite
+        movf    PRODH,W
+        rcall	TFT_DataWrite
+
+        movlw	0x04
+        rcall	TFT_CmdWrite
+        movlw   0x00
+        rcall	TFT_DataWrite
+        movlw	0x05
+        rcall	TFT_CmdWrite
+        movf    PRODL,W
+        bra	TFT_DataWrite		; and return
+
 
 ;=============================================================================
 ; TFT_frame : draw a frame around current box with current color
@@ -846,6 +1117,8 @@ TFT_frame:
 
 	global	TFT_box
 TFT_box:
+        btfsc   screen_type2
+        bra	    TFT_box_display2
 	;---- Define Window ------------------------------------------------------
 	bcf		STATUS,C
 	rlcf	win_width+0,F
@@ -900,6 +1173,71 @@ TFT_box4:
 	; reset bargraph mode...
 	setf	win_bargraph
 	return
+TFT_box_display2:
+        ;---- Define Window ------------------------------------------------------
+        bcf     STATUS,C
+        rlcf    win_width+0,F
+        rlcf    win_width+1,F		    ; x2
+        rcall   TFT_box_write               ; Setup box
+
+	bcf     STATUS,C
+	rrcf    win_width+1,F               ; width /= 2
+	rrcf    win_width+0,F
+
+	movff	win_color1,PRODH
+	movff	win_color2,PRODL
+	rcall	convert_for_display2
+    ;---- Fill Window --------------------------------------------------------
+	Index_out 0x22						; Frame Memory Data Write start
+
+	clrf	PRODH                       ; Column counter.
+	RS_H				; Data
+
+TFT_box2_display2:                              ; Loop height times
+	movff	win_height,PRODL
+    
+TFT_box3_display2:                              ; loop width times
+	movff	win_color5,PORTH
+   	bcf		tft_nwr
+	bsf		tft_nwr                  ; Upper
+	movff	win_color4,PORTH
+	bcf		tft_nwr
+	bsf		tft_nwr                  ; High
+	movff	win_color3,PORTH
+	bcf		tft_nwr
+	bsf		tft_nwr                  ; Lower
+
+	movff	win_color5,PORTH
+	bcf		tft_nwr
+	bsf		tft_nwr                  ; Upper
+	movff	win_color4,PORTH
+	bcf		tft_nwr
+	bsf		tft_nwr                  ; High
+	movff	win_color3,PORTH
+	bcf		tft_nwr
+	bsf		tft_nwr                  ; Lower
+	decfsz	PRODL,F                     ; row loop finished ?
+	bra		TFT_box3_display2                   ; No: continue.
+
+    incf    PRODH,F                     ; column count ++
+
+    movf   win_bargraph,W           ; current column == bargraph ?
+    cpfseq  PRODH
+    bra     TFT_box4_display2                   ; No: just loop.
+
+    ; Yes: switch to black
+    clrf    win_color5
+    clrf    win_color4
+    clrf    win_color3
+TFT_box4_display2:
+    movf   win_width+0,W
+    cpfseq  PRODH
+    bra     TFT_box2_display2
+
+    ; Reset bargraph mode...
+    setf	win_bargraph
+    return
+	
 
 ;=============================================================================
 ; Converts 8 bit RGB b'RRRGGGBB' into 16 bit RGB b'RRRRRGGGGGGBBBBB'
@@ -1011,6 +1349,35 @@ TFT_set_color:
 	rrcf	tft_temp1,W				; red done
 	movwf	win_color1				; set color registers
 	return
+	
+	global	convert_for_display2
+convert_for_display2:	; Convert 16Bit RGB b'RRRRRGGG GGGBBBBB' into 24Bit RGB b'RRRRRR00 GGGGGG00 BBBBBB00'
+					    ; PRODH     PRODL                  win_color5 win_color4 win_color3
+        ; Red
+	movff	PRODH,win_color5	; = RRRRRGGG
+	bcf     win_color5,2		; = RRRRR0GG
+        btfsc   win_color5,7
+        bsf     win_color5,2		; = RRRRR1GG	    ; Lower two bits ignored from screen!
+        ; Blue
+        movff   PRODL,win_color3
+	rrcf	win_color3,F		; = UGGGBBBB (And the LSB-Blue in Carry)
+	swapf	win_color3,F		; = BBBBUGGG
+	bcf	win_color3,3		; = BBBB0GGG
+	btfsc	STATUS,C
+	bsf	win_color3,3		; = BBBB1GGG
+	bcf	win_color3,2		; = BBBBB0GG
+	btfsc   win_color3,7
+        bsf     win_color3,2		; = BBBBB1GG
+        ; Green
+        rrcf    PRODH,F
+        rrcf    PRODL,F
+        rrcf    PRODH,F
+        rrcf    PRODL,F
+        rrcf    PRODH,F
+        rrcf    PRODL,F                 ; = GGGGGGBB	    ; Lower two bits ignored from screen!
+        movff   PRODL,win_color4
+	return
+	
 
 ;=============================================================================
 ; Dump screen contents to the UART

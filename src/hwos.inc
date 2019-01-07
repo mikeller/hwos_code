@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File hwos.inc									REFACTORED VERSION V2.99e
+;   File hwos.inc									REFACTORED VERSION V2.99f
 ;
 ;   OSTC Platform definitions
 ;
@@ -42,10 +42,10 @@
 ; Firmware Version
 #DEFINE softwareversion_x		.2			; Software Version, major               (1 -   9)
 #DEFINE softwareversion_y		.99			; Software Version, minor               (1 -  99)
-#DEFINE softwareversion_beta	.5			; 0= Release, 1= Beta-1, 2= Beta-2, ... (0 - 255)
+#DEFINE softwareversion_beta	.0			; 0= Release, 1= Beta-1, 2= Beta-2, ... (0 - 255)
 
 ; Firmware Expiration Date, will cause version to be displayed in "Update Firmware" style after the following date:
-#DEFINE firmware_expire_year	.19
+#DEFINE firmware_expire_year	.20
 #DEFINE firmware_expire_month	.2
 #DEFINE firmware_expire_day		.1
 
@@ -169,7 +169,7 @@
 #DEFINE ppo2_warning_loop_highest		.60			; [cbar] (max.    value) for minimum on loop
 
 #DEFINE ppo2_warning_high_lowest		.120		; [cbar] (min.    value) for maximum in none-deco phase
-#DEFINE ppo2_warning_high_default		.140		; [cbar] (default value) for maximum in none-deco phase
+#DEFINE ppo2_warning_high_default		.160		; [cbar] (default value) for maximum in none-deco phase
 #DEFINE ppo2_warning_high_highest		.160		; [cbar] (max.    value) for maximum in none-deco phase
 
 #DEFINE ppo2_warning_deco_lowest		.120		; [cbar] (min.    value) for maximum in deco phase
@@ -203,7 +203,7 @@
 #DEFINE lithium_36v_low					.2000		; [mV] (must be bigger than aa_15v_high!)
 #DEFINE aa_15v_high						.1550		; [mV] Energizer 1.5 V E2 AA
 #DEFINE aa_15v_low						.1100		; [mV] according to Energizer data sheet EBC-4201R, page 2
-#DEFINE color_code_battery_low			.10			; [%]
+#DEFINE color_code_battery_low			.30			; [%]  also acts as threshold for setting brightness level ECO when in dive mode
 #DEFINE battery_show_level				.24			; [%]
 
 ; 3.6 Volt Battery sensing Data Points at 70 mA Load
@@ -341,11 +341,11 @@
 ;								hardware_flag1,7	; --- unused
 
 ; Hardware Descriptor 2
-#DEFINE screen_type				hardware_flag2,0	; =1: display 1, =0; display 0
+#DEFINE screen_type			hardware_flag2,0	; =1: display 1, =0; display 0
 #DEFINE compass_type			hardware_flag2,1	; =1: compass 1, =0: compass 0
 #DEFINE compass_type2			hardware_flag2,2	; =1: compass 2, =0: compass 0 or 1
 #DEFINE analog_switches			hardware_flag2,3	; =1: analog switches available
-;								hardware_flag2,4	; --- unused
+#DEFINE	screen_type2			hardware_flag2,4	; =1: display 2, =0: display 0 or 1
 ;								hardware_flag2,5	; --- unused
 ;								hardware_flag2,6	; --- unused
 ;								hardware_flag2,7	; --- unused
@@ -706,7 +706,8 @@ CNS_start						res 2		; CNS value at beginning of dive
 GF_start						res 1		; GF  value at beginning of dive
 
 ;---- CPU mode
-speed_setting					res 1		; =1: eco, =2: normal, =3: fastest
+cpu_speed_request				res 1		; requested CPU speed: =1: eco, =2: normal, =3: fastest
+cpu_speed_state					res 1		; current   CPU speed: =1: eco, =2: normal, =3: fastest
 
 ;---- Data for graphical Compass
 xRD								res 2		; virtual compass ruler offset
@@ -770,6 +771,9 @@ win_height						res 1
 win_bargraph					res 1
 win_color1						res 1
 win_color2						res 1
+win_color3						res 1	    ; For Display 2
+win_color4						res 1	    ; For Display 2
+win_color5						res 1	    ; For Display 2
 win_font						res 1
 
 ;---- Interface to Math Functions

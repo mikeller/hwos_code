@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File options.asm								REFACTORED VERSION V2.99e
+;   File options.asm								REFACTORED VERSION V2.99g
 ;
 ;   Manage all options data.
 ;
@@ -18,6 +18,7 @@
 #include "external_flash.inc"
 #include "wait.inc"
 #include "shared_definitions.h"
+#include "gaslist.inc"
 
 	extern	write_eeprom
 	extern	read_eeprom
@@ -78,7 +79,7 @@ option_reset_all_2:
 ; OUTPUT: none
 ; TRASH:  TBLPTR, TABLAT, WREG, FSR0, FSR1, FSR2
 ;
-	global	option_check_all				; check all option and reset option if out of min/max boundary
+	global	option_check_all				; check all options and reset options if out of min/max boundary
 option_check_all:
 	movlw	LOW(option_table_begin)			; point to option table begin
 	movwf	FSR0L
@@ -92,10 +93,19 @@ option_check_all_1:
 	movlw	HIGH(option_table_end)			; get high byte of end of table address
 	cpfseq	FSR0H							; does it equal the current pointer position?
 	bra		option_check_all_2				; NO - more options to process
-	return									; YES to both - end of option table reached, done
+	bra		option_check_all_3				; YES to both - end of option table reached
 option_check_all_2:
 	rcall	option_check					; check one option...
 	bra		option_check_all_1				; ... and loop
+
+option_check_all_3:
+	bsf		FLAG_diluent_setup				; setup checking diluents
+	call	gaslist_cleanup_list			; check and correct multiple or none First diluent
+	bcf		FLAG_diluent_setup				; setup checking gases
+	call	gaslist_cleanup_list			; check and correct multiple or none First gas
+	call	option_cleanup_oCCRMode			; check and correct sensor mode
+	call	option_cleanup_GF				; check and correct GFlow <= GFhigh
+	return									; all done
 
 ;=============================================================================
 ; Read option handle
@@ -372,9 +382,9 @@ option_inc_uint8_0:
 	movwf	INDF1
 option_inc_uint8_1:
 	; Now some rather crude hack into this routine to make CCR Calibration more convenient:
-	movlw	.149							; EEPROM address of option CalGasO2 
+	movlw	.149							; EEPROM address of option CalGasO2
 	cpfseq	opt_eeprom						; editing CalGasO2 right now?
-	return									; NO - done (or bra option_inc_uint8_2)
+	bra		option_inc_uint8_2				; NO - check next option
 	movff	opt_dive_mode,WREG				; YES - get dive mode: 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=pSCR
 	decfsz	WREG,W							;     - in CCR mode?
 	return									;       NO  - done
@@ -384,6 +394,45 @@ option_inc_uint8_1:
 	movlw	.95								;             YES - advance it to 95
 	movwf	INDF1							;                 - store it
 	return
+option_inc_uint8_2:
+	movlw	.12								; EEPROM address of option opt_GF_low
+	cpfseq	opt_eeprom						; editing opt_GF_low right now?
+	bra		option_inc_uint8_3				; NO - check next option
+	movff	opt_GF_high,WREG				; get value of associated GF high into WREG
+	cpfsgt	INDF1							; GF low > GF high?
+	return									; NO  - setting ok, done
+	movff	opt_min,INDF1					; YES - wrap around to minimum value
+	return									;     - done
+option_inc_uint8_3:
+	movlw	.13								; EEPROM address of option opt_GF_high
+	cpfseq	opt_eeprom						; editing opt_GF_high right now?
+	bra		option_inc_uint8_4				; NO - check next option
+	movff	opt_GF_low,WREG					; get value of associated GF low into WREG
+	cpfslt	INDF1							; GF high < GF low?
+	return									; NO  - setting ok, done
+	movwf	INDF1							; YES - rise GF high to GF low
+	return									;     - done
+option_inc_uint8_4:
+	movlw	.17								; EEPROM address of option opt_aGF_low
+	cpfseq	opt_eeprom						; editing opt_aGF_low right now?
+	bra		option_inc_uint8_5				; NO - check next option
+	movff	opt_aGF_high,WREG				; get value of associated GF high into WREG
+	cpfsgt	INDF1							; GF low > GF high?
+	return									; NO  - setting ok, done
+	movff	opt_min,INDF1					; YES - wrap around to minimum value
+	return									;     - done
+option_inc_uint8_5:
+	movlw	.18								; EEPROM address of option opt_aGF_high
+	cpfseq	opt_eeprom						; editing opt_aGF_high right now?
+	bra		option_inc_uint8_6				; NO - check next option
+	movff	opt_aGF_low,WREG				; get value of associated GF low into WREG
+	cpfslt	INDF1							; GF high < GF low?
+	return									; NO  - setting ok, done
+	movwf	INDF1							; YES - rise GF high to GF low
+	return									;     - done
+option_inc_uint8_6:
+	return									; all done
+
 
 option_inc_enum8:							; always +1
 	incf	INDF1,W
@@ -493,6 +542,35 @@ option_cleanup_oCCRMode_CCR:				; continue from above & jump-in from start.asm i
 	clrf	opt_ccr_mode					;            - YES - set CCR mode to fixed SP (0)
 option_cleanup_oCCRMode_exit:
 	banksel	common							; back to bank common
+	return									; done
+
+option_cleanup_GF:
+	; cleanup normal GF
+	movff	opt_GF_high,WREG				; copy normal GF high to WREG
+	movff	opt_GF_low,lo					; copy normal GF low  to lo
+	cpfsgt	lo								; GF low > GF high ?
+	bra		option_cleanup_GF_2				; NO  - option ok, check next option
+	movwf	lo								; YES - copy GF high to lo
+	movlw	.100							;     - load GF low limit of 100% into WREG
+	cpfsgt	lo								;     - lo > 100 ?
+	bra		option_cleanup_GF_1				;       NO  - correct GF low to GF high
+	movwf	lo								;       YES - correct GF low to 100%
+option_cleanup_GF_1:
+	movff	lo,opt_GF_low					; store corrected GF low
+option_cleanup_GF_2:
+	; cleanup alternative GF
+	movff	opt_aGF_high,WREG				; copy alternative GF high to WREG
+	movff	opt_aGF_low,lo					; copy alternative GF low  to lo
+	cpfsgt	lo								; GF low > GF high ?
+	bra		option_cleanup_GF_4				; NO  - option ok, check next option
+	movwf	lo								; YES - copy GF high to lo
+	movlw	.100							;     - load GF low limit of 100% into WREG
+	cpfsgt	lo								;     - lo > 100 ?
+	bra		option_cleanup_GF_3				;       NO  - correct GF low to GF high
+	movwf	lo								;       YES - correct GF low to 100%
+option_cleanup_GF_3:
+	movff	lo,opt_aGF_low					; store corrected GF low
+option_cleanup_GF_4:
 	return									; done
 
 

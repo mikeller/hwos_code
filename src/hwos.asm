@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File hwos.asm														V2.98c
+;   File hwos.asm														V2.98f
 ;
 ;   Definition of the hwOS dive computer platform.
 ;
@@ -37,20 +37,26 @@ hwos		CODE
 
 	global	init_ostc
 init_ostc:
-	banksel	common				; bank 1
 ; init oscillator
+	banksel	common				; bank 1
 	movlw	b'01110010'
 	movwf	OSCCON				; 16 MHz INTOSC
 	movlw	b'00001000'
 	movwf	OSCCON2				; secondary oscillator running
 	movlw	b'00000000'
 	movwf	OSCTUNE				; 4x PLL disable (Bit 6) - only works with 8 or 16MHz (=32 or 64MHz)
-	bcf		RCON,SBOREN			; bown-out off
+
+	movlw	d'2'					; coding for speed normal
+	movff	WREG,cpu_speed_request	; CPU shall run with normal speed
+	movff	WREG,cpu_speed_state	; CPU does  run with normal speed
+
+	bcf		RCON,SBOREN			; brown-out off
 	bcf		RCON,IPEN			; priority interrupts off
-	clrf	CM1CON				; disable
+
 	banksel	WDTCON
 	movlw	b'10000000'
 	movwf	WDTCON				; setup watchdog
+
 
 ; I/O Ports
 	banksel	0xF16				; addresses, F16h through F5Fh, are also used by SFRs, but are not part of the access RAM
@@ -59,6 +65,7 @@ init_ostc:
 	clrf	ODCON1				; disable open drain capability
 	clrf	ODCON2				; disable open drain capability
 	clrf	ODCON3				; disable open drain capability
+	clrf	CM1CON				; disable
 	clrf	CM2CON				; disable
 	clrf	CM3CON				; disable
 
@@ -125,31 +132,30 @@ init_ostc:
 	movlw	b'10001100'			; 32768Hz clock source, 1:1 prescaler -> ; 30.51757813 µs/bit in TMR1L:TMR1H
 	movwf	T1CON
 
-	banksel 0xF16				; addresses, F16h through F5Fh, are also used by SFRs, but are not part of the access RAM
-
 ; RTCC
-	movlw	0x55
-	movwf	EECON2
-	movlw	0xAA
-	movwf	EECON2
-	bsf 	RTCCFG,RTCWREN		; unlock sequence for RTCWREN
+	banksel 0xF16				; Addresses, F16h through F5Fh, are also used by SFRs, but are not part of the Access RAM.
+	movlw 	0x55
+	movwf 	EECON2
+	movlw 	0xAA
+	movwf 	EECON2
+	bsf 	RTCCFG,RTCWREN		; Unlock sequence for RTCWREN
 	bsf		RTCCFG,RTCPTR1
 	bsf		RTCCFG,RTCPTR0
-	bsf		RTCCFG,RTCEN		; module enable
-	bsf		RTCCFG,RTCOE		; output enable
-	movlw	b'00000100'			; 32768 Hz SOCS on RTCC pin (PORTG,4) Bit7-5: pullups for Port D, E and J
+	bsf		RTCCFG,RTCEN		; Module enable
+	bsf		RTCCFG,RTCOE		; Output enable
+	movlw	b'00000100'			; 32768Hz SOCS on RTCC pin (PORTG,4) Bit7-5: Pullups for Port D, E and J
 	movwf	PADCFG1
 	movlw	b'11000100'
 	movwf	ALRMCFG				; 1 second alarm
 	movlw	d'1'
-	movwf	ALRMRPT				; alarm repeat counter
-	movlw	0x55
-	movwf	EECON2
-	movlw	0xAA
-	movwf	EECON2
-	bcf		RTCCFG,RTCWREN		; lock sequence for RTCWREN
-
+	movwf	ALRMRPT				; Alarm repeat counter
+	movlw 	0x55
+	movwf 	EECON2
+	movlw 	0xAA
+	movwf 	EECON2
+	bcf 	RTCCFG,RTCWREN		; Lock sequence for RTCWREN
 	banksel common
+	
 ; A/D Converter
 	movlw	b'00011000'			; power off ADC, select AN6
 	movwf	ADCON0
@@ -236,7 +242,22 @@ init_ostc:
 	movlw	.248
 	movwf	TMR7H				; -> Rollover after 2048 cycles -> 62,5ms
 
+; Turn off unused timer
+	movlw	b'11000000'
+	movwf	PMD0
+	movlw	b'11010001'
+	movwf	PMD1
+	movlw	b'11010111'
+	movwf	PMD2
+	movlw	b'11111111'
+	movwf	PMD3
+
+; CTMU
+	clrf	CTMUCONH
+	clrf	CTMUCONL
+	clrf	CTMUICON
 	banksel	common
+
 ; Interrupts
 	movlw	b'11010000'
 	movwf	INTCON
@@ -262,9 +283,6 @@ init_ostc:
 	btfss	power_sw2
 	bra		$-4
 
-	movlw	d'2'
-	movff	WREG,speed_setting		; normal
-
 	bcf		active_reset_ostc_rx	; start RX from RESET
 
 	return
@@ -273,21 +291,21 @@ init_ostc:
 	global	speed_eco
 speed_eco:
 	movlw	d'1'
-	movff	WREG,speed_setting		; bank-independent
+	movff	WREG,cpu_speed_request	; bank-independent
 	; Done in ISR
 	return
 ;=============================================================================
 	global	speed_normal
 speed_normal:
 	movlw	d'2'
-	movff	WREG,speed_setting		; bank-independent
+	movff	WREG,cpu_speed_request	; bank-independent
 	; Done in ISR
 	return
 ;=============================================================================
 	global	speed_fastest
 speed_fastest:
 	movlw	d'3'
-	movff	WREG,speed_setting		; bank-independent
+	movff	WREG,cpu_speed_request	; bank-independent
 	; Done in ISR
 	return
 ;=============================================================================

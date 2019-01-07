@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft_outputs.inc							REFACTORED VERSION V2.99e
+;   File tft_outputs.inc							REFACTORED VERSION V2.99f
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -108,7 +108,6 @@
 	extern	TFT_ppo2_ead_end_cns_mask			; mask for ppO2, END/EAD and CNS
 	extern	TFT_ppo2_ead_end_cns				; data for ppO2, END/EAD and CNS
 	extern	TFT_gf_factors_mask					; mask for GF factors
-	extern	TFT_gf_factors						; data for GF factors
 	extern	TFT_clock_batt_surfpress_mask		; mask for clock, battery and surface pressure
 	extern	TFT_clock_batt_surfpress			; data for clock, battery and surface pressure
 
@@ -138,7 +137,6 @@
 	extern	convert_mbar_to_feet				; convert value in lo:hi from mbar to feet
 	extern	convert_celsius_to_fahrenheit		; convert value in lo:hi from celsius to fahrenheit
 
-	extern	TFT_display_pure_ppo2				; helper function
 	extern	TFT_debug_output
 
 

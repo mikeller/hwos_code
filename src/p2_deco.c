@@ -1,5 +1,5 @@
 // ***************************************************************************
-// p2_deco.c                                         REFACTORED VERSION V2.99e
+// p2_deco.c                                         REFACTORED VERSION V2.99f
 //
 //  Created on: 12.05.2009
 //  Author: heinrichs weikamp, contributions by Ralph Lembcke and others
@@ -314,7 +314,8 @@ static float			sim_CNS_fraction;				// CNS after predicted ascent, 0.01 = 1%, as
 static unsigned int		int_sim_CNS_fraction;			// CNS after predicted ascent,    1 = 1%, as integer
 
 static unsigned char	sim_depth_limit;				// depth of next stop in meters, used in deco calculations
-static unsigned char	NDL_lead_tissue;				// used to cache the tissue to start with when calculating the NDL
+static unsigned char	NDL_lead_tissue_norm;				// used to cache the tissue to start with when calculating the NDL
+static unsigned char	NDL_lead_tissue_alt;				// used to cache the tissue to start with when calculating the NDL
 
 
 // result values from calculation functions
@@ -359,7 +360,7 @@ static float			calc_pres_tissue_N2;			// auxiliary variable to buffer tissue N2 
 static float			calc_pres_tissue_He;			// auxiliary variable to buffer tissue He pressure
 static float 			pres_tissue;					// auxiliary variable to buffer total tissue pressure
 
-// 11 byte free space left in this bank (4 bytes per float, 2 bytes per int/short, 1 byte per char)
+// 10 byte free space left in this bank (4 bytes per float, 2 bytes per int/short, 1 byte per char)
 
 
 //---- Bank 6 parameters -----------------------------------------------------
@@ -1106,7 +1107,7 @@ done:
 		{
 			// yes - set flag for stop needed to 'no'
 			need_stop       = 0;
-			
+
 			// set depth we can ascent to as 0 = surface
 			sim_depth_limit = 0;
 		}
@@ -2014,7 +2015,8 @@ static void calc_hauptroutine(void)
 		char_O_deco_info              = 0;		// reset all deco infos
 		deco_tissue_vector            = 0;		// reset tissue deco vector
 		IBCD_tissue_vector            = 0;		// reset tissue IBCD vector
-		NDL_lead_tissue               = 0;		// reset first tissue to look at during NDL calculation
+		NDL_lead_tissue_norm          = 0;		// reset first tissue to look at during NDL calculation
+		NDL_lead_tissue_alt           = 0;		// reset first tissue to look at during NDL calculation
 
 		// tag desaturation time as invalid (it will not be computed during a dive)
 		int_O_desaturation_time       = 65535;
@@ -2730,7 +2732,7 @@ static void calc_tissues()
 //
 static void calc_limit(PARAMETER float GF_parameter)
 {
-	overlay float         lead_tissue_limit = 0.0;
+	overlay float lead_tissue_limit = 0.0;
 
 
 	// set leading tissue number to not yet computed
@@ -2781,7 +2783,7 @@ static void calc_limit(PARAMETER float GF_parameter)
 		if( tissue_increment & TISSUE_FLAG )
 		{
 			overlay float supersat;
-			overlay float limit_warning;
+			overlay float baseline_threshold;
 
 			// calculate current supersaturation value (1.0 = 100%) of this tissue according to straight Buhlmann
 			supersat = (pres_tissue - real_pres_respiration) / (pres_tissue - pres_min);
@@ -2792,15 +2794,15 @@ static void calc_limit(PARAMETER float GF_parameter)
 				// memorize highest supersaturation found
 				if( supersat > lead_supersat ) lead_supersat = supersat;
 
-				// limit value for micro bubbles and outside warnings
-				limit_warning = 0.02 * ci + 0.9;
+				// tissue-dependent baseline threshold for micro bubbles and outside warnings
+				baseline_threshold = 0.02 * ci + 1.0;
 
-				// micro bubbles warning: supersaturation >= limit_warning  OR  >= 1.0
-				if( (supersat >= limit_warning) || (supersat >= 1.0) )
+				// micro bubbles warning: supersaturation > baseline threshold
+				if( supersat > baseline_threshold )
 					char_O_deco_warnings |= (DECO_WARNING_MBUBBLES + DECO_WARNING_MBUBBLES_lock);
 
-				// outside warning: supersaturation >= limit_warning  AND >= 1.0
-				if( (supersat >= limit_warning) && (supersat >= 1.0) )
+				// outside warning: supersaturation > baseline threshold + additional 5% margin
+				if( supersat > baseline_threshold + 0.05 )
 					char_O_deco_warnings |= (DECO_WARNING_OUTSIDE  + DECO_WARNING_OUTSIDE_lock );
 			}
 		}
@@ -2873,7 +2875,7 @@ static void calc_NDL_time(void)
 
 		// the fastest way to find out if already being beyond NDL is to start with
 		// the tissue that was the leading one during the last NDL computation...
-		ci = i + NDL_lead_tissue;
+		ci =  (char_O_deco_status & DECO_PLAN_ALTERNATE) ? (NDL_lead_tissue_alt + i) : (NDL_lead_tissue_norm + i);
 
 		// wrap around after the 16th tissue
 		if( ci >= NUM_COMP ) ci -= NUM_COMP;
@@ -2988,7 +2990,8 @@ static void calc_NDL_time(void)
 	} // outer for-loop iterating over all tissues
 
 	// store the NDL dominating tissue for to start with in the next NDL calculation
-	NDL_lead_tissue = new_NDL_lead_tissue;
+	if( char_O_deco_status & DECO_PLAN_ALTERNATE ) NDL_lead_tissue_alt  = new_NDL_lead_tissue;
+	else                                           NDL_lead_tissue_norm = new_NDL_lead_tissue;
 }
 
 
@@ -3707,7 +3710,7 @@ static void gas_volumes(void)
 	if( stop_gas )
 	{
 		// compute distance between bottom and first stop
-		float_depth = (float)(char_bottom_depth - stop_depth);
+		float_depth = (float)char_bottom_depth - (float)stop_depth;
 
 		// initial ascent exists only if ascent distance is > 0
 		if( float_depth > 0.0 )
@@ -3986,22 +3989,23 @@ static void convert_GF_for_display(void)
 		if( char_I_deco_model != 0 )
 		{
 			// GF factors enabled
-			if( int_O_gradient_factor >= char_I_GF_High_percentage )
+			if     ( int_O_gradient_factor > 99 )
+			{
+				int_O_gradient_factor |= INT_FLAG_WARNING;			// make GF factor shown in red
+			}
+			else if( int_O_gradient_factor > char_I_GF_High_percentage )
 			{
 				int_O_gradient_factor |= INT_FLAG_ATTENTION;		// make GF factor shown in yellow
 				char_O_deco_warnings  |= DECO_ATTENTION_OUTSIDE;	// make depth blink     in yellow
 			}
-
-			if( int_O_gradient_factor >= 100 )
-				int_O_gradient_factor |= INT_FLAG_WARNING;			// make GF factor shown in red
 		}
 		else
 		{
 			// straight Buhlmann
-			     if ( int_O_gradient_factor >= 100 )
+			if      ( int_O_gradient_factor > 100 )
 				int_O_gradient_factor |= INT_FLAG_WARNING;			// make GF factor shown in red
 
-			else if ( int_O_gradient_factor >=  90 )
+			else if ( int_O_gradient_factor >  99 )
 			{
 				int_O_gradient_factor |= INT_FLAG_ATTENTION;		// make GF factor shown in yellow
 				char_O_deco_warnings  |= DECO_ATTENTION_OUTSIDE;	// make depth blink     in yellow

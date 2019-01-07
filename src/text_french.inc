@@ -209,8 +209,8 @@
 	TCODE	tDvSalinity,		"Salinité:  "			; Salinity
 	TCODE	tShowppO2,			"Afficher PpO2:"		; Always show ppO2:
 	TCODE	tFlip,				"Pivoter l'écran:"		; Rotate Screen
-	TCODE	tMODwarning,		"Alerte MOD:"			; MOD warning
-	TCODE	tIBCDwarning,		"Alerte CDI:"			; IBCD Warning
+	TCODE	tMODwarning,		"Alerte Prof.:"			; depth Warnings
+	TCODE	tIBCDwarning,		"Alerte CDI  :"			; IBCD Warning
 	TCODE	t2ndDepth,			"2.Prof.:"				; 2nd depth display content (10 chars max)
 	TCODE	tTimeoutDive,		"Fin Plongée:"			; Dive Timeout
 
@@ -316,7 +316,7 @@
 	TCODE	tDiveBailout,		"Bailout"				; Bailout
 	TCODE	tGFactors,			"Valeurs GF"			; GF Values
 	TCODE	taGFactors,			"Valeurs aGF"			; aGF Values
-	TCODE	tGFInfo,			"   GF Info"			; GF Info
+	TCODE	tGFInfo,			"Saturation"			; Saturation					## pending translation
 	TCODE	tCeiling,			"Plafond"				; Ceiling
 	TCODE	tDiveSafetyStop,	"Stop"					; Stop (four chars, right aligned)
 	TCODE	tDiveFallback,		"Fallback!"				; Fallback! (max. nine chars)

@@ -129,32 +129,56 @@ color_image_decode_2:
 	infsnz	img_count+0				; Increment count
 	incf	img_count+1
 
-	; Loop sending pixel color
-	incf	img_count+1				; Because we decrement first, should add one here !
-	bsf		tft_rs,0				; RS_H Data
-	movff	PRODH,PORTA				; Move high byte to PORTA
-	movff	PRODL,PORTH				; Move low byte to PORTH
-	bcf		INTCON,GIE
-color_image_loop_pixel:
-	bcf		tft_nwr,0				; WR_L
-	bsf		tft_nwr,0				; WR_H Tick
-	decfsz	img_count+0
-	bra		color_image_loop_pixel
-	decfsz	img_count+1
-	bra		color_image_loop_pixel
-	bsf		INTCON,GIE
+        ; Loop sending pixel color
+        incf    img_count+1             ; Because we decrement first, should add one here !
+        bsf     tft_rs,0    ; RS_H				; Data
+	bcf	INTCON,GIE
+	
+color_image_loop_pixel:	
+	btfsc	screen_type2		; Display 2?
+	bra	color_image_display2		; Yes
+	
+    	movff	PRODH,PORTA	; Move high byte to PORTA
+        movff	PRODL,PORTH	; Move low byte to PORTH
+        bcf		tft_nwr
+        bsf		tft_nwr
+	decfsz  img_count+0
+        bra     color_image_loop_pixel
+        decfsz  img_count+1
+        bra     color_image_loop_pixel
+	bra	color_image_loop_pixel2
+	
+color_image_display2:
+    extern  convert_for_display2
+	call	convert_for_display2	; Convert 16Bit RGB b'RRRRRGGG GGGBBBBB' into 24Bit RGB b'RRRRRR00 GGGGGG00 BBBBBB00'
+color_image_display2_loop:	
+    	movff   win_color5,PORTH		; Move high byte to PORTH (DISPLAY is bigendian)
+        bcf		tft_nwr
+        bsf		tft_nwr
+        movff   win_color4,PORTH		; Move low byte to PORTH
+        bcf		tft_nwr
+        bsf		tft_nwr
+        movff   win_color3,PORTH        ; Move low(est) byte to PORTH
+        bcf		tft_nwr
+        bsf		tft_nwr
+	decfsz  img_count+0
+        bra     color_image_display2_loop
+        decfsz  img_count+1
+        bra     color_image_display2_loop
 
-	; And count (on a 24bit counter)
-	clrf	WREG					; Make a 24bit decrement
-	decf	img_pixels+0
-	subwfb	img_pixels+1,F
-	subwfb	img_pixels+2,F
+color_image_loop_pixel2:
+        bsf	INTCON,GIE
+        ; And count (on a 24bit counter)
+        clrf    WREG                    ; Make a 24bit decrement.
+        decf    img_pixels+0
+        subwfb  img_pixels+1,F
+        subwfb  img_pixels+2,F
 
-	bnn		color_image_loop_xy		; Not finished ? loop...
+        bnn     color_image_loop_xy     ; Not finished ? loop...
 
-	;---- Closeup --------------------------------------------------------	
-	Index_out 0x00
-	return
+        ;---- Closeup --------------------------------------------------------        
+;        Index_out 0x00
+        return
 
 
 	global	get_colors

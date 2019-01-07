@@ -108,12 +108,12 @@ menu_processor_bottom_line:
 	WIN_COLOR color_greenish
 menu_processor_bottom_line_comm:	
 	; Serial Number and Firmware Version
-	WIN_TINY .40,.240-.16
+	WIN_TINY .32,.240-.16
 	STRCPY	"#"
 	call	TFT_cat_serial
 	STRCAT	" v"
 	call	TFT_cat_firmware
-;	STRCAT	" "
+	STRCAT	" "
 	call	TFT_cat_beta_release
 	STRCAT_PRINT ""
 	call	TFT_standard_color

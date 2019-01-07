@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;	File text_german.asm							REFACTORED VERSIOn V2.99e
+;	File text_german.asm							REFACTORED VERSION V2.99f
 ;
 ;	German texts translation file.
 ;
@@ -209,14 +209,14 @@
 	TCODE	tDvSalinity,		"Salinität: "			; Salinity
 	TCODE	tShowppO2,			"ständig zeigen:"		; Always show ppO2:
 	TCODE	tFlip,				"Anzeige drehen:"		; Rotate Screen
-	TCODE	tMODwarning,		"MOD  Warnung:"			; MOD warning
-	TCODE	tIBCDwarning,		"IBCD Warnung:"			; IBCD Warning
+	TCODE	tMODwarning,		"Tiefe Warnung:"		; depth Warnings
+	TCODE	tIBCDwarning,		"IBCD  Warnung:"		; IBCD warning
 	TCODE	t2ndDepth,			"2.Tiefe:"				; 2nd depth display content (10 chars max)
 	TCODE	tTimeoutDive,		"TG-Ende nach:"			; Dive Timeout
 
 ; VSI display Settings
-	TCODE	tVSItext2,			"Variable Geschw.:"		; Variable speed:
-	TCODE	tVSIgraph,			"Geschw.  Grafik :"		; Speed graph:
+	TCODE	tVSItext2,			"Variable Geschw:"		; Variable speed:
+	TCODE	tVSIgraph,			"Geschw.  Grafik:"		; Speed graph:
 
 ; Setup Menu
 	TCODE	tSystSets,			"Konfiguration"
@@ -316,7 +316,7 @@
 	TCODE	tDiveBailout,		"Bailout"				; Bailout
 	TCODE	tGFactors,			"GF Werte"				; GF Values
 	TCODE	taGFactors,			"aGF Werte"				; aGF Values
-	TCODE	tGFInfo,			"GF jetzt"				; GF Info
+	TCODE	tGFInfo,			"Sättigung"				; Saturation
 	TCODE	tCeiling,			"Ceiling"				; Ceiling
 	TCODE	tDiveSafetyStop,	"Stop"					; Stop (four chars, right aligned)
 	TCODE	tDiveFallback,		"Fallback!"				; Fallback! (max. nine chars)
@@ -385,9 +385,9 @@
 	TCODE	tResetLogbook,		"Logbuch löschen"		; Reset Logbook
 
 ; Set Time Menu/Set Date Menu
-	TCODE	tSetHours,			"Stunden einst."		; Set Hours
-	TCODE	tSetMinutes,		"Minuten einst."		; Set Minutes
-	TCODE	tSetSeconds,		"Sekunden zurücks."		; Clear seconds
+	TCODE	tSetHours,			"Stunden einstellen"		; Set Hours
+	TCODE	tSetMinutes,		"Minuten einstellen"		; Set Minutes
+	TCODE	tSetSeconds,		"Sekunden Nullen"		; Clear seconds
 	TCODE	tSetDay,			"Setze Tag"				; Set Day
 	TCODE	tSetMonth,			"Setze Monat"			; Set Month
 	TCODE	tSetYear,			"Setze Jahr"			; Set Year

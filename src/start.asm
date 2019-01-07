@@ -91,6 +91,15 @@ clear_rambank:
 	cpfseq	TABLAT
 	bcf		analog_switches
 
+	; get screen type (2) from Bootloader-Info
+	bsf	screen_type2
+	movlw   0x80
+	movwf   TBLPTRL		; Only adjust low byte. High and Upper are still 0x01F7...
+	TBLRD*+			; Reads 0x83 for screen 2
+	movlw	0x83
+	cpfseq	TABLAT
+	bcf	screen_type2
+
 	; read button polarity
 	movlw	LOW  .897
 	movwf	EEADR

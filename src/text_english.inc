@@ -209,8 +209,8 @@
 	TCODE	tDvSalinity,		"Salinity:  "			; Salinity
 	TCODE	tShowppO2,			"Always show ppO2:"		; Always show ppO2:
 	TCODE	tFlip,				"Rotate Screen:"		; Rotate Screen
-	TCODE	tMODwarning,		"MOD  Warning  :"		; MOD warning
-	TCODE	tIBCDwarning,		"IBCD Warning  :"		; IBCD Warning
+	TCODE	tMODwarning,		"Depth Warnings:"		; depth Warnings
+	TCODE	tIBCDwarning,		"IBCD  Warning :"		; IBCD Warning
 	TCODE	t2ndDepth,			"2nd Depth:"			; 2nd depth display content (10 chars max)
 	TCODE	tTimeoutDive,		"Dive Timeout:"			; Dive Timeout
 
@@ -229,8 +229,8 @@
 	TCODE	tMetric,			" m/°C"					; 0   - keep order, enum!
 	TCODE	tImperial,			"ft/°F"					; 1
 								;         111         111         111         111         111
-						;123456789012123456789012123456789012123456789012123456789012
-	TCODE	tDefName,			"HW OSTC"		; 5 rows by 12 chars each
+								;123456789012123456789012123456789012123456789012123456789012
+	TCODE	tDefName,			"HW OSTC"				; 5 rows by 12 chars each
 	TCODE	tButtonleft,		"Left  button:"			; Left button
 	TCODE	tButtonright,		"Right button:"			; Right button
 	TCODE	tAltMode,			"Waiting Time:"
@@ -318,7 +318,7 @@
 	TCODE	tDiveBailout,		"Bailout"				; Bailout
 	TCODE	tGFactors,			"GF Values"				; GF Values
 	TCODE	taGFactors,			"aGF Values"			; aGF Values
-	TCODE	tGFInfo,			"Current GF"			; GF Info
+	TCODE	tGFInfo,			"Saturation"			; Saturation
 	TCODE	tCeiling,			"Ceiling"				; Ceiling
 	TCODE	tDiveSafetyStop,	"Stop"					; Stop (four chars, right aligned)
 	TCODE	tDiveFallback,		"Fallback!"				; Fallback! (max. nine chars)

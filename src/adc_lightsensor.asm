@@ -22,6 +22,8 @@ adc_light		CODE
 
 wait_adc:
 	movwf	ADCON0
+        nop
+	nop
 	nop
 	bsf		ADCON0,1						; start ADC
 wait_adc2:

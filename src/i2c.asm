@@ -624,20 +624,20 @@ init_compass1_common:
 	bra		WaitMSSP					; (And return)
 
 I2C_init_compass2:
-	bsf		SSP1CON2,SEN				; Start condition
-	rcall	WaitMSSP
-	movlw	0x3C						; address
-	rcall	I2C_TX
-	movlw	0xE0						; 0x60 with auto-increment (MSB=1)
-	rcall	I2C_TX
-	movlw	b'00000000'					; CFG_REG_A_M (10Hz, Continuous)
-	rcall	I2C_TX
-	movlw	b'00000000'					; CFG_REG_B_M (Low-Pass Filter off)
-	rcall	I2C_TX
-	movlw	b'00000000'					; CFG_REG_C_M BDU=0
-	rcall	I2C_TX
-	bsf		SSP1CON2,PEN				; Stop condition
-	bra		WaitMSSP					;(And return)
+    bsf		SSP1CON2,SEN	; Start condition
+    rcall	WaitMSSP
+    movlw	0x3C            ; address
+    rcall       I2C_TX
+    movlw	0xE0		; 0x60 with auto-increment (MSB=1)
+    rcall       I2C_TX
+    movlw	b'00000000'	; CFG_REG_A_M (10Hz, Continuous) 0x60
+    rcall       I2C_TX
+    movlw	b'00000000'	; CFG_REG_B_M (Low-Pass Filter off) 0x61 (set pulse is released every 63 ODR)
+    rcall       I2C_TX
+    movlw	b'00000000'	; CFG_REG_C_M BDU=0 0x62
+    rcall       I2C_TX
+    bsf		SSP1CON2,PEN	; Stop condition
+    bra		WaitMSSP	;(And return)
 
 
 	global	I2C_sleep_compass
@@ -686,32 +686,39 @@ I2C_sleep_compass1:
 	bra		WaitMSSP					;(And return)
 
 I2C_sleep_compass2:
-	; magnetic
-	bsf		SSP1CON2,SEN				; Start condition
-	rcall	WaitMSSP
-	movlw	0x3C						; address
-	rcall	I2C_TX
-	movlw	0xE0						; 0x60 with auto-increment (MSB=1)
-	rcall	I2C_TX
-	movlw	b'00000010'					; CFG_REG_A_M (Idle mode)
-	rcall	I2C_TX
-	bsf		SSP1CON2,PEN				; Stop condition
-	bra		WaitMSSP					; (And return)
+    ; magnetic
+    bsf		SSP1CON2,SEN	; Start condition
+    rcall	WaitMSSP
+    movlw	0x3C            ; address
+    rcall       I2C_TX
+    movlw	0xE0		; 0x60 with auto-increment (MSB=1)
+    rcall       I2C_TX
+    movlw	b'00000011'	; CFG_REG_A_M (Idle mode) 0x60
+    rcall       I2C_TX
+    movlw	b'00000100'	; CFG_REG_B_M 0x61  (set pulse is released only at power-on after PD condition)
+    rcall       I2C_TX
+    movlw	b'01010001'	; CFG_REG_C_M 0x62
+    rcall       I2C_TX
+    movlw	b'00000000'	; INT_CTRL_REG_M 0x63
+    rcall       I2C_TX
 
+    bsf		SSP1CON2,PEN	; Stop condition
+    bra		WaitMSSP	; (And return)
+    
 I2C_sleep_accelerometer2:
-	; accelerometer
-	bsf		SSP1CON2,SEN				; Start condition
-	rcall	WaitMSSP
-	movlw	0x32						; address
-	rcall	I2C_TX
-	movlw	0x9F						; 1F with auto-increment (MSB=1)
-	rcall	I2C_TX
-	movlw	b'00000000'					; TEMP_CFG_REG_A (Temp sensor off)
-	rcall	I2C_TX
-	movlw	b'00000000'					; CTRL_REG1_A (All off)
-	rcall	I2C_TX
-	bsf		SSP1CON2,PEN				; Stop condition
-	bra		WaitMSSP					; (And return)
+    ; accelerometer
+    bsf		SSP1CON2,SEN		; Start condition
+    rcall	WaitMSSP
+    movlw	0x32            ; address
+    rcall       I2C_TX
+    movlw	0x9F		; 1F with auto-increment (MSB=1)
+    rcall       I2C_TX
+    movlw	b'00000000'	; TEMP_CFG_REG_A (Temp sensor off) 0x1F
+    rcall       I2C_TX
+    movlw	b'00000000'	; CTRL_REG1_A (All off) 0x20
+    rcall       I2C_TX
+    bsf		SSP1CON2,PEN	; Stop condition
+    bra		WaitMSSP	; (And return)
 
 	global	I2C_init_accelerometer
 I2C_init_accelerometer:
@@ -1105,12 +1112,6 @@ I2C_probe_OSTC_rx_1:
 	bsf		active_reset_ostc_rx
 	WAITMS	.5
 	bcf		active_reset_ostc_rx
-	WAITMS	.250
-	WAITMS	.250
-	WAITMS	.250
-	WAITMS	.250
-	WAITMS	.250
-	WAITMS	.250
 	WAITMS	.250
 	WAITMS	.250
 	clrf	i2c_temp1

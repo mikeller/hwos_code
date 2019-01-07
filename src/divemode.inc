@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File divemode.inc								REFACTORED VERSION V2.99d
+;   File divemode.inc								REFACTORED VERSION V2.99f
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -226,8 +226,8 @@
 #DEFINE dm_custom_gf_title_row					dm_customview_row+.1			; 102
 #DEFINE dm_custom_gf_row						dm_customview_row+.18			; 119
 #DEFINE dm_custom_gf_column1					.0								;   0
-#DEFINE dm_custom_gf_column2					.60								;  60
-#DEFINE dm_custom_gf_column3					.118							; 118
+#DEFINE dm_custom_gf_column2					.65								;  65
+#DEFINE dm_custom_gf_column3					.95								;  95
 
 ;******* Custom View: Compass *******
 ; Title

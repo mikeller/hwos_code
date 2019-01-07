@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File isr.asm									REFACTORED VERSION V2.99d
+;   File isr.asm									REFACTORED VERSION V2.99f
 ;
 ;   INTERUPT subroutines
 ;
@@ -391,9 +391,9 @@ isr_sensor_state2:
 	btfss	WREG,0						; every 1/4 second
 	bsf		quarter_second_update		; set flag
 	banksel	isr_backup					; back to Bank0 ISR data
-	movlw	d'2'
-	cpfseq	speed_setting				; set to normal in case it's not already in normal speed mode
-	rcall	isr_set_speed_to_normal
+	movlw	d'2'						; coding for normal speed
+	cpfseq	cpu_speed_state				; CPU running on normal speed?
+	rcall	isr_set_speed_to_normal		; NO - set CPU speed to normal
 
 	incf	sensor_state_counter,F		; counts to eight for state machine
 
@@ -667,10 +667,10 @@ isr_battery_gauge2:
 	movff	PRODH,isr2_temp				; isr1_temp and isr2_temp hold value for backlight
 
 	; Add current for CPU and GPU 
-	; speed_setting=1: ECO (3.1mA -> 861nAs), =2: NORMAL (5.50mA -> 1528nAs) or =3: FASTEST (8.04mA -> 2233nAs)
+	; cpu_speed_state=1: ECO (3.1mA -> 861nAs), =2: NORMAL (5.50mA -> 1528nAs) or =3: FASTEST (8.04mA -> 2233nAs)
 	banksel	isr_backup					; Bank0 ISR data
 	movlw	.1
-	cpfseq	speed_setting
+	cpfseq	cpu_speed_state
 	bra		isr_battery_gauge3
 	movlw	LOW  current_speed_eco
 	addwf	isr1_temp,F
@@ -679,7 +679,7 @@ isr_battery_gauge2:
 	bra		isr_battery_gauge5
 isr_battery_gauge3:
 	movlw	.2
-	cpfseq	speed_setting
+	cpfseq	cpu_speed_state
 	bra		isr_battery_gauge4
 	movlw	LOW  current_speed_normal
 	addwf	isr1_temp,F
@@ -862,9 +862,10 @@ check_nofly_desat_time_1:
 ;=============================================================================
 
 isr_restore_clock:
+	movff	cpu_speed_request,cpu_speed_state	; acknowledge CPU speed request
 	banksel	isr_backup
 	movlw	d'1'
-	cpfseq	speed_setting
+	cpfseq	cpu_speed_request
 	bra		isr_restore_speed2
 	; Reset to eco
 	movlw	b'00000000'
@@ -876,7 +877,7 @@ isr_restore_clock:
 	bra		isr_restore_exit
 isr_restore_speed2:
 	movlw	d'2'
-	cpfseq	speed_setting
+	cpfseq	cpu_speed_request
 	bra		isr_restore_speed3
 	; Reset to normal
 	movlw	b'01110010'
@@ -886,7 +887,6 @@ isr_restore_speed2:
 	movlw	T2CON_NORMAL
 	movwf	T2CON
 	bra		isr_restore_exit
-
 isr_restore_speed3:
 	; Reset to fastest
 	movlw	b'01110010'					; 16 MHz INTOSC
@@ -896,7 +896,6 @@ isr_restore_speed3:
 	movlw	T2CON_FASTEST
 	movwf	T2CON
 	;bra	isr_restore_exit
-
 isr_restore_exit:
 	btfss	OSCCON,HFIOFS
 	bra		isr_restore_exit			; loop until PLL is stable

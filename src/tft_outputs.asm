@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft_outputs.asm							REFACTORED VERSION V2.99e
+;   File tft_outputs.asm							REFACTORED VERSION V2.99f
 ;
 ;   Startup subroutines
 ;
@@ -355,7 +355,7 @@ TFT_color_code_ppo2_1:
 	bcf		hi,int_attention_flag		; YES - clear attention    flag (it may be set)
 	bcf		hi,int_high_flag			;       clear high warning flag (it may be set)
 	bcf		hi,int_low_flag				;       clear low  warning flag (it may be set)
-	bra		TFT_attention_color			;       set to standard color and return
+	bra		TFT_attention_color			;       set to attention color and return
 TFT_color_code_ppo2_2:
 	bcf		hi,int_high_flag			; clear high warning flag (it may be set)
 	bcf		hi,int_low_flag				; clear low  warning flag (it may be set)
@@ -1328,6 +1328,7 @@ TFT_update_avr_stopwatch3:
 	; stopped dive time
 	WIN_MEDIUM dm_custom_avr_stop_column2,dm_custom_avr_stop_row
 TFT_update_stopwatch:					; jump-in point for stopped dive time in compass custom view
+	bsf		leftbind					; print numbers without leading spaces
 	movff	average_divesecs+0,lo		; average_divesecs is incremented outside ISR
 	movff	average_divesecs+1,hi
 	call	convert_time				; converts hi:lo in seconds to minutes (up:hi) and seconds (lo)
@@ -2445,9 +2446,9 @@ TFT_depth_blink:
 
 	; NO - check if it's set now
 	btfsc	blinking_depth_warning	; do we have warning set now?
-	bra		TFT_depth_blink_warn	; Yes  - so we have warning now but not previously
+	bra		TFT_depth_blink_warn	; YES  - so we have warning   now but not previously
 	btfsc	blinking_depth_attention; do we have attention set now?
-	bra		TFT_depth_blink_warn	; Yes  - so we have attention now but not previously
+	bra		TFT_depth_blink_warn	; YES  - so we have attention now but not previously
 
 	; no warning in previous cycle, no warning now, reset all flags
 	bcf		blinking_depth_prev		; reset previous flag
@@ -2479,36 +2480,27 @@ TFT_depth_blink_prevwarn_nowarn:
 TFT_depth_blink_warn:
 	; new blinking warning activated (had no warning in previous cycle)
 	bsf		blinking_depth_prev				; set prev flag
-	; set toggle and invert
-	;bra	TFT_depth_blink_set
+	;bra	TFT_depth_blink_set				; set toggle and invert
 
 TFT_depth_blink_set:
 	; clear the area with color
-	call	TFT_attention_color_dive		; default to attention color
+	call	TFT_attention_color_dive		; default background to attention color
 	btfsc	blinking_depth_warning			; in warning mode?
-	call	TFT_warnings_color_dive			; overwrite with warning color
+	call	TFT_warnings_color_dive			; overwrite background color with warning color
 	WIN_BOX_COLOR dm_depth_row, dm_depth_bot, dm_depth_column, dm_depth_rgt	;top, bottom, left, right
-	;set the invert color
-	bsf		win_invert
-	; set the toggle
-	bsf		blinking_depth_toggle
-	; all done
-	return
+	bsf		win_invert						;set the invert color
+	bsf		blinking_depth_toggle			; set the toggle
+	return									; all done
 
 TFT_depth_blink_reset:
 	; clear the area with black
 	WIN_BOX_BLACK dm_depth_row, dm_depth_bot, dm_depth_column, dm_depth_rgt	;top, bottom, left, right
-	;reset the invert color
-	bcf		win_invert
-	; reset the toggle
-	bcf		blinking_depth_toggle
-	; if it's still warning...
-	btfsc	blinking_depth_warning
-	call	TFT_warnings_color
-	btfsc	blinking_depth_attention
-	call	TFT_attention_color
-	; all done
-	return
+	bcf		win_invert						; reset the invert color
+	bcf		blinking_depth_toggle			; reset the toggle
+	call	TFT_attention_color				; default to attention color
+	btfsc	blinking_depth_warning			; do we have a warning?
+	call	TFT_warnings_color				; YES - overwrite with warning color
+	return									; all done
 
 ;=============================================================================
 
@@ -3835,42 +3827,49 @@ TFT_update_batt_percent_divemode:
 	global	TFT_gf_factors_mask			; mask for GF factors
 TFT_gf_factors_mask:
 	call	TFT_divemask_color
-	WIN_TINY dm_custom_gf_column1+.4, dm_custom_gf_title_row
+	WIN_TINY dm_custom_gf_column1,dm_custom_gf_title_row
 	STRCPY_TEXT_PRINT tGFactors
-	WIN_TINY dm_custom_gf_column2+.2, dm_custom_gf_title_row
+	WIN_TINY dm_custom_gf_column3,dm_custom_gf_title_row
 	STRCPY_TEXT_PRINT taGFactors
-	WIN_TINY dm_custom_gf_column3-.3, dm_custom_gf_title_row
-	STRCPY_TEXT_PRINT tGFInfo
-	; Show GF (Static)
-	call	TFT_disabled_color
-	btfss	use_agf
-	call	TFT_memo_color
+	; Show GF (static)
+	call	TFT_disabled_color			; default to disabled color
+	btfss	use_agf						; shall use alternative GF factors?
+	call	TFT_memo_color				; NO - switch to memo color
 	WIN_STD	dm_custom_gf_column1, dm_custom_gf_row
 	bsf		leftbind
-	movff	opt_GF_low,lo
-	output_8
-	PUTC	"/"
-	movff	opt_GF_high,lo
-	output_8
-	STRCAT_PRINT ""
-	; Show aGF (Static)
-	call	TFT_memo_color
-	TSTOSS	opt_enable_aGF				; =1: aGF can be selected underwater
-	bra		TFT_gf_mask2				; show "---" instead
-	btfss	use_agf
-	call	TFT_disabled_color
+	movff	opt_GF_low,lo				; get   normal GF low
+	output_8							; print normal GF low
+	PUTC	"/"							; print "/"
+	movff	opt_GF_high,lo				; get   normal GF high
+	output_8							; print normal GF high
+	STRCAT_PRINT ""						; finish output
+	; Show aGF (static)
+	call	TFT_memo_color				; default to memo color
+	TSTOSS	opt_enable_aGF				; are alternative GF factors enabled?
+	bra		TFT_gf_factors_mask_3		; NO  - show "---" and return
+										; YES - show aGF and which one is active
 	WIN_STD	dm_custom_gf_column2, dm_custom_gf_row
-	movff	opt_aGF_low,lo
-	output_8
-	PUTC	"/"
-	movff	opt_aGF_high,lo
-	output_8
-	STRCAT_PRINT ""
-	bra		TFT_custview_exit1			; and return...
-TFT_gf_mask2:
-	WIN_STD	dm_custom_gf_column2+.10, dm_custom_gf_row
+	btfss	use_agf						; shall use aGF?
+	bra		TFT_gf_factors_mask_1		; NO   - print "<- "
+	STRCPY_PRINT " ->"					; YES  - print " ->"
+	bra		TFT_gf_factors_mask_2		;      - continue with common part
+TFT_gf_factors_mask_1:
+	STRCPY_PRINT "<- "					; (NO) - print "<- "
+TFT_gf_factors_mask_2:					; common part
+	btfss	use_agf						; shall use aGF?
+	call	TFT_disabled_color			; NO - switch to disabled color
+	WIN_STD	dm_custom_gf_column3, dm_custom_gf_row
+	movff	opt_aGF_low,lo				; get aGF low
+	output_8							; print 
+	PUTC	"/"							; print "/"
+	movff	opt_aGF_high,lo				; get aGF high
+	output_8							; print
+	STRCAT_PRINT ""						; finish output
+	bra		TFT_custview_exit1			; done
+TFT_gf_factors_mask_3:
+	WIN_STD	dm_custom_gf_column3+.10, dm_custom_gf_row
 	STRCPY_PRINT "---"
-	bra		TFT_custview_exit1			; and return...
+	bra		TFT_custview_exit1			; done
 
 
 	global	TFT_ceiling_GF_tissue_mask	; mask for ceiling, current GF and tissues
@@ -3885,9 +3884,7 @@ TFT_ceiling_GF_tissue_mask:
 ;	STRCPY_TEXT_PRINT tN2
 ;	WIN_TINY dm_custom_tissue_He_column, dm_custom_tissue_He_row
 ;	STRCPY_TEXT_PRINT tHe
-	TSTOSS	char_I_deco_model			; in GF mode (0 = ZH-L16, 1 = ZH-L16-GF)?
-	bra		TFT_custview_exit1			; NO - no GF info in none-GF mode
-	WIN_TINY dm_custom_gf_column1, dm_custom_gf_title_row
+	WIN_TINY dm_custom_gf_column1+.5, dm_custom_gf_title_row
 	STRCPY_TEXT_PRINT tGFInfo
 	bra		TFT_custview_exit1			; and return...
 
@@ -3913,9 +3910,7 @@ TFT_ceiling_tissue_cGF0:
 	STRCAT_PRINT " "
 	; Show tissue diagram
 	call	DISP_tissue_saturation_graph; show char_O_tissue_N2_saturation and char_O_tissue_He_saturation
-	; Show current GF
-	TSTOSS	char_I_deco_model			; 0 = ZH-L16, 1 = ZH-L16-GF
-	bra		TFT_custview_exit1			; no GF info for none-GF mode
+	; Show current tissue supersaturation
 	WIN_MEDIUM dm_custom_clock_column+.3, dm_custom_gf_row
 	movff	int_O_gradient_factor+0,lo	; gradient factor absolute, 100% = on M-line of straight Buhlmann
 	movff	int_O_gradient_factor+1,hi	; hi byte holds flags
@@ -3924,17 +3919,6 @@ TFT_ceiling_tissue_cGF0:
 	STRCAT_PRINT ""
 	WIN_STD	dm_custom_clock_column+.40, dm_custom_gf_row+.5
 	STRCAT_PRINT "%"					; % is printed in color set by TFT_color_code_gf, too
-	bra		TFT_custview_exit1			; and return...
-
-
-	global	TFT_gf_factors				; data for GF factors
-TFT_gf_factors:
-	WIN_STD	dm_custom_gf_column3, dm_custom_gf_row
-	movff	int_O_gradient_factor+0,lo	; gradient factor absolute (Non-GF model)
-	movff	int_O_gradient_factor+1,hi
-	call	TFT_color_code_gf			; color-code output
-	output_8							; print lo only, int_O_gradient_factor is limited to 255
-	STRCAT_PRINT "%"
 TFT_custview_exit1:
 	bcf		leftbind
 	goto	TFT_standard_color			; and return...
@@ -4160,19 +4144,6 @@ TFT_mask_ppo2b:							; OC mode or bailout
 	bra		TFT_custview_exit2			; and return...
 
 
-	global	TFT_display_pure_ppo2		; show ppO2 of the pure gas - helper function for several custom views
-TFT_display_pure_ppo2:
-	WIN_MEDIUM dm_custom_ppo2_column, dm_custom_ppo2_row
-	movff	int_O_pure_ppO2+0,lo		; copy ppO2 of the pure gas to hi:lo
-	movff	int_O_pure_ppO2+1,hi
-	call	TFT_color_code_ppo2			; color-code output
-	bsf		leftbind
-	output_16dp .3						; x.xx bar
-	bcf		leftbind
-	STRCAT_PRINT ""
-	bra		TFT_custview_exit2			; and return...
-
-
 	global TFT_ppo2_ead_end_cns_mask	; mask for ppO2, END/EAD and CNS
 TFT_ppo2_ead_end_cns_mask:
 	rcall	TFT_mask_ppo2
@@ -4186,8 +4157,16 @@ TFT_ppo2_ead_end_cns_mask:
 
 	global	TFT_ppo2_ead_end_cns		; data for ppO2, END/EAD and CNS
 TFT_ppo2_ead_end_cns:
-	;show ppO2
-	rcall	TFT_display_pure_ppo2		; show ppO2 of the pure gas
+	; Show ppO2
+	WIN_MEDIUM dm_custom_ppo2_column, dm_custom_ppo2_row
+	movff	int_O_breathed_ppO2+0,lo	; copy ppO2 of the currently breathed gas to hi:lo
+	movff	int_O_breathed_ppO2+1,hi
+	call	TFT_color_code_ppo2			; color-code output
+	bsf		leftbind
+	output_16dp .3						; x.xx bar
+	bcf		leftbind
+	STRCAT_PRINT ""
+	call	TFT_standard_color
 	; Show END/EAD
 	WIN_SMALL	dm_custom_ead_column, dm_custom_ead_row
 	STRCPY_TEXT tEAD					; EAD:
@@ -4273,14 +4252,14 @@ TFT_sensor_check_exit:
 
 	global	TFT_surface_lastdive
 TFT_surface_lastdive:
-	call	TFT_standard_color
+	call	TFT_divemask_color
 	WIN_TINY surf_gaslist_column,surf_gaslist_row+.5
 	STRCAT_TEXT_PRINT	tLastDive			; "Last Dive:"
 	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.1)+.5
 	STRCAT_TEXT_PRINT	tDivetime			; "Divetime:"
 	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.2)+.5
 	STRCAT_TEXT_PRINT	tMaxDepth			; "Max. Depth"
-
+	call	TFT_standard_color
 	WIN_SMALL surf_gaslist_column+.48,surf_gaslist_row
 	movff	int_O_desaturation_time+0,lo	; bank-safe copies
 	movff	int_O_desaturation_time+1,WREG

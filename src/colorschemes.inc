@@ -13,14 +13,14 @@
 ; Redish
 #DEFINE color_scheme_divemode_mask2		color_red
 #DEFINE color_scheme_divemode_std2		color_orange
-#DEFINE color_scheme_divemode_dis2		color_violet
+#DEFINE color_scheme_divemode_dis2		color_dark_red
 
 ; greenish
 #DEFINE color_scheme_divemode_mask3		color_cyan
 #DEFINE color_scheme_divemode_std3		color_green
-#DEFINE color_scheme_divemode_dis3		color_greenish
+#DEFINE color_scheme_divemode_dis3		color_dark_green
 
 ; blueish
 #DEFINE color_scheme_divemode_mask4		color_blue
 #DEFINE color_scheme_divemode_std4		color_lightblue
-#DEFINE color_scheme_divemode_dis4		color_pink
+#DEFINE color_scheme_divemode_dis4		color_deepblue

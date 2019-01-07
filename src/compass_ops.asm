@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File compass_ops.asm												V2.98a
+;   File compass_ops.asm											## V2.99e
 ;
 ;   Compass Operations
 ;
@@ -942,10 +942,10 @@ TFT_dive_compass_ruler_lend2:
 	movff	xRD+1,sub_b+1
 	; hi stores the display position
 	clrf	hi
-	clrf	xHI
+	movff	hi,xHI
 	; lo stores the last item's display position
 	clrf	lo
-	clrf	xLO
+	movff	lo,xLO
 
 	movlw	low( d'219' )				; position of the label
 	movwf	sub_a+0

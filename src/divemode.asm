@@ -70,6 +70,9 @@ diveloop:
 
 	; startup tasks for all modes
 	call	TFT_boot					; initialize TFT (includes clear screen)
+        movlw       CCP1CON_VALUE               ; See hwos.inc
+        movwf       CCP1CON                     ; Power-on backlight
+
 	bsf		FLAG_TFT_divemode_mask		; request display of dive mode mask
 
 	movff	customview_divemode,menupos3; reload last custom view
@@ -1469,7 +1472,7 @@ get_first_gas_to_WREG:					; gets first gas (1-5) into WREG
 	clrf	lo							; start with gas 0
 get_first_gas_to_WREG2:
 	movf	lo,W
-	movf	PLUSW1,W					; get type of gas #lo
+	movf	PLUSW1,W					; get type of gas #lo (0=Disabled, 1=First, 2=Travel, 3=Deco)
 	sublw	.1							; it is = 1 (First Gas)
 	bz		get_first_gas_to_WREG3		; found the first gas!
 	incf	lo,F						; ++
@@ -1477,9 +1480,8 @@ get_first_gas_to_WREG2:
 	cpfseq	lo							; all done?
 	bra		get_first_gas_to_WREG2		; NO - not yet
 	; no first gas found, use #1
-	movlw	.0
+	movlw	.1							; coding of First gas
 	movff	WREG,opt_gas_type+0			; set gas 1 to First
-	incf	WREG,W						; 0 -> 1
 	return
 get_first_gas_to_WREG3:
 	movf	lo,W						; put into WREG
@@ -1492,7 +1494,7 @@ get_first_dil_to_WREG:					; gets first dil (1-5) into WREG
 	clrf	lo							; start with dil 0
 get_first_dil_to_WREG2:
 	movf	lo,W
-	movf	PLUSW1,W					; get type of Dil #lo
+	movf	PLUSW1,W					; get type of Dil #lo  (0=Disabled, 1=First, 2=Normal)
 	sublw	.1							; it is = 1 (First Dil)
 	bz		get_first_dil_to_WREG3		; found the first dil!
 	incf	lo,F						; ++
@@ -1500,9 +1502,8 @@ get_first_dil_to_WREG2:
 	cpfseq	lo							; all done?
 	bra		get_first_dil_to_WREG2		; NO - not yet
 	; no first dil found, use #1
-	movlw	.0
+	movlw	.1							; coding of First Dil
 	movff	WREG,opt_dil_type+0			; set dil 1 to First
-	incf	WREG,W						; 0 -> 1
 	return
 get_first_dil_to_WREG3:
 	movf	lo,W						; Put into WREG

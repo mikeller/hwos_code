@@ -224,9 +224,9 @@ option_table_begin:
 	OPTION_UINT8p10	ocR_button_right,	.20,			.80,			.40,	tPercent,		.153,	opt_cR_button_right				; right button sensitivity
 	OPTION_UINT8	obottom_usage,		.5,				.50,			.20,	tLitersMinute,	.154,	char_I_bottom_usage				; l/min
 	OPTION_UINT8	odeco_usage,		.5,				.50,			.20,	tLitersMinute,	.155,	char_I_deco_usage				; l/min
-	OPTION_BOOL		oMODwarning,		.0,														.156,	opt_modwarning					; =1: red depth blinking warning
+	OPTION_BOOL		oMODwarning,		.1,														.156,	opt_modwarning					; =1: blink on depth related attentions and warnings
 	OPTION_BOOL		oVSItextv2,			.0,														.157,	opt_vsitextv2					; =1: use the dynamic (depends on depth) ascend rate limits
-	OPTION_BOOL		oVSIgraph,			.0,														.158,	opt_vsigraph					; =1: draw the graphical VSI bar
+	OPTION_BOOL		oVSIgraph,			.1,														.158,	opt_vsigraph					; =1: draw the graphical VSI bar
 	OPTION_BOOL		oShowppO2,			.0,														.159,	opt_showppo2					; =1:always show the ppO2 value in the warning position
 	OPTION_UINT8	oTemperatureAdjust,	.0,				.255,			.0,		notext,			.160,	opt_temperature_adjust			; SIGNED int (-2.0/+2.0 °C max.)
 	OPTION_UINT8	oSafetyStopLength,	.60,			.240,			.180,	notext,			.161,	opt_safety_stop_length			; [s]

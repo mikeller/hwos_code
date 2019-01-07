@@ -48,6 +48,8 @@
 	extern	aa_font48_block
 	extern	aa_font90_block
 
+	extern	convert_for_display2
+	
 aa_word		CODE
 
 ;------------------------------------------------------------------------------
@@ -364,50 +366,71 @@ aa_decode_12:
 	movf	aa_temp+0,W				; hence components won't overlap
 	addwfc	PRODH,F					; in right order, to propagate carry
 
-	bra		aa_decode_3				; done
+aa_decode_12b:		
+		btfss	screen_type2		; Display 2?
+		bra	aa_decode_3		; No, Done.
 
-	; ---- Simple BLACK and WHITE cases ------------------------------
-aa_decode_13:						; got a 1xx or a 000 code...
-	btfsc	win_invert  			; inverse video mode?
-	xorlw	0x80					; YES - invert levels
-	bn		aa_decode_2				; then test high bit
+		call	convert_for_display2	; Convert 16Bit RGB b'RRRRRGGG GGGBBBBB' into 24Bit RGB b'RRRRRR00 GGGGGG00 BBBBBB00'
 
-	; WHITE pixel (i.e. full color)
-	bsf		tft_rs					; RS_H Data
-	movff	win_color1,PORTA		; current draw color
-	movff	win_color2,PORTH		; (rem: TFT is big endian)
-	bra		aa_decode_4
+		bra		aa_decode_3			    ; Done.
+
+		; ---- Simple BLACK and WHITE cases ------------------------------
+aa_decode_13:							; Got a 1xx or a 000 code...
+		btfsc	win_invert		    ; Inverse video mode ?
+		xorlw	0x80				    ; YES: invert levels.
+		bn		aa_decode_2			    ; Then test high bit.
+
+		; WHITE pixel (ie. full color)
+		movff	win_color1,PRODH	    ; current draw color
+		movff	win_color2,PRODL	    ; (rem: DISPLAY is big endian)
+		bra		aa_decode_12b
 
 aa_decode_2:
-	bsf		tft_rs					; RS_H Data
-	clrf	PORTA					; BLACK pixel
-	clrf	PORTH
-	bra		aa_decode_4
+		clrf	PRODH				    ; BLACK pixel
+		clrf	PRODL
+        clrf    win_color5
+        clrf    win_color4
+        clrf    win_color3
 
 aa_decode_3:
-	bsf		tft_rs					; RS_H Data
-	movff	PRODH,PORTA				; move high byte to PORTA
-	movff	PRODL,PORTH				; move low byte to PORTH
-aa_decode_4:
-	bcf	INTCON,GIE
-aa_decode_4a:
-	;---- PIXEL WRITE LOOP -----------------------------------------------
-	bcf		tft_nwr					; WR_L
-	bsf		tft_nwr					; WR_H tick
+		;---- PIXEL WRITE LOOP -----------------------------------------------
+    	bsf		tft_rs					; Data!
 
+	btfsc	screen_type2		; Display 2?
+	bra	aa_decode_3_display2		; Yes
+
+    	movff	PRODH,PORTA				; Move high byte to PORTA
+        movff	PRODL,PORTH				; Move low byte to PORTH
+aa_decode_3_display0and1:
+	bcf	tft_nwr
+        bsf	tft_nwr			; Tick
 	decf	aa_bitlen,F
-	bnz		aa_decode_4a
+	bnz	aa_decode_3_display0and1
+        bra     aa_decode_3_done
 
-	bsf		INTCON,GIE
-	;---- BYTE-CODE LOOP -------------------------------------------------
-	; Are we done ?
-	movf	TBLPTRL,W				; compare TBLPTR to aa_end
-	cpfseq	aa_end+0
-	bra		aa_decode_1				; loop if LOW is different
-	movf	TBLPTRH,W
-	cpfseq	aa_end+1				; loop too if HIGH is different
-	bra		aa_decode_1
-	return
+aa_decode_3_display2:
+    	movff   win_color5,PORTH	; Move high byte to PORTH (DISPLAY is bigendian)
+        bcf	tft_nwr
+        bsf	tft_nwr			; Tick
+        movff   win_color4,PORTH	; Move low byte to PORTH
+        bcf	tft_nwr
+        bsf	tft_nwr			; Tick
+        movff   win_color3,PORTH        ; Move low(est) byte to PORTH
+        bcf	tft_nwr
+        bsf	tft_nwr			; Tick
+	decf	aa_bitlen,F
+	bnz	aa_decode_3_display2
+		
+aa_decode_3_done:
+		;---- BYTE-CODE LOOP -------------------------------------------------
+		; Are we done ?
+		movf	TBLPTRL,W			    ; Compare TBLPTR to aa_end
+		cpfseq	aa_end+0
+		bra		aa_decode_1             ; Loop if LOW is different
+		movf	TBLPTRH,W
+		cpfseq	aa_end+1         ; Loop to if HIGH is different
+		bra		aa_decode_1
+		return
 
 ;------------------------------------------------------------------------------
 ; Setup pointers for a char:
