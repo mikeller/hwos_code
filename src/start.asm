@@ -304,7 +304,7 @@ restart:
 	clrf	flag7
 	clrf	flag8
 	clrf	flag9
-	clrf	flag10
+	clrf	flag10 ; Clears flag "enable_screen_dumps" - making screen dumps impossible... TODO
 	; do not clear flag11 (sensor calibration and charger status)
 	clrf	flag12
 	; do not clear flag13 (important hardware flags)

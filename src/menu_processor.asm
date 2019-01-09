@@ -355,7 +355,9 @@ menu_line_loop2:
 	btfsc	disable_comm_mode				; COMM mode disabled (happens during new battery procedure)?
 	bra	menu_line_loop					; YES - loop
  ENDIF
-
+	btfsc	enable_screen_dumps				; screendump enabled?
+	bra		menu_line_loop					; loop and skip the COMM mode
+	
 	btfsc	vusb_in							; USB plugged in?
 	call	comm_mode						; YES - start COMM mode
 
