@@ -983,33 +983,41 @@ do_new_battery_select:
 	; Sport: 0x12
 	; 3 with BLE: 0x1A 
 
-	movlw	0x0A
-	cpfseq	hardware_flag1
-	bra		$+4
-	bra		menu_new_battery_AA
-	movlw	0x13
-	cpfseq	hardware_flag1
-	bra		$+4
-	bra		menu_new_battery_AA_16650
-	movlw	0x12
-	cpfseq	hardware_flag1
-	bra		$+4
-	bra		menu_new_battery_AA
-	movlw	0x1A
-	cpfseq	hardware_flag1
-	bra		$+4
-	bra		menu_new_battery_AA
-	movlw	0x11
-	cpfseq	hardware_flag1
-	bra		$+4
-	bra		menu_new_battery_18650
-	movlw	0x05
-	cpfseq	hardware_flag1
-	bra		$+4
-	bra		menu_new_battery_18650
+	movlw   0x0A
+	cpfseq  hardware_flag1
+	bra	    $+4
+	bra	    menu_new_battery_AA
+	movlw   0x13
+	cpfseq  hardware_flag1
+	bra	    $+4
+	bra	    menu_new_battery_16650
+	movlw   0x33
+	cpfseq  hardware_flag1
+	bra	    $+4
+	bra	    menu_new_battery_AA_16650
+	movlw   0x12
+	cpfseq  hardware_flag1
+	bra	    $+4
+	bra	    menu_new_battery_AA
+	movlw   0x1A
+	cpfseq  hardware_flag1
+	bra	    $+4
+	bra	    menu_new_battery_AA
+	movlw   0x11
+	cpfseq  hardware_flag1
+	bra	    $+4
+	bra	    menu_new_battery_18650
+	movlw   0x05
+	cpfseq  hardware_flag1
+	bra	    $+4
+	bra	    menu_new_battery_18650
 	bra		use_old_batteries			; any unsupported value
 
-
+menu_new_battery_16650:
+	MENU_BEGIN	tNewBattTitle, .1
+		MENU_CALL		tNew16650,					use_16650_battery
+	MENU_END
+    
 menu_new_battery_AA_16650:
 	MENU_BEGIN	tNewBattTitle, .5
 		MENU_CALL		tNewBattOld,				use_old_batteries
