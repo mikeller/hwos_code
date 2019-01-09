@@ -50,7 +50,7 @@ init_ostc:
 	movff	WREG,cpu_speed_request	; CPU shall run with normal speed
 	movff	WREG,cpu_speed_state	; CPU does  run with normal speed
 
-	bcf		RCON,SBOREN			; brown-out off
+	bsf		RCON,SBOREN			; brown-out on (For new pcb designs)
 	bcf		RCON,IPEN			; priority interrupts off
 
 	banksel	WDTCON
