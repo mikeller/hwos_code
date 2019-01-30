@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File start.asm									REFACTORED VERSION	V2.99e
+;   File start.asm									REFACTORED VERSION	V2.99g
 ;
 ;   Startup subroutines
 ;
@@ -93,12 +93,12 @@ clear_rambank:
 
 	; get screen type (2) from Bootloader-Info
 	bsf	screen_type2
-	movlw   0x80
-	movwf   TBLPTRL		; Only adjust low byte. High and Upper are still 0x01F7...
-	TBLRD*+			; Reads 0x83 for screen 2
+	movlw	0x80
+	movwf	TBLPTRL							; only adjust low byte, high and upper are still 0x01F7...
+	TBLRD*+									; reads 0x83 if OSTC has screen type 2
 	movlw	0x83
 	cpfseq	TABLAT
-	bcf	screen_type2
+	bcf		screen_type2
 
 	; read button polarity
 	movlw	LOW  .897
@@ -372,7 +372,8 @@ restart4:
 
 	; The hardware descriptor is now:
 	; 0x11: 2 with BLE
-	; 0x13: +/2 with BLE & ambient
+	; 0x12; Sport
+	; 0x13: +/2 with BLE & ambient			; PLUS ??? OSTC 3 (2016) ???
 	; 0x05: cR
 	; 0x0A: 3
 	; 0x1A: 3 with BLE
@@ -416,7 +417,7 @@ restart5:
 	goto	use_old_batteries				; returns to surface loop
 
 	btfsc	RCON,POR						; was this a power-on reset?
-	goto	surfloop						; YES - jump to surface loop
+	goto	surfloop						; NO - jump to surface loop
 	bsf		RCON,POR						; set bit for next detection
 	; Things to do after a power-on reset
 	goto	do_new_battery_select			; returns to surface loop

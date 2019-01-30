@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File menu_tree.asm								REFACTORED VERSION V2.99e
+;   File menu_tree.asm								REFACTORED VERSION V2.99g
 ;
 ;   OSTC menus
 ;
@@ -753,7 +753,7 @@ do_date_time_menu:
 	MENU_BEGIN	tSetTimeDate, .4
 		MENU_CALL		tSetTime,					do_time_menu
 		MENU_CALL		tSetDate,					do_date_menu
-		MENU_OPTION		tDateFormat,oDateFormat,	0
+		MENU_OPTION		tDateFormat,				oDateFormat,	0
 		MENU_CALL		tBack,						do_return_settings
 	MENU_END
 
@@ -955,7 +955,7 @@ do_new_battery_select:
  ENDIF
 
 	call	TFT_boot					; initialize TFT (includes clear screen)
-	call	TFT_Display_FadeIn			; show splash
+	call	TFT_Display_FadeIn			; switch on backlight
 	movlw	.100
 	movwf	batt_percent				; make sure to reset batt_percent
 
@@ -976,71 +976,94 @@ do_new_battery_select:
 
 	call	menu_processor_reset		; restart from first item
 
-	; hardware_flag1:
-	; 3: 0x0A or 0x13 (2016)
-	; cR: 0x05
-	; 2 with BLE: 0x11
-	; Sport: 0x12
-	; 3 with BLE: 0x1A 
+	; hardware_flag1:                                                         battery changeable by user   charger  supported battery types
+	; -------------------------------------------------------------------------------------------------------------------------------------------------------
+	; 0x11: BLE                                      and battery gauge ---> OSTC 2     (old  model )  NO     YES    internal 18650
+	; 0x05:         analog  input                    and battery gauge ---> OSTC 2 cR                 NO     YES    internal 18650
+	; 0x33: BLE and xmitter input and ambient sensor and battery gauge ---> OSTC 2 TR                 NO     YES    internal 16650
+	; 0x13: BLE                   and ambient sensor and battery gauge -+-> OSTC 2     (new  model )  NO     YES    internal 16650
+	;                                                                   +-> OSTC Plus                 YES    YES    1.5V  ----- NO! -----  3.6V rechargeable
+	; 0x12; BLE                   and ambient sensor                   ---> OSTC Sport (both models)  YES    NO     1.5V  3.6V disposable  3.6V rechargeable
+	; 0x0A:         optical input and ambient sensor                   ---> OSTC 3 /USB               YES    NO     1.5V  3.6V disposable  3.6V rechargeable
+	; 0x1A: BLE and optical input and ambient sensor                   ---> OSTC 3 /BLE               YES    NO     1.5V  3.6V disposable  3.6V rechargeable
 
-	movlw   0x0A
-	cpfseq  hardware_flag1
-	bra	    $+4
-	bra	    menu_new_battery_AA
-	movlw   0x13
-	cpfseq  hardware_flag1
-	bra	    $+4
-	bra	    menu_new_battery_16650
-	movlw   0x33
-	cpfseq  hardware_flag1
-	bra	    $+4
-	bra	    menu_new_battery_AA_16650
-	movlw   0x12
-	cpfseq  hardware_flag1
-	bra	    $+4
-	bra	    menu_new_battery_AA
-	movlw   0x1A
-	cpfseq  hardware_flag1
-	bra	    $+4
-	bra	    menu_new_battery_AA
-	movlw   0x11
-	cpfseq  hardware_flag1
-	bra	    $+4
-	bra	    menu_new_battery_18650
-	movlw   0x05
-	cpfseq  hardware_flag1
-	bra	    $+4
-	bra	    menu_new_battery_18650
+	; OSTC 3 (2016) ???
+
+	movlw	0x0A						; OSTC 3 /USB
+	cpfseq	hardware_flag1
+	bra		$+4
+	bra		menu_new_battery_AA
+
+	movlw	0x13						; OSTC 2 and Plus
+	cpfseq	hardware_flag1
+	bra		$+4
+	bra		menu_new_battery_AA_16650
+
+	movlw	0x33						; OSTC 2 TR
+	cpfseq	hardware_flag1
+	bra		$+4
+	bra		menu_new_battery_AA_16650
+
+	movlw	0x12						; OSTC Sport
+	cpfseq	hardware_flag1
+	bra		$+4
+	bra		menu_new_battery_AA
+
+	movlw	0x1A						; OSTC 3 /BLE
+	cpfseq	hardware_flag1
+	bra		$+4
+	bra		menu_new_battery_AA
+
+	movlw	0x11						; OSTC 2 (old model)
+	cpfseq	hardware_flag1
+	bra		$+4
+	bra		menu_new_battery_18650
+
+	movlw	0x05						; OSTC 2 cR
+	cpfseq	hardware_flag1
+	bra		$+4
+	bra		menu_new_battery_18650
+
 	bra		use_old_batteries			; any unsupported value
 
-menu_new_battery_16650:
-	MENU_BEGIN	tNewBattTitle, .1
-		MENU_CALL		tNew16650,					use_16650_battery
-	MENU_END
-    
+
+do_return_menu_new_bat_AA_16650:
+	call	menu_processor_double_pop	; drop exit line and back to last line
+
+	; OSTC 2, TR and Plus
 menu_new_battery_AA_16650:
-	MENU_BEGIN	tNewBattTitle, .5
+	MENU_BEGIN	tNewBattTitle, .4
 		MENU_CALL		tNewBattOld,				use_old_batteries
-		MENU_CALL		tNewBattNew15,				use_new_15V_batteries
-		MENU_CALL		tNewBattNew36,				use_new_36V_batteries
-		MENU_CALL		tNewBattAccu,				use_36V_rechargeable
-		MENU_CALL		tNew16650,					use_16650_battery
+		MENU_CALL		tNewBattNew15,				use_new_15V_batteries	; OSTC Plus : not rechargeable
+;		MENU_CALL		tNewBattNew36,				use_new_36V_batteries	; OSTC Plus : not rechargeable  -> not allowed any more !!!
+		MENU_CALL		tNewBattAccu,				pre_36V_rechargeable	; OSTC Plus : rechargeable      -> goto safety question
+		MENU_CALL		tNew16650,					use_16650_battery		; OSTC 2, TR: rechargeable
 	MENU_END
 
-
+	; OSTC 3 and Sport (no charging function)
 menu_new_battery_AA:
 	MENU_BEGIN	tNewBattTitle, .4
 		MENU_CALL		tNewBattOld,				use_old_batteries
-		MENU_CALL		tNewBattNew15,				use_new_15V_batteries
-		MENU_CALL		tNewBattNew36,				use_new_36V_batteries
-		MENU_CALL		tNewBattAccu,				use_36V_rechargeable
+		MENU_CALL		tNewBattNew15,				use_new_15V_batteries	; not rechargeable
+		MENU_CALL		tNewBattNew36,				use_new_36V_batteries	; not rechargeable
+		MENU_CALL		tNewBattAccu,				use_36V_rechargeable	; rechargeable
 	MENU_END
 
-
+	; OSTC 2 (big housing) and cR
 menu_new_battery_18650:
 	MENU_BEGIN	tNewBattTitle, .2
 		MENU_CALL		tNewBattOld,				use_old_batteries
-		MENU_CALL		tNew18650,					use_18650_battery
+		MENU_CALL		tNew18650,					use_18650_battery		; rechargeable
+	MENU_END
+
+
+pre_36V_rechargeable:
+	MENU_BEGIN	tNewBattTitle, .5
+		MENU_CALL		tConfirmChargeable1,		0								; safety question, line 1
+		MENU_CALL		tConfirmChargeable2,		0								; safety question, line 2
+		MENU_CALL		tConfirmChargeable3,		0								; safety question, line 3
+		MENU_CALL		tNo,						do_return_menu_new_bat_AA_16650	; NO  - go back
+		MENU_CALL		tYes,						use_36V_rechargeable			; YES - confirmed rechargeable
 	MENU_END
 
 
@@ -1052,7 +1075,7 @@ use_old_prior_209:
 	return								; NO - done
 
 	call	lt2942_get_status			; check for gauge IC
-	movlw	.3							; Assume a 18650
+	movlw	.3							; assume a 18650
 	btfss	battery_gauge_available		; cR/2 hardware?
 	movlw	.1							; assume a Saft
 	movwf	EEDATA
@@ -1078,7 +1101,8 @@ use_old_batteries:
 	read_int_eeprom 0x0F
 	movff	EEDATA,battery_type			; =0:1.5V, =1:3,6V Saft, =2:LiIon 3,7V/0.8Ah, =3:LiIon 3,7V/3.1Ah, =4: LiIon 3,7V/2.3Ah
 
-	rcall	setup_new_saft				; any other value
+	rcall	setup_new_saft				; set a save default, not rechargeable
+
 	incf	EEDATA,F					; 1...5
 	dcfsnz	EEDATA,F
 	rcall	setup_new_15v				; =0
@@ -1094,7 +1118,7 @@ use_old_batteries:
 	bcf		use_old_batt_flag			; clear flag
 
  IFNDEF _screendump
-	bcf	disable_comm_mode			; re-enable COMM mode again
+	bcf	disable_comm_mode				; re-enable COMM mode again
  ENDIF
 
 	goto	surfloop					; jump to surface loop
@@ -1210,7 +1234,7 @@ use_batt_exit:
 use_batt_exit1:
 
  IFNDEF _screendump
-	bcf	disable_comm_mode			; re-enable COMM mode again
+	bcf	disable_comm_mode				; re-enable COMM mode again
  ENDIF
 
 	goto	surfloop					; jump to surface loop

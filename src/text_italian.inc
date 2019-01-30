@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;	File text_italian.asm							REFACTORED VERSION V2.99e
+;	File text_italian.asm							REFACTORED VERSION V2.99g
 ;
 ;	Italian texts translation file.
 ;
@@ -106,13 +106,18 @@
 	TCODE	tppO2Mix,			"ppO2(Mix)"				; ppO2(Mix)
 
 ; New battery menu
+	;                                     1         2	;
+	;                            12345678901234567890	; max 20 chars
 	TCODE	tNewBattTitle,		"Nuova Batteria?"
 	TCODE	tNewBattOld,		"Mantieni vecchio"
-	TCODE	tNewBattNew36,		"Nuova 3,6V Saft (T1)"
-	TCODE	tNewBattNew15,		"Nuova 1,5V AA   (T0)"
-	TCODE	tNewBattAccu,		"3,6V AA ricaric.(T2)"
-	TCODE	tNew18650,			"Internal 18650  (T3)"
-	TCODE	tNew16650,			"Internal 16650  (T4)"
+	TCODE	tNewBattNew36,		"3,6V monouso    (T1)"	; new 3,6V disposable
+	TCODE	tNewBattNew15,		"1,5V monouso    (T0)"	; new 1,5V disposable
+	TCODE	tNewBattAccu,		"3,6V ricaricare (T2)"	; new 3.6V rechargeable
+	TCODE	tNew18650,			"OSTC 2 o cR     (T3)"	; internal battery on 2 (old) / cR
+	TCODE	tNew16650,			"OSTC 2 o TR     (T4)"	; internal battery on 2 (new) / TR
+	TCODE	tConfirmChargeable1	"Confirm:"				; safety question, line 1				### translation pending
+	TCODE	tConfirmChargeable2	"inserted Battery"		; safety question, line 2				### translation pending
+	TCODE	tConfirmChargeable3	"is rechargeable"		; safety question, line 3				### translation pending
 
 ; Gaslist management
 	TCODE	tGas,				"Gas"					; Gas

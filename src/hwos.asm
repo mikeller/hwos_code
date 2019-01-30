@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File hwos.asm														V2.98f
+;   File hwos.asm														V2.99g
 ;
 ;   Definition of the hwOS dive computer platform.
 ;
@@ -123,6 +123,8 @@ init_ostc:
 	movlw	b'00100000'			; init port
 	movwf	PORTJ
 
+; disable charger by default
+	bsf		charge_disable
 
 ; Timer 0
 	movlw	b'00000001'			; timer0 with 1:4 prescaler
@@ -155,7 +157,7 @@ init_ostc:
 	movwf 	EECON2
 	bcf 	RTCCFG,RTCWREN		; Lock sequence for RTCWREN
 	banksel common
-	
+
 ; A/D Converter
 	movlw	b'00011000'			; power off ADC, select AN6
 	movwf	ADCON0
@@ -163,7 +165,6 @@ init_ostc:
 	movwf	ADCON1
 	movlw	b'10001101'			; right aligned
 	movwf	ADCON2
-
 
 ; init serial port1 (TRISC6/7)
 	movlw	b'00001000'			; BRG16=1
