@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File text_multilang.asm												V2.99c
+;   File text_multilang.asm											V2.99-9
 ;
 ;   Implementation text in various selectable languages.
 ;
@@ -25,22 +25,22 @@ LANG		set		0
 #define		TCODE	TCODE_1
 
  IF _language_1==en
- MESSG		"1st Laguage: English"
+ MESSG		"1st Language: English"
 #include	"text_english.inc"
  ELSE
  IF _language_1==de
- MESSG		"1st Laguage: German"
+ MESSG		"1st Language: German"
 #include	"text_german.inc"
  ELSE
  IF _language_1==fr
- MESSG		"1st Laguage: French"
+ MESSG		"1st Language: French"
 #include	"text_french.inc"
  ELSE
  IF _language_1==it
- MESSG		"1st Laguage: Italian"
-#include	"text_english.inc"
+ MESSG		"1st Language: Italian"
+#include	"text_italian.inc"
  ELSE
- MESSG		"1st Laguage: Default (English)"
+ MESSG		"1st Language: Default (English)"
 #include	"text_english.inc"
  ENDIF
  ENDIF
@@ -63,7 +63,7 @@ tcode_idx	set		0
 #include	"text_french.inc"
  ELSE
  IF _language_1==it
-#include	"text_english.inc"
+#include	"text_italian.inc"
  ELSE
 #include	"text_english.inc"
  ENDIF
@@ -85,22 +85,22 @@ LANG		set		1
 #define		TCODE	TCODE_1
 
  IF _language_2==en
- MESSG		"2nd Laguage: English"
+ MESSG		"2nd Language: English"
 #include	"text_english.inc"
  ELSE
  IF _language_2==de
- MESSG		"2nd Laguage: German"
+ MESSG		"2nd Language: German"
 #include	"text_german.inc"
  ELSE
  IF _language_2==fr
- MESSG		"2nd Laguage: French"
+ MESSG		"2nd Language: French"
 #include	"text_french.inc"
  ELSE
  IF _language_2==it
- MESSG		"2nd Laguage: Italian"
-#include	"text_english.inc"
+ MESSG		"2nd Language: Italian"
+#include	"text_italian.inc"
  ELSE
- MESSG		"2nd Laguage: Default (English)"
+ MESSG		"2nd Language: Default (English)"
 #include	"text_english.inc"
  ENDIF
  ENDIF
@@ -123,7 +123,7 @@ tcode_idx	set		0
 #include	"text_french.inc"
  ELSE
  IF _language_2==it
-#include	"text_english.inc"
+#include	"text_italian.inc"
  ELSE
 #include	"text_english.inc"
  ENDIF
