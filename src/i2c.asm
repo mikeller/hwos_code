@@ -48,66 +48,6 @@ i2c		CODE
 
 ;=============================================================================
 
-WaitMSSP:
-	decfsz	i2c_temp1,F					; check for timeout during I2C action
-	bra		WaitMSSP2
-	bra		I2CFail						; timeout occurred
-WaitMSSP2:
-	btfss	PIR1,SSP1IF
-	bra		WaitMSSP
-	clrf	i2c_temp1
-	bcf		PIR1,SSP1IF
-	return
-
-I2C_WaitforACK:
-	btfss	SSP1CON2,ACKSTAT			; checks for ACK bit from slave
-	return
-I2CFail:
-	rcall	I2CReset					; I2C Reset
-	bcf		PIR1,SSP1IF
-	clrf	i2c_temp1
-	bsf		i2c_error_flag				; set error flag
-	return
-
-I2CReset:								; something went wrong (slave holds SDA low?)
-	clrf	SSP1CON1					; wake-up slave and reset entire module
-	clrf	SSP1CON2
-	clrf	SSP1STAT
-	bcf		TRISC,3						; SCL OUTPUT
-	bsf		TRISC,4						; SDA input
-	bcf		PORTC,3
-	movlw	d'9'
-	movwf	i2c_temp1					; clock-out 9 clock cycles manually
-I2CReset_1:
-	bsf		PORTC,3						; SCL = 1
-	nop
-	nop
-	nop
-	nop
-	btfsc	PORTC,4						; SDA = 1 ?
-	bra		I2CReset_2					; YES - =1, SDA has been released from slave
-	bcf		PORTC,3						; NO  - set SCL = 0
-	nop
-	nop
-	bcf		PORTC,3
-	nop
-	nop
-	decfsz	i2c_temp1,F
-	bra		I2CReset_1					; check for nine clock cycles
-I2CReset_2:
-	bsf		TRISC,3						; SCL Input
-	clrf	SSP1CON1					; setup I²C mode
-	WAITMS	d'10'						; reset-timeout for I2C devices
-	movlw	b'00000000'					; with slew rate control
-	movwf	SSP1STAT
-	movlw	b'00101000'
-	movwf	SSP1CON1
-	movlw	b'00000000'
-	movwf	SSP1CON2
-	movlw	0x27
-	movwf	SSP1ADD
-	return
-
 I2C_TX:
 	movwf	SSP1BUF
 	rcall	WaitMSSP
@@ -720,6 +660,66 @@ I2C_sleep_accelerometer2:
     bsf		SSP1CON2,PEN	; Stop condition
     bra		WaitMSSP	; (And return)
 
+WaitMSSP:
+	decfsz	i2c_temp1,F					; check for timeout during I2C action
+	bra		WaitMSSP2
+	bra		I2CFail						; timeout occurred
+WaitMSSP2:
+	btfss	PIR1,SSP1IF
+	bra		WaitMSSP
+	clrf	i2c_temp1
+	bcf		PIR1,SSP1IF
+	return
+
+I2C_WaitforACK:
+	btfss	SSP1CON2,ACKSTAT			; checks for ACK bit from slave
+	return
+I2CFail:
+	rcall	I2CReset					; I2C Reset
+	bcf		PIR1,SSP1IF
+	clrf	i2c_temp1
+	bsf		i2c_error_flag				; set error flag
+	return
+
+I2CReset:								; something went wrong (slave holds SDA low?)
+	clrf	SSP1CON1					; wake-up slave and reset entire module
+	clrf	SSP1CON2
+	clrf	SSP1STAT
+	bcf		TRISC,3						; SCL OUTPUT
+	bsf		TRISC,4						; SDA input
+	bcf		PORTC,3
+	movlw	d'9'
+	movwf	i2c_temp1					; clock-out 9 clock cycles manually
+I2CReset_1:
+	bsf		PORTC,3						; SCL = 1
+	nop
+	nop
+	nop
+	nop
+	btfsc	PORTC,4						; SDA = 1 ?
+	bra		I2CReset_2					; YES - =1, SDA has been released from slave
+	bcf		PORTC,3						; NO  - set SCL = 0
+	nop
+	nop
+	bcf		PORTC,3
+	nop
+	nop
+	decfsz	i2c_temp1,F
+	bra		I2CReset_1					; check for nine clock cycles
+I2CReset_2:
+	bsf		TRISC,3						; SCL Input
+	clrf	SSP1CON1					; setup I²C mode
+	WAITMS	d'10'						; reset-timeout for I2C devices
+	movlw	b'00000000'					; with slew rate control
+	movwf	SSP1STAT
+	movlw	b'00101000'
+	movwf	SSP1CON1
+	movlw	b'00000000'
+	movwf	SSP1CON2
+	movlw	0x27
+	movwf	SSP1ADD
+	return
+    
 	global	I2C_init_accelerometer
 I2C_init_accelerometer:
 	btfsc	compass_type2				; compass2?
@@ -892,53 +892,70 @@ lt2942_get_voltage2:
 	return								; No, done.
 	bra		lt2942_init					;(and return)
 
-;	global	lt2942_get_temperature
-;lt2942_get_temperature:				; Read temperature registers
-;	clrf	i2c_temp1
-;	movlw	0x0C						; Point to temperature registers
-;	call	I2C_TX_GAUGE
-;	call	I2C_RX
-;	bsf		SSP1CON2,ACKEN				; Master acknowledge
-;	rcall	WaitMSSP
-;	movff	SSP1BUF,xA+1
-;	bsf		SSP1CON2, RCEN				; Enable receive mode
-;	rcall	WaitMSSP
-;	movff	SSP1BUF,xA+0
-;	bsf		SSP1CON2,PEN				; Stop condition
-;	rcall	WaitMSSP
-;
-;;	banksel	common
-;	; xA:2 loaded with raw values
-;	movlw	LOW  .6000
-;	movwf	xB+0
-;	movlw	HIGH .6000
-;	movwf	xB+1
-;	call	mult16x16					; xA*xB=xC
-;
-;	; devide xC (32bit)/65535 for result in 0.1K (16bit)
-;	movlw	.16
-;	movwf	i2c_temp1
-;lt2942_get_temperature2:
-;	bcf		STATUS,C
-;	rrcf	xC+3,F
-;	rrcf	xC+2,F
-;	rrcf	xC+1,F
-;	rrcf	xC+0,F
-;	decfsz	i2c_temp1,F
-;	bra		lt2942_get_temperature2
-;
-;	movff	xC+1,sub_a+1
-;	movff	xC+0,sub_a+0
-;	movlw	LOW	  .2731					; Kelvin to Celsius offset
-;	movwf	sub_b+0
-;	movlw	HIGH .2731					; Kelvin to Celsius offset
-;	movwf	sub_b+1
-;	call	subU16						; sub_c = sub_a - sub_b (with UNSIGNED values)
-;
-;	; Update batttery_temperature in 0.1°C
-;	movff	sub_c+1,battery_temperature+1
-;	movff	sub_c+0,battery_temperature+0
-;	return
+	global	lt2942_get_temperature
+lt2942_get_temperature:		; Read temperature registers
+	clrf	i2c_temp1
+	movlw	0x0C            ; Point to temperature registers
+	call	I2C_TX_GAUGE
+	call	I2C_RX_GAUGE
+	bsf		SSP1CON2,ACKEN	; Master acknowlegde
+	rcall	WaitMSSP
+	movff	SSP1BUF,xA+1
+	bsf		SSP1CON2, RCEN	; Enable recieve mode
+	rcall	WaitMSSP
+	movff	SSP1BUF,xA+0
+	bsf		SSP1CON2,PEN	; Stop condition
+	rcall	WaitMSSP
+
+;	banksel	common
+    ; xA:2 loaded with raw values
+    movlw   LOW     .6000
+    movwf   xB+0
+    movlw   HIGH    .6000
+    movwf   xB+1
+    call    mult16x16		;xA*xB=xC
+
+    ; devide xC (32bit)/65535 for result in 0.1K (16bit)
+    movlw   .16
+    movwf   i2c_temp1
+lt2942_get_temperature2:
+    bcf     STATUS,C
+    rrcf    xC+3,F
+    rrcf    xC+2,F
+    rrcf    xC+1,F
+    rrcf    xC+0,F
+    decfsz  i2c_temp1,F
+    bra     lt2942_get_temperature2
+
+    movff   xC+1,sub_a+1
+    movff   xC+0,sub_a+0
+    movlw   LOW     .2731       ; Kelvin to Celcius offset
+    movwf   sub_b+0
+    movlw   HIGH    .2731       ; Kelvin to Celcius offset
+    movwf   sub_b+1
+    call    subU16  ;  sub_c = sub_a - sub_b (with UNSIGNED values)
+
+    ; Update battery_temperature in 0.1°C
+    movff   sub_c+1,battery_temperature+1
+    movff   sub_c+0,battery_temperature+0
+    
+    movlw   LOW	    max_allowed_battery_temp	    ; in 0.1°C
+    movwf   sub_a+0
+    movlw   HIGH    max_allowed_battery_temp
+    movwf   sub_a+1
+    movff   battery_temperature+0,sub_b+0
+    movff   battery_temperature+1,sub_b+1
+    call    subU16  ;  sub_c = sub_a - sub_b (with UNSIGNED values)
+    btfss   neg_flag
+    return	; temp ok, return
+    ; too hot, disable charge if currently charging
+    btfss   cc_active
+    return	; Not charging, return
+    ; charging: Disable now
+    bsf	    charge_disable
+    bcf	    TRISE,2
+    bsf	    battery_overtemp    ; =1: The battery was charged and temp was too high (Only cleared on POR)
+    return
 
 	global	lt2942_get_accumulated_charge
 lt2942_get_accumulated_charge:			; Read accumulated charge and compute percent

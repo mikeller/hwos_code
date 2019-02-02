@@ -38,13 +38,15 @@ get_battery_voltage:						; starts ADC and waits until finished
 
 	call	lt2942_get_accumulated_charge
 	call	lt2942_get_voltage
-
+        call    lt2942_get_temperature
+	
 	tstfsz	batt_voltage+1					; < 256 mV ?
 	bra		get_battery_voltage_noretry		; NO
 
 	; Retry
 	call	lt2942_get_accumulated_charge
 	call	lt2942_get_voltage
+	call    lt2942_get_temperature
 
 get_battery_voltage_noretry:
 	btfsc	divemode
@@ -65,7 +67,7 @@ get_battery_voltage_noretry:
 	WAITMS	d'1'
 
 	btfsc	CHRG_IN
-	return
+	return		    ; Not charging, done.
 charge_cv_active:
 	decfsz	get_bat_volt_counter,F
 	return
@@ -98,7 +100,11 @@ charge_cc_active2:
 	return
 
 get_battery_voltage1:
-	bsf		adc_running						; =1: The ADC is in use
+	; Additional disable in software
+    	bsf	charge_disable
+	bcf	TRISE,2
+        bsf     adc_running         ; =1: The ADC is in use
+
 	movlw	b'00100000'						; 2.048V Vref+ -> 1LSB = 500µV
 	movwf	ADCON1
 	movlw	b'00011001'						; power on ADC, select AN6

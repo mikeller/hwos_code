@@ -184,7 +184,7 @@ no_deco_restore:
 	; check for power-on reset here
 
 	; *****************************************************************************
-	; "new_battery_menu" and "use_old_batteries" 'goto' back to "power_on_return"
+	; "do_new_battery_menu" and "use_old_batteries" 'goto' back to "power_on_return"
 	; *****************************************************************************
 
 	; Try to migrate the old battery status from firmware 2.09 or earlier..
@@ -312,7 +312,8 @@ restart:
 	clrf	flag15
 	clrf	flag16
 	clrf	flag17
-
+	; do not clear flag18 (important hardware flags)
+	
 	clrf	cvt_flags
 
 	clrf	tft_update_flags+0
@@ -352,7 +353,7 @@ restart2:
 	btfsc	vusb_in
 	bra		restart3						; USB (and powered on)
 	bcf		PORTE,0							; start comms
-	WAITMS	d'1'
+	WAITMS	d'5'
 	btfss	vusb_in
 	bra		restart3						; USB (and powered off)
 	bsf		ble_available					; BLE available

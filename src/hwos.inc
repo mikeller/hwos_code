@@ -40,8 +40,8 @@
 
 
 ; Firmware Version
-#DEFINE softwareversion_x		.2			; Software Version, major               (1 -   9)
-#DEFINE softwareversion_y		.99			; Software Version, minor               (1 -  99)
+#DEFINE softwareversion_x		.3			; Software Version, major               (1 -   9)
+#DEFINE softwareversion_y		.00			; Software Version, minor               (1 -  99)
 #DEFINE softwareversion_beta	.0			; 0= Release, 1= Beta-1, 2= Beta-2, ... (0 - 255)
 
 ; Firmware Expiration Date, will cause version to be displayed in "Update Firmware" style after the following date:
@@ -199,6 +199,8 @@
 #DEFINE velocity_display_threshold_1	.3			; [m/min]
 
 ; Battery Thresholds
+ #DEFINE max_allowed_battery_temp			.500	; Max temperature before charging is disabled in 0.1°C	
+ 
 #DEFINE lithium_36v_empty				.2400		; [mV] Saft 3.6 V LS14500 AA - threshold for battery percent display
 #DEFINE lithium_36v_low					.2000		; [mV] (must be bigger than aa_15v_high!)
 #DEFINE aa_15v_high						.1550		; [mV] Energizer 1.5 V E2 AA
@@ -546,6 +548,8 @@
 #DEFINE transmitter2_pres_warn	flag17,6			; =1: transmitter 2 pressure warning   is an old message
 #DEFINE transmitter2_pres_att	flag17,7			; =1: transmitter 2 pressure attention is an old message
  ENDIF
+ 
+#DEFINE	battery_overtemp	flag18,0			; =1: The battery was charged and temp was too high (Only cleared on Reset)
 
 ; Low-Level Display Control
 #DEFINE aa_antialias			aa_flags,0			;     used by aa_wordprocessor
@@ -749,6 +753,7 @@ flag14							res 1
 flag15							res 1
 flag16							res 1
 flag17							res 1
+flag18							res 1
 hardware_flag1					res 1		; hardware descriptor flags 1
 hardware_flag2					res 1		; hardware descriptor flags 2
 tft_update_flags				res 3
@@ -986,6 +991,7 @@ battery_offset					res 2		; For battery gauge IC
 battery_type					res 1		; =0:1.5V, =1:3.6V Saft, =2:LiIon 3.7V/0.8Ah, =3:LiIon 3.7V/3.1Ah, =4: LiIon 3.7V/2.3Ah
 battery_acumulated_charge		res 2		; Raw values in battery gauge IC
 gauge_status_byte				res 1		; Gauge IC status byte
+battery_temperature			res 2		; in 0.1°C
 
 analog_sw1_raw					res 2		; idle values (average)
 analog_sw2_raw					res 2		; idle values (average)

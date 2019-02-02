@@ -2610,6 +2610,14 @@ TFT_update_batt_voltage:
 	btfsc	cc_active
 	call	TFT_set_color
 
+	; Setup Temperature warning
+        btfsc   battery_overtemp
+        bsf	    win_invert
+        btfsc   battery_overtemp
+        movlw   color_red
+	btfsc   battery_overtemp
+	call    TFT_set_color
+ 
  IFDEF _ostc_logo
 	WIN_TINY  batt_percent_column,batt_percent_row
  ELSE

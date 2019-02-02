@@ -985,9 +985,9 @@ do_new_battery_select:
 	;                                                                   +-> OSTC Plus                 YES    YES    1.5V  ----- NO! -----  3.6V rechargeable
 	; 0x12; BLE                   and ambient sensor                   ---> OSTC Sport (both models)  YES    NO     1.5V  3.6V disposable  3.6V rechargeable
 	; 0x0A:         optical input and ambient sensor                   ---> OSTC 3 /USB               YES    NO     1.5V  3.6V disposable  3.6V rechargeable
+	; 0x02:				  ambient sensor		   ---> OSTC sport /USB		  YES    NO     1.5V  3.6V disposable  3.6V rechargeable
 	; 0x1A: BLE and optical input and ambient sensor                   ---> OSTC 3 /BLE               YES    NO     1.5V  3.6V disposable  3.6V rechargeable
 
-	; OSTC 3 (2016) ???
 
 	movlw	0x0A						; OSTC 3 /USB
 	cpfseq	hardware_flag1
