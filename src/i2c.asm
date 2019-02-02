@@ -922,29 +922,17 @@ lt2942_get_temperature2:
     bcf     STATUS,C
     rrcf    xC+3,F
     rrcf    xC+2,F
-    rrcf    xC+1,F
-    rrcf    xC+0,F
+    rrcf    xC+1,F  ; Result in 0.1K
+    rrcf    xC+0,F  ; Result in 0.1K
     decfsz  i2c_temp1,F
     bra     lt2942_get_temperature2
 
-    movff   xC+1,sub_a+1
-    movff   xC+0,sub_a+0
-    movlw   LOW     .2731       ; Kelvin to Celcius offset
-    movwf   sub_b+0
-    movlw   HIGH    .2731       ; Kelvin to Celcius offset
-    movwf   sub_b+1
-    call    subU16  ;  sub_c = sub_a - sub_b (with UNSIGNED values)
-
-    ; Update battery_temperature in 0.1°C
-    movff   sub_c+1,battery_temperature+1
-    movff   sub_c+0,battery_temperature+0
-    
-    movlw   LOW	    max_allowed_battery_temp	    ; in 0.1°C
+    movlw   LOW	    max_allowed_battery_temp	    ; in 0.1K
     movwf   sub_a+0
     movlw   HIGH    max_allowed_battery_temp
     movwf   sub_a+1
-    movff   battery_temperature+0,sub_b+0
-    movff   battery_temperature+1,sub_b+1
+    movff   xC+1,sub_b+1
+    movff   xC+0,sub_b+0
     call    subU16  ;  sub_c = sub_a - sub_b (with UNSIGNED values)
     btfss   neg_flag
     return	; temp ok, return

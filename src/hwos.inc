@@ -35,7 +35,7 @@
 #DEFINE fr						3			; French
 #DEFINE it						4			; Italian
 
-#DEFINE _language_1				en			; first or single language - must be set to en, de, fr, or it, defaults to en
+#DEFINE _language_1				de			; first or single language - must be set to en, de, fr, or it, defaults to en
 #DEFINE _language_2				none		; second language or none
 
 
@@ -199,7 +199,7 @@
 #DEFINE velocity_display_threshold_1	.3			; [m/min]
 
 ; Battery Thresholds
- #DEFINE max_allowed_battery_temp			.500	; Max temperature before charging is disabled in 0.1°C	
+ #DEFINE max_allowed_battery_temp			.323	; Max temperature before charging is disabled in 0.1K
  
 #DEFINE lithium_36v_empty				.2400		; [mV] Saft 3.6 V LS14500 AA - threshold for battery percent display
 #DEFINE lithium_36v_low					.2000		; [mV] (must be bigger than aa_15v_high!)
