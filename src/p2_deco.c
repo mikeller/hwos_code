@@ -2718,17 +2718,17 @@ static void calc_tissues()
 //////////////////////////////////////////////////////////////////////////////
 // calc_limit
 //
-// Input:
-//        tissue_increment       : selector for context: real or simulated tissues
-//        sim_pres_tissue_N2/_He : tissue pressures (used in simulated tissues context)
-//        pres_tissue_N2/_He     : tissue pressures (used in real      tissues context)
+// Input:  GF_parameter             gradient factor to be used, negative values activate surface mode
+//         tissue_increment         selector for context: real or simulated tissues
+//         sim_pres_tissue_N2/_He   tissue pressures (used in simulated tissues context)
+//         pres_tissue_N2/_He       tissue pressures (used in real      tissues context)
 //
-// Output:
-//        lead_supersat          : supersaturation of the leading tissue, 1.0 = 100%
-//        ceiling                : ceiling in bar relative pressure
+// Output: lead_supersat            highest supersaturation found among all tissues, 1.0 = 100%
+//         lead_tissue              number of the leading tissue (0-15)
+//         ceiling                  ceiling in bar relative pressure
 //
 // Modified:
-//        char_O_deco_warnings   : for IBCD, microbubbles and outside warning (only in real tissues context)
+//         char_O_deco_warnings     for IBCD, microbubbles and outside warning (only in real tissues context)
 //
 static void calc_limit(PARAMETER float GF_parameter)
 {
@@ -2744,7 +2744,7 @@ static void calc_limit(PARAMETER float GF_parameter)
 	// check context
 	if( tissue_increment & TISSUE_FLAG )
 	{
-		// clear IBCD, microbubbles and outside warning flags (locked warnings will be preserved)
+		// clear IBCD, micro bubbles and outside warning flags (locked warnings will be preserved)
 		char_O_deco_warnings &= ~(DECO_WARNING_IBCD + DECO_WARNING_MBUBBLES + DECO_WARNING_OUTSIDE + DECO_ATTENTION_OUTSIDE );
 	}
 
@@ -2776,21 +2776,23 @@ static void calc_limit(PARAMETER float GF_parameter)
 		// adopt a and b coefficients to current N2/He ratio inside the tissue
 		adopt_Buhlmann_coefficients();
 
-		// calculate minimum ambient pressure that the tissue can withstand according to straight Buhlmann
-		pres_min = (pres_tissue - var_N2_a) * var_N2_b;
-
 		// next calculations are only relevant when invoked on the real tissues
 		if( tissue_increment & TISSUE_FLAG )
 		{
+			overlay float pres_tissue_max;
 			overlay float supersat;
 			overlay float baseline_threshold;
 
-			// calculate current supersaturation value (1.0 = 100%) of this tissue according to straight Buhlmann
-			supersat = (pres_tissue - real_pres_respiration) / (pres_tissue - pres_min);
-
 			// check if tissue is in supersaturation
-			if( supersat > 0.0 )
+			if( pres_tissue > real_pres_respiration )
 			{
+				// calculate maximum allowed tissue pressure at current ambient pressure
+				pres_tissue_max = real_pres_respiration / var_N2_b + var_N2_a;
+
+				// calculate current supersaturation value (1.0 = 100%) of this tissue according to straight Buhlmann
+				supersat =    ( pres_tissue     - real_pres_respiration )
+				            / ( pres_tissue_max - real_pres_respiration );
+
 				// memorize highest supersaturation found
 				if( supersat > lead_supersat ) lead_supersat = supersat;
 
@@ -2807,11 +2809,19 @@ static void calc_limit(PARAMETER float GF_parameter)
 			}
 		}
 
-		// Apply the Eric Baker's varying gradient factor correction if the GF-Model is selected.
-		// Note: the correction factor depends both on GF and b, so that can change which is the
-		//       leading tissue...            (this equation [1] is the inverse of equation [2])
-		if( char_I_deco_model != 0 ) pres_min =   ( pres_tissue        - (var_N2_a     * GF_parameter) )
-		                                        / ( 1.0 - GF_parameter + (GF_parameter / var_N2_b    ) );
+		// calculate the minimum ambient pressure that the tissue can withstand
+		if( char_I_deco_model == 0 )
+		{
+			// straight Buhlmann
+			pres_min = (pres_tissue - var_N2_a) * var_N2_b;
+		}
+		else
+		{
+			// Buhlmann with Eric Baker's varying gradient factor correction
+			// note: this equation [1] is the inverse of equation [2]
+			pres_min =   ( pres_tissue        - (var_N2_a     * GF_parameter) )
+			           / ( 1.0 - GF_parameter + (GF_parameter / var_N2_b      ) );
+		}
 
 		// check if this tissue requires a higher ambient pressure than was found to be needed up to now
 		if( pres_min > lead_tissue_limit )
@@ -2838,7 +2848,6 @@ static void calc_limit(PARAMETER float GF_parameter)
 		}
 	}
 }
-
 //////////////////////////////////////////////////////////////////////////////
 // calc_NDL_time
 //

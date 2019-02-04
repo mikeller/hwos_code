@@ -872,21 +872,11 @@ lt2942_get_voltage:						; Read battery voltage registers
 	movwf	xB+1
 	call	mult16x16					; xA*xB=xC
 
-	; divide xC (32bit)/65535 for result in mV (16bit)
-	movlw	.16
-	movwf	i2c_temp1
-lt2942_get_voltage2:
-	bcf		STATUS,C
-	rrcf	xC+3,F
-	rrcf	xC+2,F
-	rrcf	xC+1,F
-	rrcf	xC+0,F
-	decfsz	i2c_temp1,F
-	bra		lt2942_get_voltage2
+	; xC+3:xC+2  -> Result in mV
 
 	; Update battery voltage in mV
-	movff	xC+1,batt_voltage+1
-	movff	xC+0,batt_voltage+0
+	movff	xC+3,batt_voltage+1
+	movff	xC+2,batt_voltage+0
 
 	tstfsz	batt_voltage+1				; <256mV?
 	return								; No, done.
@@ -915,24 +905,14 @@ lt2942_get_temperature:		; Read temperature registers
     movwf   xB+1
     call    mult16x16		;xA*xB=xC
 
-    ; devide xC (32bit)/65535 for result in 0.1K (16bit)
-    movlw   .16
-    movwf   i2c_temp1
-lt2942_get_temperature2:
-    bcf     STATUS,C
-    rrcf    xC+3,F
-    rrcf    xC+2,F
-    rrcf    xC+1,F  ; Result in 0.1K
-    rrcf    xC+0,F  ; Result in 0.1K
-    decfsz  i2c_temp1,F
-    bra     lt2942_get_temperature2
+    ; xC+3:xC+2  -> Result in 0.1K
 
     movlw   LOW	    max_allowed_battery_temp	    ; in 0.1K
     movwf   sub_a+0
     movlw   HIGH    max_allowed_battery_temp
     movwf   sub_a+1
-    movff   xC+1,sub_b+1
-    movff   xC+0,sub_b+0
+    movff   xC+3,sub_b+1
+    movff   xC+2,sub_b+0
     call    subU16  ;  sub_c = sub_a - sub_b (with UNSIGNED values)
     btfss   neg_flag
     return	; temp ok, return

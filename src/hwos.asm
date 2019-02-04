@@ -123,9 +123,10 @@ init_ostc:
 	movlw	b'00100000'			; init port
 	movwf	PORTJ
 
-; disable charger by default
-	bsf		charge_disable
-
+; disable Charger by default
+	bsf        charge_disable	    ; set      charging-inhibit signal
+	bcf        TRISE,2
+	
 ; Timer 0
 	movlw	b'00000001'			; timer0 with 1:4 prescaler
 	movwf	T0CON

@@ -994,6 +994,11 @@ do_new_battery_select:
 	bra		$+4
 	bra		menu_new_battery_AA
 
+	movlw    0x02						; OSTC Sport (USB model)
+	cpfseq    hardware_flag1
+	bra        $+4
+	bra        menu_new_battery_AA 
+
 	movlw	0x13						; OSTC 2 and Plus
 	cpfseq	hardware_flag1
 	bra		$+4

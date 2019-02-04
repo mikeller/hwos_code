@@ -34,7 +34,7 @@
 #DEFINE dm_mask_maxdepth_column					.73
 #DEFINE dm_mask_maxdepth_column_nvsi			.63
 #DEFINE dm_mask_divetime_row					.0
-#DEFINE dm_mask_divetime_column					.122
+#DEFINE dm_mask_divetime_column					.115
 
 ;   The content row contains 3 columns:
 ;   - depth and ascend rate warning
