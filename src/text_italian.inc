@@ -40,7 +40,7 @@
 
 ; Main menu
 	TCODE	tNext,				"<Prossimo"				; <Next
-	TCODE	tEnter,				"Enter>"				; Enter>
+	TCODE	tEnter,				" Enter>"				; Enter>
 	TCODE	tMainMenu,			"Menu Principale"		; MainMenu
 	TCODE	tLogbook,			"Logbook"				; Logbook
 	TCODE	tGasSetup,			"Imposta Gas OC"		; OC Gas Setup
@@ -115,9 +115,9 @@
 	TCODE	tNewBattAccu,		"3,6V ricaricare (T2)"	; new 3.6V rechargeable
 	TCODE	tNew18650,			"OSTC 2 o cR     (T3)"	; internal battery on 2 (old) / cR
 	TCODE	tNew16650,			"OSTC 2 o TR     (T4)"	; internal battery on 2 (new) / TR
-	TCODE	tConfirmChargeable1	"Confirm:"				; safety question, line 1				### translation pending
-	TCODE	tConfirmChargeable2	"inserted Battery"		; safety question, line 2				### translation pending
-	TCODE	tConfirmChargeable3	"is rechargeable"		; safety question, line 3				### translation pending
+	TCODE	tConfirmChargeable1,	"Conferma:"				; safety question, line 1				### translation pending
+	TCODE	tConfirmChargeable2,	"la batteria inserita"		; safety question, line 2				### translation pending
+	TCODE	tConfirmChargeable3,	"è ricaricabile"		; safety question, line 3				### translation pending
 
 ; Gaslist management
 	TCODE	tGas,				"Gas"					; Gas

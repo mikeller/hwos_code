@@ -115,9 +115,9 @@
 	TCODE	tNewBattAccu,		"3,6V chargeable (T2)"	; new 3.6V rechargeable
 	TCODE	tNew18650,			"OSTC 2 ou cR    (T3)"	; internal battery on 2 (old) / cR
 	TCODE	tNew16650,			"OSTC 2 ou TR    (T4)"	; internal battery on 2 (new) / TR
-	TCODE	tConfirmChargeable1	"Confirm:"				; safety question, line 1				### translation pending
-	TCODE	tConfirmChargeable2	"inserted Battery"		; safety question, line 2				### translation pending
-	TCODE	tConfirmChargeable3	"is rechargeable"		; safety question, line 3				### translation pending
+	TCODE	tConfirmChargeable1,	"Confirmer:"				; safety question, line 1				### translation pending
+	TCODE	tConfirmChargeable2,	"La batterie insérée"		; safety question, line 2				### translation pending
+	TCODE	tConfirmChargeable3,	"est rechargeable"		; safety question, line 3				### translation pending
 
 ; Gaslist management
 	TCODE	tGas,				"Gaz"					; Gas
@@ -299,7 +299,7 @@
 	TCODE	tDepth,				"Prof."					; Depth
 	TCODE	tMaxDepth,			"Prof. Max."			; Max. Depth    - max 10chars!
 	TCODE	tAvgDepth,			"Prof. Moy."			; average Depth - max 10chars!
-	TCODE	tDivetime,			"Durée"					; Divetime
+	TCODE	tDivetime,			"   Durée"					; Divetime
 	TCODE	tDiveHudMask1,		"cell. 1"
 	TCODE	tDiveHudMask2,		"cell. 2"
 	TCODE	tDiveHudMask3,		"cell. 3"

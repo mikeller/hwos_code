@@ -40,7 +40,7 @@
 
 ; Main menu
 	TCODE	tNext,				"<Weiter"				; <Next
-	TCODE	tEnter,				"Enter>"				; Enter>
+	TCODE	tEnter,				" Enter>"				; Enter>
 	TCODE	tMainMenu,			"Hauptmenü"				; MainMenu
 	TCODE	tLogbook,			"Logbuch"				; Logbook
 	TCODE	tGasSetup,			"OC Gas Setup"			; OC Gas Setup
@@ -79,7 +79,7 @@
 	TCODE	tDilDisabled,		"Deaktiviert"			; Disabled
 	TCODE	tDilFirst,			"Start"					; First
 	TCODE	tDilNorm,			"Normal"				; Normal
-	TCODE	tAir,				"Luft "					; Enum: values must follows (5 chars)
+	TCODE	tAir,				"Air  "					; Enum: values must follows (5 chars)
 	TCODE	tO2,				"O2   "					; tAir + 5
 	TCODE	tO2Plus,			"O2 +"
 	TCODE	tO2Minus,			"O2 -"

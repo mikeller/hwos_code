@@ -40,7 +40,7 @@
 
 ; Main menu
 	TCODE	tNext,				"<Next"					; <Next
-	TCODE	tEnter,				"Enter>"				; Enter>
+	TCODE	tEnter,				" Enter>"				; Enter>
 	TCODE	tMainMenu,			"Main Menu"				; MainMenu
 	TCODE	tLogbook,			"Logbook"				; Logbook
 	TCODE	tGasSetup,			"OC Gas Setup"			; OC Gas Setup
