@@ -107,8 +107,8 @@
 
 ; New batteries menu
 	;                                     1         2	;
-	;                            12345678901234567890	; max 20 chars
-	TCODE	tNewBattTitle,		"Nouvelle Batterie?"
+	;			12345678901234567890	; max 20 chars
+	TCODE	tNewBattTitle,		"Nouvelle Pile?"
 	TCODE	tNewBattOld,		"Conserver"
 	TCODE	tNewBattNew36,		"3,6V jetable    (T1)"	; new 3,6V disposable
 	TCODE	tNewBattNew15,		"1,5V jetable    (T0)"	; new 1,5V disposable
@@ -116,7 +116,7 @@
 	TCODE	tNew18650,			"OSTC 2 ou cR    (T3)"	; internal battery on 2 (old) / cR
 	TCODE	tNew16650,			"OSTC 2 ou TR    (T4)"	; internal battery on 2 (new) / TR
 	TCODE	tConfirmChargeable1,	"Confirmer:"				; safety question, line 1				### translation pending
-	TCODE	tConfirmChargeable2,	"La batterie insérée"		; safety question, line 2				### translation pending
+	TCODE	tConfirmChargeable2,	"La pile insérée"		; safety question, line 2				### translation pending
 	TCODE	tConfirmChargeable3,	"est rechargeable"		; safety question, line 3				### translation pending
 
 ; Gaslist management

@@ -84,6 +84,8 @@ I2C_TwoBytesRX_div8_2:					; divide lo:hi/8 (signed) only
 
 	global	I2C_RX_accelerometer
 I2C_RX_accelerometer:
+    	btfss	compass_enabled					; Compass enabled?
+	return							; No, return
 	btfsc	compass_type2					; compass2 ?
 	bra		I2C_RX_accelerometer_compass2	; YES
 	btfsc	compass_type					; compass1 ?
@@ -269,6 +271,9 @@ I2C_OneByteRX:
 
 	global	I2C_RX_compass
 I2C_RX_compass:
+    	btfss	compass_enabled					; Compass enabled?
+	return							; No, return
+
 	btfsc	compass_type2				; compass2
 	bra		I2C_RX_compass2				; yes
 	btfsc	compass_type				; compass1?
@@ -497,7 +502,32 @@ I2C_init_compass:
 
 	btfsc	compass_type				; compass1?
 	bra		I2C_init_compass1			; yes
+	
+	; Check for compass0
+	bsf		SSP1CON2,SEN				; Start condition
+	rcall	WaitMSSP
+	movlw	0x3C						; address
+	rcall	I2C_TX
+	movlw	0x10
+	rcall	I2C_TX
+	bsf		SSP1CON2,PEN				; Stop condition
+	rcall   WaitMSSP
+	bcf		PIR1,SSP1IF
+	bsf		SSP1CON2,SEN				; Start condition
+	rcall	WaitMSSP
+	movlw	0x3D						; address
+	rcall	I2C_TX
+	rcall	I2C_OneByteRX					; Get one byte
+	movlw	"H"						; ASCI "H" = Compass0
+	cpfseq	SSP1BUF
+	bcf	compass_enabled					; clear enable flag, neither Compass2, 1 or 0 was found properly
+	bsf		SSP1CON2,PEN				; Stop condition
+	rcall	WaitMSSP
+
+	
 ; init compass0
+	btfss	compass_enabled					; Compass enabled?
+	return							; No, return
 	bsf		SSP1CON2,SEN				; Start condition
 	rcall	WaitMSSP
 	movlw	0x3C						; address
@@ -582,6 +612,8 @@ I2C_init_compass2:
 
 	global	I2C_sleep_compass
 I2C_sleep_compass:
+    	btfss	compass_enabled					; Compass enabled?
+	return							; No, return
 	bcf		 compass_enabled
 	btfsc	compass_type2				; compass2?
 	bra		I2C_sleep_compass2			; yes
@@ -722,6 +754,9 @@ I2CReset_2:
     
 	global	I2C_init_accelerometer
 I2C_init_accelerometer:
+    	btfss	compass_enabled					; Compass enabled?
+	return							; No, return
+
 	btfsc	compass_type2				; compass2?
 	bra		I2C_init_accelerometer2		; Yes.
 

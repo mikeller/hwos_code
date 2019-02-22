@@ -1396,6 +1396,9 @@ tft_compass_cardinal_NW:
 	return
 
 compass_heading_common:
+       	btfss	compass_enabled					; Compass enabled?
+	return							; No, return
+
 	call	speed_normal
 	movlw	compass_averaging			; numbers of extra averaging
 	movwf	up

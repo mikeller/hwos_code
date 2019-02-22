@@ -1707,44 +1707,45 @@ logbook_decomodel_common:
 	WIN_FRAME_COLOR16 .63,.220,.2,.105				; Top, Bottom, Left, Right
 
 	; Firmware
-	call	TFT_standard_color
-	WIN_SMALL .110,.65
-	STRCAT	"V:"
-	LOG_POINT_TO log_firmware
-	call	ext_flash_byte_read_plus				; read firmware xx
-	movff	ext_flash_rw,lo
-	bsf		neg_flag								; set flag for 2.15 or newer
-	movlw	.1
-	cpfsgt	lo										; >1?
-	bcf		neg_flag								; NO - clear flag
-	movlw	.9
-	cpfslt	lo										; <9 ?
-	bcf		neg_flag								; NO - clear flag (When unit was upgraded from hwOS Sport (10.xx))
-	bsf		leftbind
-	output_8
-	PUTC	"."
-	call	ext_flash_byte_read_plus				; read firmware yy
-	movff	ext_flash_rw,lo
-	movlw	.14
-	cpfsgt	lo										; >14 ?
-	bcf		neg_flag								; NO - clear flag
-	output_99x
-	STRCAT_PRINT ""
+    call    TFT_standard_color
+    WIN_SMALL .110,.65
+    STRCAT    "V:"
+    LOG_POINT_TO log_firmware
+    call    ext_flash_byte_read_plus                ; read firmware major number
+    movf    ext_flash_rw,W                            ; copy to WREG
+    movwf    hi                                        ; copy from WREG to hi
+    movwf    lo                                        ; copy from WREG to lo, too
+    bsf        leftbind                                ; print left-aligned
+    output_8                                        ; print major number
+    PUTC    "."                                        ; print "."
+    call    ext_flash_byte_read_plus                ; read firmware minor number
+    movff    ext_flash_rw,lo                            ; store in lo
+    output_99x                                        ; print minor version in 2 digit format
+    STRCAT_PRINT ""                                    ; finalize output
 
-	btfss	neg_flag								; set flag for 2.15 or newer
-	bra		logbook_no_batt_info
+    movf    hi,W                                    ; get major into WREG
+    xorlw    .3                                        ; major == 3 ?
+    bz        logbook_battery_percent                    ; YES - show battery %
 
-	; Battery percent (for dives with 2.15 or newer)
-	WIN_SMALL .110,.140
-	LOG_POINT_TO log_batt_info						; battery percent
-	call	ext_flash_byte_read_plus				; read battery low
-	movff	ext_flash_rw,lo
-	output_8
-	STRCAT_PRINT "%"
+    movf    hi,W                                    ; get major into WREG (again)
+    xorlw    .2                                        ; major == 2 ?
+    bnz        logbook_battery_voltage                    ; NO  - skip battery %
+    movlw    .14                                        ; YES - check minor version
+    cpfsgt    lo                                        ;     - minor > 14 ?
+    bra        logbook_battery_voltage                    ; NO  - skip battery %
+    ;bra    logbook_battery_percent                    ;       YES - show battery %
 
-logbook_no_batt_info:								; dives with firmware <2.15
+    ; Battery %
+logbook_battery_percent:
+    WIN_SMALL .110,.140                                ; show battery percent
+    LOG_POINT_TO log_batt_info                        ; address battery percent
+    call    ext_flash_byte_read_plus                ; read battery percent
+    movff    ext_flash_rw,lo                            ; copy battery percent to lo
+    output_8                                        ; print battery percent
+    STRCAT_PRINT "%"                                ; print "%" and finalize output
 
-	; Battery voltage
+    ; Battery Voltage
+logbook_battery_voltage: 
 	WIN_SMALL .110,.90
 	STRCAT_PRINT "Batt:"
 	WIN_SMALL .110,.115

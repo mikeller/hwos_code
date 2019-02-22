@@ -67,10 +67,13 @@ Int16 imul(PARAMETER Int16 a, PARAMETER Int16 b)
 Int16 udiv(PARAMETER Int16 a, PARAMETER Int16 b)
 {
 	OVERLAY Int16 d, r;
-
+    OVERLAY char failsafe=250;
+    
 	//---- Pre-scale both numerator and denominator --------------------------
 	while( (((a>>8) | (b>>8)) & 0xC0) == 0 )
 	{
+        failsafe--;
+        if (failsafe==0) break;
 		a <<= 1;
 		b <<= 1;
 	}
@@ -173,6 +176,7 @@ Int16 cosxh(PARAMETER Int16 x2, PARAMETER Int16 h2)
 void sincos(PARAMETER Int16 x, PARAMETER Int16 y, Int16* sin, Int16* cos)
 {
 	OVERLAY Int16 x2, y2, h2;
+    OVERLAY char failsafe = 250;
 
 	//---- Fold into one quadant ---------------------------------------------
 	OVERLAY char neg = 0;
@@ -190,6 +194,8 @@ void sincos(PARAMETER Int16 x, PARAMETER Int16 y, Int16* sin, Int16* cos)
 	//---- Pre-scale both numerator and denominator ----------------------
 	while( (((x>>8) | (y>>8)) & 0xE0) == 0 )
 	{
+        failsafe--;
+        if (failsafe == 0) break;
 		x <<= 1;
 		y <<= 1;
 	}
