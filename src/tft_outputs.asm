@@ -3078,7 +3078,7 @@ TFT_cat_firmware:
 	PUTC	'.'
 	movlw	softwareversion_y
 	movwf	lo
-	output_8
+	output_99x
 	bcf		leftbind
 	rcall	check_expiry
 	btfss	aux_flag
@@ -3125,7 +3125,7 @@ TFT_cat_beta_rel:					; entry point for printing "Rel." / "B. #"
 	bcf		aux_flag
 TFT_cat_beta_common:
  IFDEF __DEBUG
-	STRCAT	"DEBUG"
+	STRCAT	"DBG "
 	goto	TFT_warnings_color
  ELSE
 	movlw	softwareversion_beta	; =0: release, =1: beta 1, =2: beta 2, ...
@@ -3137,7 +3137,7 @@ TFT_cat_beta_common:
 	rcall	check_expiry			;       YES - check  expiry date
 	btfsc	aux_flag				;           - within expiry date?
 	bra		TFT_cat_beta_4			;             NO  - give update cue
-	STRCAT "Release"				;             YES - print "Release"
+	STRCAT "Rel. "				;             YES - print "Release"
 	return							;                 - done
 TFT_cat_beta_1:
 	btfss	aux_flag				; shall show long  version?
@@ -4893,44 +4893,43 @@ TFT_surface_tankdata_print_3:
 	return
 
 
-; TFT_surface_tankdata_debug:					; surface custom view debug output
-	; call	TFT_standard_color
-	; WIN_TINY surf_customtext_column,surf_customtext_row1+.14*0
-	; rcall	TFT_surface_tankdata_debug_print
-	; WIN_TINY surf_customtext_column,surf_customtext_row1+.14*1
-	; rcall	TFT_surface_tankdata_debug_print
-	; WIN_TINY surf_customtext_column,surf_customtext_row1+.14*2
-	; rcall	TFT_surface_tankdata_debug_print
-	; WIN_TINY surf_customtext_column,surf_customtext_row1+.14*3
-	; rcall	TFT_surface_tankdata_debug_print
-	; WIN_TINY surf_customtext_column,surf_customtext_row1+.14*4
-	; rcall	TFT_surface_tankdata_debug_print
-	; WIN_TINY surf_customtext_column,surf_customtext_row1+.14*5
-	; rcall	TFT_surface_tankdata_debug_print
-	; WIN_TINY surf_customtext_column,surf_customtext_row1+.14*6
-	; rcall	TFT_surface_tankdata_debug_print
-	; WIN_TINY surf_customtext_column,surf_customtext_row1+.14*7
-	; rcall	TFT_surface_tankdata_debug_print
-	; return
+TFT_surface_tankdata_debug:					; surface custom view debug output
+	 call	TFT_standard_color
+	 WIN_TINY surf_customtext_column,surf_customtext_row1+.14*0
+	 rcall	TFT_surface_tankdata_debug_print
+	 WIN_TINY surf_customtext_column,surf_customtext_row1+.14*1
+	 rcall	TFT_surface_tankdata_debug_print
+	 WIN_TINY surf_customtext_column,surf_customtext_row1+.14*2
+	 rcall	TFT_surface_tankdata_debug_print
+	 WIN_TINY surf_customtext_column,surf_customtext_row1+.14*3
+	 rcall	TFT_surface_tankdata_debug_print
+	 WIN_TINY surf_customtext_column,surf_customtext_row1+.14*4
+	 rcall	TFT_surface_tankdata_debug_print
+	 WIN_TINY surf_customtext_column,surf_customtext_row1+.14*5
+	 rcall	TFT_surface_tankdata_debug_print
+	 WIN_TINY surf_customtext_column,surf_customtext_row1+.14*6
+	 rcall	TFT_surface_tankdata_debug_print
+	 WIN_TINY surf_customtext_column,surf_customtext_row1+.14*7
+	 rcall	TFT_surface_tankdata_debug_print
+	 return
 
-; TFT_surface_tankdata_debug_print:
-	; movff	POSTINC1,hi					; ID high (+0)
-	; movff	POSTINC1,lo					; ID low  (+1)
-	; output_16
-	; PUTC	","
-	; movff	POSTINC1,hi					; pressure high (+2)
-	; movff	POSTINC1,lo					; pressure low  (+3)
-	; call	TFT_color_code_tank_pres_sac; needed to clear the status flags before output
-	; output_16
-	; PUTC	","
-	; movff	POSTINC1,lo					; status (+4)
-	; output_8
-	; PUTC	","
-	; movff	POSTINC1,lo					; date (+5)
-	; output_8
-	; STRCAT_PRINT ""
-	; return
-
+TFT_surface_tankdata_debug_print:
+	 movff	POSTINC1,hi					; ID high (+0)
+	 movff	POSTINC1,lo					; ID low  (+1)
+	 output_16
+	 PUTC	","
+	 movff	POSTINC1,hi					; pressure high (+2)
+	 movff	POSTINC1,lo					; pressure low  (+3)
+	 call	TFT_color_code_tank_pres_sac; needed to clear the status flags before output
+	 output_16
+	 PUTC	","
+	 movff	POSTINC1,lo					; status (+4)
+	 output_8
+	 PUTC	","
+	 movff	POSTINC1,lo					; date (+5)
+	 output_8
+	 STRCAT_PRINT ""
+	 return
  ENDIF
 
 ;=============================================================================    

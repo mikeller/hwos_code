@@ -35,13 +35,13 @@
 #DEFINE fr						3			; French
 #DEFINE it						4			; Italian
 
-#DEFINE _language_1				en			; first or single language - must be set to en, de, fr, or it, defaults to en
+#DEFINE _language_1				de			; first or single language - must be set to en, de, fr, or it, defaults to en
 #DEFINE _language_2				none		; second language or none
 
 
 ; Firmware Version
 #DEFINE softwareversion_x		.3			; Software Version, major               (1 -   9)
-#DEFINE softwareversion_y		.00			; Software Version, minor               (1 -  99)
+#DEFINE softwareversion_y		.01			; Software Version, minor               (1 -  99)
 #DEFINE softwareversion_beta	.0			; 0= Release, 1= Beta-1, 2= Beta-2, ... (0 - 255)
 
 ; Firmware Expiration Date, will cause version to be displayed in "Update Firmware" style after the following date:
@@ -641,7 +641,7 @@ amb_pressure_avg				res 2
 temperature_avg					res 2
 minimum_temperature				res 2		; minimum temperature
 last_temperature				res 2
-last_pressure					res 2
+;last_pressure					res 2
 last_pressure_velocity			res 2		; for velocity
 last_surfpressure				res 2
 last_surfpressure_15min			res 2

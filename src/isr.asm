@@ -475,21 +475,21 @@ isr_sensor_state2_3:
 	movff	temperature+0,last_temperature+0	; copy for compare
 	movff	temperature+1,last_temperature+1
 
-	movf	amb_pressure+0,W
-	cpfseq	last_pressure+0
-	bra		isr_sensor_state2_4			; YES
-	movf	amb_pressure+1,W
-	cpfseq	last_pressure+1
-	bra		isr_sensor_state2_4			; YES
-
-	bra		isr_sensor_state2_5			; no change
-isr_sensor_state2_4:
+;	movf	amb_pressure+0,W
+;	cpfseq	last_pressure+0
+;	bra		isr_sensor_state2_4			; YES
+;	movf	amb_pressure+1,W
+;	cpfseq	last_pressure+1
+;	bra		isr_sensor_state2_4			; YES
+;
+;	bra		isr_sensor_state2_5			; no change
+;isr_sensor_state2_4:
 	banksel	common						; flag1 is in bank 1
-	bsf		pressure_refresh			; YES
+	bsf		pressure_refresh			; Always set this flag
 	banksel	isr_backup					; back to bank 0 ISR data
-isr_sensor_state2_5:
-	movff	amb_pressure+0,last_pressure+0	; copy for compare
-	movff	amb_pressure+1,last_pressure+1
+;isr_sensor_state2_5:
+;	movff	amb_pressure+0,last_pressure+0	; copy for compare
+;	movff	amb_pressure+1,last_pressure+1
 
 	clrf	sensor_state_counter		; reset state counter
 	banksel	common						; flag2 is in bank 1

@@ -120,8 +120,8 @@ surfloop:
 ;	clrf	timeout_counter3		; not used / required [rl]
 	bcf		menubit					; clear menu flag
 	bcf		premenu
-	clrf	last_pressure+0
-	clrf	last_pressure+1
+;	clrf	last_pressure+0
+;	clrf	last_pressure+1
 	bcf		FLAG_bailout_mode		; =1: Bailout
 	bcf		FLAG_diluent_setup		; use OC gases for gaslist routine
 
