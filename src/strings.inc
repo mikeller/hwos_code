@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File strings.asm
+;   File strings.asm                          combined next generation V3.03.2
 ;
 ;   Implementation code various string functions
 ;
@@ -144,6 +144,14 @@ WIN_LARGE macro x, y
 	DB		x, y
 	endm
 
+ IFDEF _huge_font
+	extern	start_huge_block
+WIN_HUGE macro x, y
+	call	start_huge_block
+	DB		x, y
+	endm
+ ENDIF
+
 ;=============================================================================
 ; Shortcuts for compact display programmings
 ;
@@ -162,6 +170,11 @@ TEXT_SMALL_INVERT macro x, y, txt
 	STRCPY_TEXT_PRINT txt
 	endm
 
+TEXT_STD macro x, y, txt
+	WIN_STD x,y
+	STRCPY_TEXT_PRINT txt
+	endm
+
 TEXT_MEDIUM macro x, y, txt
 	WIN_MEDIUM x,y
 	STRCPY_TEXT_PRINT txt
@@ -171,6 +184,12 @@ TEXT_LARGE macro x, y, txt
 	WIN_LARGE x,y
 	STRCPY_TEXT_PRINT txt
 	endm
+
+TEXT_HUGE macro x, y, txt
+	WIN_HUGE x,y
+	STRCPY_TEXT_PRINT txt
+	endm
+
 
 STRING_TINY macro x, y, string
 	WIN_SMALL x,y
@@ -189,5 +208,10 @@ STRING_MEDIUM macro x, y, string
 
 STRING_LARGE macro x, y, string
 	WIN_LARGE x,y
+	STRCPY_PRINT string
+	endm
+
+STRING_HUGE macro x, y, string
+	WIN_HUGE x,y
 	STRCPY_PRINT string
 	endm

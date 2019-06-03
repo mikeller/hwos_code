@@ -1,8 +1,8 @@
 ;=============================================================================
 ;
-;   File sleepmode.asm											Version 2.99e
+;   File sleepmode.asm                        combined next generation V3.03.1
 ;
-;   Sleepmode
+;   Sleep Mode
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
 ;==============================================================================
@@ -13,343 +13,357 @@
 #include "shared_definitions.h"				; Mailbox from/to p2_deco.c
 #include "surfmode.inc"
 #include "tft.inc"
-#include "isr.inc"
 #include "start.inc"
 #include "adc_lightsensor.inc"
 #include "math.inc"
 #include "ms5541.inc"
-#include "wait.inc"
 #include "eeprom_rs232.inc"
 #include "external_flash.inc"
 #include "ghostwriter.inc"
 #include "i2c.inc"
 #include "mcp.inc"
+#include "wait.inc"
 
 
 	extern	vault_decodata_into_eeprom
+	extern	power_up_switches			; from hwos.asm
 
 
-	;---- Private local variables -------------------------------------------------
+;---- Private local Variables -------------------------------------------------
 
 	CBLOCK	local1						; max size is 16 Byte !!!
-		sm_temp1						; sleepmode temporary 1
-		sm_temp2						; sleepmode temporary 2
-		sm_timer1						; timer for pressure check every 10 seconds
-		sm_timer2						; timer for 10 minutes tasks (updating of tissues)
-		sm_timer3						; timer for 15 minutes tasks (updating of surface pressure)
-	ENDC								; used: 5 byte, remaining: 11 byte
+		accel_reference					; acceleration reference value for detecting movement / terminating deep sleep
+		sm_timer_10sec					; timer for 10 seconds tasks (pressure check)
+		sm_timer_10min					; timer for 10 minutes tasks (tissue updating)
+		sm_timer_15min					; timer for 15 minutes tasks (entering deep sleep)
+		loop_counter					; loop counter, used in init_avg_switches routine
+		sm_flags						; local flags
+	ENDC								; used: 6 byte, remaining: 10 byte
 
 
-slmode		CODE
+;---- Private local Flags -----------------------------------------------------
+
+#DEFINE deep_sleep			sm_flags,0	; =1: in deep sleep mode,                      =0: normal sleep
+#DEFINE desat_on_10_mins	sm_flags,1	; =1: calculate desaturation every 10 minutes, =0: every minute
+;							sm_flags,2	; unused
+;							sm_flags,3	; unused
+;							sm_flags,4	; unused
+;							sm_flags,5	; unused
+;							sm_flags,6	; unused
+;							sm_flags,7	; unused
+
+
+slmode	CODE
 
 ;==============================================================================
 
 	global	sleeploop
-sleeploop:									; enter sleep mode
-	call	disable_ir_s8					; IR/S8 off
-	call	mcp_sleep
-	bcf		LEDg
-	bcf		LEDr
-	call	TFT_Display_FadeOut
-	call	TFT_DisplayOff					; display off
+sleeploop:
+	clrf	STKPTR							; clear return addresses stack
+	call	request_speed_normal			; request CPU speed switch to normal speed
+
+	bcf		LEDg							; turn off green LED / release reset to RX circuitry
+	bcf		LEDr							; turn off red   LED
 
  IFDEF _screendump
-	bcf		enable_screen_dumps				; =1: Ignore vin_usb, wait for "l" command (screen dump)
+	bcf		screen_dump_avail				; disable screen dump function
  ENDIF
 
-	call	disable_rs232					; USB off
-	call	vault_decodata_into_eeprom		; store deco data
-	call	ext_flash_enable_protection		; enable write protection for external flash
-	call	update_battery_registers		; update battery registers into EEPROM
-	clrf	sm_temp1
-	clrf	sm_temp2
-	clrf	sm_timer1
-	clrf	sm_timer2
-	clrf	sm_timer3
-	call	speed_normal
-	bsf		no_sensor_int					; inhibit sensor interrupts
+	bsf		sleepmode						; flag being in sleep mode
+	bsf		block_sensor_interrupt			; suspend ISR from executing sensor interrupts
+
+ IFDEF _external_sensor
+	call	disable_ir_s8					; power-down IR/S8 interrupts
+	call	mcp_sleep						; power-down RX power supply
+ ENDIF
+
 	clrf	ADCON0							; power-down ADC module
+	call	TFT_Display_FadeOut				; power-down backlight
+	call	TFT_DisplayOff					; power-down display
+	call	disable_rs232					; power-down USB
+	call	I2C_sleep_accelerometer			; power-down accelerometer
+	call	I2C_sleep_compass				; power-down compass
 
-sleeploop_pre:
-	bcf		deep_sleep						; normal sleep mode
-	call	I2C_sleep_accelerometer
-	call	I2C_sleep_compass
-	btfss	analog_switches					; OSTC with analog switches?
-	bra		sleeploop_loop					; NO - no analog switches
+	call	vault_decodata_into_eeprom		; store deco data
+	call	ext_flash_enable_protection		; enable write protection on external flash
+	call	update_battery_registers		; update battery registers into EEPROM
 
-	bsf		power_sw1
-	btfss	power_sw1
-	bra		$-4
-	bsf		power_sw2
-	btfss	power_sw2
-	bra		$-4
-	movlw	.4								; wait for button circuity
-	movwf	sm_temp1						; used as temp
-	bcf		onesecupdate
-
-sleeploop_pre1:
-	rcall	sleepmode_sleep
-	btfss	onesecupdate					; wait 1 second
-	bra		sleeploop_pre1
-	bcf		onesecupdate
-	decfsz	sm_temp1,F
-	bra		sleeploop_pre1
-	movlw	.32								; wait for button circuity
-	movwf	sm_temp1						; used as temp
-
-sleeploop_pre2:	
-	call	get_analog_switches
-	decfsz	sm_temp1,F
-	bra		sleeploop_pre2
-
-	bcf		PIR1,TMR1IF
-	bcf		INTCON,INT0IF
-	bcf		INTCON3,INT1IF
-	bcf		PIR5,TMR7IF
-	bcf		switch_left
-	bcf		switch_right
-	bcf		analog_sw2_pressed
-	bcf		analog_sw1_pressed
-	bsf		PIE1,0							; (re)start timer 1 interrupt
-	bsf		PIE2,1							; (re)start timer 2 interrupt
-	bsf		PIE5,3							; (re)start timer 7 interrupt
-	bsf		INTCON,4						; (re)start INT0 interrupt
-	bsf		INTCON3,3						; (re)start INT1 interrupt
+	clrf	sm_timer_10sec					; clear 10 seconds timer
+	clrf	sm_timer_10min					; clear 10 minutes timer
+	clrf	sm_timer_15min					; clear 15 minutes timer
+	clrf	sm_flags						; clear all local  flags
 
 sleeploop_loop:
-	btfsc	onesecupdate					; one second in sleep?
-	rcall	onesec_sleep					; check switches, check pressure sensor, etc.
+	btfsc	trigger_full_second				; one second in sleep?
+	rcall	one_sec_sleep					; YES - check switches, pressure sensor, etc.
 
-	btfss	sleepmode						; wake up? (This bit will be set in other routines)
-	goto	restart							; YES
+	btfss	sleepmode						; shall terminate sleep mode?
+	bra		sleeploop_exit					; YES
 
-	btfsc	deep_sleep						; enter deep sleep?
-	bra		deepsleep						; YES
+	rcall	sleepmode_sleep					; wait at least 35 ms (every 62.5 ms timer7 wakeup)
 
-no_deepsleep:
-	rcall	sleepmode_sleep					; wait at least 35 ms (every 62.5ms timer7 wakeup)
+	btfss	deep_sleep						; shall enter deep sleep?
+	bra		sleeploop_loop					; NO  - remain in normal sleep loop
+	;bra	deepsleep_pre					; YES - enter     deep   sleep loop
 
-	; Any button pressed in sleep?
-;	btfsc	switch_left
-;	rcall	onesec_sleep1a
-;	btfsc	switch_right
-;	rcall	onesec_sleep1a
-;
-;	btfss	sleepmode						; wake up? (this bit will be set in other routines)
-;	goto	restart							; YES
+deepsleep_pre:
+	bcf		PIE1,0							; disable timer 1 interrupt
+	bcf		PIE2,1							; disable timer 2 interrupt
+	bcf		PIE5,3							; disable timer 7 interrupt
+	bcf		INTCON,4						; disable INT0    interrupt
+	bcf		INTCON3,3						; disable INT1    interrupt
 
-	bra		sleeploop_loop					; do loop until something happens
+	bcf		power_sw1						; power-down switch 1
+	bcf		power_sw2						; power-down switch 2
 
-deepsleep:
-	btfss	analog_switches
-	bra		no_deepsleep					; no analog switches, no deep sleep required
-
-	bcf		PIE1,0							; stop timer 1 interrupt
-	bcf		PIE2,1							; stop timer 2 interrupt
-	bcf		PIE5,3							; stop timer 7 interrupt
-	bcf		INTCON,4						; stop INT0 interrupt
-	bcf		INTCON3,3						; stop INT1 interrupt
-	bcf		power_sw1
-	bcf		power_sw2
 	rcall	deepsleep_get_accel				; read accelerometer into WREG
-	movwf	sm_temp1						; store init value
+	movwf	accel_reference					; store as reference value
 
 deepsleep_loop:
-	btfsc	onesecupdate					; one second in sleep?
-	rcall	onesec_deepsleep				; YES - check accelerometer
+	btfsc	trigger_full_second				; one second in deep sleep?
+	rcall	check_accelerometer				; YES - check accelerometer
 
-	btfsc	onesecupdate					; one second in sleep?
-	rcall	onesec_sleep					; YES - check switches, check pressure sensor, etc.
+	btfsc	trigger_full_second				; one second in deep sleep?
+	rcall	one_sec_sleep					; YES - check switches, check pressure sensor, etc.
 
-	rcall	sleepmode_sleep
+	rcall	sleepmode_sleep					; wait at least 35 ms (every 62.5 ms timer7 wakeup)
 
-	btfss	deep_sleep						; enter normal sleep mode?
-	bra		sleeploop_pre					; Yes
+	btfss	sleepmode						; shall leave sleep mode?
+	bcf		deep_sleep						; YES - leave deep sleep mode then, too
 
-	bra		deepsleep_loop					; do loop until something happens
+	btfsc	deep_sleep						; shall leave deep sleep mode?
+	bra		deepsleep_loop					; NO - loop in deep sleep loop
 
-onesec_deepsleep:
+	call	power_up_switches				; turn on    the analog switches
+	rcall	init_avg_switches				; initialize the averaging system
+
+	bsf		PIE1,0							; enable timer 1 interrupt
+	bsf		PIE2,1							; enable timer 2 interrupt
+	bsf		PIE5,3							; enable timer 7 interrupt
+	bsf		INTCON,4						; enable INT0    interrupt
+	bsf		INTCON3,3						; enable INT1    interrupt
+
+	bra		sleeploop_loop					; enter normal sleep loop
+
+
+sleeploop_exit:
+	bcf		switch_left						; eventually clear left  button event
+	bcf		switch_right					; eventually clear right button event
+	movlw	.0								; reset ISR sensor state machine
+	movff	WREG,sensor_state_counter		; ...
+	bcf		PIR5,TMR7IF						; clear timer 7, driving the ISR sensor interrupts
+	bcf		block_sensor_interrupt			; re-enable execution of the ISR sensor interrupts
+	goto	restart							; restart
+
+
+one_sec_sleep:
+	; tasks every second in sleep mode
+	bcf		trigger_full_second				; clear trigger flag
+
+	btfsc	switch_left						; left switch pressed?
+	bcf		sleepmode						; YES - terminate sleep mode
+
+	btfsc	switch_right					; right switch pressed?
+	bcf		sleepmode						; YES - terminate sleep mode
+
+	btfsc	battery_gauge_available			; is a battery gauge IC available?
+	bra		one_sec_sleep_1					; YES - check for charger
+	btfsc	vusb_in							; NO  - USB plugged in?
+	bcf		sleepmode						;       YES - terminate sleep mode
+	bra		one_sec_sleep_2					;     - continue
+
+one_sec_sleep_1:
+	call	get_battery_voltage				; check for charger
+
+one_sec_sleep_2:
+	incf	sm_timer_10sec,F				; increment 10 seconds timer
+	movlw	.10								; load  a 10 into WREG
+	cpfslt	sm_timer_10sec					; timer < 10 yet?
+	rcall	ten_sec_sleep					; NO - do the every 10 second tasks
+
+	btfsc	trigger_full_minute				; one minute in sleep?
+	rcall	one_min_sleep					; YES - do the every minute tasks
+
+	btfsc	trigger_full_hour				; one hour in sleep?
+	rcall	one_hour_sleep					; YES - do the every hour tasks
+
+	return									; done
+
+
+ten_sec_sleep:
+	; tasks every 10 seconds in sleep mode
+	clrf	sm_timer_10sec					; clear timer
+	rcall	pressuretest_sleep_fast			; get pressure without averaging (faster)
+	MOVLI	wake_up_from_sleep,sub_a		; load wake-up pressure (1160 mbar) into sub_a
+	MOVII	pressure_abs,      sub_b		; load current absolute pressure    into sub_b
+	call	cmpU16							; sub_a - sub_b = wake-up pressure - current absolute pressure
+	btfsc	neg_flag						; is the current absolute pressure > 1160 mbar ?
+	bcf		sleepmode						; YES - terminate sleep mode
+	return									; done
+
+
+one_min_sleep:
+	; tasks every minute in sleep mode
+	bcf		trigger_full_minute				; clear flag
+
+	; tick the 10 minutes timer
+	incf	sm_timer_10min,F				; increment 10 minutes timer
+	movlw	.10								; load  a 10 into WREG
+	cpfslt	sm_timer_10min					; timer < 10 yet?
+	rcall	ten_min_sleep					; NO - do the every 10 minutes tasks
+
+	; the 15 minutes timer only ticks on OSTC with analog switches
+	btfss	analog_switches					; OSTC with analog switches?
+	bra		one_min_sleep_1					; NO  - no analog switches, no deep sleep required
+
+	; the 15 minutes timer also ticks only when not in deep sleep
+	btfsc	deep_sleep						; in deep sleep mode?
+	bra		one_min_sleep_1					; YES - already in deep sleep
+
+	; tick the 15 minutes timer
+	incf	sm_timer_15min,F				; increment 15 minutes timer
+	movlw	.15								; load  a 15 into WREG
+	cpfslt	sm_timer_15min					; timer < 15 yet?
+	rcall	fifteen_min_sleep				; NO - do the every 15 minute tasks
+
+one_min_sleep_1:
+	; continue tasks every minute
+	btfsc	desat_on_10_mins				; shall do desaturation calculation on 10 minute intervals?
+	return									; YES - that's not here then, so done
+	call	deco_calc_dive_interval_1min	; NO  - calculate 1 minute at surface conditions (C-code)
+	banksel	common							;     - back to bank common
+	return									;     - done
+
+
+ten_min_sleep:
+	; tasks every 10 minutes in sleep mode
+	clrf	sm_timer_10min					; reset timer to 0
+
+	call	sample_surface_pressure			; sample surface pressure and update ISR and deco engine
+
+	btfss	desat_on_10_mins				; shall do desaturation calculation on 10 minute intervals?
+	bra		ten_min_sleep_1					; NO  - continue checking if schedule can be switched to 10 minutes
+	call	deco_calc_dive_interval_10min	; YES - calculate 10 minutes at surface conditions (C-code)
+	banksel	common							;     - back to bank common
+	return									;     - done
+
+ten_min_sleep_1:
+	movff	int_O_lead_supersat+0,WREG		; get leading tissue's supersaturation (only the lower byte is used for the value)
+	bsf		desat_on_10_mins				; switch to 10 minute intervals by default
+	tstfsz	WREG							; gradient factor = 0 ?
+	bcf		desat_on_10_mins				; NO - stay on 1 minute intervals
+	return									; done
+
+
+fifteen_min_sleep:
+	; tasks every 15 minutes in sleep mode
+	clrf	sm_timer_15min					; reset timer to 0
+	bsf		deep_sleep						; enable deep-sleep mode
+	return
+
+
+one_hour_sleep:
+	; tasks every hour in sleep mode mode
+	bcf		trigger_full_hour				; clear one hour flag
+	call	update_battery_registers		; update battery registers into EEPROM
+	call	vault_decodata_into_eeprom		; update tissue  pressures into EEPROM
+	return
+
+
+init_avg_switches:
+	; pause 4 seconds using CPU sleep mode to conserve on battery
+	movlw	.4								; time to pause
+	movwf	loop_counter					; initialize loop counter
+	bcf		trigger_full_second				; clear 'one second elapsed' flag
+activate_switches_1:
+	rcall	sleepmode_sleep					; wait at least 35 ms (every 62.5 ms timer7 wakeup)
+	btfss	trigger_full_second				; did 1 second elapsed meanwhile?
+	bra		activate_switches_1				; NO  - loop
+	bcf		trigger_full_second				; YES - clear flag
+	decfsz	loop_counter,F					;     - decrement loop counter, done?
+	bra		activate_switches_1				;       NO  - loop
+
+	; initialize the averaging system
+	movlw	.32								; number of readout cycles
+	movwf	loop_counter					; initialize loop counter
+activate_switches_2:
+	call	get_analog_switches				; do a analog switch readout
+	decfsz	loop_counter,F					; decrement loop counter, done?
+	bra		activate_switches_2				; NO  - loop
+
+	; clear all button events that may have intermediately occurred
+	bcf		PIR1,TMR1IF						; clear button-hold-down timer
+	bcf		INTCON,INT0IF					; clear right button activity
+	bcf		INTCON3,INT1IF					; clear left  button activity
+	bcf		analog_sw1_pressed				; clear analog switch 1 activity
+	bcf		analog_sw2_pressed				; clear analog switch 2 activity
+	bcf		switch_right					; clear right button event
+	bcf		switch_left						; clear left  button event
+
+	; done
+	return
+
+
+check_accelerometer:
 	rcall	deepsleep_get_accel				; read accelerometer into WREG
-	subwf	sm_temp1,W						; sm_temp1 - accel_DZ+0 -> WREG
+	subwf	accel_reference,W				; reference value - accel_DZ+0 -> WREG
 	btfsc	STATUS,N						; result negative?
 	negf	WREG							; YES - negate it
-	movwf	sm_temp2						; change of acceleration in Z-axis
-	movlw	.50								; threshold (mg)
-	cpfslt	sm_temp2						; bigger then the threshold?
-	bcf		deep_sleep						; YES
+	movwf	lo								; save as change of acceleration in Z-axis
+	movlw	.50								; load threshold (mg)
+	cpfslt	lo								; change of acceleration > threshold ?
+	bcf		deep_sleep						; YES - terminate deep sleep mode
+	return									; done
 
-;	extern	piezo_config_tx
-;	movff	sm_temp1,WREG
-;	call	piezo_config_tx
-;	movff	accel_DZ+0,WREG
-;	call	piezo_config_tx
-;	movff	sm_temp2,WREG
-;	call	piezo_config_tx
-
-	return
 
 deepsleep_get_accel:
-	call	I2C_init_compass				; required for compass1
-	call	I2C_init_accelerometer			; required for compass2
+	call	I2C_init_compass				; start compass,           required for compass1
+	call	I2C_init_accelerometer			; start accelerometer,     required for compass2
 	call	I2C_RX_accelerometer			; read accelerometer
-	call	I2C_sleep_compass				; required for compass1
-	call	I2C_sleep_accelerometer			; required for compass2
-	movff	accel_DZ+0,WREG
-	return
+	call	I2C_sleep_compass				; shut down compass,       required for compass1
+	call	I2C_sleep_accelerometer			; shut down accelerometer, required for compass2
+	movff	accel_DZ+0,WREG					; transfer result to WREG
+	return									; done
 
-onehour_sleep:
-	call	update_battery_registers		; update battery registers into EEPROM
-	call	vault_decodata_into_eeprom		; update deco data
-	bcf		onehourupdate					; all done
-	return
-
-onemin_sleep:
-	btfsc	onehourupdate					; one hour in sleep?
-	rcall	onehour_sleep					; YES
-
-	btfsc	battery_gauge_available
-	call	get_battery_voltage				; check for charger
-
-	;---- update tissues and CNS every 10 minutes when gradient factor is 0 (no supersaturation in any tissue any more)
-	movff	int_O_gradient_factor+0,WREG	; get gradient factor, only the lower byte is used for the value
-	tstfsz	WREG							; gradient factor = 0?
-	bra		onemin_sleep1					; NO - continue with air pressure compensation
-	incf	sm_timer2,F						; count-up...
-	movlw	d'9'							; ...to 9
-	cpfsgt	sm_timer2						; 10 minutes over?
-	bra		onemin_sleep1					; NO - continue with air pressure compensation
-	clrf	sm_timer2						; reset counter
-	SAFE_2BYTE_COPY amb_pressure, int_I_pres_respiration ; copy pressure to deco routine
-	call	deco_calc_dive_interval_10min	; calculate 10 minutes under surface conditions
-	banksel	common
-
-onemin_sleep1:
-	;---- adjust air pressure compensation any 15 minutes
-	incf	sm_timer3,F						; count-up...
-	movlw	d'14'							; ...to 14
-	cpfsgt	sm_timer3						; 15 minutes over?
-	bra		onemin_sleep2					; NO - continue with every-minute-tasks
-
-	; Tasks every 15 minutes in sleep
-	bsf		deep_sleep						; enter deep-sleep mode
-	clrf	sm_timer3						; reset counter
-
-	SAFE_2BYTE_COPY last_surfpressure_15min, last_surfpressure_30min	; save older air pressure
-	SAFE_2BYTE_COPY amb_pressure,            last_surfpressure_15min	; save new   air pressure
-
-	movlw	LOW  max_surfpressure
-	movff	WREG,sub_a+0					; max. "allowed" air pressure in mbar
-	movlw	HIGH max_surfpressure
-	movff	WREG,sub_a+1					; max. "allowed" air pressure in mbar
-	movff	last_surfpressure_15min+0,sub_b+0
-	movff	last_surfpressure_15min+1,sub_b+1
-	call	subU16							; sub_c = sub_a - sub_b
-	btfss	neg_flag						; Is 1080mbar < amb_pressure ?
-	bra		onemin_sleep2					; NO: current air pressure is lower then "allowed" air pressure, ok!
-
-	; not ok! Overwrite with max. "allowed" air pressure
-	movlw	LOW  max_surfpressure
-	movff	WREG,last_surfpressure_15min+0	; max. "allowed" air pressure in mbar
-	movlw	HIGH max_surfpressure
-	movff	WREG,last_surfpressure_15min+1	; max. "allowed" air pressure in mbar
-
-onemin_sleep2:
-	; Tasks every minute in sleep
-
-	;---- update tissues and CNS every minute when gradient factor is >0 (supersaturation in at least one tissue)
-	movff	int_O_gradient_factor+0,WREG	; get gradient factor, only the lower byte is used for the value
-	tstfsz	WREG							; gradient factor = 0?
-	bra		onemin_sleep3					; NO  - do tissue update on 1 minute schedule
-	bra		onemin_sleep4					; YES - tissue update is done on 10 minutes schedule
-
-onemin_sleep3:
-	SAFE_2BYTE_COPY amb_pressure, int_I_pres_respiration ; copy pressure to deco routine
-	call	deco_calc_dive_interval_1min	; calculate 1 minute under surface conditions
-	banksel	common
-
-onemin_sleep4:
-	bcf		oneminupdate					; all done
-	return
-
-onesec_sleep:
-	btfsc	oneminupdate					; one minute in sleep?
-	rcall	onemin_sleep					; YES - do one-minute tasks, e.g. calculate desaturation
-
-	btfsc	battery_gauge_available
-	call	get_battery_voltage				; check for charger
-
-	incf	sm_timer1,F						; counts to #test_pressure_in_sleep (10)
-	movlw	d'10'
-	cpfsgt	sm_timer1						; here: temp variable
-	bra		onesec_sleep1					; #test_pressure_in_sleep not done yet
-
-	clrf	sm_timer1						; clear counter
-	rcall	pressuretest_sleep_fast			; Gets pressure without averaging (faster!)
-	; compare current ambient pressure with wake_up_from_sleep
-	movlw	LOW  wake_up_from_sleep
-	movwf	sub_a+0							; power on if ambient pressure is greater threshold
-	movlw	HIGH wake_up_from_sleep
-	movwf	sub_a+1							; power on if ambient pressure is greater threshold
-	SAFE_2BYTE_COPY amb_pressure, sub_b
-	call	subU16							; is (1160mbar - averaged(amb_pressure)) < 0 ?
-	btfsc	neg_flag						; wake up from sleep?
-	bra		onesec_sleep1a					; YES - skip button checks, wake up!
-
-	btfsc	battery_gauge_available
-	bra		onesec_sleep1					; no wake-up with cR hardware
-	btfsc	vusb_in							; USB plugged in?
-	bra		onesec_sleep1a					; YES - skip button checks, wake up
-
-onesec_sleep1:
-	bcf		onesecupdate					; clear flag
-	btfsc	switch_left						; left switch pressed?
-	bra		onesec_sleep1a					; YES
-	btfsc	switch_right					; right switch pressed?
-	bra		onesec_sleep1a					; YES
-	return									; NO to both - done
-
-onesec_sleep1a:								; at least one button pressed or amb_pressure -> wake_up_from_sleep
-	bcf		sleepmode						; wake up
-	SAFE_2BYTE_COPY last_surfpressure_30min, amb_pressure	; copy for compatibility
-	movlw	.0
-	movff	WREG,sensor_state_counter		; reset sensor state counter
-	bcf		no_sensor_int					; normal sensor interrupt mode
-	return
 
 pressuretest_sleep_fast:					; get pressure without averaging (faster to save some power in sleep mode)
-	banksel	isr_backup						; back to Bank0 ISR data
-	clrf	amb_pressure_avg+0				; clear pressure average registers
-	clrf	amb_pressure_avg+1
-	clrf	temperature_avg+0				; clear temperature average registers
-	clrf	temperature_avg+1
+	banksel	isr_backup						; select bank ISR data
+
+	CLRI	pressure_abs_avg				; clear pressure    average register
+	CLRI	temperature_avg					; clear temperature average register
+
 	call	get_temperature_start			; start temperature integration (73.5 us)
-	banksel	common
+
 	rcall	sleepmode_sleep					; wait at least 35 ms (every 62.5 ms timer7 wakeup)
 	rcall	sleepmode_sleep					; wait at least 35 ms (every 62.5 ms timer7 wakeup)
-	banksel	isr_backup						; back to Bank0 ISR data
+
 	call	get_temperature_value			; state 1: get temperature
 	call	get_pressure_start				; start pressure integration
-	banksel	common
+
 	rcall	sleepmode_sleep					; wait at least 35 ms (every 62.5 ms timer7 wakeup)
 	rcall	sleepmode_sleep					; wait at least 35 ms (every 62.5 ms timer7 wakeup)
-	banksel	isr_backup						; back to bank0 ISR data
+
 	call	get_pressure_value				; state2: get pressure (51 us)
 	call	calculate_compensation			; calculate temperature compensated pressure (27 us)
-	banksel	common
-	SAFE_2BYTE_COPY amb_pressure_avg, amb_pressure	; copy for compatibility
+
+	MOVII	pressure_abs_avg,pressure_abs	; get result, bypassing the averaging
+
+	banksel	common							; back to bank common
 	return
 
+
 sleepmode_sleep:
-	banksel 0xF16							; addresses F16h through F5Fh are also used by SFRs, but are not part of the access RAM
+	movff	BSR,BSR_backup					; backup BSR
+	banksel	T7GCON							; switch bank, T7* is outside access RAM
 	clrf	T7GCON							; reset timer7 gate control register
 	movlw	b'10001101'						; 1:1 prescaler -> 2 seconds @ 32768 Hz, not synced
 	movwf	T7CON
 	sleep
 	sleep
 	clrf	T7GCON							; reset timer7 gate control register
-	movlw	b'10001001'						; 1:1 prescaler ->  2 seconds @ 32768Hz, synced
+	movlw	b'10001001'						; 1:1 prescaler ->  2 seconds @ 32768 Hz, synced
 	movwf	T7CON
-	banksel	common							; back to bank1
+	movff	BSR_backup,BSR					; restore BSR
 	return
 
  END

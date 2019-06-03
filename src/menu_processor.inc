@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File menu_processor.asm							REFACTORED VERSION V2.97
+;   File menu_processor.asm                   combined next generation V3.0.4b
 ;
 ;   Routines to handle all OSTC graphic/text menus.
 ;
@@ -9,24 +9,23 @@
 ; HISTORY
 ;   2011-05-30 : [jDG] Creation.
 
-	; Restart menu-system from first icon/line
-	extern  menu_processor_reset
+	; restart menu-system from first icon/line
+	extern	menu_processor_reset
 
-	; Recall last (automatically) saved icon/line when returning from submenu
+	; recall last (automatically) saved icon/line when returning from submenu
 	extern	menu_processor_pop
 	extern	menu_processor_double_pop
 
 	; execute the menu block
-	extern  menu_processor
-	extern  menu_processor_bottom_line
+	extern	menu_processor
 
 ;=============================================================================
 ; Menus parameters
 
-;NOTE: should be idenric in .inc and .asm !
-#define MENU_LINES_MAX		.7		; Number of lines per screen?
-#define MENU_HEIGHT			.27		; Spacing on screen.
-#define MENU_VCENTER		.125	; Position on screen.
+;NOTE: needs to be identical in .inc and .asm files!
+#define MENU_LINES_MAX		.7		; max number of lines per screen
+#define MENU_HEIGHT			.27		; spacing on screen
+#define MENU_VCENTER		.125	; position on screen
 
 ;=============================================================================
 
@@ -46,10 +45,10 @@ center		set MENU_VCENTER - (MENU_HEIGHT/2) * nb_items
 		extern	txt
 		call	menu_processor
 
-		; Push 6 bytes of menu header data.
-		db		nb_items,   dynamic
-		db		LOW(txt),   HIGH(txt)
-		db		UPPER(txt), center
+		; Push 6 bytes of menu header data
+		db		nb_items,	dynamic
+		db		LOW(txt),	HIGH(txt)
+		db		UPPER(txt),	center
 	ENDM
 
 ;=============================================================================
@@ -71,8 +70,8 @@ MENU_BEGIN_DYNAMIC	MACRO	title_proc, nb_items
 MENU_CALL			MACRO	txt, proc
 		extern	txt
 		db		0, 0,             0,             0
-		db		   LOW(proc),     HIGH(proc),    UPPER(proc), 0
-		db		   LOW(txt),      HIGH(txt)
+		db		LOW(proc),     HIGH(proc),    UPPER(proc), 0
+		db		LOW(txt),      HIGH(txt)
     ENDM
 
 ; Generic option menu
@@ -81,7 +80,7 @@ MENU_OPTION			MACRO	txt, option, callback
 		extern	txt
 		extern	option
 		db		2, LOW(callback), HIGH(callback), UPPER(callback)
-		db		   LOW(option),   HIGH(option),   UPPER(option), 0
+		db		   LOW(option),   HIGH(option),   UPPER(option),  0
 		db		   LOW(txt),      HIGH(txt)
 	ENDM
 

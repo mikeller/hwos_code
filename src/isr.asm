@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File isr.asm									REFACTORED VERSION V2.99f
+;   File isr.asm                              combined next generation V3.03.4
 ;
 ;   INTERUPT subroutines
 ;
@@ -13,12 +13,12 @@
 #include "shared_definitions.h"			; Mailbox from/to p2_deco.c
 #include "ms5541.inc"
 #include "adc_lightsensor.inc"
-#include "eeprom_rs232.inc"
+
+	extern	restore_flash
 
 ;=============================================================================
-
-	extern	start
-
+; Code to be placed at fixed position
+;
 isr_high	CODE	0x0008				; high priority interrupts
 	bra		HighInt
 	nop
@@ -28,147 +28,163 @@ isr_high	CODE	0x0008				; high priority interrupts
 	nop
 	nop
 	bra		HighInt
-
+										; *** low priority interrupts are not used ***
 isr_low		CODE	0x00018				; low priority interrupts
-;	*** low priority interrupts not used
-	retfie	FAST						; restores BSR, STATUS and WREG
+	retfie	FAST						; do an immediate return with restore of BSR, STATUS and WREG
 
+
+;=============================================================================
+; Interrupt Dispatcher
+;
 HighInt:
-	movff	PRODL,isr_prod+0
-	movff	PRODH,isr_prod+1
+	; initialize interrupt code
+	banksel	isr_backup					; default bank for all ISR code is bank ISR data
+	rcall	isr_registers_backup		; back-up registers
 
-	; Buttons
-	btfsc	PIR1,TMR1IF					; timer 1 INT (button hold-down timer)
-	rcall	timer1int
-	btfsc	INTCON,INT0IF				; buttons
-	rcall	isr_switch_right
-	btfsc	INTCON3,INT1IF				; buttons
-	rcall	isr_switch_left
+	; serve buttons
+	btfsc	PIR1,TMR1IF					; timer 1 interrupt (button hold-down timer)?
+	rcall	timer1int					; YES - reset timer
+	btfsc	INTCON,INT0IF				; right button activity?
+	rcall	isr_switch_right			; YES - check right switch
+	btfsc	INTCON3,INT1IF				; left button activity?
+	rcall	isr_switch_left				; YES - check left switch
 
-	; IR/S8 link timer int
-	btfsc	PIR3,RC2IF					; UART 2
-	rcall	isr_uart2					; IR/S8 link
-	btfsc	PIR2,TMR3IF					; timer 3
-	rcall	isr_timer3					; IR-Link timeout
+ IFDEF _external_sensor
+	; serve IR/S8 link timer
+	btfsc	PIR3,RC2IF					; UART 2 interrupt?
+	rcall	isr_uart2					; YES - get a byte from the IR/S8 link
+	btfsc	PIR2,TMR3IF					; timer 3 interrupt?
+	rcall	isr_timer3					; YES - check bytes received from IR/S8 link for being a valid telegram
+ ENDIF
 
-	; Pressure sensor and others
-	btfsc	PIR5,TMR7IF					; timer 7
-	rcall	isr_tmr7					; every 62.5ms
+	; serve pressure and temperature sensor
+	btfsc	PIR5,TMR7IF					; timer 7 interrupt?
+	rcall	isr_tmr7					; YES - do every 62.5 ms tasks: read sensors, set CPU speed
 
-	; RTCC
-	btfsc	PIR3,RTCCIF					; real-time-clock interrupt
-	rcall	isr_rtcc					; may return in bank common!
+	; serve real-time clock (RTCC)
+	btfsc	PIR3,RTCCIF					; real-time-clock interrupt?
+	rcall	isr_rtcc					; YES - do every 1/2 s tasks: read RTC, trigger timed tasks, adjust CPU speed, gauge battery, etc.
 
-	movff	isr_prod+1,PRODH
-	movff	isr_prod+0,PRODL
-	retfie	FAST						; restores BSR, STATUS and WREG
+	; clean up and exit
+	rcall	isr_registers_restore		; restore registers
+	bsf		trigger_isr_updates			; signal that the ISR had kicked in
+	retfie	FAST						; return from interrupt restoring BSR, STATUS and WREG
+
+
+;=============================================================================
+; CPU speed adjustment
+;
+isr_adjust_speed:
+	movff	cpu_speed_request,cpu_speed_state	; acknowledge CPU speed request
+
+	btfsc	speed_is_eco				; speed 'eco' requested?
+	bra		isr_set_speed_to_eco		; YES - set eco speed
+	btfsc	speed_is_fastest			; NO  - speed 'fastest' requested?
+	bra		isr_set_speed_to_fastest	;       YES - set fastest speed
+	;bra	isr_set_speed_to_normal		;       NO  - default to normal speed
 
 isr_set_speed_to_normal:
-	; Set speed to normal
-	movlw	b'01110010'
-	movwf	OSCCON						; 16 MHz INTOSC
-	movlw	b'00000000'
-	movwf	OSCTUNE						; 4x PLL disable (bit 6) - only works with 8 or 16 MHz (=32 or 64 MHz)
-	movlw	T2CON_NORMAL
-	movwf	T2CON
-	btfss	OSCCON,HFIOFS
-	bra		$-2							; wait until clock is stable
-	return
+	movlw	b'00000000'					; coding for x4 PLL disabled
+	movwf	OSCTUNE						; switch off x4 PLL
+	movlw	b'01110010'					; select 16 MHz
+	movwf	OSCCON						; set prescaler
+	movlw	T2CON_NORMAL				; PWM1 dimming factor for speed 'normal'
+	movwf	T2CON						; adjust PWM1 for LED dimming
+	bra		isr_adjust_speed_exit
 
-isr_dimm_tft:							; adjust until max_CCPR1L=CCPR1L
-	banksel	common
-	btfsc	tft_is_dimming				; ignore while dimming
-	return
-	banksel	isr_backup
-	movf	max_CCPR1L,W
-	cpfsgt	CCPR1L						; CCPR1L > max_CCPR1L ?
-	bra		isr_dimm_tft2				; NO - dimm up
-	; dimm down
-	decf	CCPR1L,F					; -1
-	return
-isr_dimm_tft2:
-	movf	max_CCPR1L,W
-	sublw	ambient_light_min_eco
-	cpfsgt	CCPR1L						; CCPR1L > max_CCPR1L-ambient_light_min_eco ?
-	bra		isr_dimm_tft3				; NO - dimm up slow
-	; dimm up faster
-	movlw	.10
-	addwf	CCPR1L,F
-isr_dimm_tft3:
-	incf	CCPR1L,F					; +1
-	return
+isr_set_speed_to_eco:
+	movlw	b'00000000'					; coding for x4 PLL disabled
+	movwf	OSCTUNE						; switch off x4 PLL
+	movlw	b'00110010'					; select 1 MHz
+	movwf	OSCCON						; set prescaler
+	movlw	T2CON_ECO					; PWM1 dimming factor for speed 'eco'
+	movwf	T2CON						; adjust PWM1 for LED dimming
+	bra		isr_adjust_speed_exit
+
+isr_set_speed_to_fastest:
+	movlw	b'01110010'					; select 16 MHz by default
+	btfsc	lv_core						; on OSTC with low voltage core?
+	movlw	b'01100010'					; YES - reduce to 8 MHz
+	movwf	OSCCON						; set prescaler
+	movlw	b'01000000'					; coding for x4 PLL enable
+	movwf	OSCTUNE						; switch on  x4 PLL -> 64 MHz on high voltage core, 32 MHz on low voltage core
+	movlw	T2CON_FASTEST				; PWM1 dimming factor for speed 'fastest'
+	movwf	T2CON						; adjust PWM1 for LED dimming
+	;bra	isr_adjust_speed_exit
+
+isr_adjust_speed_exit:
+	btfss	OSCCON,HFIOFS				; PLL stabilized?
+	bra		isr_adjust_speed_exit		; NO  - loop to give it some more time
+	return								; YES - done
+
+	; Attention: fill-up the gap between the end of this section
+	;            and the next section which starts at 0x00080 !!
 	nop
-	nop									; block flash here
 
+block_0_code_end:						; marker to find end of code in block 0 in linker report file
+
+;=============================================================================
+; jump vector for the bootloader, placed at an appointed position here
+;
 isr_restore	CODE	0x00080				; restore first flash page from EEPROM
 restore_flash_0x00080:
 	goto	restore_flash
 
-isr_routines							; CODE
+
 ;=============================================================================
-
-isr_uart2:								; IR/S8 link
-	banksel	RCREG2
-	movf	RCREG2,W
-	bcf		RCSTA2,CREN					; clear receiver status
-	bsf		RCSTA2,CREN
-	banksel	isr_backup
-	incf	ir_s8_counter,F				; increase counter
-	movff	ir_s8_counter,isr1_temp		; copy
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.0
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.1
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.2
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.3
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.4
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.5
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.6
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.7
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.8
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.9
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.10
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.11
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.12
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.13
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.14
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.15
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.16
-	dcfsnz	isr1_temp,F
-	movwf	ir_s8_buffer+.17
-
-	clrf	TMR3L						; preload timer
-	movlw	.253
-	movwf	TMR3H
-	bsf		T3CON,TMR3ON				; (re)start timeout counter
+; back-up and restore registers
+;
+isr_registers_backup:
+	MOVII	PRODL,PROD_backup			; back-up PRODH:PRODL
 	return
 
-isr_timer3:								; IR/S8 link timeout
+isr_registers_restore:
+	MOVII	PROD_backup,PRODL			; restore PRODH:PRODL
+	return
+
+
+;=============================================================================
+; routines for handling digital-attached external sensors
+;
+ IFDEF _external_sensor
+
+; Take a byte received on IR/S8 link and slot it into the RX buffer
+;
+isr_uart2:
+	banksel	RCREG2						; RC*2 is outside access RAM
+	movff	RCREG2,isr_lo				; copy received byte to isr_lo
+	bcf		RCSTA2,CREN					; clear receiver status
+	bsf		RCSTA2,CREN					; ...
+	banksel	isr_backup					; back to default ISR bank
+	movlw	.18							; size of the buffer
+	cpfslt	ir_s8_counter				; number of received bytes < buffer size?
+	bra		isr_uart2_1					; NO  - buffer full, do not store the byte
+	movf	ir_s8_counter,W				; YES - copy number of received bytes to WREG
+	MOVII	FSR0L,FSR0_backup			;     - back-up FSR0
+	lfsr	FSR0,ir_s8_buffer			;     - load base address of buffer
+	movff	isr_lo,PLUSW0				;     - store received byte
+	MOVII	FSR0_backup,FSR0L			;     - restore FSR0
+	incf	ir_s8_counter,F				;     - increment number of received bytes by 1
+isr_uart2_1:
+	clrf	TMR3L						; reload timer 3
+	movlw	.253						; ...
+	movwf	TMR3H						; ...
+	bsf		T3CON,TMR3ON				; (re)start timeout timer 3
+	return
+
+
+; Timeout on IR/S8 link: check the checksum and gather the received data
+;
+isr_timer3:
 	bcf		T3CON,TMR3ON				; stop timer 3
-	banksel	isr_backup					; select bank 0 for ISR data
 	movlw	.15
 	cpfseq	ir_s8_counter				; got exactly 15 bytes?
-	bra		isr_timer3_1				; NO  - test for 16bytes
+	bra		isr_timer3_1				; NO  - test for 16 bytes
 	bra		isr_timer3_ir				; YES - got 15 bytes, compute local checksum
 isr_timer3_1:
 	movlw	.16
 	cpfseq	ir_s8_counter				; got exactly 16 bytes?
-	bra		isr_timer3_2				; NO - test for 17 bytes
+	bra		isr_timer3_2				; NO  - test for 17 bytes
 	tstfsz	ir_s8_buffer+.15			; YES - last byte = 0x00 ?
 	bra		isr_timer3_exit				;       No  - exit
 	bra		isr_timer3_ir				;       YES - got 16 bytes, compute local checksum
@@ -178,350 +194,316 @@ isr_timer3_2:
 	bra		isr_timer3_exit				; NO  - exit
 	bra		isr_timer3_s8				; YES - S8 data
 
-isr_timer3_ir:							; IR input
-	movff	ir_s8_buffer+.0,PRODL
-	clrf	PRODH
-	movf	ir_s8_buffer+.1,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.2,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.3,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.4,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.5,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.6,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.7,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.8,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.9,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.10,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.11,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.12,W
-	rcall	isr_timer3_checksum
-
-	; Compare checksum
-	movf	ir_s8_buffer+.13,W
-	cpfseq	PRODL						; checksum ok?
+	; Process telegram received on IR link
+isr_timer3_ir:
+	movlw	.12							; checksum shall be computed for 1st and next 12 bytes
+	rcall	compute_IR_S8_checksum		; compute checksum
+	movf	ir_s8_buffer+.13,W			; get low  byte of the received checksum
+	cpfseq	isr_mpr+0					;  =  low  byte of the calculated local checksum?
 	bra		isr_timer3_exit				; NO - exit
-	movf	ir_s8_buffer+.14,W
-	cpfseq	PRODH						; checksum ok?
+	movf	ir_s8_buffer+.14,W			; get high byte of the received checksum
+	cpfseq	isr_mpr+1					;  =  high byte of the calculated local checksum?
 	bra		isr_timer3_exit				; NO - exit
+										; YES to both - received telegram valid, copy data
 
-	; Checksum OK, copy results
-	movff	ir_s8_buffer+.1,hud_status_byte
-	movff	ir_s8_buffer+.2,o2_mv_sensor1+0
-	movff	ir_s8_buffer+.3,o2_mv_sensor1+1
-	movff	ir_s8_buffer+.4,o2_mv_sensor2+0
-	movff	ir_s8_buffer+.5,o2_mv_sensor2+1
-	movff	ir_s8_buffer+.6,o2_mv_sensor3+0
-	movff	ir_s8_buffer+.7,o2_mv_sensor3+1
-	movff	ir_s8_buffer+.8,o2_ppo2_sensor1
-	movff	ir_s8_buffer+.9,o2_ppo2_sensor2
-	movff	ir_s8_buffer+.10,o2_ppo2_sensor3
+	movff	ir_s8_buffer+.1, hud_status_byte
+	movff	ir_s8_buffer+.2, sensor1_mv+0
+	movff	ir_s8_buffer+.3, sensor1_mv+1
+	movff	ir_s8_buffer+.4, sensor2_mv+0
+	movff	ir_s8_buffer+.5, sensor2_mv+1
+	movff	ir_s8_buffer+.6, sensor3_mv+0
+	movff	ir_s8_buffer+.7, sensor3_mv+1
+	movff	ir_s8_buffer+.8, sensor1_ppO2
+	movff	ir_s8_buffer+.9, sensor2_ppO2
+	movff	ir_s8_buffer+.10,sensor3_ppO2
 	movff	ir_s8_buffer+.11,hud_battery_mv+0
 	movff	ir_s8_buffer+.12,hud_battery_mv+1
 
-	movlw	ir_timeout_value			; multiples of 62.5 ms
+	bsf		hud_connection_ok			; set manually for hwHUD w/o the HUD module
+	bra		isr_timer3_reload			; reload timer and exit
+
+	; Process telegram received on S8 link
+isr_timer3_s8:
+	movlw	.14							; checksum shall be computed for 1st and next 14 bytes
+	rcall	compute_IR_S8_checksum		; compute checksum
+
+	movf	ir_s8_buffer+.15,W			; get low  byte of the received checksum
+	cpfseq	isr_mpr+0					;  =  low  byte of the calculated local checksum?
+	bra		isr_timer3_exit				; NO - exit
+	movf	ir_s8_buffer+.16,W			; get high byte of the received checksum
+	cpfseq	isr_mpr+1					;  =  high byte of the calculated local checksum?
+	bra		isr_timer3_exit				; NO - exit
+										; YES to both - received telegram valid, copy data
+	movff	ir_s8_buffer+.3, hud_status_byte
+	movff	ir_s8_buffer+.13,hud_battery_mv+0
+	movff	ir_s8_buffer+.14,hud_battery_mv+1
+
+	btfsc	trigger_S8_data_update		; last data already processed?
+	bra		isr_timer3_reload			; NO  - skip copying new results
+	bsf		trigger_S8_data_update		; YES - set flag for new data available
+										;     - copy more data
+
+	movff	ir_s8_buffer+.4, s8_rawdata_sensor1+0
+	movff	ir_s8_buffer+.5, s8_rawdata_sensor1+1
+	movff	ir_s8_buffer+.6, s8_rawdata_sensor1+2
+	movff	ir_s8_buffer+.7, s8_rawdata_sensor2+0
+	movff	ir_s8_buffer+.8, s8_rawdata_sensor2+1
+	movff	ir_s8_buffer+.9, s8_rawdata_sensor2+2
+	movff	ir_s8_buffer+.10,s8_rawdata_sensor3+0
+	movff	ir_s8_buffer+.11,s8_rawdata_sensor3+1
+	movff	ir_s8_buffer+.12,s8_rawdata_sensor3+2
+
+isr_timer3_reload:
+	movlw	ir_timeout_value			; in multiples of 62.5 ms
 	movwf	ir_s8_timeout				; reload timeout
-
-	banksel	hud_status_byte
-	bsf		hud_connection_ok			; set manually for hwHUD w/o the HUD module...
-	banksel	isr_backup					; select bank 0 for ISR data
-
 isr_timer3_exit:
 	clrf	ir_s8_counter				; clear pointer
 	bcf		PIR2,TMR3IF					; clear flag
 	return
 
-isr_timer3_checksum:
-	addwf	PRODL,F
-	movlw	.0
-	addwfc	PRODH,F
-	return
 
-isr_timer3_s8:							; S8 input
-	movff	ir_s8_buffer+.0,PRODL
-	clrf	PRODH
-	movf	ir_s8_buffer+.1,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.2,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.3,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.4,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.5,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.6,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.7,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.8,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.9,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.10,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.11,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.12,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.13,W
-	rcall	isr_timer3_checksum
-	movf	ir_s8_buffer+.14,W
-	rcall	isr_timer3_checksum
+; compute checksum on data in RX buffer
+;
+compute_IR_S8_checksum:
+	movwf	ir_s8_counter				; initialize loop counter from WREG
+	movff	ir_s8_buffer+0,isr_mpr+0	; initialize low byte of the local checksum with first byte in buffer
+	clrf	               isr_mpr+1	; clear the high byte of the local checksum
+	lfsr	FSR0,ir_s8_buffer			; load base address of the buffer
+compute_IR_S8_checksum_loop:
+	movf	PREINC0,W					; get next byte
+	addwf	isr_mpr+0,F					; add it to the to checksum, low  byte
+	movlw	.0							; no explicit data to add to the high byte...
+	addwfc	isr_mpr+1,F					; ... besides the carry
+	decfsz	ir_s8_counter				; decrement number of bytes yet to do, all done?
+	bra		compute_IR_S8_checksum_loop	; NO  - loop
+	return								; YES - done
 
-	; Compare checksum
-	movf	ir_s8_buffer+.15,W
-	cpfseq	PRODL						; checksum ok?
-	bra		isr_timer3_exit				; NO - exit
-	movf	ir_s8_buffer+.16,W
-	cpfseq	PRODH						; checksum ok?
-	bra		isr_timer3_exit				; NO - exit
-
-	; Checksum OK, copy results
-	movff	ir_s8_buffer+.3,hud_status_byte
-	movff	ir_s8_buffer+.13,hud_battery_mv+0
-	movff	ir_s8_buffer+.14,hud_battery_mv+1
-
-	banksel	common
-	btfsc	new_s8_data_available		; =1: old data already processed?
-	bra		isr_timer3_skip				; NO - skip copying new results
-
-	movff	ir_s8_buffer+.6,s8_rawdata_sensor1+2
-	movff	ir_s8_buffer+.5,s8_rawdata_sensor1+1
-	movff	ir_s8_buffer+.4,s8_rawdata_sensor1+0
-	movff	ir_s8_buffer+.9,s8_rawdata_sensor2+2
-	movff	ir_s8_buffer+.8,s8_rawdata_sensor2+1
-	movff	ir_s8_buffer+.7,s8_rawdata_sensor2+0
-	movff	ir_s8_buffer+.12,s8_rawdata_sensor3+2
-	movff	ir_s8_buffer+.11,s8_rawdata_sensor3+1
-	movff	ir_s8_buffer+.10,s8_rawdata_sensor3+0
-	banksel	common
-	bsf		new_s8_data_available		; set flag
-
-isr_timer3_skip:
-	banksel	ir_s8_timeout
-	movlw	ir_timeout_value			; multiples of 62.5ms
-	movwf	ir_s8_timeout				; reload timeout
-	bra		isr_timer3_exit				; exit
-
+ ENDIF	; _external_sensor
 
 ;=============================================================================
 
-isr_tmr7:								; each 62.5ms
+;=============================================================================
+; Tasks every 62.5 ms: buttons, dimming, pressure/temp sensor and CPU speed
+;
+isr_tmr7:
 	bcf		PIR5,TMR7IF					; clear flag
-	banksel	0xF16						; addresses F16h through F5Fh, are also used by SFRs, but are not part of the Access RAM
-	movlw	.248
-	movwf	TMR7H						; rollover after 2048 cycles -> 62.5ms
+	movlw	.248						; rollover after 248 cycles -> 62.5 ms
+	movff	WREG,TMR7H					; timer 7 is outside access RAM
 
-	banksel	common
-	call	get_analog_switches			; get analog readings
+	call	get_analog_switches			; get analog readings, CAUTION: returns in bank common
+	banksel	isr_backup					;back to ISR default bank
+
 	btfss	INTCON3,INT1IE
 	bra		isr_tmr7_a
 	btfsc	analog_sw2_pressed
-	rcall	isr_switch_left
+	rcall	isr_switch_left				; get digital readings of left switch
 isr_tmr7_a:
-	banksel	common
 	btfss	INTCON,INT0IE
 	bra		isr_tmr7_b
 	btfsc	analog_sw1_pressed
-	rcall	isr_switch_right
+	rcall	isr_switch_right			; get digital readings of right switch
 isr_tmr7_b:
-	banksel	common
-	btfss	no_sensor_int				; sensor interrupt (because it's addressed during sleep)?
+	btfss	block_sensor_interrupt		; sensor interrupts disabled?
 	bra		isr_tmr7_c					; NO  - continue
-	banksel	isr_backup					; YES - back to bank 0 ISR data
-	return
+	return								; YES - done
 isr_tmr7_c:
-	banksel	isr_backup
-	movf	max_CCPR1L,W				; dimm value
+	movf	max_CCPR1L,W				; dim value
 	cpfseq	CCPR1L						; = current PWM value?
-	rcall	isr_dimm_tft				; NO - adjust until max_CCPR1L=CCPR1L
+	rcall	isr_dimm_tft				; NO - adjust until max_CCPR1L = CCPR1L
 
-	banksel	isr_backup
-	decfsz	ir_s8_timeout,F				; IR data still valid?
+ IFDEF _external_sensor
+	decfsz	ir_s8_timeout,F				; IR / S8 digital data still valid?
 	bra		isr_tmr7_2					; YES - continue
-	; timeout, clear IR-Data
-
-	movlw	ir_timeout_value			; multiples of 62.5ms
-	movwf	ir_s8_timeout				; reload timeout
-
-	banksel	common
-	btfss	analog_o2_input
-	bra		isr_tmr7_1a					; always with normal ostc3 hardware
-	btfss	s8_digital
-	bra		isr_tmr7_2					; only when digital
+	movlw	ir_timeout_value			; NO  - get timer reload in multiples of 62.5 ms
+	movwf	ir_s8_timeout				;     - reload the timer
+	btfss	analog_o2_input				;     - analog input available?
+	bra		isr_tmr7_1a					;       NO  - clear data
+	btfss	s8_digital_avail			;       YES - S8 digital interface available?
+	bra		isr_tmr7_2					;             NO  - must be analog interface in use, keep data
 isr_tmr7_1a:
-	clrf	o2_mv_sensor1+0				; S8/IR timeout clears all analog input readings to zero -> fallback will be triggered when sensor mode was used
-	clrf	o2_mv_sensor1+1
-	clrf	o2_mv_sensor2+0
-	clrf	o2_mv_sensor2+1
-	clrf	o2_mv_sensor3+0
-	clrf	o2_mv_sensor3+1
-	banksel	hud_battery_mv
-	clrf	hud_battery_mv+0
-	clrf	hud_battery_mv+1
-	banksel	hud_status_byte
-	clrf	hud_status_byte
-	clrf	o2_ppo2_sensor1				; for IR/S8 UD
-	clrf	o2_ppo2_sensor2
-	clrf	o2_ppo2_sensor3
+	clrf	hud_status_byte				; S8/IR timeout clears all analog input readings to zero -> fallback will be triggered when in sensor mode
+	CLRI	hud_battery_mv				; clear battery voltage
 
-	banksel	common
-	bsf		new_s8_data_available		; set flag to update in surface mode
+	banksel	sensor1_mv					; select bank where sensor data are stored
+	CLRI	sensor1_mv					; clear all sensor data
+	CLRI	sensor2_mv					; ...
+	CLRI	sensor3_mv					; ...
+	clrf	sensor1_ppO2				; ...
+	clrf	sensor2_ppO2				; ...
+	clrf	sensor3_ppO2				; ...
+	banksel	isr_backup					; back to ISR default bank
+
+	bsf		trigger_S8_data_update		; signal a data update
+ ENDIF
 
 isr_tmr7_2:
-	banksel	common
-	btfss	no_sensor_int				; sensor interrupt (because it's addressed during sleep)?
-	bra		isr_sensor_state2			; NO  - continue
-	banksel	isr_backup					; YES - back to Bank0 ISR data
-	return
+	btfsc	block_sensor_interrupt				; sensor interrupts disabled?
+	return										; YES - abort
 
 isr_sensor_state2:
-	banksel	common
-	movff	sensor_state_counter,WREG
-	btfss	WREG,0						; every 1/4 second
-	bsf		quarter_second_update		; set flag
-	banksel	isr_backup					; back to Bank0 ISR data
-	movlw	d'2'						; coding for normal speed
-	cpfseq	cpu_speed_state				; CPU running on normal speed?
-	rcall	isr_set_speed_to_normal		; NO - set CPU speed to normal
+	btfss	sensor_state_counter,0				; every 1/4 second
+	bsf		trigger_quarter_second				; set flag
 
-	incf	sensor_state_counter,F		; counts to eight for state machine
+	btfss	speed_is_normal						; CPU running on normal speed?
+	rcall	isr_set_speed_to_normal				; NO - set CPU speed to normal
 
-; State 1: Clear flags and average registers, get temperature (51 us) and start pressure integration (73.5 us)
-; State 2: Get pressure    (51 us), start temperature integration (73.5 us) and calculate temperature compensated pressure (233 us)
-; State 3: Get temperature (51 us) and start pressure integration (73.5 us)
-; State 4: Get pressure    (51 us), start temperature integration (73.5 us) and calculate temperature compensated pressure (233 us)
-; State 5: Get temperature (51 us) and start pressure integration (73.5 us)
-; State 6: Get pressure    (51 us), start temperature integration (73.5 us) and calculate temperature compensated pressure (233 us)
-; State 7: Get temperature (51 us) and start pressure integration (73.5 us)
-; State 8: Get pressure    (51 us), start temperature integration (73.5 us),    calculate temperature compensated pressure (233 us) and build average for half-second update of temperature and pressure
+	; update surface pressure
+	btfss	update_surface_pressure				; shall update the surface pressure?
+	bra		isr_sensor_state2_1					; NO
+	bcf		update_surface_pressure				; YES - clear request flag
+	MOVII	pressure_abs_ref,pressure_surf		;     - update surface pressure
 
-	movff	sensor_state_counter,WREG		; WREG used as temp here...
+isr_sensor_state2_1:
+	incf	sensor_state_counter,F				; counts to eight for state machine
+
+; State 1: clear flags and average registers, get temperature (51 us) and start pressure integration (73.5 us)
+; State 2: get pressure    (51 us), start temperature integration (73.5 us) and calculate temperature compensated pressure (233 us)
+; State 3: get temperature (51 us) and start pressure integration (73.5 us)
+; State 4: get pressure    (51 us), start temperature integration (73.5 us) and calculate temperature compensated pressure (233 us)
+; State 5: get temperature (51 us) and start pressure integration (73.5 us)
+; State 6: get pressure    (51 us), start temperature integration (73.5 us) and calculate temperature compensated pressure (233 us)
+; State 7: get temperature (51 us) and start pressure integration (73.5 us)
+; State 8: get pressure    (51 us), start temperature integration (73.5 us) and calculate temperature compensated pressure (233 us) and build average for half-second update of temperature and pressure
+
+	movff	sensor_state_counter,WREG			; WREG used as temp here...
 	dcfsnz	WREG,F
-	bra		sensor_int_state1_plus_restart	; do State 1
+	bra		sensor_int_state1_plus_restart		; do state 1
 	dcfsnz	WREG,F
-	bra		sensor_int_state2				; do State 2
+	bra		sensor_int_state2					; do state 2
 	dcfsnz	WREG,F
-	bra		sensor_int_state1				; do State 3
+	bra		sensor_int_state1					; do state 3
 	dcfsnz	WREG,F
-	bra		sensor_int_state2				; do State 4
+	bra		sensor_int_state2					; do state 4
 	dcfsnz	WREG,F
-	bra		sensor_int_state1				; do State 5
+	bra		sensor_int_state1					; do state 5
 	dcfsnz	WREG,F
-	bra		sensor_int_state2				; do State 6
+	bra		sensor_int_state2					; do state 6
 	dcfsnz	WREG,F
-	bra		sensor_int_state1				; do State 7
-;	bra		sensor_int2_plus_average		; do State 8
-;sensor_int2_plus_average:
-	; First, do state2:
-	call	get_pressure_value			; state 2: get pressure (51 us)
-	call	get_temperature_start		; and start temperature integration (73.5 us)
-	call	calculate_compensation		; calculate temperature compensated pressure (27 us)
-; Build average
-	bcf		STATUS,C					; clear carry bit
-	rrcf	amb_pressure_avg+1			; amb_pressure sum / 2
-	rrcf	amb_pressure_avg+0
-	bcf		STATUS,C					; clear carry bit, twice
-	rrcf	amb_pressure_avg+1			; amb_pressure sum / 4
-	rrcf	amb_pressure_avg+0
+	bra		sensor_int_state1					; do state 7
 
-	movff	amb_pressure_avg+1,amb_pressure+1	; copy into actual register
-	movff	amb_pressure_avg+0,amb_pressure+0
+	; first, do state 2:
+	call	get_pressure_value					; state 2: get pressure (51 us)
+	call	get_temperature_start				; and start temperature integration (73.5 us)
+	call	calculate_compensation				; calculate temperature compensated pressure (27 us)
 
-	bcf		STATUS,C
-	btfsc	temperature_avg+1,7			; copy sign bit to carry
-	bsf		STATUS,C
-	rrcf	temperature_avg+1			; signed temperature /2
-	rrcf	temperature_avg+0
-	bcf		STATUS,C
-	btfsc	temperature_avg+1,7			; copy sign bit to carry
-	bsf		STATUS,C
-	rrcf	temperature_avg+1			; signed temperature /4
-	rrcf	temperature_avg+0
+; build average for pressure
+	bcf		STATUS,C							; clear carry bit
+	rrcf	pressure_abs_avg+1					; divide by 2
+	rrcf	pressure_abs_avg+0
+	bcf		STATUS,C							; clear carry bit
+	rrcf	pressure_abs_avg+1					; divide by 2, again
+	rrcf	pressure_abs_avg+0
 
-	movff	temperature_avg+1,temperature+1		; copy into actual register
-	movff	temperature_avg+0,temperature+0
+	; copy into result register
+	MOVII	pressure_abs_avg,pressure_abs
 
-	banksel	common						; flag1 is in bank 1
-	bcf		temp_changed				; clear flag for temperature update
-	bcf		pressure_refresh			; clear flag for pressure update
-	banksel	isr_backup					; back to bank 0 ISR data
+; build average for temperature
+	bcf		STATUS,C							; clear carry bit by default
+	btfsc	temperature_avg+1,7					; sign bit set?
+	bsf		STATUS,C							; YES - copy sign bit to carry bit
+	rrcf	temperature_avg+1					; divide signed temperature by 2
+	rrcf	temperature_avg+0					; ...
+	bcf		STATUS,C							; clear carry bit by default
+	btfsc	temperature_avg+1,7					; sign bit set?
+	bsf		STATUS,C							; YES - copy sign bit to carry bit
+	rrcf	temperature_avg+1					; divide signed temperature by 2 again (by 4 in total now)
+	rrcf	temperature_avg+0					; ...
+	MOVII	temperature_avg,temperature_cur		; store final result
 
-	; Temp changed?
-	movf	temperature+0,W
-	cpfseq	last_temperature+0
-	bra		isr_sensor_state2_2			; YES
-	movf	temperature+1,W
-	cpfseq	last_temperature+1
-	bra		isr_sensor_state2_2			; YES
-
-	bra		isr_sensor_state2_3			; no change
+; check for temperature change
+	movf	temperature_cur+0,W					; get current temperature, low  byte
+	cpfseq	temperature_last+0					; compare with last temperature, equal?
+	bra		isr_sensor_state2_2					; NO - temperature has changed
+	movf	temperature_cur+1,W					; get current temperature, high byte
+	cpfseq	temperature_last+1					; compare with last temperature, equal?
+	bra		isr_sensor_state2_2					; NO - temperature has changed
+	bra		isr_sensor_state2_3					; YES to both - no change
 
 isr_sensor_state2_2:
-	banksel	common						; flag1 is in bank 1
-	bsf		temp_changed				; YES
-	banksel	isr_backup					; back to bank 0 ISR data
+	MOVII	temperature_cur,temperature_last	; store current temperature as last temperature for next round
+	bsf		trigger_temp_changed				; set flag for temperature change
+
 isr_sensor_state2_3:
-	movff	temperature+0,last_temperature+0	; copy for compare
-	movff	temperature+1,last_temperature+1
+	; reset state counter and set update flag
+	clrf	sensor_state_counter				; reset state counter
+	bsf		trigger_pres_update					; signal a pressure update
+	btfss	reset_max_pressure					; shall clear the max pressure?
+	bra		isr_sensor_state2_3a				; NO  - continue with checking for pressure change
+	bcf		reset_max_pressure					; YES - clear request flag
+	CLRI	pressure_rel_max					;     - clear max. pressure
 
-;	movf	amb_pressure+0,W
-;	cpfseq	last_pressure+0
-;	bra		isr_sensor_state2_4			; YES
-;	movf	amb_pressure+1,W
-;	cpfseq	last_pressure+1
-;	bra		isr_sensor_state2_4			; YES
-;
-;	bra		isr_sensor_state2_5			; no change
-;isr_sensor_state2_4:
-	banksel	common						; flag1 is in bank 1
-	bsf		pressure_refresh			; Always set this flag
-	banksel	isr_backup					; back to bank 0 ISR data
-;isr_sensor_state2_5:
-;	movff	amb_pressure+0,last_pressure+0	; copy for compare
-;	movff	amb_pressure+1,last_pressure+1
+isr_sensor_state2_3a:
+	; check for pressure change
+	movf	pressure_abs+0,W					; get current pressure, low  byte
+	cpfseq	pressure_abs_last+0					; compare with last pressure, equal?
+	bra		isr_sensor_state2_4					; NO  - pressure has changed
+	movf	pressure_abs+1,W					; YES - get current pressure, high byte
+	cpfseq	pressure_abs_last+1					;     - compare with last pressure, equal?
+	bra		isr_sensor_state2_4					;       NO  - pressure has changed
+	bra		isr_sensor_state2_5					;       YES - no change
 
-	clrf	sensor_state_counter		; reset state counter
-	banksel	common						; flag2 is in bank 1
-	btfss	simulatormode_active		; are we in simulator mode?
-	bra		comp_air_pressure			; NO
-	bsf		pressure_refresh			; always set pressure_refresh flag in simulator mode
-	banksel	isr_backup					; back to bank 0 ISR data
-	movlw	LOW  d'1000'				; simulate 1000 mbar surface pressure
-	movwf	last_surfpressure+0
-	movlw	HIGH d'1000'
-	movwf	last_surfpressure+1
+isr_sensor_state2_4:
+	MOVII	pressure_abs,pressure_abs_last		; store current pressure as last pressure for next round
+	bsf		trigger_pres_cur_changed			; signal a pressure change
 
-comp_air_pressure:
-	banksel	isr_backup					; back to bank 0 ISR data
-	movf	last_surfpressure+0,W		; compensate air pressure
-	subwf	amb_pressure+0,W
-	movwf	rel_pressure+0				; rel_pressure stores depth
+isr_sensor_state2_5:
+	; compute relative pressure
+	movf	pressure_surf+0,W					; get surface pressure, low  byte
+	subwf	pressure_abs+0,W					; WREG = pressure_abs - pressure_surf (low  byte)
+	movwf	pressure_rel_cur+0					; store relative pressure, low  byte
+	movf	pressure_surf+1,W					; get surface pressure, high byte
+	subwfb	pressure_abs+1,W					; WREG = pressure_abs - pressure_surf (high byte)
+	movwf	pressure_rel_cur+1					; store relative pressure, high byte
+	btfss	STATUS,N							; relative pressure < 0 ?
+	bra		isr_sensor_state2_6					; NO  - OK, keep result
+	CLRI	pressure_rel_cur					; YES - set relative pressure to zero
 
-	movf	last_surfpressure+1,W
-	subwfb	amb_pressure+1,W
-	movwf	rel_pressure+1
-	btfss	STATUS,N					; is result below zero?
-	bra		sensor_int_state_exit		; NO
-	clrf	rel_pressure+0				; YES - do not display negative depths
-	clrf	rel_pressure+1				; e.g. when surface air pressure dropped during the dive
-	bra		sensor_int_state_exit
+isr_sensor_state2_6:
+	; check for new max relative pressure
+	movf	pressure_rel_cur+0,W				; get current relative pressure, low  byte
+	subwf	pressure_rel_max+0,W				; WREG = pressure_rel_max - pressure_rel_cur (low  byte)
+	movf	pressure_rel_cur+1,W				; get current relative pressure, high byte
+	subwfb	pressure_rel_max+1,W				; WREG = pressure_rel_max - pressure_rel_cur (high byte)
+	btfss	STATUS,N							; result < 0, i.e. new max rel pressure?
+	bra		isr_sensor_state2_6a				; NO
+	MOVII	pressure_rel_cur,pressure_rel_max	; YES - set new max rel pressure
+	bsf		trigger_pres_max_changed			;     - signal a pressure max change
+
+isr_sensor_state2_6a:
+
+ IFDEF _min_depth_option
+	; check if min/max pressures shall be reset
+	btfss	reset_trip_pressure						; shall reset the resettable min/max pressures?
+	bra		isr_sensor_state2_6b					; NO
+	bcf		reset_trip_pressure						; YES - clear request flag
+	CLRI	pressure_rel_max_trip					;     - set max pressure to zero
+	SETI	pressure_rel_min_trip					;     - set min pressure to biggest value possible
+isr_sensor_state2_6b:
+	; check for new resettable max relative pressure
+	movf	pressure_rel_cur+0,W					; get current relative pressure, low  byte
+	subwf	pressure_rel_max_trip+0,W				; WREG = pressure_rel_max - pressure_rel_cur (low  byte)
+	movf	pressure_rel_cur+1,W					; get current relative pressure, high byte
+	subwfb	pressure_rel_max_trip+1,W				; WREG = pressure_rel_max - pressure_rel_cur (high byte)
+	btfss	STATUS,N								; result < 0, i.e. new max rel pressure?
+	bra		isr_sensor_state2_6c					; NO  - continue checking for min depth
+	MOVII	pressure_rel_cur,pressure_rel_max_trip	; YES - set new max rel pressure
+isr_sensor_state2_6c:
+	; check for new resettable min relative pressure
+	movf	pressure_rel_cur+0,W					; get current relative pressure, low  byte
+	subwf	pressure_rel_min_trip+0,W				; WREG = pressure_rel_min - pressure_rel_cur (low  byte)
+	movf	pressure_rel_cur+1,W					; get current relative pressure, high byte
+	subwfb	pressure_rel_min_trip+1,W				; WREG = pressure_rel_min - pressure_rel_cur (high byte)
+	btfss	STATUS,C								; result > 0, i.e. new min rel pressure?
+	bra		sensor_int_state_exit					; NO  - done
+	MOVII	pressure_rel_cur,pressure_rel_min_trip	; YES - set new min rel pressure
+ ENDIF	; _min_depth_option
+	bra		sensor_int_state_exit					; done
+
 
 sensor_int_state1_plus_restart:
-	clrf	amb_pressure_avg+0			; pressure average registers
-	clrf	amb_pressure_avg+1
-	clrf	temperature_avg+0
-	clrf	temperature_avg+1
+	; clear average registers
+	CLRI	pressure_abs_avg
+	CLRI	temperature_avg
 
 sensor_int_state1:
 	call	get_temperature_value		; state 1: get temperature...
@@ -532,116 +514,197 @@ sensor_int_state2:
 	call	get_pressure_value			; state 2: get pressure (51 us)...
 	call	get_temperature_start		; ...and start temperature integration (73.5 us)
 	call	calculate_compensation		; .. and calculate temperature compensated pressure (233 us)
-	;bra	sensor_int_state_exit
 
 sensor_int_state_exit:
-	rcall	isr_restore_clock			; restore clock
-	return
+	bra		isr_adjust_speed			; set/restore CPU speed and return
+
+
+isr_dimm_tft:							; adjust until max_CCPR1L = CCPR1L
+	btfsc	tft_is_dimming				; is the display dimming?
+	return								; YES - ignore
+	movf	max_CCPR1L,W				; NO  - proceed
+	cpfsgt	CCPR1L						; CCPR1L > max_CCPR1L ?
+	bra		isr_dimm_tft2				; NO  - dim up
+	decf	CCPR1L,F					; YES - dim down
+	return								;     - done
+isr_dimm_tft2:
+	movf	max_CCPR1L,W
+	sublw	ambient_light_min_eco
+	cpfsgt	CCPR1L						; CCPR1L > max_CCPR1L - ambient_light_min_eco ?
+	bra		isr_dimm_tft3				; NO  - dim up slow
+	movlw	.10							; YES - dim up faster
+	addwf	CCPR1L,F
+isr_dimm_tft3:
+	incf	CCPR1L,F					; +1
+	return								; done
+
 
 ;=============================================================================
-
-isr_rtcc:								; each second
+; RTC interrupt on every 1/2 second
+;
+isr_rtcc:
 	bcf		PIR3,RTCCIF					; clear flag
-	banksel	0xF16						; addresses, F16h through F5Fh, are also used by SFRs, but are not part of the access RAM
+	bsf		trigger_half_second			; set flag for a new 1/2 second has begun
+	btfsc	reset_timebase				; shall reset the timebase?
+	bra		isr_rtcc_1					; YES - warp to new full second
+	btg		timebase_0sec				; NO  - toggle the 1/2 second timebase
+	btfsc	timebase_0sec				;     - did it toggled 1 -> 0 ?
+	return								;       NO - on half second, done
+
+isr_rtcc_1:
+	; new full second
+	bsf		trigger_full_second			; set flag for a new 1/1 second has begun
+
+	btfsc	block_rtc_access			; ISR suspended from accessing the RTC?
+	bra		isr_rtcc_2					; YES
+
+	banksel	RTCCFG						; RTC registers are outside access RAM
 	bsf		RTCCFG,RTCPTR1
-	bsf		RTCCFG,RTCPTR0				; year
-	movff	RTCVALL,year				; format is BCD
-	movff	RTCVALH,day					; dummy read
-	movff	RTCVALL,day					; format is BCD
-	movff	RTCVALH,month				; format is BCD
-	movff	RTCVALL,hours				; format is BCD
-	movff	RTCVALH,secs				; format is BCD
-	movff	RTCVALL,secs				; format is BCD
-	movff	RTCVALH,mins				; format is BCD
-	banksel	isr_backup					; back to bank 0 ISR data
+	bsf		RTCCFG,RTCPTR0
+	banksel	isr_backup					; back to ISR default bank
+
+	movff	RTCVALL,rtc_year			; read year    in BCD
+	movff	RTCVALH,rtc_day				; dummy read
+	movff	RTCVALL,rtc_day				; read day     in BCD
+	movff	RTCVALH,rtc_month			; read month   in BCD
+	movff	RTCVALL,rtc_hour			; read hour    in BCD
+	movff	RTCVALH,rtc_secs			; dummy read
+	movff	RTCVALL,rtc_secs			; read seconds in BCD
+	movff	RTCVALH,rtc_mins			; read minutes in BCD
 
 	; Convert BCD to DEC and set registers
-	movff	mins, isr1_temp
-	rcall	isr_rtcc_convert			; converts to dec with result in WREG
-	movff	WREG,mins
-	movff	secs, isr1_temp
-	rcall	isr_rtcc_convert			; converts to dec with result in WREG
-	movff	WREG,secs
-	movff	hours, isr1_temp
-	rcall	isr_rtcc_convert			; converts to dec with result in WREG
-	movff	WREG,hours
-	movff	month, isr1_temp
-	rcall	isr_rtcc_convert			; converts to dec with result in WREG
-	movff	WREG,month
-	movff	day, isr1_temp
-	rcall	isr_rtcc_convert			; converts to dec with result in WREG
-	movff	WREG,day
-	movff	year, isr1_temp
-	rcall	isr_rtcc_convert			; converts to dec with result in WREG
-	movff	WREG,year
+	movf	rtc_mins,W
+	rcall	isr_rtcc_convert_BCD_DEC	; convert to decimal with result in WREG
+	movwf	rtc_mins
+	movf	rtc_secs,W
+	rcall	isr_rtcc_convert_BCD_DEC	; convert to decimal with result in WREG
+	movwf	rtc_secs
+	movf	rtc_hour,W
+	rcall	isr_rtcc_convert_BCD_DEC	; convert to decimal with result in WREG
+	movwf	rtc_hour
+	movf	rtc_month,W
+	rcall	isr_rtcc_convert_BCD_DEC	; convert to decimal with result in WREG
+	movwf	rtc_month
+	movf	rtc_day,W
+	rcall	isr_rtcc_convert_BCD_DEC	; convert to decimal with result in WREG
+	movwf	rtc_day
+	movf	rtc_year,W
+	rcall	isr_rtcc_convert_BCD_DEC	; convert to decimal with result in WREG
+	movwf	rtc_year
 
-	; Place once/second tasks for ISR here (Be sure of the right bank!)
-	banksel	common						; flag1 is in bank 1
-	btfss	sleepmode					; in sleepmode?
-	call	get_ambient_level			; NO - get ambient light level and set max_CCPR1L
+isr_rtcc_2:
+	; get ambient light level and set max_CCPR1L
+	call	get_ambient_level			; get ambient light level and set max_CCPR1L
+	banksel	isr_backup					; back to ISR default bank (for safety only)
 
-	rcall	isr_battery_gauge			; add amount of battery consumption to battery_gauge:6
+	rcall	isr_battery_gauge			; calculate the current charge consumption and add it to the battery gauge
+	rcall	isr_update_uptime			; increment overall OSTC uptime
+	rcall	isr_update_timeout			; process the timeout timer
 
-	; update uptime
-	banksel	uptime+0
+	btfsc	divemode					; in dive mode?
+	rcall	isr_divemode_1sec			; YES - do the every second dive mode tasks
+
+	btfsc	divemode					; in dive mode?
+	btfsc	simulatormode				; YES - in simulator mode?
+	rcall	isr_update_lastdive_time	; NO  - YES - increment the last dive time
+
+	; reset the timebase if requested
+	btfss	reset_timebase				; shall reset the timebase?
+	bra		isr_rtcc_3					; NO
+	bcf		reset_timebase				; YES - clear request flag
+	clrf	eventbase					;     - clear all pending events
+	clrf	timebase					;     - clear all timebase flags
+	clrf	timebase_secs				;     - clear seconds timer
+	clrf	timebase_mins				;     - clear minutes timer
+	clrf	simulator_time				;     - clear minutes timer of simulator runtime as well
+	bsf		trigger_half_second			;     - set flag for a new 1/2 second has begun
+	bsf		trigger_full_second			;     - set flag for a new 1/1 second has begun
+	return								;     - done
+
+isr_rtcc_3:
+	; count-up the 2 seconds timebase timer
+	btg		timebase_1sec				; toggle the 1 second timer bit
+	btfss	timebase_1sec				; did it toggled 1 -> 0 ?
+	btg		timebase_2sec				; YES - toggle the 2 seconds timer bit
+
+	; count-up the seconds timer
+	incf	timebase_secs,F				; increment seconds timer (may temporary become 60 here)
+	movlw	.59							; max. for seconds timer
+	cpfsgt	timebase_secs				; seconds timer > max.?
+	return								; NO  - done
+
+	; new full minute
+	clrf	timebase_secs				; YES - reset timer
+	bsf		trigger_full_minute			;     - set flag for a new minute has begun
+
+	btfsc	divemode					;     - in dive mode?
+	btfsc	simulatormode				;       YES - in simulator mode?
+	rcall	inc_surface_interval		;       NO  - YES - increment surface interval
+
+	btfss	simulatormode				;     - in simulator mode?
+	bra		isr_rtcc_4					;       NO
+	infsnz	simulator_time,F			;       YES - increment real runtime of the simulator, did wrap around (became zero)?
+	setf	simulator_time				;             YES - disallow wrap-around, keep at 255 instead
+
+isr_rtcc_4:
+	incf	timebase_mins,F				;     - increment minutes timer
+	movlw	.59							;     - max. for minutes timer
+	cpfsgt	timebase_mins				;     - minutes timer > max.?
+	return								;       NO  - done
+
+	; new full hour
+	clrf	timebase_mins				;       YES - reset timer
+	bsf		trigger_full_hour			;           - set flag for a new hour has begun
+	return								;           - done
+
+
+	; increment overall OSTC uptime
+isr_update_uptime:
 	incf	uptime+0,F
-	movlw	.0
+	clrf	WREG
 	addwfc	uptime+1,F
 	addwfc	uptime+2,F
 	addwfc	uptime+3,F
+	return
 
-	banksel	common						; flag1 is in bank 1
-	bsf		onesecupdate				; a new second has begun
-	btfsc	divemode					; in divemode?
-	rcall	isr_divemode_1sec			; YES - do some divemode stuff in bank common
-
-	btfss	divemode					; in divemode?
-	rcall	isr_update_lastdive_time	; NO - update the last dive timer
-
-	tstfsz	secs						; secs == 0 ?
-	return								; NO - done
-
-	bsf		oneminupdate				; a new minute has begun
-
-	btfss	divemode					; in Divemode?
-	rcall	check_nofly_desat_time		; NO - so increase interval
-
-	; Check if a new hour has just begun
-	tstfsz	mins						; mins == 0 ?
-	bra		isr_rtcc2					; NP
-	bsf		onehourupdate				; YES - set flag
-
-isr_rtcc2:
-	banksel	isr_backup					; back to bank 0 ISR data
-	return								; done
-
-isr_update_lastdive_time:				; called every second when not in divemode
-	; update uptime
-	banksel	lastdive_time+0
+	; increment time since last dive, called every second when not in dive mode (or when in simulator mode)
+isr_update_lastdive_time:
 	incf	lastdive_time+0,F
-	movlw	.0
+	clrf	WREG
 	addwfc	lastdive_time+1,F
 	addwfc	lastdive_time+2,F
 	addwfc	lastdive_time+3,F
-	banksel	common
 	return
 
+	; process the timeout timer
+isr_update_timeout:
+	btfsc	reset_timeout				; shall reset the timeout?
+	bra		isr_update_timeout_1		; YES
+	tstfsz	isr_timeout_timer			; NO  - timeout timer already at zero?
+	decfsz	isr_timeout_timer			;       NO  - decrement timer, reached zero now?
+	return								;       YES / NO  - nothing further to do
+	bsf		trigger_timeout				;             YES - set timeout flag
+	return								;                 - done
+isr_update_timeout_1:
+	bcf		reset_timeout							; clear request flag
+	bcf		trigger_timeout							; clear pending timeout trigger, if any
+	movff	isr_timeout_reload,isr_timeout_timer	; reload timer
+	return											; done
+
+;=============================================================================
+; Calculate charge drawn from the battery
+;
 isr_battery_gauge:
-	banksel	isr_backup					; bank 0 ISR data
-	movlw	current_sleepmode			; 100µA/3600 -> nAs (sleepmode current)
-	movwf	isr1_temp					; store value (low byte)
-	clrf	isr2_temp					; high byte
-
-	banksel	common						; flag1 is in bank 1
-	btfss	sleepmode					; in sleepmode?
-	rcall	isr_battery_gauge2			; NO - compute current consumption value into isr1_temp and isr2_temp
-
-	banksel	isr_backup					; bank 0 ISR data
-	movf	isr1_temp,W					; 48 Bit add of isr1_temp and isr2_temp into battery_gauge:6
+	btfsc	block_battery_gauge			; access to battery gauge suspended?
+	return								; YES - done
+	MOVLI	current_sleepmode,isr_mpr	; NO  - default to sleep mode with 100µA/3600 -> nAs
+	btfss	sleepmode					;     - in sleep mode?
+	rcall	isr_battery_gauge2			;       NO - compute current consumption value into isr_lo and isr_hi
+	movf	isr_mpr+0,W					;     - 48 bit add of isr_mpr:2 with battery_gauge:6
 	addwf	battery_gauge+0,F
-	movf	isr2_temp,W
+	movf	isr_mpr+1,W
 	addwfc	battery_gauge+1,F
-	movlw	.0
+	clrf	WREG
 	addwfc	battery_gauge+2,F
 	addwfc	battery_gauge+3,F
 	addwfc	battery_gauge+4,F
@@ -649,124 +712,141 @@ isr_battery_gauge:
 	return
 
 isr_battery_gauge2:
-	; set consumption rate in nAs for an one second interval
+	; set consumption rate in nAs - nano Ampere per second
 	; Example:
-	; movlw	LOW  .55556					; 0,2A/3600*1e9s = nAs
-	; movwf	isr1_temp					; low byte
-	; movlw	HIGH .55556					; 0,2A/3600*1e9s = nAs
-	; movwf	isr2_temp					; high byte
+	; MOVLI  .55556,isr_mpr    ; 0.2 Ah / 3600 seconds per hour * 1e9s = nAs
+	;
+	; Remark: although all the constants are named current_xxxx, in reality they mean charge!
 
-	; Current consumption for LED backlight is 47*CCPR1L+272
-	movf	CCPR1L,W
-	mullw	current_backlight_multi
-	movlw	LOW  current_backlight_offset
-	addwf	PRODL,F
-	movlw	HIGH current_backlight_offset
-	addwfc	PRODH,F
-	movff	PRODL,isr1_temp
-	movff	PRODH,isr2_temp				; isr1_temp and isr2_temp hold value for backlight
+	; Calculate current consumption for LED backlight: 47*CCPR1L+272  (according to values in hwos.inc: 115*CCPR1L+216)
+	movf	CCPR1L,W						; get CCPR1L into WREG
+	mullw	current_backlight_multi			; PRODH:PRODL  = k * WREG = current_backlight_multi * CCPR1L
+	ADDLI	current_backlight_offset,PRODL	; PRODH:PRODL += current_backlight_offset
+	MOVII	PRODL,isr_mpr					; copy result to isr_mpr
 
-	; Add current for CPU and GPU 
-	; cpu_speed_state=1: ECO (3.1mA -> 861nAs), =2: NORMAL (5.50mA -> 1528nAs) or =3: FASTEST (8.04mA -> 2233nAs)
-	banksel	isr_backup					; Bank0 ISR data
-	movlw	.1
-	cpfseq	cpu_speed_state
-	bra		isr_battery_gauge3
-	movlw	LOW  current_speed_eco
-	addwf	isr1_temp,F
-	movlw	HIGH current_speed_eco
-	addwfc	isr2_temp,F
+	; Add current for CPU and GPU
+	; cpu_speed_state = ECO     3.10 mA ->  861 nAs
+	;                 = NORMAL  5.50 mA -> 1528 nAs
+	;                 = FASTEST 8.04 mA -> 2233 nAs
+	btfss	speed_is_eco					; speed = eco ?
+	bra		isr_battery_gauge3				; NO
+	ADDLI	current_speed_eco,isr_mpr		; YES - add current_speed_eco to isr_mpr
 	bra		isr_battery_gauge5
 isr_battery_gauge3:
-	movlw	.2
-	cpfseq	cpu_speed_state
-	bra		isr_battery_gauge4
-	movlw	LOW  current_speed_normal
-	addwf	isr1_temp,F
-	movlw	HIGH current_speed_normal
-	addwfc	isr2_temp,F
+	btfss	speed_is_normal					; speed = normal?
+	bra		isr_battery_gauge4				; NO
+	ADDLI	current_speed_normal,isr_mpr	; YES - add current_speed_normal to isr_mpr
 	bra		isr_battery_gauge5
 isr_battery_gauge4:
-	movlw	LOW  current_speed_fastest
-	addwf	isr1_temp,F
-	movlw	HIGH current_speed_fastest
-	addwfc	isr2_temp,F
+	ADDLI	current_speed_fastest,isr_mpr	; speed is fastest, add current_speed_fastest to isr_mpr
 isr_battery_gauge5:
-	; Add current if IR receiver is on
-	btfss	ir_power					; IR enabled?
-	bra		isr_battery_gauge6			; NO
-	movlw	LOW  current_ir_receiver
-	addwf	isr1_temp,F
-	movlw	HIGH current_ir_receiver
-	addwfc	isr2_temp,F
+	btfss	ir_power						; IR enabled?
+	bra		isr_battery_gauge6				; NO
+	ADDLI	current_ir_receiver,isr_mpr		; YES - add current_ir_receiver to isr_mpr
 isr_battery_gauge6:
-	; Add current for compass/accelerometer
-	btfss	compass_enabled				; compass active?
-	bra		isr_battery_gauge7			; NO
-	movlw	LOW  current_compass
-	addwf	isr1_temp,F
-	movlw	HIGH current_compass
-	addwfc	isr2_temp,F
+	btfss	compass_enabled					; compass active?
+	bra		isr_battery_gauge7				; NO
+	ADDLI	current_compass,isr_mpr			; YES - add current_compass to isr_mpr
 isr_battery_gauge7:
 	return
 
+
+;=============================================================================
+; Every second tasks while in dive mode
+;
 isr_divemode_1sec:
-	incf	samplesecs,F				; "samplingrate" diving seconds done 
-	decf	samplesecs_value,W			; holds "samplingrate" value (minus 1 into WREG)
-	cpfsgt	samplesecs					; done?
-	bra		isr_divemode_1sec2			; NO
+	decfsz	sampling_timer,F			; decrement sampling timer, became zero?
+	bra		isr_divemode_1sec_1			; NO
+	bsf		trigger_sample_divedata		; YES - set trigger flag for sampling dive data
+	movff	sampling_rate,sampling_timer;     - reload timer
 
-	clrf	samplesecs					; clear counter...
-	bsf		store_sample				; ...and set bit for profile storage
-isr_divemode_1sec2:
-	; increase total divetime (regardless of start_dive_threshold)
-	infsnz	total_divetime_seconds+0,F
-	incf	total_divetime_seconds+1,F	; total dive time (regardless of start_dive_threshold)
+isr_divemode_1sec_1:
+	btfss	reset_timebase				; shall reset the timebase? (request flag will be cleared later)
+	bra		isr_divemode_1sec_2			; NO
+	CLRI	total_divetime_secs			; YES - reset total   dive time, seconds (2 byte)
+	clrf	counted_divetime_secs		;     - reset counted dive time, seconds (1 byte)
+	CLRI	counted_divetime_mins		;     - reset counted dive time, minutes (2 byte)
+	clrf	apnoe_dive_secs				;     - reset apnoe   dive time, seconds (1 byte)
+	clrf	apnoe_dive_mins				;     - reset apnoe   dive time, minutes (1 byte)
+	bcf		apnoe_at_surface			;     - apnoe mode starts in submerged state
+	return								;     - done
 
-	btfss	divemode2					; displayed divetime is running?
-	return								; NO (e.g. too shallow)
+isr_divemode_1sec_2:
+	INCI	total_divetime_secs			; increase total dive time       (regardless of start_dive_threshold)
+	btfss	count_divetime				; shall the dive time be counted (regarding     start_dive_threshold)?
+	bra		isr_divemode_1sec_4			; NO (too shallow / apnoe at surface)
+	incf	counted_divetime_secs,F		; YES - increase dive time (displayed dive time)
+	movlw	d'59'						;     - 60 seconds make a minute
+	cpfsgt	counted_divetime_secs		;     - next full minute reached?
+	bra		isr_divemode_1sec_3			;       NO  - done
+	clrf	counted_divetime_secs		;       YES - reset seconds to 0
+	INCI	counted_divetime_mins		;           - increase dive minutes
+	bsf		divetime_longer_1min		;           - set flag for dive time exceeding 1 minute
+	;bra	isr_divemode_1sec_3			;           - done
 
-	; increase divetime registers (displayed dive time)
-	incf	divesecs,F
-	movlw	d'59'
-	cpfsgt	divesecs
-	bra		isr_divemode_1sec2a
+isr_divemode_1sec_3:					; submerged
+	btfss	FLAG_apnoe_mode				; in apnoe mode?
+	return								; NO  - done
+	btfss	apnoe_at_surface			;     - been at surface before?
+	bra		isr_divemode_1sec_3a		;       NO  - increment the dive time
+	bcf		apnoe_at_surface			;       YES - a new dive has begun
+	bsf		apnoe_new_dive				;           - signal a new dive has begun
+	clrf	apnoe_surface_secs			;           - clear surface seconds
+	clrf	apnoe_surface_mins			;           - clear surface minutes
+	clrf	apnoe_dive_secs				;           - clear dive    seconds
+	clrf	apnoe_dive_mins				;           - clear dive    minutes
+	MOVII	pressure_rel_cur,pressure_rel_max ;     - reset max pressure to current pressure
+	bsf		trigger_pres_max_changed	;           - signal a new maximum pressure
+isr_divemode_1sec_3a:
+	incf	apnoe_dive_secs,F			; increment dive time, seconds
+	movlw	d'59'						; 60 seconds make a minute
+	cpfsgt	apnoe_dive_secs				; next full minute reached?
+	return								; NO  - done
+	clrf	apnoe_dive_secs				; YES - reset seconds to 0
+	incf	apnoe_dive_mins,F			;     - increment dive time, minutes
+	return								;     - done
 
-	clrf	divesecs
-	bsf		realdive					; this bit is always set (again) if the dive is longer then one minute
-	infsnz	divemins+0,F
-	incf	divemins+1,F				; increase divemins
+isr_divemode_1sec_4:					; at surface
+	btfss	FLAG_apnoe_mode				; in apnoe mode?
+	return								; NO  - done
+	bsf		apnoe_at_surface			; YES - memorize been at the surface
+	incf	apnoe_surface_secs,F		;     - increment surface time, seconds
+	movlw	d'59'						;     - 60 seconds make a minute
+	cpfsgt	apnoe_surface_secs			;     - next full minute reached?
+	return								;       NO  - done
+	clrf	apnoe_surface_secs			;       YES - reset seconds to 0
+	incf	apnoe_surface_mins,F		;           - increment surface time, minutes
+	return								;           - done
 
-isr_divemode_1sec2a:
-	btfss	FLAG_apnoe_mode				; are we in apnoe mode?
-	return								; NO
 
-	incf	apnoe_secs,F				; increase descent registers
-	movlw	d'59'
-	cpfsgt	apnoe_secs					; full minute?
-	return								; NO
-	clrf	apnoe_secs
-	incf	apnoe_mins,F				; increase descent mins
-	return
+
+
+
+
+isr_divemode_1sec_3_dive:
+
 
 ;=============================================================================
-; BCD to Binary conversion.
-; Input: isr1_temp = Value in BCD
-; Output WREG = value in binary.
-isr_rtcc_convert:
-	swapf	isr1_temp, W
+; BCD to Binary conversion
+; Input   WREG = value in BCD
+; Output  WREG = value in binary
+;
+isr_rtcc_convert_BCD_DEC:
+	movwf	isr_lo
+	swapf	isr_lo, W
 	andlw	0x0F						; W = tens
-	rlncf	WREG, W						; W = 2*tens
-	subwf	isr1_temp, F				; 16*tens + ones - 2*tens
-	subwf	isr1_temp, F				; 14*tens + ones - 2*tens
-	subwf	isr1_temp, W				; 12*tens + ones - 2*tens
+	rlncf	WREG, W						; W = 2 * tens
+	subwf	isr_lo, F					; 16 * tens + ones - 2*tens
+	subwf	isr_lo, F					; 14 * tens + ones - 2*tens
+	subwf	isr_lo, W					; 12 * tens + ones - 2*tens
 	return
 
-;=============================================================================
 
+;=============================================================================
+; Check buttons
+;
 isr_switch_right:
 	bcf		INTCON,INT0IE				; disable INT0
-	banksel	common						; flag1 is in bank 1
 	btfss	flip_screen					; 180° flipped?
 	bsf		switch_right				; set flag
 	btfsc	flip_screen					; 180° flipped?
@@ -775,25 +855,27 @@ isr_switch_right:
 
 isr_switch_left:
 	bcf		INTCON3,INT1IE				; disable INT1
-	banksel	common						; flag1 is in bank 1
 	btfss	flip_screen					; 180° flipped?
 	bsf		switch_left					; set flag
 	btfsc	flip_screen					; 180° flipped?
 	bsf		switch_right				; set flag
+	;bra	isr_switch_common			; continue...
+
 isr_switch_common:
-	; load timer1 for first press
-	clrf	TMR1L
+	clrf	TMR1L						; load timer1 for first press
 	movlw	TMR1H_VALUE_FIRST			; in steps of 7.8125 ms
-	movwf	TMR1H
+	movwf	TMR1H						; ...
 	bsf		T1CON,TMR1ON				; start timer 1
-	banksel	isr_backup					; select bank 0 for ISR data
 	bcf		INTCON3,INT1IF				; clear flag
 	bcf		INTCON,INT0IF				; clear flag
 	return
 
+
+;=============================================================================
+; Button hold-down interrupt
+;
 timer1int:
 	bcf		PIR1,TMR1IF					; clear flag
-	banksel	common						; flag1 is in bank 1
 	bcf		INTCON,INT0IF				; clear flag
 	bcf		INTCON3,INT1IF				; clear flag
 	; digital
@@ -802,13 +884,13 @@ timer1int:
 	btfss	switch_right2				; right button hold-down?
 	bra		timer1int_right				; YES
 
-	; Analog
+	; analog
 	btfsc	analog_sw2_pressed			; left button hold-down?
 	bra		timer1int_left				; YES
 	btfsc	analog_sw1_pressed			; right button hold-down?
 	bra		timer1int_right				; YES
 
-	; No button hold-down, stop Timer 1
+	; no button hold-down, stop Timer 1
 	bcf		T1CON,TMR1ON				; stop timer 1
 	bsf		INTCON,INT0IE				; enable INT0
 	bsf		INTCON3,INT1IE				; enable INT1
@@ -820,128 +902,47 @@ timer1int_left:
 	btfsc	flip_screen					; 180° flipped?
 	bsf		switch_right				; (re-)set flag
 	bra		timer1int_common			; continue
+
 timer1int_right:
 	btfss	flip_screen					; 180° flipped?
 	bsf		switch_right				; set flag
 	btfsc	flip_screen					; 180° flipped?
-	bsf		switch_left					; set flag
-timer1int_common:
-	; load timer1 for next press
-	clrf	TMR1L
-	movlw	TMR1H_VALUE_CONT			; surface mode
-	btfsc	divemode
-	movlw	TMR1H_VALUE_CONT_DIVE		; sive mode
-	movwf	TMR1H
+	bsf		switch_left					; (re-)set flag
+	;bra	timer1int_common			; continue
+
+timer1int_common:						; load timer1 for next pressure
+	clrf	TMR1L						; clear timer, low byte
+	movlw	TMR1H_VALUE_CONT			; default to surface mode value
+	btfsc	divemode					; in dive mode?
+	movlw	TMR1H_VALUE_CONT_DIVE		; YES - overwrite with dive mode value
+	movwf	TMR1H						; write value to timer, high byte
 	return								; return from timer1int with timer1 kept running
 
-;=============================================================================
-
-check_nofly_desat_time:					; called every minute when not in divemode
-	banksel	int_O_desaturation_time
-	movf	int_O_desaturation_time+0,W	; is Desat null ?
-	iorwf	int_O_desaturation_time+1,W
-	bz		check_nofly_desat_time_1	; YES
-
-	; int_O_desaturation_time is only computed while in start, surface mode, menue_tree or ghostwriter.
-	; So the ISR may clock surface_interval past the actual surface interval time. But TFT_surface_lastdive
-	; will check int_O_desaturation_time and in case int_O_desaturation_time is zero it will not show
-	; surface_interval but lastdive_time instead. So this glitch remains invisible.
-
-	; Increase surface interval timer
-	banksel	common
-	infsnz	surface_interval+0,F
-	incf	surface_interval+1,F
-	return								; done
-
-check_nofly_desat_time_1:
-	banksel	common
-	clrf	surface_interval+0
-	clrf	surface_interval+1			; clear surface interval timer
-	return								; done
 
 ;=============================================================================
+; Increment surface interval (counted in minutes) while still in desaturation
+;
+; int_O_desaturation_time is only computed while in start, surface mode,
+; menue_tree or ghostwriter. So the ISR may clock surface_interval past
+; the actual surface interval time. But TFT_surface_lastdive will check
+; int_O_desaturation_time and in case int_O_desaturation_time is zero it
+; will not show surface_interval but lastdive_time instead. Thus the glitch
+; will remain invisible.
+;
+inc_surface_interval:							; called every minute when not in dive mode (in banksel common context)
+	btfsc	reset_surface_interval				; shall reset the surface interval timer?
+	bra		inc_surface_interval_1				; YES
+	movff	int_O_desaturation_time+0,isr_lo	; NO - check desaturation time
+	movff	int_O_desaturation_time+1,WREG
+	iorwf	isr_lo,W							;    - inclusive-or low & high byte, desaturation time = 0 ?
+	bz		inc_surface_interval_1				;      YES - reset surface interval timer
+	INCI	surface_interval					;      NO  - increment surface interval
+	return										;          - done
+inc_surface_interval_1:
+	bcf		reset_surface_interval				; reset request flag
+	CLRI	surface_interval					; reset surface interval timer
+	return										; done
 
-isr_restore_clock:
-	movff	cpu_speed_request,cpu_speed_state	; acknowledge CPU speed request
-	banksel	isr_backup
-	movlw	d'1'
-	cpfseq	cpu_speed_request
-	bra		isr_restore_speed2
-	; Reset to eco
-	movlw	b'00000000'
-	movwf	OSCTUNE						; 4x PLL Ddsable (Bit 6) - only works with 8 or 16MHz (=32 or 64MHz)
-	movlw	b'00110010'
-	movwf	OSCCON						; 1 MHz INTOSC
-	movlw	T2CON_ECO
-	movwf	T2CON
-	bra		isr_restore_exit
-isr_restore_speed2:
-	movlw	d'2'
-	cpfseq	cpu_speed_request
-	bra		isr_restore_speed3
-	; Reset to normal
-	movlw	b'01110010'
-	movwf	OSCCON						; 16 MHz INTOSC
-	movlw	b'00000000'
-	movwf	OSCTUNE						; 4x PLL disable (Bit 6) - only works with 8 or 16MHz (=32 or 64MHz)
-	movlw	T2CON_NORMAL
-	movwf	T2CON
-	bra		isr_restore_exit
-isr_restore_speed3:
-	; Reset to fastest
-	movlw	b'01110010'					; 16 MHz INTOSC
-	movwf	OSCCON
-	movlw	b'01000000'
-	movwf	OSCTUNE						; 4x PLL enable (Bit 6) - only works with 8 or 16MHz (=32 or 64MHz)
-	movlw	T2CON_FASTEST
-	movwf	T2CON
-	;bra	isr_restore_exit
-isr_restore_exit:
-	btfss	OSCCON,HFIOFS
-	bra		isr_restore_exit			; loop until PLL is stable
-	return
-
-
-restore_flash:							; restore first flash page from EEPROM
-	banksel	common
-	; Start address in internal flash
-	movlw	0x00
-	movwf	TBLPTRL
-	movwf	TBLPTRH
-	movwf	TBLPTRU
-
-	movlw	b'10010100'					; setup erase
-	rcall	Write						; write
-
-	movlw	.128
-	movwf	lo							; byte counter
-	clrf	EEADR
-	movlw	.3
-	movwf	EEADRH						; setup backup address
-
-	TBLRD*-								; dummy read to be in 128 byte block
-restore_flash_loop:
-	call	read_eeprom
-	incf	EEADR,F
-	movff	EEDATA,TABLAT				; put 1 byte
-	tblwt+*								; table write with pre-increment
-	decfsz	lo,F						; 128 bytes done?
-	bra		restore_flash_loop			; NO - loop
-
-	movlw	b'10000100'					; setup writes
-	rcall	Write						; write
-
-	reset								; done, reset CPU
-
-Write:
-	movwf	EECON1						; type of memory to write in
-	movlw	0x55
-	movwf	EECON2
-	movlw	0xAA
-	movwf	EECON2
-	bsf		EECON1,WR					; write
-	nop
-	nop
-	return
+;=============================================================================
 
 	END

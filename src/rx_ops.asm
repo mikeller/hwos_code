@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File rx_ops.asm														V2.99c
+;   File rx_ops.asm                           combined next generation V3.03.1
 ;
 ;   RX (Tank Pressure Transmitter) Routines.
 ;
@@ -11,10 +11,21 @@
 #include "shared_definitions.h"			; mailbox to p2_deco.c
 #include "i2c.inc"
 #include "math.inc"
-#include "isr.inc"
+#include "wait.inc"
+
+;=============================================================================
+
+ IFDEF _rx_functions
+
 
 	extern	get_first_gas_to_WREG
+	extern	I2C_update_OSTC_rx
+	extern	I2C_probe_OSTC_rx
+	extern	rx_firmware_storage
+
+ IFDEF _ccr_pscr
 	extern	get_first_dil_to_WREG
+ ENDIF
 
 
 ; SAC calculation averaging settings
@@ -24,9 +35,10 @@
 
 rx_ops	CODE
 
- IFDEF _rx_functions
-
 ;=============================================================================
+
+
+;-----------------------------------------------------------------------------
 ; Get configured pressure readings
 ;
 ; input : opt_TR_1st_pres            - selector for first  pressure reading, in normal  mode
@@ -44,16 +56,18 @@ get_pressure_readings:
 	call	I2C_get_tankdata			; get raw pressure data
 get_pressure_readings_1:
 	movff	opt_TR_1st_pres,ul			; 1st pressure to read
-	btfsc	FLAG_bailout_mode			; in bailout mode?
+	btfsc	bailout_mode				; in bailout mode?
 	movff	opt_TR_Bail_pres,ul			; YES - replace with assigned bailout selection
 	tstfsz	ul							; disabled?
 	bra		get_pressure_readings_1a	; NO  - get received pressure data
 	rcall	get_pressure_readings_H1	; YES - set pressure data to not available
 	bra		get_pressure_readings_1c	;     - continue with copying to result vars
 get_pressure_readings_1a:
+ IFDEF _ccr_pscr
 	movlw	.11							; first code for "special" pressures
 	cpfslt	ul							; opt_TR_1st_pres < 11 ?
 	rcall	get_pressure_readings_H2	; NO  - pre-process measurement selection
+ ENDIF
 	rcall	get_pressure_readings_H3	; get transmitter ID
 	rcall	get_pres_by_transmitter_id	; get data from transmitter with ID in hi:lo into hi:lo (pressure) and up (status)
 get_pressure_readings_1c:
@@ -69,9 +83,11 @@ get_pressure_readings_2:
 	rcall	get_pressure_readings_H1	; YES - set pressure data to not available
 	bra		get_pressure_readings_2c	;     - continue with copying to result vars
 get_pressure_readings_2a:
+ IFDEF _ccr_pscr
 	movlw	.11							; first code for "special" pressures
 	cpfslt	ul							; opt_TR_2nd_pres < 11 ?
 	rcall	get_pressure_readings_H2	; NO  - pre-process measurement selection
+ ENDIF
 	btfss	ul,7						; gas selector >= 127 (special treatment)?
 	bra		get_pressure_readings_2b	; NO  - proceed reading a pressure
 	rcall	get_pressure_readings_H1	; YES - set pressure data to not available
@@ -95,6 +111,8 @@ get_pressure_readings_H1:
 	bsf		hi,int_not_avail_flag		; set flag for data not available
 	return
 
+
+ IFDEF _ccr_pscr
 get_pressure_readings_H2:
 	movlw	.11
 	subwf	ul,F
@@ -126,6 +144,8 @@ get_pressure_readings_H2d:
 	movlw	.1
 	movwf	ul							; ul >= 15 -> should not happen, default to ul = 1
 	return
+ ENDIF	;  _ccr_pscr
+
 
 get_pressure_readings_H3:
 	lfsr	FSR1,opt_transmitter_id_1	; load base address of transmitter ID array
@@ -138,7 +158,7 @@ get_pressure_readings_H3:
 	return
 
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 ; Get data from transmitter with ID in (hi:lo)
 ;
 ; input:       hi:lo = transmitter ID
@@ -226,7 +246,7 @@ output_pressure_7:
 	return								; done
 
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 ; Get transmitter ID in given slot
 ;
 ; input    : WREG  = slot (0-7)
@@ -243,7 +263,7 @@ get_transmitter_id_by_slot:
 	return
 
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 ; Compute average pressure drop from 1st / 2nd reading
 ;
 ; Memory Map:
@@ -371,27 +391,27 @@ calc_pres_drop_common_1:
 	btfss	STATUS,C					; did the accumulator under-run (result negative)?
 	bsf		neg_flag					; YES - memorize this
 
-	; get the current time into lo
-	SAFE_2BYTE_COPY total_divetime_seconds,lo	; get current total dive time into lo:2
+	; get the current time into the multi-purpose register
+	SMOVII	total_divetime_secs,mpr		; ISR-safe 2 byte copy of current total dive time into hi:lo
 
 	; get the last pressure time and store the current time as the new last pressure time
 	movlw	offset_FSR1_time_last+0		; load index of last pressure time,             low  byte
 	movff	PLUSW1,sub_b+0				; copy last pressure time to sub_b,             low  byte
-	movff	lo+0,PLUSW1					; store current time as new last pressure time, low  byte
+	movff	lo,PLUSW1					; store current time as new last pressure time, low  byte
 	movlw	offset_FSR1_time_last+1		; load index of last pressure time,             high byte
 	movff	PLUSW1,sub_b+1				; copy last pressure time to sub_b,             high byte
-	movff	lo+1,PLUSW1					; store current time as new last pressure time, high byte
+	movff	hi,PLUSW1					; store current time as new last pressure time, high byte
 
 	; did the pressure accumulator under-run before because the current pressure is higher than the accumulator value was?
 	; we can not check & abort earlier because the current time needs to be stored along with the current pressure
 	btfsc	neg_flag					; did the pressure accumulator under-run?
 	bra		calc_pres_drop_restart		; YES - reset both accumulators and set average pressure drop to not available
 
-	; add the current time to the time accumulator: time_accu (xB) += time_curr (lo)
-	movf	lo+0,W						; copy   time_curr (lo) to WREG,  low  byte
-	addwf	xB+0,F						; add to time_accu (xB),          low  byte
-	movf	lo+1,W						; copy   time_curr (lo) to WREG,  high byte
-	addwfc	xB+1,F						; add to time_accu (xB),          high_byte
+	; add the current time to the time accumulator: time_accu (xB) += time_curr (mpr)
+	movf	lo,W						; copy   time_curr (mpr) to WREG,  low  byte
+	addwf	xB+0,F						; add to time_accu (xB),           low  byte
+	movf	hi,W						; copy   time_curr (mpr) to WREG,  high byte
+	addwfc	xB+1,F						; add to time_accu (xB),           high_byte
 
 	; subtract the last pressure time from time accumulator: time_accu (xB) -= time_last (sub_b)
 	movf	sub_b+0,W					; copy          time_last (sub_b) to WREG, low  byte
@@ -413,10 +433,10 @@ calc_pres_drop_common_2:
 	bz		calc_pres_drop_restart		; YES - reset both accumulators and set average pressure drop to not available
 
 	; duplicate pressure and time accumulators to other variables because xC and xB will get destroyed in div32x16 operation
-	movff	xC+0,lo+0					; duplicate pres_accu to lo, lowest  byte
-	movff	xC+1,lo+1					; duplicate pres_accu to lo, second  byte
-	movff	xC+2,lo+2					; duplicate pres_accu to lo, third   byte
-	movff	xC+3,lo+3					; duplicate pres_accu to lo, highest byte
+	movff	xC+0,mpr+0					; duplicate pres_accu to mpr, lowest  byte
+	movff	xC+1,mpr+1					; duplicate pres_accu to mpr, second  byte
+	movff	xC+2,mpr+3					; duplicate pres_accu to mpr, third   byte
+	movff	xC+3,mpr+4					; duplicate pres_accu to mpr, highest byte
 	movff	xB+0,divA+0					; duplicate time_accu to divA,  low  byte
 	movff	xB+1,divA+1					; duplicate time_accu to divA,  high byte
 
@@ -429,14 +449,14 @@ calc_pres_drop_common_2:
 	rcall	calc_pres_drop_reduce_accus	; YES - do an accumulator reduction
 
 	; do an additional half-rate (every 2nd second) accumulator reduction
-	btfsc	total_divetime_seconds+0,0	; are we on an even second?
+	btfsc	timebase_1sec				; are we on an even second?
 	rcall	calc_pres_drop_reduce_accus	; YES - do an additional accumulator reduction
 
-	; store pressure accumulator (lo:4) - FSR0 was left pointing to address of highest byte
-	movff	lo+3,POSTDEC0				; store pressure accumulator, highest byte
-	movff	lo+2,POSTDEC0				; store pressure accumulator, third   byte
-	movff	lo+1,POSTDEC0				; store pressure accumulator, second  byte
-	movff	lo+0,POSTDEC0				; store pressure accumulator, lowest  byte
+	; store pressure accumulator (mpr:4) - FSR0 was left pointing to address of highest byte
+	movff	mpr+3,POSTDEC0				; store pressure accumulator, highest byte
+	movff	mpr+2,POSTDEC0				; store pressure accumulator, third   byte
+	movff	mpr+1,POSTDEC0				; store pressure accumulator, second  byte
+	movff	mpr+0,POSTDEC0				; store pressure accumulator, lowest  byte
 
 	; store the time accumulator
 	movff	divA+0,INDF1				; store time accumulator (only the low byte will be stored)
@@ -456,10 +476,7 @@ calc_pres_drop_common_2:
 
 calc_pres_drop_limit:
 	; limit output to 0x0FFF
-	movlw	LOW  0x0FFF					; set output to 0x0FFF
-	movwf	divA+0						; ...
-	movlw	HIGH 0x0FFF					; ...
-	movwf	divA+1						; ...
+	MOVLI	0x0FFF,divA					; set output to 0x0FFF
 	bsf		divA+1,int_warning_flag		; set warning flag indicating out-of-range
 
 calc_pres_drop_common_3:
@@ -487,21 +504,21 @@ calc_pres_drop_reduce_accus:
 	; subtract 1 second from the time accumulator: time_accu (divA) -= 1 (only the low byte needs to be processed)
 	decf	divA+0,F					; decrement low byte of time_accu
 
-	; subtract average pressure drop per second from pressure accumulator: press_accu (lo) -= press_drop (xC)
+	; subtract average pressure drop per second from pressure accumulator: press_accu (mpr) -= press_drop (xC)
 	movf	xC+0,W						; copy          press_drop(xC) to WREG, lowest  byte
-	subwf	lo+0,F						; subtract from pres_accu,              lowest  byte
+	subwf	mpr+0,F						; subtract from pres_accu,              lowest  byte
 	movf	xC+1,W						; copy          press_drop(xC) to WREG, second  byte
-	subwfb	lo+1,F						; subtract from pres_accu,              second  byte
+	subwfb	mpr+1,F						; subtract from pres_accu,              second  byte
 	movf	xC+2,W						; copy          press_drop(xC) to WREG, third   byte
-	subwfb	lo+2,F						; subtract from pres_accu,              third   byte
+	subwfb	mpr+2,F						; subtract from pres_accu,              third   byte
 	movf	xC+3,W						; copy          press_drop(xC) to WREG, highest byte
-	subwfb	lo+3,F						; subtract from pres_accu,              highest byte
+	subwfb	mpr+3,F						; subtract from pres_accu,              highest byte
 	btfsc	STATUS,C					; did the buffer under-run (result negative)?
 	return								; NO  - done
-	clrf	lo+0						; YES - clear pressure accumulator, lowest  byte
-	clrf	lo+1						;     - clear pressure accumulator, second  byte
-	clrf	lo+2						;     - clear pressure accumulator, third   byte
-	clrf	lo+3						;     - clear pressure accumulator, highest byte
+	clrf	mpr+0						; YES - clear pressure accumulator, lowest  byte
+	clrf	mpr+1						;     - clear pressure accumulator, second  byte
+	clrf	mpr+2						;     - clear pressure accumulator, third   byte
+	clrf	mpr+3						;     - clear pressure accumulator, highest byte
 	return								;     - done
 
 calc_pres_drop_reset:
@@ -541,7 +558,7 @@ calc_pres_drop_restart:
 	return								; done
 
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 ; set up SAC calculation dependent on TR mode
 ;
 	global	configure_sac_calculation
@@ -569,7 +586,7 @@ configure_sac_calculation_2:			; TR mode 2: independent double
 	bra		configure_sac_calculation_5	; goto exit
 
 configure_sac_calculation_3:			; TR mode 3: CCR Dil+O2
-	btfsc	FLAG_bailout_mode			; in bailout?
+	btfsc	bailout_mode				; in bailout?
 	bra		configure_sac_calculation_1	; YES - handle alike TR mode 1
 	movlw	time_accu_target_CCR		; load time accumulator target value for CCR mode
 	movwf	ul							; store it in ul
@@ -584,8 +601,65 @@ configure_sac_calculation_5:
 	movff	WREG,char_I_SAC_mode		; write SAC mode selection
 	return
 
+
+;-----------------------------------------------------------------------------
+; Update TR module
+;
+	global	update_tr_module
+update_tr_module:
+	movlw	LOW   rx_firmware_storage	; setup program memory read for embedded TR firmware
+	movwf	TBLPTRL
+	movlw	HIGH  rx_firmware_storage
+	movwf	TBLPTRH
+	movlw	UPPER rx_firmware_storage
+	movwf	TBLPTRU
+
+	bsf		active_reset_ostc_rx		; apply a reset to the RX co-processor
+	WAITMS	.200						; wait 200 ms
+	bcf		active_reset_ostc_rx		; release reset
+	WAITMS	.100						; wait 100 ms, the RX co-processor will be in bootloader stage by then
+
+	bcf		INTCON,GIE					; halt all interrupts
+
+	movlw	.64							; load loop counter
+	movwf	lo							; ...
+
+update_tr_module_loop:					; (loop 64 times)
+	call	I2C_update_OSTC_rx			; send a batch of 64 bytes to the RX co-processor
+	tstfsz	WREG						; WREG = 0, i.e. data sent successfully?
+	bra		update_tr_module_fail		; NO - transfer error, abort
+	decfsz	lo,F						; YES - decrement loop counter, became zero?
+	bra		update_tr_module_loop		;       NO  - loop
+	bra		update_tr_module_done		;       YES - transfer complete & successful
+
+update_tr_module_fail:
+	bsf		INTCON,GIE					; re-enable interrupts
+	bcf		ostc_rx_present				; flag TR module as unserviceable
+	return								; done
+
+update_tr_module_done:
+	bsf		INTCON,GIE					; re-enable interrupts
+
+	call	wait_1s						; wait (up to)        1 second
+	call	wait_1s						; wait (another full) 1 second
+
+	bsf		active_reset_ostc_rx		; apply a reset to the RX co-processor
+	WAITMS	.200						; wait 200 ms
+	bcf		active_reset_ostc_rx		; release reset
+	call	wait_1s						; wait (up to)        1 second
+	call	wait_1s						; wait (another full) 1 second
+	call	wait_1s						; wait (another full) 1 second
+
+	call	I2C_probe_OSTC_rx			; check if RX co-processor is alive, will set ostc_rx_present if so (1st try)
+	btfsc	ostc_rx_present				; RX co-processor up & running?
+	return								; YES
+	call	wait_1s						; NO  - wait (up to) 1 second
+	call	I2C_probe_OSTC_rx			;     - give it a 2nd try
+	return								;     - finally done (whatever result on 2nd tray)
+
+
 ;=============================================================================
 
- ENDIF
+ ENDIF	; _rx_functions
 
 	END

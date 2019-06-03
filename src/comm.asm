@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File comm.asm									REFACTORED VERSION V2.99d
+;   File comm.asm                             combined next generation V3.03.3
 ;
 ;   RS232 via USB
 ;
@@ -28,29 +28,21 @@
 	extern	option_reset_all
 	extern	option_check_all
 	extern	gaslist_cleanup_list
-	extern	get_first_gas_to_WREG
-	extern	get_first_dil_to_WREG
 	extern	option_save_all
 	extern	vault_decodata_into_eeprom
-	extern  menu_processor_bottom_line_comm
-
- IFDEF _rx_functions
-	extern	I2C_update_OSTC_rx
- ENDIF
 
 
-#DEFINE timeout_comm_pre_mode	.240	; pre-loop
-#DEFINE timeout_comm_mode		.120	; download mode
-#DEFINE timeout_service_mode	.120	; service mode
+#DEFINE timeout_comm_pre_mode	.240	; timeout before communication is established
+#DEFINE timeout_service_mode	.120	; timeout when communication is established
 
-#DEFINE comm_title_row			.0
-#DEFINE comm_title_column_usb	.50
+#DEFINE comm_title_row			.0		; positioning of title
+#DEFINE comm_title_column_usb	.40
 #DEFINE comm_title_column_ble	.25
 
-#DEFINE comm_string_row			.30
+#DEFINE comm_string_row			.30		; positioning of host-sent text messages
 #DEFINE comm_string_column		.40
 
-#DEFINE comm_status1_row		.70
+#DEFINE comm_status1_row		.70		; positioning of COMM mode status messages
 #DEFINE comm_status1_column		.10
 #DEFINE comm_status2_row		.100
 #DEFINE comm_status2_column		comm_status1_column
@@ -59,306 +51,299 @@
 #DEFINE	comm_status4_row		.160
 #DEFINE	comm_status4_column		comm_status1_column
 
-
-#DEFINE comm_warning_row		.160
+#DEFINE comm_warning_row		.160	; positioning of COMM mode warning messages
 #DEFINE comm_warning_column		.65
+
 
 comm	CODE
 
 ;=============================================================================
 
-	; test for comm
-	global	comm_mode, comm_mode0
-comm_mode:
-	WAITMS	d'1'
-	btfss	vusb_in						; USB plugged in?
-	return								; NO - it was only a glitch
-	WAITMS	d'1'
-	btfss	vusb_in						; USB plugged in?
-	return								; NO - it was only a glitch
-comm_mode0:
-	call	TFT_ClearScreen
-	WIN_COLOR color_greenish
-	btfsc	ble_available							; BLE available
-	bra		comm_mode0_ble
-	WIN_SMALL comm_title_column_usb, comm_title_row
-	STRCPY_TEXT_PRINT tUsbTitle						; USB mode
-	bra		comm_mode0_common
-comm_mode0_ble:
-	WIN_SMALL comm_title_column_ble, comm_title_row
-	STRCPY_TEXT_PRINT tBleTitle						; BLE mode
-comm_mode0_common:
-	call	TFT_standard_color
-	WIN_TOP  .10
-	WIN_LEFT .1
-	TFT_WRITE_PROM_IMAGE_BY_ADDR usb_ble_logo_block
-	WIN_SMALL comm_status1_column,comm_status1_row
-	STRCPY_TEXT_PRINT tUsbStarting					; starting...
-	call	menu_processor_bottom_line_comm			; serial and fw version
+	global	comm_mode_usb
+comm_mode_usb:										; entry point for comm mode via USB
+	WAITMS	d'1'									; wait 1 ms
+	btfss	vusb_in									; USB still plugged in?
+	return											; NO - it was only a glitch, abort
+	WAITMS	d'1'									; wait 1 ms
+	btfss	vusb_in									; USB still plugged in?
+	return											; NO  - it was only a glitch, abort
+	bsf		aux_flag								; YES - remember to show USB title
+	bra		comm_mode_common						;     - continue with common part
+
+	global	comm_mode_ble
+comm_mode_ble:										; entry point for comm mode via BLE
+	bcf		aux_flag								; remember to show BLE title
+	;bra	comm_mode_common						; continue with common part
+
+comm_mode_common:
+	clrf	STKPTR									; clear return addresses stack
+	call	TFT_ClearScreen							; clear screen
+	WIN_COLOR color_greenish						; set color
+	btfss	aux_flag								; shall show USB title?
+	bra		comm_mode_common_1						; NO
+	WIN_SMALL comm_title_column_usb, comm_title_row	; YES - set   USB title position
+	STRCPY_TEXT_PRINT tUsbTitle						;     - print USB title text
+	bra		comm_mode_common_2
+comm_mode_common_1:
+	WIN_SMALL comm_title_column_ble, comm_title_row	; set   BLE title position
+	STRCPY_TEXT_PRINT tBleTitle						; print BLE title text
+comm_mode_common_2:
+	call	TFT_standard_color						; set standard color
+	WIN_TOP  .10									; positioning of USB/BLE logo, row
+	WIN_LEFT .1										; positioning of USB/BLE logo, column
+	TFT_WRITE_PROM_IMAGE_BY_ADDR usb_ble_logo_block	; show USB/BLE logo, respective logo is stored in bootloader section dependent on OSTC type
+	WIN_SMALL comm_status1_column,comm_status1_row	; positioning of status message
+	STRCPY_TEXT_PRINT tUsbStarting					; print status message "starting..."
+	WIN_TINY .40,.240-.16							; set output position to bottom line
+	call	TFT_show_serial_and_firmware			; show serial number and firmware version
 	call	option_save_all							; save all settings into EEPROM (comm mode may be entered after settings have been changed without leaving the menu in between)
 
  IFDEF _screendump
-	bcf		enable_screen_dumps			; =1: ignore vin_usb, wait for "l" command (screen dump)
+	bcf		screen_dump_avail			; disable screen dump function
  ENDIF
 
-	bcf		switch_right
-	bcf		comm_service_enabled
-	bsf		menubit
-	bcf		battery_removed_in_usb		; =1: the battery has been removed in USB (properly not used for anything useful)
-	movlw	timeout_comm_pre_mode
-	movwf	comm_timeout
+	bcf		switch_right				; clear left-over right button event
+	bcf		comm_service_enabled		; communication is not yet established
+	bsf		surfmode_menu				; flag that restart will be entered from surface menu / comm mode
+	movlw	timeout_comm_pre_mode		; get timeout for phase without communication established yet
+	movwf	comm_timeout_timer			; initialize timeout counter
 	WIN_SMALL comm_status1_column+.80,comm_status1_row
-	STRCPY_TEXT_PRINT tUsbStartDone		; done...
-	call	enable_rs232				; also sets to speed_normal ...
+	STRCPY_TEXT_PRINT tUsbStartDone		; add to status message "done..."
+	call	enable_rs232				; enable serial comm, also sets CPU to normal speed
 comm_mode1:
-	bcf		onesecupdate
-	bcf		LEDr
-	dcfsnz	comm_timeout,F
-	bra		comm_service_exit			; timeout -> exit
+	bcf		trigger_full_second			; clear 'one second elapsed' flag
+	bcf		LEDr						; switch off red LED / power down TR co-processor
+	dcfsnz	comm_timeout_timer,F		; decrement timeout, reached zero?
+	bra		comm_service_exit			; YES - timeout, exit comm mode
 comm_mode2:
-	rcall	comm_get_byte
-
-	movlw	0xAA						; start byte=0xAA?
-	cpfseq	RCREG1
-	bra		comm_mode2a
-	bra		comm_mode2b					; start byte for service mode found
+	rcall	comm_get_byte				; read 1 byte from RX buffer
+	movlw	0xAA						; coding of service mode start byte: 0xAA
+	cpfseq	RCREG1						; received service mode start byte?
+	bra		comm_mode2a					; NO  - probe for download mode
+	bra		comm_mode2b					; YES - received start byte for service mode
 comm_mode2a:
-	movlw	0xBB						; start byte=0xBB?
-	cpfseq	RCREG1
-	bra		comm_mode2c
-	bra		comm_download_mode			; start byte for download mode found
-
+	movlw	0xBB						; coding of download mode start byte: 0xBB
+	cpfseq	RCREG1						; received download mode start byte?
+	bra		comm_mode2c					; NO 
+	bra		comm_download_mode			; YES - received start byte for download mode
 comm_mode2c:
 	btfss	vusb_in						; USB plugged in?
-	bra		comm_service_exit_nousb_delay	; disconnected -> exit
+	bra		comm_service_exit_nousb_delay; NO - disconnected, exit comm mode
 comm_mode4a:
-	btfsc	switch_right				; abort with right
-	bra		comm_service_exit
+	btfsc	switch_right				; right button pressed?
+	bra		comm_service_exit			; YES - exit comm mode
+	btfsc	trigger_full_second			; NO  - did 1 second elapsed meanwhile?
+	bra		comm_mode1					;       YES - loop with    clocking down timeout counter
+	bra		comm_mode2					;       NO  - loop without clocking down timeout counter
 
-	btfsc	onesecupdate
-	bra		comm_mode1
-
-	bra		comm_mode2					; cycle
-
+; received start byte for service mode
 comm_mode2b:
-	; Startbyte found
-	rcall	comm_write_byte				; wait for UART
-	movlw	0x4B
-	movwf	TXREG1						; send answer
-	; Now, check comm command
-
-	rcall	comm_get_byte				; first byte
-	rcall	comm_write_byte				; wait for UART
-	movff	RCREG1,TXREG1				; Echo
-	movlw	UPPER comm_service_key
-	cpfseq	RCREG1
-	bra		comm_mode1					; wrong -> restart
-	rcall	comm_get_byte				; second byte
-	rcall	comm_write_byte				; wait for UART
-	movff	RCREG1,TXREG1				; echo
-	movlw	HIGH (comm_service_key & 0xFFFF)
-	cpfseq	RCREG1
-	bra		comm_mode1					; wrong -> restart
-	rcall	comm_get_byte				; third byte
-	rcall	comm_write_byte				; wait for UART
-	movff	RCREG1,TXREG1				; echo
-	movlw	LOW comm_service_key
-	cpfseq	RCREG1
-	bra		comm_mode1					; wrong -> restart
-
-	; Enable comm service mode
+	rcall	comm_write_byte				; wait for completion of transmit
+	movlw	0x4B						; prepare answer
+	movwf	TXREG1						; send    answer
+	; check if correct service key is received
+	rcall	comm_get_byte				; receive first byte
+	rcall	comm_write_byte				; wait for completion of transmit
+	movff	RCREG1,TXREG1				; echo received byte
+	movlw	UPPER comm_service_key		; load expected byte
+	cpfseq	RCREG1						; received expected byte?
+	bra		comm_mode1					; NO - restart
+	rcall	comm_get_byte				; receive second byte
+	rcall	comm_write_byte				; wait for completion of transmit
+	movff	RCREG1,TXREG1				; echo received byte
+	movlw	HIGH (comm_service_key & 0xFFFF) ; load expected byte
+	cpfseq	RCREG1						; received expected byte?
+	bra		comm_mode1					; NO - restart
+	rcall	comm_get_byte				; receive third byte
+	rcall	comm_write_byte				; wait for completion of transmit
+	movff	RCREG1,TXREG1				; echo received byte
+	movlw	LOW comm_service_key		; load expected byte
+	cpfseq	RCREG1						; received expected byte?
+	bra		comm_mode1					; NO - restart
+										; YES to all - enable com service mode
 	WIN_SMALL comm_status2_column, comm_status2_row
-	STRCPY_TEXT_PRINT tUsbServiceMode	; service mode enabled
-	bsf		comm_service_enabled		; set flag...
-	bra		comm_download_mode0			; ... but use common routine
+	STRCPY_TEXT_PRINT tUsbServiceMode	; print service mode enabled message
+	bsf		comm_service_enabled		; set flag for com service mode enabled
+	bra		comm_download_mode0			; continue using common routine
 
 comm_service_exit_nousb_delay:
-	WAITMS	d'200'
+	WAITMS	d'200'						; wait 200 ms
 	btfsc	vusb_in						; USB plugged in?
 	bra		comm_mode4a					; YES - (still) connected, return
-comm_service_exit_nousb:				; NO  - disconnected -> exit
+comm_service_exit_nousb:				; NO  - disconnected
 	WIN_SMALL comm_status3_column, comm_status3_row
-	STRCPY_TEXT_PRINT tUsbClosed		; port closed
-	bra		comm_service_exit_common
+	STRCPY_TEXT_PRINT tUsbClosed		; print port closed message
+	bra		comm_service_exit_common	; exit to restart
 
 comm_service_exit:
 	WIN_SMALL	comm_status3_column, comm_status3_row
-	STRCPY_TEXT_PRINT	tUsbExit		; exited
+	STRCPY_TEXT_PRINT	tUsbExit		; print exited message
 comm_service_exit_common:
-	rcall	comm_write_byte				; wait for UART
-	movlw	0xFF						; reply FF
-	movwf	TXREG1						; send answer
+	rcall	comm_write_byte				; wait for completion of transmit
+	movlw	0xFF						; prepare reply "FF"
+	movwf	TXREG1						; send    reply
+	call	wait_1s						; wait <= 1 second
+	call	wait_1s						; wait    1 second
+	call	disable_rs232				; shut down comm port
+	goto	restart						; restart
 
-	call	wait_1s						; wait 1 second
-	call	wait_1s						; wait 1 second
-
-	call	disable_rs232
-	goto	restart
 
 ;-----------------------------------------------------------------------------
-
+; Start Bootloader
+;
 comm_service_ll_bootloader:
-	bsf		LEDr
+	bsf		LEDr										; switch on red LED
 	WIN_SMALL comm_status3_column, comm_status3_row
-	STRCPY_TEXT_PRINT tUsbLlBld							; low level bootloader started
-	WIN_TOP  comm_warning_row
-	WIN_LEFT comm_warning_column
-	TFT_WRITE_PROM_IMAGE_BY_LABEL dive_warning2_block	; show warning icon
-	goto	0x1FF0C
+	STRCPY_TEXT_PRINT tUsbLlBld							; print low level bootloader started message
+	WIN_TOP  comm_warning_row							; set row for icon
+	WIN_LEFT comm_warning_column						; set column for icon
+	TFT_WRITE_PROM_IMAGE_BY_LABEL dive_warning2_block	; show the warning icon
+	goto	0x1FF0C										; jump into the bootloader code
+
 
 ;-----------------------------------------------------------------------------
-; send firmware to bootloader
+; Send Firmware to Bootloader
 ;
 comm_send_firmware:
-	movlw	0x50						; send echo
-	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
-
-	; Read 5 bytes into buffer.
-	lfsr	FSR2,buffer
-	movlw	.5							; counter
-	movwf	lo
-	movlw	0x55						; 5'ft byte checksum
-	movwf	hi
-
+	movlw	0x50						; prepare reply
+	movwf	TXREG1						; send    reply
+	rcall	comm_write_byte				; wait for completion of transmit
+	lfsr	FSR2,buffer					; load base address of buffer
+	movlw	.5							; read 5 bytes into buffer
+	movwf	lo							; initialize loop counter
+	movlw	0x55						; initialize checksum byte
+	movwf	hi							; store in hi
 comm_send_firmware_loop:
-	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
-	bra		comm_send_firmware_abort	; NO - abort
-	movf	RCREG1,W
-	movwf	POSTINC2					; store checksum byte
-	xorwf	hi,F						; also xor into checksum
-	rlncf	hi,F						; and rotate it
-	decfsz	lo,F
-	bra		comm_send_firmware_loop
-
-	; check that 5ft byte checksum's checksum
-	movf	hi,W
-	bnz		comm_send_firmware_failed
-
-	movlw	0x4C						; send OK
-	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
-
-	; Passed: goto second stage verification.
-	; NOTE: Bootloader is Bank0. With buffer at address 0x200.
-	call	vault_decodata_into_eeprom	; store last deco data (and time/date) into EEPROM
-	goto	0x1FDF0						; and pray...
+	rcall	comm_get_byte				; receive one byte
+	btfsc	rs232_rx_timeout			; got a byte?
+	bra		comm_send_firmware_abort	; NO  - abort
+	movf	RCREG1,W					; YES - copy received byte to WREG
+	movwf	POSTINC2					;     - copy received byte to buffer
+	xorwf	hi,F						;     - xor  received byte into checksum
+	rlncf	hi,F						;     - rotate checksum byte
+	decfsz	lo,F						;     - decrement loop counter, done?
+	bra		comm_send_firmware_loop		;       NO  - loop
+	movf	hi,W						;       YES - copy checksum to WREG, zero flag set?
+	bnz		comm_send_firmware_failed	;             NO - checksum test failed
+	movlw	0x4C						;             YES - checksum ok, prepare reply
+	movwf	TXREG1						;                 - send reply
+	rcall	comm_write_byte				;                 - wait for completion of transmit
+	call	vault_decodata_into_eeprom	;                 - store last deco data (and time/date) to EEPROM
+	goto	0x1FDF0						;                 - jump into the bootloader code
 
 comm_send_firmware_failed:
 	WIN_SMALL comm_string_column, comm_string_row
-	call	TFT_warnings_color
-	STRCPY_PRINT "Checksum failed"
-
+	call	TFT_warning_color			; set warning color
+	STRCPY_PRINT "Checksum failed"		; print failure message
 comm_send_firmware_abort:
-
-	movlw	0xFF						; send ABORTED byte
-	movwf	TXREG1
+	movlw	0xFF						; prepare reply for ABORTED
+	movwf	TXREG1						; send reply
 	bra		comm_download_mode0			; done
 
-;-----------------------------------------------------------------------------
-; Reset to Dive 1 in logbook
 
+;-----------------------------------------------------------------------------
+; Reset to Dive 1 in Logbook
+;
 comm_reset_logbook_pointers:
-	call	eeprom_reset_logbook_pointers	; clear logbook pointers in EEPROM...
-	call	ext_flash_erase_logbook			; ... and complete logbook (!)
+	call	eeprom_reset_logbook_pointers	; clear logbook pointers in EEPROM
+	call	ext_flash_erase_logbook			; clear complete logbook(!)
 	bra		comm_download_mode0				; done
 
 ;-----------------------------------------------------------------------------
-comm_reset_battery_gauge:				; resets battery gauge registers
-	call	reset_battery_pointer		; resets battery pointer 0x07-0x0C and battery_gauge:5
+; Reset Battery Gauge
+;
+comm_reset_battery_gauge:				; reset battery gauge registers
+	call	reset_battery_pointer		; reset battery pointer 0x07-0x0C and battery gauge
 	bra		comm_download_mode0			; done
 
 ;-----------------------------------------------------------------------------
-; erases range in 4 kB steps
-
+; Erase a Memory Range given byte Start Address and Number of 4 kB Blocks
+;
 comm_erase_range4kb:
-	movlw	0x42						; send echo
-	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
-	bcf		INTCON,GIE					; all interrupts off!
-	rcall	comm_get_flash_address		; get three bytes address or return
-	btfsc	rs232_receive_overflow		; got data?
-	bra		comm_download_mode0			; NO - done
-	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
-	bra		comm_download_mode0			; NO - done
-	movff	RCREG1,lo
-	; Got 4 bytes: 3 bytes address and 1 byte (lo) amount of 4kB blocks
+	movlw	0x42						; prepare reply
+	movwf	TXREG1						; send reply
+	rcall	comm_write_byte				; wait for completion of transmit
+	bcf		INTCON,GIE					; disable all interrupts
+	rcall	comm_get_flash_address		; get three bytes start address or return
+	btfsc	rs232_rx_timeout			; got start address?
+	bra		comm_download_mode0			; NO  - done
+	rcall	comm_get_byte				; YES - get number of blocks
+	btfsc	rs232_rx_timeout			;     - got number?
+	bra		comm_download_mode0			;       NO  - done
+	movff	RCREG1,lo					;       YES - copy number of blocks to lo
 comm_erase_range4kb_loop:
-	call	ext_flash_erase4kB			; erase block
-	movlw	0x10
-	addwf	ext_flash_address+1,F
-	movlw	.0
-	addwfc	ext_flash_address+2,F		; increase address by .4096, or 0x1000
-	decfsz	lo,F
-	bra		comm_erase_range4kb_loop	; loop until lo=zero
-	bra		comm_download_mode0			; done (sends the 4C OK too)
+	call	ext_flash_erase4kB			;           - erase a memory block
+	movlw	0x10						;           - increase start address by 4096 (0x1000)
+	addwf	ext_flash_address+1,F		;           - ...
+	movlw	.0							;           - ...
+	addwfc	ext_flash_address+2,F		;           - ...
+	decfsz	lo,F						;           - decrement block counter, all blocks done?
+	bra		comm_erase_range4kb_loop	;             NO  - loop
+	bra		comm_download_mode0			;             YES - done
 
 ;-----------------------------------------------------------------------------
-
-comm_erase_4kb:							; get 3 bytes start address
-	bcf		INTCON,GIE					; all interrupts off
-
-	rcall	comm_get_flash_address		; get three bytes address or return
-	btfsc	rs232_receive_overflow		; got data?
-	bra		comm_download_mode0			; NO - done
-
-	call	ext_flash_erase4kB			; erase one block
-	bra		comm_download_mode0			; done
+; Erase one Memory Block of 4 kB Size
+;
+comm_erase_4kb:
+	bcf		INTCON,GIE					; disable all interrupts
+	rcall	comm_get_flash_address		; get three bytes start address or return
+	btfsc	rs232_rx_timeout			; got start address?
+	bra		comm_download_mode0			; NO  - done
+	call	ext_flash_erase4kB			; YES - erase memory block
+	bra		comm_download_mode0			;     - done
 
 ;-----------------------------------------------------------------------------
-
-comm_write_range:						; get 3 bytes start address
-	movlw	0x30						; send echo
-	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
-
-	bcf		INTCON,GIE					; all interrupts off
-
-	rcall	comm_get_flash_address		; get three bytes address or return
-	btfsc	rs232_receive_overflow		; got data?
-	bra		comm_download_mode0			; NO - done
-
+; Write a Stream of Data Bytes to Memory
+;
+comm_write_range:
+	movlw	0x30						; prepare reply
+	movwf	TXREG1						; send    reply
+	rcall	comm_write_byte				; wait for completion of transmit
+	bcf		INTCON,GIE					; disable all interrupts
+	rcall	comm_get_flash_address		; get three bytes starts address or return
+	btfsc	rs232_rx_timeout			; got start address?
+	bra		comm_download_mode0			; NO  - done
 comm_write_range_loop:
-	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
-	bra		comm_download_mode0			; NO - done (and send OK byte too)
-	movf	RCREG1,W
-;	bsf		NCTS						; hold Bluetooth chip (requires PC/Android/iOS side to use flow control...)
-	call	ext_flash_byte_write_comms	; write one byte
-;	bcf		NCTS						; release Bluetooth chip (requires PC/Android/iOS side to use flow control...)
-	call	incf_ext_flash_address_p1	; increase address+1
-	bra	comm_write_range_loop
+	rcall	comm_get_byte				; YES - get data byte to write to memory
+	btfsc	rs232_rx_timeout			; got byte?
+	bra		comm_download_mode0			; NO  - done
+	movf	RCREG1,W					; YES - copy received data byte to WREG
+;	bsf		NCTS						;     - hold Bluetooth chip (requires PC/Android/iOS side to use flow control...)
+	call	ext_flash_byte_write_comms	;     - write data byte to flash memory
+;	bcf		NCTS						;     - release Bluetooth chip (requires PC/Android/iOS side to use flow control...)
+	call	incf_ext_flash_address_p1	;     - increase address
+	bra		comm_write_range_loop		;     - loop
+
 
 ;-----------------------------------------------------------------------------
-
-comm_send_range:						; get 3 bytes start address and 3 bytes amount
-	movlw	0x20						; send echo
-	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
-	bcf		INTCON,GIE					; all interrupts off
-	rcall	comm_get_flash_address		; get three bytes address or return
-	btfsc	rs232_receive_overflow		; got data?
+; Read a Memory Section given by Start Address and Length
+;
+comm_send_range:
+	movlw	0x20						; prepare reply
+	movwf	TXREG1						; send    reply
+	rcall	comm_write_byte				; wait for completion of transmit
+	bcf		INTCON,GIE					; disable all interrupts
+	rcall	comm_get_flash_address		; get three bytes start address or return
+	btfsc	rs232_rx_timeout			; got start address?
 	bra		comm_download_mode0			; NO - done
-	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	rcall	comm_get_byte				; get length, 3rd byte
+	btfsc	rs232_rx_timeout			; got byte?
 	bra		comm_download_mode0			; NO - done
-	movff	RCREG1,up
-	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	movff	RCREG1,up					; store length, 3rd byte
+	rcall	comm_get_byte				; get length, 2nd byte
+	btfsc	rs232_rx_timeout			; got byte?
 	bra		comm_download_mode0			; NO - done
-	movff	RCREG1,hi
-	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	movff	RCREG1,hi					; store length, 2nd byte
+	rcall	comm_get_byte				; get length, 1st byte
+	btfsc	rs232_rx_timeout			; got byte?
 	bra		comm_download_mode0			; NO - done
-	movff	RCREG1,lo
+	movff	RCREG1,lo					; store length, 1st byte
 	; if lo==0, we must precondition hi because there are too many bytes sent
 	movf	lo,W
 	bnz		$+4
 	decf	hi,F
 	movlw	0x40
-	cpfslt	up							; up > 0x3F?
+	cpfslt	up							; up > 0x3F ?
 	bra		comm_download_mode0			; YES - abort
 	; 6 bytes received, send data
 	; needs ext_flash_address:3 start address and up:hi:lo amount
@@ -369,7 +354,7 @@ comm_send_range24_loop:
 	call	ext_flash_read_block		; read one byte
 	movwf	TXREG1						; start new transmit
 comm_send_range24:
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	decfsz	lo,F
 	bra		comm_send_range24_loop
 	decf	hi,F
@@ -387,15 +372,15 @@ comm_send_range24:
 
 comm_get_flash_address:
 	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	btfsc	rs232_rx_timeout			; got byte?
 	return								; NO - return
 	movff	RCREG1,ext_flash_address+2
 	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	btfsc	rs232_rx_timeout			; got byte?
 	return								; NO - return
 	movff	RCREG1,ext_flash_address+1
 	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	btfsc	rs232_rx_timeout			; got byte?
 	return								; NO - return
 	movff	RCREG1,ext_flash_address+0
 	return
@@ -407,37 +392,36 @@ comm_download_mode:
 	WIN_SMALL comm_status2_column, comm_status2_row
 	STRCPY_TEXT_PRINT tUsbDownloadMode	; download mode enabled
 	bsf		INTCON,GIE					; all interrupts on
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	movlw	0xBB						; command echo
 	movwf	TXREG1						; send answer
 comm_download_mode0:
 	bsf		INTCON,GIE					; all interrupts on
-	rcall	comm_write_byte				; wait for UART
-	movlw	0x4C						; 4C in service mode
-	btfss	comm_service_enabled
-	movlw	0x4D						; 4D in download mode
+	rcall	comm_write_byte				; wait for completion of transmit
+	movlw	0x4C						; default reply is 4C for service mode
+	btfss	comm_service_enabled		; com service enabled?
+	movlw	0x4D						; NO - change to reply 4D for download mode
 	movwf	TXREG1						; send answer
-	movlw	timeout_service_mode
-	movwf	comm_timeout				; timeout
-	bcf		switch_right
+	movlw	timeout_service_mode		; get timeout value
+	movwf	comm_timeout_timer			; load into timeout counter
+	bcf		switch_right				; clear left-over button event
 comm_download_mode1:
-	bcf		onesecupdate
-	dcfsnz	comm_timeout,F
-	bra		comm_service_exit			; timeout -> exit
+	bcf		trigger_full_second			; clear 'one second elapsed' flag
+	dcfsnz	comm_timeout_timer,F		; decrement timeout, reached zero?
+	bra		comm_service_exit			; YES - exit
 comm_download_mode2:
-	rcall	comm_get_byte				; check for a byte
-	btfsc	comm_service_enabled
-	btg		LEDr						; blink in service mode
-	btfss	vusb_in						; USB plugged in?
-	bra		comm_service_exit_nousb		; NO - disconnected -> exit
-	btfsc	switch_right				; abort with right button
-	bra		comm_service_exit
-	btfsc	onesecupdate
-	bra		comm_download_mode1
-	btfsc	rs232_receive_overflow
-	bra		comm_download_mode2			; wait for command byte
-
-	; command received
+	rcall	comm_get_byte				; No - check for a byte
+	btfsc	comm_service_enabled		;      com service mode enabled?
+	btg		LEDr						;      YES - blink in service mode
+	btfss	vusb_in						;      USB plugged in?
+	bra		comm_service_exit_nousb		;      NO  - disconnected -> exit
+	btfsc	switch_right				;      YES - shall abort?
+	bra		comm_service_exit			;            YES
+	btfsc	trigger_full_second			;            NO  - did 1 second elapsed meanwhile?
+	bra		comm_download_mode1			;                  YES - check for timeout
+	btfsc	rs232_rx_timeout			;                   NO  - got a byte?
+	bra		comm_download_mode2			;                         NO - loop waiting for command byte
+										;                         YES - command received
 	bcf		LEDr
 	movlw	0xFF
 	cpfseq	RCREG1
@@ -479,14 +463,12 @@ comm_download_mode2:
 	cpfseq	RCREG1
 	bra		$+4
 	goto	comm_send_compact_headers	; send all 256 compact headers
-
  IFDEF _screendump
 	movlw	"l"
 	cpfseq	RCREG1
 	bra	$+4
 	call	TFT_dump_screen				; dump the screen contents
  ENDIF
-
 	movlw	"r"
 	cpfseq	RCREG1
 	bra		$+4
@@ -535,12 +517,6 @@ comm_download_mode2:
 ;	cpfseq	RCREG1
 ;	bra		$+4
 ;	goto	testloop					; start raw-data test loop
- IFDEF _rx_function
-	movlw	0x70
-	cpfseq	RCREG1
-	bra		$+4
-	bra		comm_update_ostc_rx			; send firmware from external memory 3D0800h -> 3DFFFFh to OSTC RX circuity
- ENDIF
 	movlw	0xC1
 	cpfseq	RCREG1
 	bra		$+4
@@ -580,7 +556,7 @@ comm_send_compact_headers2:
 comm_send_compact_headers4:
 	movlw	.13
 	movwf	lo							; counter
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	call	ext_flash_read_block_start	; 1st byte
 	movwf	TXREG1
 	bra		comm_send_compact_headers3	; counter 24 bit
@@ -588,7 +564,7 @@ comm_send_compact_headers_loop:
 	call	ext_flash_read_block		; read one byte
 	movwf	TXREG1						; start new transmit
 comm_send_compact_headers3:
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	decfsz	lo,F
 	bra		comm_send_compact_headers_loop
 	call	ext_flash_read_block_stop
@@ -598,18 +574,18 @@ comm_send_compact_headers3:
 	movwf	ext_flash_address+0
 	call	ext_flash_read_block_start	; 1st byte
 	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	call	ext_flash_read_block		; 2nd byte
 	movwf	TXREG1
 	call	ext_flash_read_block_stop
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 
 	; Offset to Logbook-Profile version
 	movlw	.8
 	movwf	ext_flash_address+0
 	call	ext_flash_byte_read			; get byte
 	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	bra		comm_send_compact_headers2	; continue
 
 
@@ -641,7 +617,7 @@ comm_send_headers2:
 	bra		comm_download_mode0			; done, loop with timeout reset
 comm_send_headers4:
 	clrf	lo							; counter
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	call	ext_flash_read_block_start	; 1st byte
 	movwf	TXREG1
 	bra		comm_send_headers3			; counter 24 bit
@@ -649,7 +625,7 @@ comm_send_headers_loop:
 	call	ext_flash_read_block		; read one byte
 	movwf	TXREG1						; start new transmit
 comm_send_headers3:
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	decfsz	lo,F
 	bra		comm_send_headers_loop
 	call	ext_flash_read_block_stop
@@ -669,48 +645,32 @@ comm_set_time:
 	movlw	"b"							; send echo
 	movwf	TXREG1
 
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	btfsc	rs232_rx_timeout			; got byte?
 	bra		comm_download_mode0			; NO - abort
-	movff	RCREG1, hours
-	movlw	d'24'
-	cpfslt	hours
-	clrf	hours
+	movff	RCREG1, rtc_latched_hour
 	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	btfsc	rs232_rx_timeout			; got byte?
 	bra		comm_download_mode0			; NO - abort
-	movff	RCREG1, mins
-	movlw	d'60'
-	cpfslt	mins
-	clrf	mins
+	movff	RCREG1, rtc_latched_mins
 	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	btfsc	rs232_rx_timeout			; got byte?
 	bra		comm_download_mode0			; NO - abort
-	movff	RCREG1, secs
-	movlw	d'60'
-	cpfslt	secs
-	clrf	secs
+	movff	RCREG1, rtc_latched_secs
 	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	btfsc	rs232_rx_timeout			; got byte?
 	bra		comm_download_mode0			; NO - abort
-	movff	RCREG1, month
-	movlw	d'13'
-	cpfslt	month
-	movwf	month
+	movff	RCREG1, rtc_latched_month
 	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	btfsc	rs232_rx_timeout			; got byte?
 	bra		comm_download_mode0			; NO - abort
-	call	comm_check_day				; check day
+	movff	RCREG1, rtc_latched_day
 	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	btfsc	rs232_rx_timeout			; got byte?
 	bra		comm_download_mode0			; NO - abort
-	movff	RCREG1, year
-	movlw	d'100'
-	cpfslt	year
-	clrf	year
-	; all ok, set RTCC
-	call	rtc_set_rtc					; writes mins,sec,hours,day,month and year to RTC module
+	movff	RCREG1, rtc_latched_year
+	call	rtc_set_rtc					; write time and date to RTC module
 	bra		comm_download_mode0			; done, back to loop with timeout reset
 
 ;-----------------------------------------------------------------------------
@@ -720,13 +680,13 @@ comm_set_time:
 comm_set_custom_text:
 	movlw	"c"							; send echo
 	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	lfsr	FSR2,opt_name
 	movlw	opt_name_length
 	movwf	lo							; counter
 comm_set_ctext_loop:
 	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	btfsc	rs232_rx_timeout			; got byte?
 	bra		comm_set_ctext_loop_done	; NO - abort
 	movff	RCREG1,POSTINC2				; store character
 	decfsz	lo,F
@@ -748,7 +708,7 @@ comm_set_ctext_loop_done2:
 comm_identify:
 	movlw	"i"							; send echo
 	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 
 	;---- Read serial from internal EEPROM address 0000
 	clrf	EEADRH
@@ -761,17 +721,17 @@ comm_identify:
 
 	;---- Emit serial number
 	movff	lo,TXREG1
-	rcall	comm_write_byte
+	rcall	comm_write_byte				; wait for completion of transmit
 	movff	hi,TXREG1
-	rcall	comm_write_byte
+	rcall	comm_write_byte				; wait for completion of transmit
 
 	;---- Emit firmware hi.lo
 	movlw	softwareversion_x
 	movwf	TXREG1
-	rcall	comm_write_byte
+	rcall	comm_write_byte				; wait for completion of transmit
 	movlw	softwareversion_y
 	movwf	TXREG1
-	rcall	comm_write_byte
+	rcall	comm_write_byte				; wait for completion of transmit
 
 	;---- Emit custom text
 	movlw	opt_name_length
@@ -780,7 +740,7 @@ comm_identify:
 
 common_identify_loop:
 	movff	POSTINC2,TXREG1
-	rcall	comm_write_byte
+	rcall	comm_write_byte				; wait for completion of transmit
 	decfsz	hi,F
 	bra		common_identify_loop
 
@@ -791,119 +751,52 @@ common_identify_loop:
 comm_get_byte:
 	goto	rs232_get_byte				; ... and return
 
-comm_write_byte:
+comm_write_byte:						; wait for completion of transmit
 	goto	rs232_wait_tx				; ... and return
+
 
 ;-----------------------------------------------------------------------------
 ; Reply hardware descriptor byte
 ;
-
 comm_hardware_descriptor:
-	movlw	"j"							; send echo
-	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
-	movff	hardware_flag1,TXREG1
+	movlw	"j"							; prepare echo
+	movwf	TXREG1						; send    echo
+	rcall	comm_write_byte				; wait for completion of transmit
+
+	movf	HW_descriptor,W				; get hardware descriptor
+	bcf		WREG,6						; clear bit 6 for reason of compatibility with 3rd party software
+	bcf		WREG,7						; clear bit 7 for reason of compatibility with 3rd party software
+	movwf	TXREG1						; send hardware descriptor
+
 	bra		comm_download_mode0			; done
 
 comm_feature_and_hardware:
 	movlw	0x60						; send echo
 	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
+
 	movlw	0x00						; hardware high byte
 	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
-	movff	hardware_flag1,TXREG1
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
+
+	movf	HW_descriptor,W				; get hardware descriptor
+	bcf		WREG,6						; clear bit 6 for reason of compatibility with 3rd party software
+	bcf		WREG,7						; clear bit 7 for reason of compatibility with 3rd party software
+	movwf	TXREG1						; send hardware descriptor
+	rcall	comm_write_byte				; wait for completion of transmit
+
 	movlw	0x00						; feature high Byte
 	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
+
 	movlw	0x00						; feature low Byte
 	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
+
 	movlw	0x00						; model descriptor byte
 	movwf	TXREG1
+
 	bra		comm_download_mode0			; done
-
-;-----------------------------------------------------------------------------
-
- IFDEF _rx_function
-
-comm_update_ostc_rx:
-	movlw	0x70						; send echo
-	movwf	TXREG1
-	rcall	comm_write_byte				; wait for UART
-;	btfss	ostc_rx_present				; rx model?
-;	bra		comm_download_mode0			; NO - abort
-
-	; Setup ext_flash_address:3
-	movlw	LOW   0x3D0800
-	movwf	ext_flash_address+0
-	movlw	HIGH  (0x3D0800 & 0xFFFF)	; <- & 0xFFFF to suppress warning message...
-	movwf	ext_flash_address+1
-	movlw	UPPER 0x3D0800
-	movwf	ext_flash_address+2
-
-	bsf		active_reset_ostc_rx
-	WAITMS	.5
-	bcf		active_reset_ostc_rx
-	WAITMS	.100
-	bcf		INTCON,GIE					; halt all interrupts
-
-	movlw	LOW  .992
-	movwf	uart1_temp
-	movlw	HIGH .992
-	movwf	uart2_temp
-	incf	uart2_temp,F				; ++1
-	WAITMS	.1
-
-	call	ext_flash_read_block_start
-	movwf	up							; first byte to write
-
-comm_update_ostc_rx_loop:				; (run 992 times)
-	WIN_SMALL comm_status4_column, comm_status4_row
-	movff	uart1_temp,xA+0
-	movf	uart2_temp,W
-	tstfsz	uart2_temp
-	decf	uart2_temp,W				; --1 for display
-	movwf	xA+1
-	movlw	.64
-	movwf	xB+0
-	clrf	xB+1
-	call	mult16x16					; xA * xB = xC
-	movff	xC+0,lo
-	movff	xC+1,hi
-	bsf		leftbind
-	output_16
-	bcf		leftbind
-	STRCAT_PRINT " Bytes left  "
-
-	call	I2C_update_OSTC_rx			; send firmware from external memory 3D0800h -> 3DFFFFh to OSTC RX circuity
-
-	tstfsz	WREG						; returns with WREG=0 if everything was ok
-	bra		comm_update_ostc_rx_loop_error	; error -> abort
-
-	decfsz	uart1_temp,F
-	bra		comm_update_ostc_rx_loop
-	decfsz	uart2_temp,F
-	bra		comm_update_ostc_rx_loop
-
-comm_update_ostc_rx_loop_done:
-	call	ext_flash_read_block_stop
-	bsf		INTCON,GIE
-	WIN_SMALL comm_status4_column, comm_status4_row
-	STRCPY_PRINT "                "
-	bra		comm_download_mode0			; done
-
-comm_update_ostc_rx_loop_error:
-	bsf		INTCON,GIE
-	WIN_SMALL comm_status4_column, comm_status4_row
-	STRCPY_PRINT "ERROR. Retry!  "
-	call	wait_1s						; do not use for time critical routines, can be between 0 and 1 sec!
-	call	wait_1s						; do not use for time critical routines, can be between 0 and 1 sec!
-	call	wait_1s						; do not use for time critical routines, can be between 0 and 1 sec!
-	bra		comm_update_ostc_rx_loop_done
-
- ENDIF
 
 ;-----------------------------------------------------------------------------
 
@@ -912,7 +805,7 @@ comm_send_dive:
 	movwf	TXREG1
 
 	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
+	btfsc	rs232_rx_timeout			; got byte?
 	bra		comm_download_mode0			; NO - abort!
 	movff	RCREG1,lo					; store dive number (0-255)
 ; First, send the header (again)
@@ -965,7 +858,7 @@ comm_send_dive:
 comm_send_dive1:
 	; Send header
 	clrf	hi							; counter
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	call	ext_flash_read_block_start	; 1st byte
 	movwf	TXREG1
 	bra		comm_send_dive_header
@@ -973,7 +866,7 @@ comm_send_dive_header2:
 	call	ext_flash_read_block		; read one byte
 	movwf	TXREG1						; start new transmit
 comm_send_dive_header:
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	decfsz	hi,F
 	bra		comm_send_dive_header2
 	call	ext_flash_read_block_stop
@@ -990,7 +883,7 @@ comm_send_dive_header:
 
 comm_send_dive_profile:
 	call	ext_flash_byte_read_plus_0x20	; read one byte into ext_flash_rw, takes care of banking at 0x200000
-	rcall	comm_write_byte					; wait for UART
+	rcall	comm_write_byte					; wait for completion of transmit
 	movff	ext_flash_rw,TXREG1				; send a byte
 
 	; 24bit compare with end address
@@ -1004,7 +897,7 @@ comm_send_dive_profile:
 	cpfseq	ext_flash_address+2
 	bra		comm_send_dive_profile
 
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	bra		comm_download_mode0			; done, loop with timeout reset
 
 ;-----------------------------------------------------------------------------
@@ -1013,9 +906,9 @@ comm_read_setting:
 	movlw	"r"
 	movwf	TXREG1
 	rcall	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
-	bra		comm_read_abort				; NO - abort!
-	rcall	comm_write_byte				; wait for UART
+	btfsc	rs232_rx_timeout			; got byte?
+	bra		comm_read_abort				; NO - abort
+	rcall	comm_write_byte				; wait for completion of transmit
 	movlw	0x0F
 	cpfsgt	RCREG1						; 0x00-0x0F: unused
 	bra		comm_read_abort				; abort!
@@ -1075,7 +968,7 @@ comm_read_setting:
 	dcfsnz	WREG
 	movff	char_I_deco_model,			TXREG1	; RCREG1=0x21
 	dcfsnz	WREG
-	movff	char_I_ppO2_max,			TXREG1	; RCREG1=0x22
+	movff	char_I_ppO2_max_work,		TXREG1	; RCREG1=0x22
 	dcfsnz	WREG
 	movff	char_I_ppO2_min,			TXREG1	; RCREG1=0x23
 	dcfsnz	WREG
@@ -1127,9 +1020,9 @@ comm_read_setting:
 	dcfsnz	WREG
 	movff	opt_cR_button_right,		TXREG1	; RCREG1=0x3B
 	dcfsnz	WREG
-	movff	char_I_bottom_usage,		TXREG1	; RCREG1=0x3C
+	movff	char_I_SAC_work,			TXREG1	; RCREG1=0x3C
 	dcfsnz	WREG
-	movff	char_I_deco_usage,			TXREG1	; RCREG1=0x3D
+	movff	char_I_SAC_deco,			TXREG1	; RCREG1=0x3D
 	dcfsnz	WREG
 	movff	opt_modwarning,				TXREG1	; RCREG1=0x3E
 	dcfsnz	WREG
@@ -1137,7 +1030,7 @@ comm_read_setting:
 	dcfsnz	WREG
 	movff	opt_vsigraph,				TXREG1	; RCREG1=0x40
 	dcfsnz	WREG
-	movff	opt_showppo2,				TXREG1	; RCREG1=0x41
+	movff	opt_showppo2,				TXREG1	; RCREG1=0x41, always show ppO2
 	dcfsnz	WREG
 	movff	opt_temperature_adjust,		TXREG1	; RCREG1=0x42
 	dcfsnz	WREG
@@ -1163,27 +1056,27 @@ comm_read_setting:
 	dcfsnz	WREG
 	movff	char_I_ppO2_min_loop,		TXREG1	; RCREG1=0x4D
 	dcfsnz	WREG
-	movff	char_I_tank_size+0,			TXREG1	; RCREG1=0x4E
+	movff	char_I_gas_avail_size+0,	TXREG1	; RCREG1=0x4E
 	dcfsnz	WREG
-	movff	char_I_tank_size+1,			TXREG1	; RCREG1=0x4F
+	movff	char_I_gas_avail_size+1,	TXREG1	; RCREG1=0x4F
 	dcfsnz	WREG
-	movff	char_I_tank_size+2,			TXREG1	; RCREG1=0x50
+	movff	char_I_gas_avail_size+2,	TXREG1	; RCREG1=0x50
 	dcfsnz	WREG
-	movff	char_I_tank_size+3,			TXREG1	; RCREG1=0x51
+	movff	char_I_gas_avail_size+3,	TXREG1	; RCREG1=0x51
 	dcfsnz	WREG
-	movff	char_I_tank_size+4,			TXREG1	; RCREG1=0x52
+	movff	char_I_gas_avail_size+4,	TXREG1	; RCREG1=0x52
 	dcfsnz	WREG
-	movff	char_I_tank_pres_fill+0,	TXREG1	; RCREG1=0x53
+	movff	char_I_gas_avail_pres+0,	TXREG1	; RCREG1=0x53
 	dcfsnz	WREG
-	movff	char_I_tank_pres_fill+1,	TXREG1	; RCREG1=0x54
+	movff	char_I_gas_avail_pres+1,	TXREG1	; RCREG1=0x54
 	dcfsnz	WREG
-	movff	char_I_tank_pres_fill+2,	TXREG1	; RCREG1=0x55
+	movff	char_I_gas_avail_pres+2,	TXREG1	; RCREG1=0x55
 	dcfsnz	WREG
-	movff	char_I_tank_pres_fill+3,	TXREG1	; RCREG1=0x56
+	movff	char_I_gas_avail_pres+3,	TXREG1	; RCREG1=0x56
 	dcfsnz	WREG
-	movff	char_I_tank_pres_fill+4,	TXREG1	; RCREG1=0x57
+	movff	char_I_gas_avail_pres+4,	TXREG1	; RCREG1=0x57
 	dcfsnz	WREG
-	movff	char_I_cc_max_frac_o2,		TXREG1	; RCREG1=0x58
+	movff	char_I_CC_max_frac_O2,		TXREG1	; RCREG1=0x58
 	dcfsnz	WREG
 	movff	opt_sim_setpoint_number,	TXREG1	; RCREG1=0x59
 	dcfsnz	WREG
@@ -1239,25 +1132,25 @@ comm_read_setting:
 	dcfsnz	WREG
 	movff	opt_transmitter_id_10+1,	TXREG1	; RCREG1=0x73
 	dcfsnz	WREG
-	movff	char_I_tank_size+5,			TXREG1	; RCREG1=0x74
+	movff	char_I_gas_avail_size+5,	TXREG1	; RCREG1=0x74
 	dcfsnz	WREG
-	movff	char_I_tank_size+6,			TXREG1	; RCREG1=0x75
+	movff	char_I_gas_avail_size+6,	TXREG1	; RCREG1=0x75
 	dcfsnz	WREG
-	movff	char_I_tank_size+7,			TXREG1	; RCREG1=0x76
+	movff	char_I_gas_avail_size+7,	TXREG1	; RCREG1=0x76
 	dcfsnz	WREG
-	movff	char_I_tank_size+8,			TXREG1	; RCREG1=0x77
+	movff	char_I_gas_avail_size+8,	TXREG1	; RCREG1=0x77
 	dcfsnz	WREG
-	movff	char_I_tank_size+9,			TXREG1	; RCREG1=0x78
+	movff	char_I_gas_avail_size+9,	TXREG1	; RCREG1=0x78
 	dcfsnz	WREG
-	movff	char_I_tank_pres_fill+5,	TXREG1	; RCREG1=0x79
+	movff	char_I_gas_avail_pres+5,	TXREG1	; RCREG1=0x79
 	dcfsnz	WREG
-	movff	char_I_tank_pres_fill+6,	TXREG1	; RCREG1=0x7A
+	movff	char_I_gas_avail_pres+6,	TXREG1	; RCREG1=0x7A
 	dcfsnz	WREG
-	movff	char_I_tank_pres_fill+7,	TXREG1	; RCREG1=0x7B
+	movff	char_I_gas_avail_pres+7,	TXREG1	; RCREG1=0x7B
 	dcfsnz	WREG
-	movff	char_I_tank_pres_fill+8,	TXREG1	; RCREG1=0x7C
+	movff	char_I_gas_avail_pres+8,	TXREG1	; RCREG1=0x7C
 	dcfsnz	WREG
-	movff	char_I_tank_pres_fill+9,	TXREG1	; RCREG1=0x7D
+	movff	char_I_gas_avail_pres+9,	TXREG1	; RCREG1=0x7D
 	dcfsnz	WREG
 	movff	opt_TR_mode,				TXREG1	; RCREG1=0x7E
 	dcfsnz	WREG
@@ -1274,6 +1167,18 @@ comm_read_setting:
 	movff	opt_ZfactorTemp,			TXREG1	; RCREG1=0x84
 	dcfsnz	WREG
 	movff	opt_2ndDepthDisp,			TXREG1	; RCREG1=0x85
+	dcfsnz	WREG
+	movff	opt_max_depth,				TXREG1	; RCREG1=0x86
+	dcfsnz	WREG
+	movff	char_I_descent_speed,		TXREG1	; RCREG1=0x87
+	dcfsnz	WREG
+	movff	opt_store_apnoe_dive,		TXREG1	; RCREG1=0x88
+	dcfsnz	WREG
+	movff	opt_tissue_graphics,		TXREG1	; RCREG1=0x89
+	dcfsnz	WREG
+	movff	opt_layout,					TXREG1	; RCREG1=0x90
+	dcfsnz	WREG
+	movff	opt_extended_stops,			TXREG1	; RCREG1=0x91
 
 comm_read_abort:
 comm_read_done:
@@ -1296,13 +1201,13 @@ comm_read_gas_dil:
 	lfsr	FSR0,opt_gas_O2_ratio		; load base address of gas data arrays
 	movf	up,W						; load index (0-9) of gas/dil into WREG, addressing O2 ratio
 	movff	PLUSW0, TXREG1				; transmit O2 ratio
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	addlw	.10							; increment index by 10, addressing He ratio now
 	movff	PLUSW0, TXREG1				; transmit He ratio
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	addlw	.10							; increment index by 10, addressing gas/dil type now
 	movff	PLUSW0, TXREG1				; transmit gas/dil type
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	addlw	.10							; increment index by 10, addressing change depth now
 	movff	PLUSW0,TXREG1				; transmit change depth
 	bra		comm_read_done				; done, wait for UART and loop with timeout reset
@@ -1310,14 +1215,14 @@ comm_read_gas_dil:
 
 ; Memory map is as follows:
 ; -------------------------
-; char_I_setpoint_cbar			res 5	; setpoints in cbar
-; char_I_setpoint_change		res 5	; change depth for the setpoints in meter
+; opt_setpoint_cbar			res 5	; setpoints in cbar
+; opt_setpoint_change		res 5	; change depth for the setpoints in meter
 
 comm_read_sp:
-	lfsr	FSR0,char_I_setpoint_cbar	; load base address of setpoint cbar values
+	lfsr	FSR0,opt_setpoint_cbar		; load base address of setpoint cbar values
 	movf	up,W						; load index (0-4) of setpoint into WREG, addressing cbar value
 	movff	PLUSW0, TXREG1				; transmit setpoint cbar value
-	rcall	comm_write_byte				; wait for UART
+	rcall	comm_write_byte				; wait for completion of transmit
 	addlw	.5							; increment index by 5, addressing change depth now
 	movff	PLUSW0, TXREG1				; transmit change depth
 	bra		comm_read_done				; done, wait for UART and loop with timeout reset
@@ -1328,11 +1233,11 @@ comm_write_setting:
 	movlw	"w"
 	movwf	TXREG1
 	rcall	comm_get_byte					; "Byte 2"
-	btfsc	rs232_receive_overflow			; got byte?
-	bra		comm_write_abort				; NO - abort!
+	btfsc	rs232_rx_timeout				; got a byte?
+	bra		comm_write_abort				; NO - abort
 	movff	RCREG1,lo						; copy
 	rcall	comm_get_byte					; "Byte 3"
-	rcall	comm_write_byte					; wait for UART
+	rcall	comm_write_byte					; wait for completion of transmit
 	movlw	0x0F
 	cpfsgt	lo								; 0x00-0x0F: unused
 	bra		comm_write_abort				; abort!
@@ -1392,7 +1297,7 @@ comm_write_setting:
 	dcfsnz	WREG
 	movff	RCREG1, char_I_deco_model		; RCREG1=0x21
 	dcfsnz	WREG
-	movff	RCREG1, char_I_ppO2_max			; RCREG1=0x22
+	movff	RCREG1, char_I_ppO2_max_work	; RCREG1=0x22
 	dcfsnz	WREG
 	movff	RCREG1, char_I_ppO2_min			; RCREG1=0x23
 	dcfsnz	WREG
@@ -1444,9 +1349,9 @@ comm_write_setting:
 	dcfsnz	WREG
 	movff	RCREG1, opt_cR_button_right		; RCREG1=0x3B
 	dcfsnz	WREG
-	movff	RCREG1, char_I_bottom_usage		; RCREG1=0x3C
+	movff	RCREG1, char_I_SAC_work			; RCREG1=0x3C
 	dcfsnz	WREG
-	movff	RCREG1, char_I_deco_usage		; RCREG1=0x3D
+	movff	RCREG1, char_I_SAC_deco			; RCREG1=0x3D
 	dcfsnz	WREG
 	movff	RCREG1, opt_modwarning			; RCREG1=0x3E
 	dcfsnz	WREG
@@ -1454,7 +1359,7 @@ comm_write_setting:
 	dcfsnz	WREG
 	movff	RCREG1, opt_vsigraph			; RCREG1=0x40
 	dcfsnz	WREG
-	movff	RCREG1, opt_showppo2			; RCREG1=0x41
+	movff	RCREG1, opt_showppo2			; RCREG1=0x41, always show ppO2
 	dcfsnz	WREG
 	movff	RCREG1, opt_temperature_adjust	; RCREG1=0x42
 	dcfsnz	WREG
@@ -1480,27 +1385,27 @@ comm_write_setting:
 	dcfsnz	WREG
 	movff	RCREG1, char_I_ppO2_min_loop	; RCREG1=0x4D
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_size+0		; RCREG1=0x4E
+	movff	RCREG1, char_I_gas_avail_size+0	; RCREG1=0x4E
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_size+1		; RCREG1=0x4F
+	movff	RCREG1, char_I_gas_avail_size+1	; RCREG1=0x4F
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_size+2		; RCREG1=0x50
+	movff	RCREG1, char_I_gas_avail_size+2	; RCREG1=0x50
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_size+3		; RCREG1=0x51
+	movff	RCREG1, char_I_gas_avail_size+3	; RCREG1=0x51
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_size+4		; RCREG1=0x52
+	movff	RCREG1, char_I_gas_avail_size+4	; RCREG1=0x52
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_pres_fill+0	; RCREG1=0x53
+	movff	RCREG1, char_I_gas_avail_pres+0	; RCREG1=0x53
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_pres_fill+1	; RCREG1=0x54
+	movff	RCREG1, char_I_gas_avail_pres+1	; RCREG1=0x54
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_pres_fill+2	; RCREG1=0x55
+	movff	RCREG1, char_I_gas_avail_pres+2	; RCREG1=0x55
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_pres_fill+3	; RCREG1=0x56
+	movff	RCREG1, char_I_gas_avail_pres+3	; RCREG1=0x56
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_pres_fill+4	; RCREG1=0x57
+	movff	RCREG1, char_I_gas_avail_pres+4	; RCREG1=0x57
 	dcfsnz	WREG
-	movff	RCREG1, char_I_cc_max_frac_o2	; RCREG1=0x58
+	movff	RCREG1, char_I_CC_max_frac_O2	; RCREG1=0x58
 	dcfsnz	WREG
 	movff	RCREG1, opt_sim_setpoint_number	; RCREG1=0x59
 	dcfsnz	WREG
@@ -1556,25 +1461,25 @@ comm_write_setting:
 	dcfsnz	WREG
 	movff	RCREG1, opt_transmitter_id_10+1	; RCREG1=0x73
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_size+5		; RCREG1=0x74
+	movff	RCREG1, char_I_gas_avail_size+5	; RCREG1=0x74
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_size+6		; RCREG1=0x75
+	movff	RCREG1, char_I_gas_avail_size+6	; RCREG1=0x75
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_size+7		; RCREG1=0x76
+	movff	RCREG1, char_I_gas_avail_size+7	; RCREG1=0x76
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_size+8		; RCREG1=0x77
+	movff	RCREG1, char_I_gas_avail_size+8	; RCREG1=0x77
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_size+9		; RCREG1=0x78
+	movff	RCREG1, char_I_gas_avail_size+9	; RCREG1=0x78
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_pres_fill+5	; RCREG1=0x79
+	movff	RCREG1, char_I_gas_avail_pres+5	; RCREG1=0x79
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_pres_fill+6	; RCREG1=0x7A
+	movff	RCREG1, char_I_gas_avail_pres+6	; RCREG1=0x7A
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_pres_fill+7	; RCREG1=0x7B
+	movff	RCREG1, char_I_gas_avail_pres+7	; RCREG1=0x7B
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_pres_fill+8	; RCREG1=0x7C
+	movff	RCREG1, char_I_gas_avail_pres+8	; RCREG1=0x7C
 	dcfsnz	WREG
-	movff	RCREG1, char_I_tank_pres_fill+9	; RCREG1=0x7D
+	movff	RCREG1, char_I_gas_avail_pres+9	; RCREG1=0x7D
 	dcfsnz	WREG
 	movff	RCREG1, opt_TR_mode				; RCREG1=0x7E
 	dcfsnz	WREG
@@ -1591,17 +1496,24 @@ comm_write_setting:
 	movff	RCREG1, opt_ZfactorTemp			; RCREG1=0x84
 	dcfsnz	WREG
 	movff	RCREG1, opt_2ndDepthDisp		; RCREG1=0x85
+	dcfsnz	WREG
+	movff	RCREG1, opt_max_depth			; RCREG1=0x86
+	dcfsnz	WREG
+	movff	RCREG1, char_I_descent_speed	; RCREG1=0x87
+	dcfsnz	WREG
+	movff	RCREG1, opt_store_apnoe_dive	; RCREG1=0x88
+	dcfsnz	WREG
+	movff	RCREG1, opt_tissue_graphics		; RCREG1=0x89
+	dcfsnz	WREG
+	movff	RCREG1, opt_layout				; RCREG1=0x90
+	dcfsnz	WREG
+	movff	RCREG1, opt_extended_stops		; RCREG1=0x91
+
 
 comm_write_abort:
 comm_write_done:
 	; check options, gases and diluents
 	call	option_check_all			; check all options (and reset if not within their min/max boundaries)
-	bsf		FLAG_diluent_setup			; =1: setting up diluents
-	call	gaslist_cleanup_list		; take care that only one gas can be first and first has 0m change depth
-	bcf		FLAG_diluent_setup			; =1: Setting up diluents
-	call	gaslist_cleanup_list		; take care that only one gas can be first and first has 0m change depth
-	call	get_first_gas_to_WREG		; make sure at least one gas is "First"
-	call	get_first_dil_to_WREG		; make sure at least one diluent is "First"
 	goto	comm_download_mode0			; done, loop with timeout reset
 
 ;-----------------------------------------------------------------------------
@@ -1635,11 +1547,11 @@ comm_write_gas_dil:
 
 ; Memory map is as follows:
 ; -------------------------
-; char_I_setpoint_cbar			res 5	; setpoints in cbar
-; char_I_setpoint_change		res 5	; change depth for the setpoints in meter
+; opt_setpoint_cbar			res 5	; setpoints in cbar
+; opt_setpoint_change		res 5	; change depth for the setpoints in meter
 
 comm_write_sp:
-	lfsr	FSR0,char_I_setpoint_cbar	; load base address of setpoint cbar values
+	lfsr	FSR0,opt_setpoint_cbar		; load base address of setpoint cbar values
 	movf	up,W						; load index (0-4) of setpoint into WREG, addressing cbar value
 	movff	RCREG1,PLUSW0				; receive setpoint cbar value
 	rcall	comm_get_byte				; wait for UART
@@ -1652,14 +1564,14 @@ comm_write_sp:
 comm_send_string:
 	movlw	"n"							; send echo
 	movwf	TXREG1
-	call	comm_write_byte				; wait for UART
+	call	comm_write_byte				; wait for completion of transmit
 	WIN_SMALL comm_string_column, comm_string_row
 	movlw	.16
 	movwf	lo							; counter
 comm_send_string_loop:
 	call	comm_get_byte
-	btfsc	rs232_receive_overflow		; got byte?
-	bra		comm_send_string_abort		; NO - abort!
+	btfsc	rs232_rx_timeout			; got a byte?
+	bra		comm_send_string_abort		; NO - abort
 	movff	RCREG1,POSTINC2				; store character
 	decfsz	lo,F
 	bra		comm_send_string_loop
@@ -1668,39 +1580,6 @@ comm_send_string_abort:
 	goto	comm_download_mode0			; done, loop with timeout reset
 
 ;-----------------------------------------------------------------------------
-
-comm_check_day:
-	movff	RCREG1,day
-	movff	month,lo					; new month
-	dcfsnz	lo,F
-	movlw	.31
-	dcfsnz	lo,F
-	movlw	.28
-	dcfsnz	lo,F
-	movlw	.31
-	dcfsnz	lo,F
-	movlw	.30
-	dcfsnz	lo,F
-	movlw	.31
-	dcfsnz	lo,F
-	movlw	.30
-	dcfsnz	lo,F
-	movlw	.31
-	dcfsnz	lo,F
-	movlw	.31
-	dcfsnz	lo,F
-	movlw	.30
-	dcfsnz	lo,F
-	movlw	.31
-	dcfsnz	lo,F
-	movlw	.30
-	dcfsnz	lo,F
-	movlw	.31
-	cpfsgt	day							; day ok?
-	return								; YES
-	movlw	.1							; NO - set to 1st
-	movwf	day
-	return
 
 comm_write_button_polarity:
 	; store RCREG1 into EEPROM .897

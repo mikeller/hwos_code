@@ -1,9 +1,12 @@
 ;=============================================================================
 ;
-;   File calibrate.inc								REFACTORED VERSION V2.97
+;   File calibrate.inc                        combined next generation V3.03.1
 ;
 ;=============================================================================
 
-	extern	calibrate_mix					; Calibrate with any mix
-	extern	compute_mvolts_for_all_sensors	; compute sensor mv values from digital transmitted data
-	extern	transmit_setpoint				; Transmit current setpoint from WREG (in cbar) to external electronics
+
+ IFDEF _external_sensor
+	extern	calibrate_mix					; calibrate sensors
+	extern	compute_mvolts_for_all_sensors	; compute sensor mV values from digital transmitted data
+	extern	transmit_setpoint				; transmit current setpoint to external electronics
+ ENDIF

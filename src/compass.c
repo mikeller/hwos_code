@@ -1,6 +1,6 @@
 //////////////////////////////////////////////////////////////////////////////
 /// compass.c
-/// Compute north direction from magnetic/acceleration measures
+/// Compute north direction from magnetic/acceleration measures        V3.02.1
 ///
 /// Copyright (c) 2012-2015, JD Gascuel, HeinrichsWeikamp, all right reserved.
 //////////////////////////////////////////////////////////////////////////////
@@ -10,7 +10,12 @@
 //  2012-12-30  [jDG] Added calibration (spherical best fit).
 //  2015-05-22  [jDG] Minor cleanups. Smaller calibration code.
 
+#include "configuration.inc"
 #include "compass.h"
+
+
+#ifdef _compass
+
 
 //////////////////////////////////////////////////////////////////////////////
 // mH: crude work-around, needs to be fixed up
@@ -67,13 +72,14 @@ Int16 imul(PARAMETER Int16 a, PARAMETER Int16 b)
 Int16 udiv(PARAMETER Int16 a, PARAMETER Int16 b)
 {
 	OVERLAY Int16 d, r;
-    OVERLAY char failsafe=250;
-    
+	OVERLAY char failsafe=250;
+
 	//---- Pre-scale both numerator and denominator --------------------------
 	while( (((a>>8) | (b>>8)) & 0xC0) == 0 )
 	{
-        failsafe--;
-        if (failsafe==0) break;  
+		failsafe--;
+		if( failsafe == 0 ) break;
+
 		a <<= 1;
 		b <<= 1;
 	}
@@ -176,9 +182,9 @@ Int16 cosxh(PARAMETER Int16 x2, PARAMETER Int16 h2)
 void sincos(PARAMETER Int16 x, PARAMETER Int16 y, Int16* sin, Int16* cos)
 {
 	OVERLAY Int16 x2, y2, h2;
-    OVERLAY char failsafe=250;
-    
-	//---- Fold into one quadant ---------------------------------------------
+	OVERLAY char failsafe = 250;
+
+	//---- Fold into one quadrant --------------------------------------------
 	OVERLAY char neg = 0;
 	if( x < 0 )
 	{
@@ -190,12 +196,13 @@ void sincos(PARAMETER Int16 x, PARAMETER Int16 y, Int16* sin, Int16* cos)
 		neg |= 2;
 		y = -y;
 	}
-    
-    //---- Pre-scale both numerator and denominator ----------------------
+
+	//---- Pre-scale both numerator and denominator ----------------------
 	while( (((x>>8) | (y>>8)) & 0xE0) == 0 )
 	{
-        failsafe--;
-        if (failsafe==0) break;
+		failsafe--;
+		if( failsafe == 0 ) break;
+
 		x <<= 1;
 		y <<= 1;
 	}
@@ -223,6 +230,14 @@ void compass(void)
 
 	RESET_C_STACK;
 
+	//---- Detect uncalibrated compass ---------------------------------------
+	if( !compass_CX_f && !compass_CY_f && !compass_CZ_f )
+	{
+		// no usable compass is signaled by bit 15 set to 1
+		compass_heading_new = 32768;
+		return;
+	}
+
 	//---- Make hard iron correction -----------------------------------------
 	// Measured magnetometer orientation, measured ok
 	// From matthias drawing: (X,Y,Z) --> (X,Y,Z) : no rotation
@@ -247,18 +262,13 @@ void compass(void)
 	///---- de-rotate by pitch angle Theta -----------------------------------
 	iBfx = imul(iBpx, cos) + imul(iBpz, sin);
 
-	//---- Detect uncalibrated compass ---------------------------------------
-	if( !compass_CX_f && !compass_CY_f && !compass_CZ_f )
-	{
-		compass_heading = -1;
-		return;
-	}
-
 	//---- calculate current yaw = e-compass angle Psi -----------------------
 	// Result in degree (no need of 0.01 deg precision...
-	compass_heading = itan(-iBfy, iBfx) / 100;
+	compass_heading_new = itan(-iBfy, iBfx) / 100;
 
 	// Result in 0..360 range:
-	if( compass_heading < 0 )
-		compass_heading += 360;
+	if( compass_heading_new < 0 )
+		compass_heading_new += 360;
 }
+
+#endif	// _compass

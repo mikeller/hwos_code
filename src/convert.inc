@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File convert.inc												## V2.98b
+;   File convert.inc                           combined next generation V3.0.1
 ;
 ;   Converts register values to string
 ;

@@ -1,4 +1,4 @@
-// Linker script for the hwOS
+// Linker script for the hwOS               combined next generation V3.03.4
 // History:
 
 LIBPATH .
@@ -6,11 +6,10 @@ FILES "clib.lib"
 FILES "p18F87K22.lib"
 
 // General PROM code area
-CODEPAGE   NAME=page       START=0x0            END=0x1DCFF
+CODEPAGE   NAME=page       START=0x0            END=0x1DC7F
 
-// Special area reserved for tables. Just to make sure the linker won't
-// relocate something at the end of the bühlmann text table...
-CODEPAGE   NAME=tables     START=0x1DD00        END=0x1DFFF        PROTECTED
+// Special area reserved for tables, located at end of program memory
+CODEPAGE   NAME=tables     START=0x1DC80        END=0x1DFFF        PROTECTED
 
 // Internal EEPROM: R/O and R/W sections.
 CODEPAGE   NAME=eedata_ro  START=0xF00000       END=0xF0000F       PROTECTED

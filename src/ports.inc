@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File ports.inc														V2.98b
+;   File ports.inc                            combined next generation V3.0.4b
 ;
 ;   Portmap
 ;
@@ -51,16 +51,18 @@
 ; PORTE
 #DEFINE	RE0_unused		PORTE,0			; unused
 #DEFINE	ir_power		PORTE,1			; power supply for IR
-#DEFINE	charge_disable	PORTE,2			; ex. mcp_ncs (RX /CS) (Available from hardware rev x.x only)
+#DEFINE	charge_disable	PORTE,2			; ex. mcp_ncs (RX /CS) (available from hardware rev x.x only)
 #DEFINE	LEDr			PORTE,3			; LED red
 #DEFINE	power_sw2		PORTE,4			; power supply for switch1 circuit
 #DEFINE	RE5_unused		PORTE,5			; unused
 #DEFINE	lightsen_power	PORTE,6			; power supply for lightsensor
 #DEFINE	flash_ncs		PORTE,7			; /CS
 ; TRIS=b'00000000'
+#DEFINE charge_enable	TRISE,2			; tristating of charge_disable pin
 
 ; PORTF
-; RF1 (AN6, Batt_analog) and RF2 (AN7, Lightsensor)
+;						PORTF,1			; (AN6, Batt_analog)
+;						PORTF,2			; (AN7, Lightsensor)
 ; TRIS=b'01111110'
 #DEFINE	NRTS			PORTF,6			; I
 #DEFINE	NCTS			PORTF,7			; 0
@@ -69,8 +71,8 @@
 #DEFINE	TX3_PIEZO_CFG	PORTG,0
 #DEFINE	RG1_blocked_by_RS232_2 PORTG,1	; unused
 #DEFINE	tsop_rx			PORTG,2			; IR (RX2)
-; RG3 (AN17, RSSI RX)
-; RG4 (32768Hz Clock out)
+;						PORTG,3			; (AN17, RSSI RX)
+;						PORTG,4			; (32768Hz Clock out)
 #DEFINE	RG5_unused		PORTG,5			; /MCLR
 #DEFINE	RG6_unused		PORTG,6			; unavailable
 #DEFINE	RG7_unused		PORTG,7			; unavailable

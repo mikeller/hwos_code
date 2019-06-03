@@ -1,16 +1,17 @@
 ;=============================================================================
 ;
-;   File colorschemes.inc
+;   File colorschemes.inc                      combined next generation V3.0.1
 ;
 ;=============================================================================
 
 ; Dive mode
+
 ; Standard
 #DEFINE color_scheme_divemode_mask1		color_green
 #DEFINE color_scheme_divemode_std1		color_white
 #DEFINE color_scheme_divemode_dis1		color_lightblue		; color_grey
 
-; Redish
+; redish
 #DEFINE color_scheme_divemode_mask2		color_red
 #DEFINE color_scheme_divemode_std2		color_orange
 #DEFINE color_scheme_divemode_dis2		color_dark_red

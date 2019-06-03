@@ -1,5 +1,7 @@
 ; \file C:/hw/osct3_code/src/Icons/dive_warning2.inc
-; Generated 2015-03-19T13:15:44								V2.98a
+; Generated 2015-03-19T13:15:44                         V3.03.2
+;
+; encoding format 2 used
 ;
 dive_warning2_version	equ .112
 dive_warning2_width		equ .45
@@ -7,7 +9,7 @@ dive_warning2_height	equ .39
 ;
 dive_warning2_block:
 	db	.22, .39	; width/2, height
-	db	.4, 0		; #colors, spare
+	db	.4, .1		; #colors, encoding format
 ;
 	dw	0x0000		; color 0x00: outside	black	rgb=(  0,  0,  0)
 	dw	0xff80		; color 0x01: triangle	yellow	rgb=(255,242,  0)
@@ -57,4 +59,4 @@ dive_warning2_block:
 	db	0x81, 0x03, 0x84, 0x01, 0x99, 0x00, 0x8c, 0x01
 	db	0x9b, 0x00, 0x8a, 0x01, 0x9c, 0x00, 0x89, 0x01
 	db	0x9e, 0x00, 0x86, 0x01, 0xa0, 0x00, 0x84, 0x01
-	db	0x83, 0x00
+	db	0x83, 0x00, 0x7f

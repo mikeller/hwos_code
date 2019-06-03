@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File text_multilang.asm											V2.99-9
+;   File text_multilang.asm                    combined next generation V3.0.4
 ;
 ;   Implementation text in various selectable languages.
 ;

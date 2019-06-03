@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File menu_processor.asm							REFACTORED VERSION V2.99d
+;   File menu_processor.asm                   combined next generation V3.03.2
 ;
 ;   Routines to handle all hwOS graphic/text menus.
 ;
@@ -15,7 +15,6 @@
 #include "strings.inc"
 #include "tft.inc"
 #include "varargs.inc"
-#include "wait.inc"
 #include "start.inc"
 #include "surfmode.inc"
 #include "divemode.inc"
@@ -23,10 +22,12 @@
 #include "eeprom_rs232.inc"
 #include "adc_lightsensor.inc"
 #include "i2c.inc"
+#include "rtc.inc"
+#include "wait.inc"
 
 
 ; NOTE: needs to be identical in .inc and .asm !
-#define MENU_LINES_MAX			.7			; number of lines per screen?
+#define MENU_LINES_MAX			.7			; maximum number of lines per screen
 #define MENU_TITLE_FONT			WIN_STD		; font needs to contain lower and UPPER chars
 #define MENU_LINE_FONT			WIN_SMALL	; font needs to contain lower and UPPER chars
 #define MENU_LEFT				.20			; position of first menu item
@@ -35,11 +36,10 @@
 #define MENU_LINE_MAX_LENGTH	.20			; length in characters
 #define option_item				proc_item
 
-; Other needed references
+
 	extern	aa_wordprocessor
 	extern	option_inc
 	extern	option_draw
-	extern	comm_mode
 	extern	TFT_clear_divemode_menu
 	extern	TFT_divemask_color
 	extern	rtc_set_rtc
@@ -47,17 +47,17 @@
 	extern	TFT_fillup_with_spaces
 
 
-menu_proc		CODE
+menu_proc	CODE
 
 ;=============================================================================
-; menu handler.
+; menu handler
 ;
-; Input:    TBLPTR = addr of menu block.
+; Input:    TBLPTR = addr of menu block
+
 	global	menu_processor
 menu_processor:
-	banksel	common							; bank 1
-	btfss	divemode						; in divemode?
-	call	speed_fastest					; NO - make it quick
+;	btfss	divemode						; in dive mode?
+;	call	request_speed_fastest			; NO  - request CPU speed change to fastest speed
 	;---- Read menu block ------------------------------------------------
 	VARARGS_BEGIN							; read inline PROM data
 	clrf	STKPTR							; never return from here
@@ -66,20 +66,21 @@ menu_processor:
 	VARARGS_GET24	menu_title				; get pointer to menu title
 	VARARGS_GET8	menu_center				; vertical position
 	movff	TBLPTRL, menu_block+0			; save base address for menu_read_item
-	movff	TBLPTRH, menu_block+1
-	movff	TBLPTRU, menu_block+2
-	btfss	divemode						; in divemode?
+	movff	TBLPTRH, menu_block+1			; ...
+	movff	TBLPTRU, menu_block+2			; ...
+	btfss	divemode						; in dive mode?
 	bra		menu_processor0					; NO
+
 	; Required for menus with less entries than the calling menu but not so nice when setting up gas 6.... mH
 	movlw	.1
-	cpfsgt	menupos1						; only if menupos1 = 1...
+	cpfsgt	menu_pos_cur					; only if menu_pos_cur = 1...
 	call	TFT_clear_divemode_menu			; ... clear the menu!
-	; Draw one frame around the divemode menu
+	; Draw one frame around the dive mode menu
 	call	TFT_divemask_color
 	WIN_FRAME_COLOR16 dm_menu_row, dm_menu_lower, dm_menu_left ,dm_menu_right	; top, bottom, left, right
 	call	TFT_standard_color
 
-	bra		menu_processor1					; skip next code segment in divemode
+	bra		menu_processor1					; skip next code segment in dive mode
 
 menu_processor0:
 	;---- draw menu title ------------------------------------------------
@@ -90,8 +91,7 @@ menu_processor0:
 	rcall	menu_processor_bottom_line
 
 menu_processor1:
-	movlw	FT_SMALL
-	movff	WREG, win_font
+	WIN_FONT FT_SMALL
 
 	;---- Select menu type -----------------------------------------------
 	bra		menu_vertical
@@ -100,25 +100,11 @@ menu_processor1:
 ;=============================================================================
 ; draw menu bottom line
 ;
-	global	menu_processor_bottom_line,menu_processor_bottom_line_comm
 menu_processor_bottom_line:
 	;---- Draw bottom line -----------------------------------------------
 	TEXT_TINY .5,         .240-.16, tNext
 	TEXT_TINY .160-.6*.6, .240-.16, tEnter
-	WIN_COLOR color_greenish
-menu_processor_bottom_line_comm:	
-	; Serial Number and Firmware Version
-	WIN_TINY .40,.240-.16
-	STRCPY	"#"
-	call	TFT_cat_serial
-	STRCAT	" v"
-	call	TFT_cat_firmware
-	STRCAT	" "
-	call	TFT_cat_beta_release
-	STRCAT_PRINT ""
-	call	TFT_standard_color
-	bcf		win_invert
-	return
+	goto	TFT_standard_color				; ...and return
 
 ;=============================================================================
 ; (re-)draw menu title
@@ -165,47 +151,40 @@ menu_processor_call_title:
 ;
 	global	menu_processor_reset
 menu_processor_reset:
-	banksel	menustack
-	lfsr	FSR2,menustack
-	clrf	POSTINC2
-	clrf	POSTINC2
-	clrf	POSTINC2
-	clrf	POSTINC2
-	clrf	POSTINC2
-	banksel	common
-	clrf	selected_item
+	clrf	menustack						; clear                 first stack position
+	clrf	menustack_pointer				; set stack pointer  to first stack position
+	clrf	selected_item					; set last menu item to first item
 	return
 
-	global	menu_processor_pop
-menu_processor_pop:
-	movff	menustack+0,selected_item
-	movff	menustack+1,menustack+0
-	movff	menustack+2,menustack+1
-	movff	menustack+3,menustack+2
-	movff	menustack+4,menustack+3
-	return
 
 	global	menu_processor_double_pop
+	global	menu_processor_pop
 menu_processor_double_pop:
-	movff	menustack+1,selected_item
-	movff	menustack+2,menustack+0
-	movff	menustack+3,menustack+1
-	movff	menustack+4,menustack+2
-	return
+	decf	menustack_pointer,F				; decrement stack pointer
+menu_processor_pop:
+	decf	menustack_pointer,F				; decrement stack pointer
+	btfsc	menustack_pointer,7				; did the stack pointer under-run?
+	clrf	menustack_pointer				; YES - reset stack pointer to first stack position
+	movf	menustack_pointer,W				; load stack pointer into WREG
+	lfsr	FSR2,menustack					; load base  address of menu stack
+	movff	PLUSW2,selected_item			; retrieve menu item from stack
+	return									; done
+
 
 menu_processor_push:
-	movff	menustack+3,menustack+4
-	movff	menustack+2,menustack+3
-	movff	menustack+1,menustack+2
-	movff	menustack+0,menustack+1
-	movff	selected_item,menustack+0
-	clrf	selected_item
-	return
+	lfsr	FSR2,menustack					; load base  address of menu stack
+	movf	menustack_pointer,W				; load stack pointer into WREG
+	movff	selected_item,PLUSW2			; save menu item to stack
+	incf	menustack_pointer,W				; increment stack pointer, park result in WREG
+	btfss	WREG,3							; result < 8 ?
+	movwf	menustack_pointer				; YES - update stack pointer
+	clrf	selected_item					; set to first item in new menu
+	return									; done
+
 
 ;---- Execute menu selection -------------------------------------------------
 do_menu_item:
-	bcf		switch_right					; avoid loops
-	call	speed_normal					; back to normal speed
+	bcf		switch_right					; clear left-over button event
 	movf	selected_item,W					; reread proc address from table
 	rcall	menu_read_item					; (destroys PROD)
 	movff	selected_item,PRODL				; pass along selected line
@@ -247,143 +226,66 @@ menu_read_item:
 ;
 	global	menu_vertical
 menu_vertical:
-	btfss	divemode						; in divemode?
-	clrf	timeout_counter2				; NO - reset timeout
-
-menu_vertical_2:
 	rcall	menu_draw_lines					; always re-draw whole menu
 	movlw	CCP1CON_VALUE					; see hwos.inc
-	btfss	divemode						; in divemode?
+	btfss	divemode						; in dive mode?
 	movwf	CCP1CON							; NO - power-on backlight
 
 menu_vertical_1:
-	movf	selected_item,W					; get current item data
-	rcall	menu_read_item
+	movf	selected_item,W					; copy current menu item selection to WREG
+	rcall	menu_read_item					; get current menu item data
 	movf	proc_item+0,W					; check if proc address is NULL
 	iorwf	proc_item+1,W
 	bz		next_line_menu					; YES - not selectable
-	btfss	divemode						; in divemode?
+	btfss	divemode						; in dive mode?
 	rcall	menu_draw_selected_line			; NO
-	btfsc	in_color_menu					; in the color scheme menu?
-	call	TFT_show_color_schemes			; YES - update the color schemes
-	btfss	settime_setdate					; in the set time or set date menu?
-	bra		menu_line_loop_pre2				; NO - skip all following
-	movff	month,lo						; new month
-	dcfsnz	lo,F
-	movlw	.31
-	dcfsnz	lo,F
-	movlw	.28
-	dcfsnz	lo,F
-	movlw	.31
-	dcfsnz	lo,F
-	movlw	.30
-	dcfsnz	lo,F
-	movlw	.31
-	dcfsnz	lo,F
-	movlw	.30
-	dcfsnz	lo,F
-	movlw	.31
-	dcfsnz	lo,F
-	movlw	.31
-	dcfsnz	lo,F
-	movlw	.30
-	dcfsnz	lo,F
-	movlw	.31
-	dcfsnz	lo,F
-	movlw	.30
-	dcfsnz	lo,F
-	movlw	.31
-	cpfsgt	day								; day ok?
-	bra		menu_line_loop_pre1				; YES
-	movlw	.1								; NO  - set to 1st
-	movwf	day
+	btfss	imprint_time_date				; currently imprinting the current time & date?
+	bra		menu_line_loop_pre1				; NO
+	btfss	switch_right					; YES - right button pressed, i.e. time or date changed?
+	bra		menu_line_loop_pre1				;       NO
+	call	TFT_show_time_date_menu_fast	;       YES - show a fast response on the screen (may momentarily show an illegal day/month combination)
+	call	rtc_set_rtc						;           - update time and date on RTC module (corrects illegal day/month combinations)
 
 menu_line_loop_pre1:
-	btfsc	switch_right					; enter pressed?
-	call	rtc_set_rtc						; YES - update mins,sec,hours,day,month and year to RTC module
-	call	TFT_show_time_date_menu			; update clock
+	btfsc	imprint_color_schemes			; in the color scheme menu?
+	call	TFT_show_color_schemes			; YES - update the color schemes
 
 menu_line_loop_pre2:
-	bcf		switch_right
-	bcf		switch_left
-	btfss	divemode						; in divemode?
-	call	speed_normal					; NO
+	bcf		switch_right					; clear left-over right button event
+	bcf		switch_left						; clear left-over left  button event
 
 menu_line_loop_pre3:
-	btfsc	divemode						; in divemode?
-	goto	divemode_option0_return			; Yes - return to it
+	btfsc	divemode						; in dive mode?
+	goto	divemode_option0_return			; YES - return to it
+	;bra	menu_line_loop_surface			;     - proceed to surface mode dispatcher
 
+; dispatcher for surface mode menus
+menu_line_loop_surface:
+	call	reset_timeout_surfmode			; reset timeout
 menu_line_loop:
-	btfsc	switch_right
-	bra		do_line_menu					; type dependent
-	btfsc	switch_left
-	bra		next_line_menu
-	btfss	quarter_second_update			; 1/4 second?
-	bra		menu_line_loop1					; NO - not yet...
-	btfsc	menu_update_sensor_mv			; in the "Calibrate" menu?
-	call	TFT_menu_calibrate				; YES - update mV data
-	bcf		quarter_second_update			; clear flag
-
-menu_line_loop1:
-	btfss	onesecupdate					; new second?
-	bra		menu_line_loop2					; NO - not yet...
-
- IFDEF _rx_functions
-	btfsc	FLAG_tr_enabled					; TR functions enabled?
-	call	I2C_get_tankdata				; YES - get new tank data
-	btfsc	menu_update_tank_pres			; in tank setup menu?
-	call	TFT_menu_tank_pres				; YES - update tank press
- ENDIF
-
-	call	timeout_surfmode				; timeout on timeout_counter2
-	call	set_dive_modes					; check if divemode must be entered
-	call	get_battery_voltage				; gets battery voltage
-	btfsc	settime_setdate					; in the set time or set date menu?
-	call	TFT_show_time_date_menu			; YES - update clock
-	bcf		onesecupdate					; one second updates done
-
-menu_line_loop2:
-	btfsc	sleepmode						; timeout?
-	goto	restart							; YES - back to surfacemode
-	btfsc	divemode
-	goto	restart							; enter divemode if required
-
- IFDEF _screendump
-	btfsc	enable_screen_dumps				; screendump enabled?
-	call	TFT_dump_screen_check			; YES - check if requested and do it
- ELSE
-	btfsc	disable_comm_mode				; COMM mode disabled (happens during new battery procedure)?
-	bra	menu_line_loop					; YES - loop
- ENDIF
-	btfsc	enable_screen_dumps				; screendump enabled?
-	bra		menu_line_loop					; loop and skip the COMM mode
-	
-	btfsc	vusb_in							; USB plugged in?
-	call	comm_mode						; YES - start COMM mode
-
-	bra		menu_line_loop					; loop
+	call	housekeeping					; handle data imprinting, screen dump request, timeout and entering dive mode
+	btfsc	switch_right					; right button pressed?
+	bra		do_line_menu					; YES - type dependent
+	btfsc	switch_left						; left button pressed?
+	bra		next_line_menu					; YES - goto next item
+	bra		menu_line_loop					; NO to both - loop
 
 
 ;---- Move to menu's next line
 next_line_menu:
-	btfss	divemode						; not in divemode
-	call	speed_fastest
-	bcf		switch_left						; avoid looping
+	bcf		switch_left						; clear button event
 	incf	selected_item,F					; select next item
-	movf	selected_item,W					; index == max ?
-	cpfseq	item_max
+	movf	selected_item,W					; copy item number to WREG
+	cpfseq	item_max						; item number == max ?
 	bra		menu_vertical_1					; NO  - redraw cursor
-	clrf	selected_item					; YES - restart for item 0
+	clrf	selected_item					; YES - wrap-around to first item
 	bra		menu_vertical_1					; then redraw cursor
 
 	global	do_line_menu
 do_line_menu:
-	btfss	divemode						; in divemode?
-	call	speed_fastest					; NO
-;	bcf		switch_right					; avoid looping
-	decf	menupos1,W						; menu_processor needs 0-5
-	btfsc	divemode						; only in divemode
-	movwf	selected_item
+	decf	menu_pos_cur,W					; menu_processor needs 0-5
+	btfsc	divemode						; in dive mode?
+	movwf	selected_item					; YES - set selected item from WREG
 	movf	selected_item,W					; read selected descriptor
 	rcall	menu_read_item
 	movf	value_type,W					; switch on data type
@@ -407,33 +309,34 @@ menu_do_line_option:
 	movff	option_item+0,FSR0L				; get option handle
 	movff	option_item+1,FSR0H
 	call	option_inc						; increment
-	movff	selected_item,PRODL				; pass selection to callback.
+	movff	selected_item,PRODL				; pass selection to callback
 	rcall	menu_text_call
-	bra		menu_vertical_2					; redraw all lines
+	bra		menu_vertical					; redraw all lines
 
 ;-----------------------------------------------------------------------------
 
+	global	menu_draw_lines_divemode		; entry point for re-drawing of the menu to update color-coding of gases
 menu_draw_lines_divemode:
 	movlw	dm_menu_item1_row
 	movff	WREG,win_top
 	movlw	dm_menu_item1_column
 	movff	WREG,win_leftx2
 	clrf	start_item
-	movff	item_max,menupos4				; copy item_max for divemode cursor routine
+	movff	item_max,menu_pos_max			; copy item_max for dive mode cursor routine
 	bra		menu_draw_lines_2
 
 menu_draw_lines:
-	btfsc	divemode						; in divemode?
+	btfsc	divemode						; in dive mode?
 	bra		menu_draw_lines_divemode		; YES
 	btfsc	menu_flags,0					; Dynamic title?
 	rcall	menu_processor_title			; YES - redraw it then
-	MENU_LINE_FONT MENU_LEFT, 0				; init start position/font
+	MENU_LINE_FONT MENU_LEFT, 0				; initialize start position/font
 	movff	menu_center,win_top				; computed in menu block.
 
 	; Does the menu have more than 6 lines ?
 	movf	item_max,W
-	addlw	-(MENU_LINES_MAX+1)				; (max - 7)
-	bnn		menu_draw_long_menu				; bra if (max >= 7)
+	addlw	-(MENU_LINES_MAX+1)				;
+	bnn		menu_draw_long_menu				; bra if >= 7
 	clrf	start_item
 	bra		menu_draw_lines_2
 
@@ -446,9 +349,10 @@ menu_draw_long_menu:
 
 menu_draw_lines_2:
 	movff	start_item, menu_item
+	WIN_FONT FT_SMALL						; set font size
 
 menu_draw_lines_1:
-	call	TFT_standard_color				; restore color after disabled lines
+	call	TFT_standard_color				; set default text color
 	movf	menu_item,W
 	rcall	menu_read_item
 	movf	value_type,W					; switch on data type
@@ -479,8 +383,8 @@ menu_draw_line_option:
 	call	strcpy_text						; copy in buffer
 	movff	option_item+0,FSR0L				; retrieve option handle
 	movff	option_item+1,FSR0H
-	btfss	settime_setdate					; not in Time/Date menu
-	call	option_draw
+	btfss	block_option_value				; display of option value suspended?
+	call	option_draw						; NO - draw option (do not do it when setting time or date)
 	bra		menu_draw_line_none
 
 menu_draw_line_dynamic:
@@ -502,10 +406,10 @@ menu_text_call:
 	movwf	PCL								; ...and jump
 
 menu_draw_line_none:
-	btfsc	divemode						; in divemode?
-	bra	menu_draw_line_none_divemode		; YES
+	btfsc	divemode						; in dive mode?
+	bra		menu_draw_line_none_divemode	; YES
 	movlw	MENU_LINE_MAX_LENGTH
-	call	TFT_fillup_with_spaces			; fill up FSR2 with spaces (Total string length in #WREG)
+	call	TFT_fillup_with_spaces			; fill up FSR2 with spaces (total string length in #WREG)
 	clrf	WREG
 	movff	WREG,buffer+MENU_LINE_MAX_LENGTH ; NO - make sure won't be longer than MENU_LINE_MAX_LENGTH ch
 	call	aa_wordprocessor
@@ -515,30 +419,28 @@ menu_draw_line_none:
 	incf	menu_item,F						; inc loop counter
 	movf	start_item,W					; first line (scrolled)
 	subwf	menu_item,W						; current - first
-	xorlw	MENU_LINES_MAX					; already done 6 lines?
-	btfsc	STATUS,Z
+	xorlw	MENU_LINES_MAX					; get max number of lines
+	btfsc	STATUS,Z						; already done max number of lines?
 	return									; YES
 menu_draw_line_none2:
 	movf	menu_item,W						; done item_max lines?
 	xorwf	item_max,W
 	btfss	STATUS,Z
-	bra	menu_draw_lines_1					; NO - loop...
+	bra		menu_draw_lines_1				; NO - loop...
 	return
 
 menu_draw_line_none_divemode:
 	movlw	.10
-	call	TFT_fillup_with_spaces			; fill up FSR2 with spaces (Total string length in #WREG)
+	call	TFT_fillup_with_spaces			; fill up FSR2 with spaces (total string length in #WREG)
 	clrf	WREG
 	movff	WREG,buffer+.10
 	call	aa_wordprocessor				; draw the line
-	banksel	common
 	bcf		win_invert						; reset invert flag
-	banksel	win_top
-	movlw	.24								; divemode menu spacing
+	movlw	.24								; dive mode menu spacing
 	addwf	win_top,F
 	incf	menu_item,F						; inc loop counter
 	movlw	.3
-	cpfseq	menu_item						; at pos 4?
+	cpfseq	menu_item						; at position 4?
 	bra		menu_draw_line_none2			; NO
 	movlw	dm_menu_item4_row
 	movff	WREG,win_top					; reset row
@@ -547,9 +449,8 @@ menu_draw_line_none_divemode:
 	bra		menu_draw_line_none2			; done
 
 ;-----------------------------------------------------------------------------
-; Put a mark in front of the current line
+; draw cursor
 menu_draw_selected_line:
-	clrf	timeout_counter2				; reset timeout
 	WIN_BOX_BLACK .34,.221,MENU_LEFT-8,MENU_LEFT-2 ; clear left column
 	call	TFT_standard_color
 	WIN_SMALL MENU_LEFT-8, 0				; arrow symbol only in small font
@@ -558,7 +459,7 @@ menu_draw_selected_line:
 	mullw	MENU_HEIGHT						; 30 pixel by line
 	movf	PRODL,W							; result
 	addwf	menu_center,W					; added to first line
-	movwf	win_top							; and stored to pos.
+	movwf	win_top							; and stored to position
 	STRCPY_PRINT "\xb7"						; print cursor
 	return
 

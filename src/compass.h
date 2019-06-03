@@ -28,7 +28,7 @@ extern Int16 compass_DX_f;
 extern Int16 compass_DY_f;
 extern Int16 compass_DZ_f;
 
-// Found soft-iron calibration values, deduced from already filtered values.
+// Found soft-iron calibration values, deduced from already filtered values:
 extern Int16 compass_CX_f;
 extern Int16 compass_CY_f;
 extern Int16 compass_CZ_f;
@@ -38,10 +38,10 @@ extern Int16 accel_DX_f;
 extern Int16 accel_DY_f;
 extern Int16 accel_DZ_f;
 
-// The compass result value.
-extern Int16 compass_heading;
-extern Int16 compass_roll;
-extern Int16 compass_pitch;
+// The compass result value:
+extern Int16 compass_heading_new;
+//extern Int16 compass_roll;
+//extern Int16 compass_pitch;
 
 extern Int16 umul(PARAMETER Int16 a, PARAMETER Int16 b);
 extern Int16 imul(PARAMETER Int16 a, PARAMETER Int16 b);

@@ -2,7 +2,7 @@
 // **          Common definitions for the OSTC decompression code            **
 // ****************************************************************************
 
-//													REFACTORED VERSION	V2.99d
+//                                                       next generation V3.0.1
 
 //////////////////////////////////////////////////////////////////////////////
 // OSTC - diving computer code
@@ -37,6 +37,7 @@ extern void deco_calc_dive_interval_10min(void);
 extern void deco_calc_desaturation_time(void);
 extern void deco_push_tissues_to_vault(void);
 extern void deco_pull_tissues_from_vault(void);
+extern void deco_init_output_vars(void);
 
 
 // ***********************************************
@@ -44,7 +45,7 @@ extern void deco_pull_tissues_from_vault(void);
 // ***********************************************
 
 #if defined(WIN32) || defined(UNIX)
-    // Some keywords just dont exists on Visual C++:
+    // Some keywords just do not exists on Visual C++:
 #   define CROSS_COMPILE
 #   define __18CXX
 #   define ram
@@ -55,7 +56,7 @@ extern void deco_pull_tissues_from_vault(void);
 #   include <assert.h>
 #else
 #   define PARAMETER static
-#   ifdef __DEBUG
+#   ifdef _DEBUG
 #       define assert(predicate) if( !(predicate) ) assert_failed(__LINE__)
 #   else
 #       define assert(predicate)

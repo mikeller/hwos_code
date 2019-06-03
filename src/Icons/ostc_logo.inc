@@ -1,13 +1,15 @@
 ; \file /src/Icons/ostc_logo.inc
-; Generated 2015-03-19T12:24:04
+; Generated 2015-03-19T12:24:04                         V3.03.2
+;
+; encoding format 2 used
 ;
 ostc_logo_version  equ .112
 ostc_logo_width    equ .170
 ostc_logo_height   equ .47
 ;
 ostc_logo_block:
-    db  .85, .47
-    db  .9, 0
+    db  .85, .47	; width/2, height
+    db  .9, .1		; #colors, encoding format
 ;
     dw  0x0000 ; rgb=(0,0,0)
     dw  0x424b ; rgb=(67,74,95)
@@ -243,4 +245,4 @@ ostc_logo_block:
     db  0x05, 0x04, 0x01, 0x9c, 0x00, 0x04, 0x81, 0x06
     db  0x81, 0x05, 0x87, 0x00, 0x03, 0x82, 0x00, 0x03
     db  0x9d, 0x00, 0x03, 0x01, 0x04, 0x01, 0x03, 0x84
-    db  0xb6, 0x00
+    db  0xb6, 0x00, 0x7f

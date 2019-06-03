@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;    File text_multilang.inc
+;    File text_multilang.inc                   combined next generation V3.0.1
 ;
 ;    Implementation of texts in various selectable languages
 ;
@@ -33,6 +33,7 @@
 ;=============================================================================
 
 ; Pass 1: generate a jump table and define labels
+;
 TCODE_1 macro label, text
 tcode_idx set tcode_idx+1
 	If LANG == 0
@@ -41,14 +42,17 @@ label:
 	Endif
 	dw		t#v(LANG)_#v(tcode_idx)
 	endm
-;
+
+
 ; Pass 2: generates string table
+;
 TCODE_2 macro label, text
 tcode_idx set tcode_idx+1
 t#v(LANG)_#v(tcode_idx):
 	db		text, 0
 	endm
-;
+
+
 ;=============================================================================
 ; strcpy_text : copy a multiling text into string buffer
 ;
@@ -56,7 +60,9 @@ t#v(LANG)_#v(tcode_idx):
 ; Output : Buffer  filled with the text
 ;          FSR2    pointer to end of copied text (the null char)
 ; Trashed: WREG
+
 	extern	strcpy_text
+
 
 ;=============================================================================
 ; strcpy_text_print : same as above, but calls word processor afterward
@@ -65,7 +71,9 @@ t#v(LANG)_#v(tcode_idx):
 ; Output : Buffer  filled with the text.
 ;          FSR2    pointer to end of copied text (the null char)
 ; Trashed: WREG
+
 	extern	strcpy_text_print
+
 
 ;=============================================================================
 ; strcat_text : append a multiling text to FSR2 pointer
@@ -74,7 +82,9 @@ t#v(LANG)_#v(tcode_idx):
 ;          FSR2  current position (in buffer)
 ; Output : FSR2  pointer to end of copied text (the null char)
 ; Trashed: WREG
+
 	extern	strcat_text
+
 
 ;=============================================================================
 ; strcat_text_print : aame as above, but calls word processor afterward
@@ -83,5 +93,6 @@ t#v(LANG)_#v(tcode_idx):
 ;          FSR2  current position (in buffer)
 ; Output : FSR2  pointer to end of copied text (the null char)
 ; Trashed: WREG
+
 	extern	strcat_text_print
 

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File math.asm									REFACTORED VERSION V2.99d
+;   File math.asm                             combined next generation V3.03.2
 ;
 ;   Math subroutines
 ;
@@ -10,9 +10,9 @@
 ;  2011-08-03 : [mH] moving from OSTC code
 
 
-#include "hwos.inc"					; mandatory header
+#include "hwos.inc"						; mandatory header
 
-math		CODE
+math	CODE
 
 ;=============================================================================
 
@@ -80,7 +80,7 @@ sub16:
 										; trashes WREG
 subU16:
 	bcf		neg_flag					; clear flag which will indicate if result is negative
-	movf	sub_b+0,W					; get Value to be subtracted, low byte
+	movf	sub_b+0,W					; get value to be subtracted, low byte
 	subwf	sub_a+0,W					; execute subtraction on low byte
 	movwf	sub_c+0						; copy result to output variable, low byte
 	movf	sub_b+1,W					; get value to be subtracted, high byte
@@ -90,10 +90,24 @@ subU16:
 	return								; NO  - result positive, done
 	bsf		neg_flag					; YES - set flag
 	comf	sub_c+1						;     - do a 16 bit sign change
-	negf	sub_c+0						;
+	negf	sub_c+0						;     - ...
 	btfsc	STATUS,C					;     - carry to be propagated ?
 	incf	sub_c+1,F					;       YES - do it
 	return								;     - done
+
+
+	global	cmpU16						; sub_a:2 - sub_b:2	with UNSIGNED values
+										; sets neg_flag if result is < 0, but does not store result itself
+										; trashes WREG
+cmpU16:
+	bcf		neg_flag					; clear flag which will indicate if result is negative
+	movf	sub_b+0,W					; get value to be subtracted, low byte
+	subwf	sub_a+0,W					; execute subtraction on low byte
+	movf	sub_b+1,W					; get value to be subtracted, high byte
+	subwfb	sub_a+1,W					; execute subtraction on high byte, considering borrow flag
+	btfss	STATUS,C					; borrow to propagate (B == /CARRY) ?
+	bsf		neg_flag					; YES - result is negative, set flag
+	return								; done
 
 
 	global	mult16x16					; xC:4 = xA:2 * xB:2   with UNSIGNED values
@@ -251,7 +265,7 @@ isr_unsigned_mult16x16:
 	return
 
 
-	global	isr_signed_mult16x16		; isr_xC = isr_xA * _isr_xB   with SIGNED values
+	global	isr_signed_mult16x16		; isr_xC = isr_xA * isr_xB   with SIGNED values
 										; trashes PRODL, PRODH, WREG
 isr_signed_mult16x16:
 	rcall	isr_unsigned_mult16x16		; do an unsigned multiplication first

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File aa_fonts.asm													V2.99d
+;   File aa_fonts.asm                         combined next generation V3.01.1
 ;
 ;   Font-data for the anti-aliased word processor
 ;
@@ -11,12 +11,17 @@
 ;  2010-12-01 : [jDG] Adding 3 bit anti-aliased fonts
 ;=============================================================================
 
+
+#include "configuration.inc"
+
+
+; Attention: all fonts need to be in the same 64 kByte page
+fonts_data	CODE_PACK	0x10000			; ex 0x11000
+
+;============================================================================
+
+
 ;---- TINY font description and data ----------------------------------------
-
-; Attention: all three fonts need to be in the same 64 kByte page
-fonts_data	CODE_PACK	0x11000
-
-
 	global	aa_font16_block
 aa_font16_block:
 	DB		'°', 0x7F					; remap a few ASCII chars, to avoid
@@ -88,8 +93,8 @@ aa_font28_end:
 	endif
 
 ;---- STD font description and data ------------------------------------------
-	global	aa_font36_block
-aa_font36_block:
+	global	aa_font34_block
+aa_font34_block:
 	DB		'°', 0x7F					; remap a few ASCII chars, to avoid
 	DB		'ö', 0x80					; holes in the character table
 	DB		'ä', 0x81
@@ -107,7 +112,7 @@ aa_font36_block:
 	DB		'ñ', 0x8D
 	DB		'¡', 0x8E
 	DB		'¿', 0x8F
-	; 90, 91 contain the the logo
+	; 90, 91 contain the logo
 	DB	0xB7,0x92						; cursor
 	; 93 is down arrow (dive start)
 	; 94 is up   arrow (dive end)
@@ -116,7 +121,7 @@ aa_font36_block:
 	DB	0								; end of translation table
 	DB	aa_font34_firstChar				; to be subtracted
 	DB	aa_font34_chars					; max value
-	DB	0x87-aa_font34_firstChar		; replace by ¤ when unknown.
+	DB	0x87-aa_font34_firstChar		; replace by ¤ when unknown
 	DB	aa_font34_height + 0x80
 ;
 #include	"../src/Fonts/aa_font34_idx.inc"
@@ -166,6 +171,28 @@ aa_font90_end:
 	if aa_font90_nbbits != 3
 		error SMALL font should be encoded with 3 bits anti-aliasing!
 	endif
+
+;---- HUGE font description and data ----------------------------------------
+ IFDEF _huge_font
+
+	global aa_font92_block
+aa_font92_block:
+			DB	' ', 0x2F
+			DB	0
+			DB	aa_font92_firstChar
+			DB	aa_font92_chars
+			DB	0x2F-aa_font92_firstChar
+			DB	aa_font92_height + 0x80		; AA flag
+;
+#include	"../src/Fonts/aa_font92_idx.inc"
+#include	"../src/Fonts/aa_font92.inc"
+aa_font92_end:
+; Make sure this is coherent...
+	if aa_font92_nbbits != 3
+		error SMALL font should be encoded with 3bits anti-aliasing...
+	endif
+
+ ENDIF
 
 ;=============================================================================
 	END

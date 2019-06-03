@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File math.inc									REFACTORED VERSION V2.99d
+;   File math.inc                             combined next generation V3.03.2
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -8,7 +8,7 @@
 ; HISTORY
 ;  2011-08-03 : [mH] moving from OSTC code
 
-	extern	convert_time			; converts hi:lo in minutes to hours (up:hi) and minutes (lo)
+	extern	convert_time			; convert hi:lo in minutes to hours (up:hi) and minutes (lo)
 									; also usable for conversion of seconds to minutes and seconds
 									; trashes xA, xB, xC
 
@@ -24,6 +24,10 @@
 
 	extern	subU16					; sub_c:2 = sub_a:2 - sub_b:2	with UNSIGNED values
 									; sets neg_flag if result is < 0
+									; trashes WREG
+
+	extern	cmpU16					; sub_a:2 - sub_b:2	with UNSIGNED values
+									; sets neg_flag if result is < 0, but does not store result itself
 									; trashes WREG
 
 	extern	mult16x16				; xC:4 = xA:2 * xB:2			with UNSIGNED values

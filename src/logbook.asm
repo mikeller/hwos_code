@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File logbook.asm								REFACTORED VERSION V2.99e
+;   File logbook.asm                          combined next generation V3.03.4
 ;
 ;   Logbook
 ;
@@ -21,15 +21,13 @@
 #include "tft_outputs.inc"
 #include "eeprom_rs232.inc"
 #include "menu_processor.inc"
-#include "wait.inc"
 #include "start.inc"
 #include "surfmode.inc"
 #include "divemode.inc"
 #include "ghostwriter.inc"
 
 	extern	do_main_menu2
-	extern	comm_mode
-	extern	customview_show_mix
+	extern	gaslist_show_mix
 
 
 	;---- Private local variables -------------------------------------------------
@@ -37,12 +35,12 @@
 	CBLOCK	local1						; max size is 16 byte !!!
 		count_temperature				; current sample count for temperature divisor
 		count_deco						; current sample count for deco (ceiling) divisor
-		logbook_cur_depth:2				; current depth, for drawing profile.
-		logbook_cur_tp:2				; current temperature, for drawing profile.
-		logbook_last_tp					; Y of the last item in Tp° curve.
-		logbook_min_tp:2				; min temperature, for drawing profile.
-		logbook_max_tp:2				; maximum temperature, for drawing profile.
-		logbook_ceiling					; current ceiling, for drawing profile.
+		logbook_cur_depth:2				; current depth, for drawing profile
+		logbook_cur_tp:2				; current temperature, for drawing profile
+		logbook_last_tp					; Y of the last item in Tp° curve
+		logbook_min_tp:2				; min temperature, for drawing profile
+		logbook_max_tp:2				; maximum temperature, for drawing profile
+		logbook_ceiling					; current ceiling, for drawing profile
 		logbook_flags					; flags only used in logbook.asm
 		logbook_page_number				; page# in logbook
 		logbook_divenumber				; # of dive in list during search
@@ -82,9 +80,12 @@
 	ENDC								; used: 16 byte, remaining: 0 byte => FULL
 
 
-	; Remark: The variable gaslist_gas is "misused" here as a local variable,
-	;         because the storage space for local variables is fully used up.
-
+	; Remarks: The variable gaslist_gas is "misused" here as a local variable,
+	;          because the storage space for local variables is fully used up.
+	;
+	;          This code includes decoding and displaying of log data for Trimix
+	;          and CCR/pSCR dives to make sure that if such dives are in the
+	;          logbook they will be displayed correctly.
 
 ;---- Defines ----------------------------------------------------------------
 
@@ -100,7 +101,7 @@
 
 ; Logbook Coordinates
 #DEFINE logbook_list_left			.10				; column of dive# in list
-#DEFINE logbook_row_offset			.28				; distance between rows of list
+#DEFINE logbook_row_offset			.28				; distance between rows of list (needs to be <= 32)
 #DEFINE logbook_row_number			.6				; amount of rows in the list
 
 ; Profile display
@@ -116,17 +117,21 @@
 ; Dive number
 #DEFINE logbook_divenumer_column	.1
 #DEFINE logbook_divenumer_row		.1
+
 ; Date and Time
 #DEFINE logbook_date_column			.100
 #DEFINE logbook_date_row			.7
 #DEFINE logbook_time_column			.120
 #DEFINE logbook_time_row			.38
+
 ; Max. Depth
 #DEFINE log_max_value_row			.38
 #DEFINE log_max_value_column		.1
+
 ; Divetime
 #DEFINE log_divetime_value_row		.38
 #DEFINE log_divetime_value_column	.60
+
 ; Gaslist below profile
 #DEFINE log_gas_row					.225
 #DEFINE log_gas_column1				.0
@@ -175,6 +180,7 @@
 #DEFINE log2_divemode_column		log2_salinity_column
 #DEFINE log2_lastdeco_row			.9*.16+log2_salinity_row
 #DEFINE log2_lastdeco_column		log2_salinity_column
+
 ; Air pressure
 #DEFINE MBAR_row					.10*.16+log2_salinity_row
 #DEFINE MBAR_column					log2_salinity_column
@@ -230,53 +236,31 @@ logbook		CODE
 ;=============================================================================
 
 TFT_logbook_cursor:
-;	call	speed_fastest
 	WIN_BOX_BLACK .0, .240-.16, logbook_list_left-.8, logbook_list_left-.1	; top, bottom, left, right
 
-	WIN_LEFT logbook_list_left-.8
-	WIN_FONT FT_SMALL
+	WIN_LEFT logbook_list_left-.8					; set horizontal position
+	WIN_FONT FT_SMALL								; select small font
 ;	bcf		win_invert								; reset invert flag
-	call	TFT_standard_color
+	call	TFT_standard_color						; print in white color
+	decf	menu_pos_cur,W							; get row number -1 into WREG
+	mullw	logbook_row_offset						; multiply with vertical offset between rows
+	movff	PRODL,win_top							; set vertical position
+	STRCPY_PRINT "\xB7"								; print cursor
+	return											; done
 
-	movff	menupos1,lo
-	dcfsnz	lo,F
-	movlw	d'0'
-	dcfsnz	lo,F
-	movlw	logbook_row_offset
-	dcfsnz	lo,F
-	movlw	.2*logbook_row_offset
-	dcfsnz	lo,F
-	movlw	.3*logbook_row_offset
-	dcfsnz	lo,F
-	movlw	.4*logbook_row_offset
-	dcfsnz	lo,F
-	movlw	.5*logbook_row_offset
-	dcfsnz	lo,F
-	movlw	.6*logbook_row_offset
-	dcfsnz	lo,F
-	movlw	.7*logbook_row_offset
-	dcfsnz	lo,F
-	movlw	.8*logbook_row_offset
-
-	movwf	win_top
-	STRCPY_PRINT "\xB7"
-	return
 
 	global	logbook									; entry point coming from menu_tree.asm
 logbook:
 	clrf	logbook_flags
-	clrf	CCP1CON									; stop PWM
-	bcf		PORTC,2									; pull PWM out to GND
 	call	TFT_boot
 ;	call	TFT_standard_color
-	clrf	menupos3								; here: used rows on current logbook-page
+	clrf	menu_pos_max							; number of used rows on current logbook-page
 	clrf	logbook_page_number						; here: # of current displayed page
 	clrf	logbook_divenumber						; # of dive in list during search
 	clrf	logbook_temp
 	clrf	logbook_temp_backup
-	clrf	timeout_counter2						; for timeout
 	movlw	logbook_row_number
-	movwf	menupos1								; here: stores current position on display (logbook_row_number-x)
+	movwf	menu_pos_cur							; number of current position on display (logbook_row_number-x)
 	read_int_eeprom .2								; get low-byte of total dives
 	movff	EEDATA,logbook_max_dive_counter
 
@@ -292,10 +276,9 @@ logbook:
 ; c) when 255 dives are reached logbook_temp = 255
 
 logbook2:
-;	call	speed_fastest
 	incf	logbook_temp,F							; increase dive counter
 	incf	logbook_temp,W							; = 0x..FF ?
-	bz		logbook_reset							; YES -  FF --> loop
+	bz		logbook_reset							; YES - ..FF --> loop
 
 	; Set ext_flash_address:3 to TOC entry of this dive
 	; 1st: 200000h-200FFFh -> logbook_max_dive_counter=0
@@ -322,9 +305,8 @@ logbook2:
 	movlw	0xFA
 	cpfseq	ext_flash_rw							; 0xFA found?
 	bra		logbook3b								; NO - abort
-
-	incf	logbook_divenumber,F					; new header found, increase logbook_divenumber
-	bra		logbook4								; done with searching, display the header
+	incf	logbook_divenumber,F					; YES - new header found, increase logbook_divenumber
+	bra		logbook4								;     - done with searching, display the header
 
 logbook3b:
 	btfss	logbook_page_not_empty					; was there at least one dive?
@@ -343,21 +325,18 @@ logbook_reset2:
 logbook4:
 	btfsc	all_dives_shown							; all dives displayed?
 	bra		logbook_display_loop2					; YES - display first page again
-
-	call	display_listdive						; display short header for list on current list position
-
-	movlw	logbook_row_number
-	cpfseq	menupos1								; first dive on list (top place)?
-	bra		logbook_display_loop1					; NO - skip saving of address
+	call	display_listdive						; NO  - display short header for list on current list position
+	movlw	logbook_row_number						;     - 
+	cpfseq	menu_pos_cur							;     - first dive on list (top row)?
+	bra		logbook_display_loop1					;       NO - skip saving of address
 
 	; store all registers required to rebuilt the current logbook page after the detail/profile view
 	movff	logbook_divenumber,logbook_divenumber_temp				; # of dive in list of the current page
 	movff	logbook_max_dive_counter,logbook_max_dive_counter_temp	; backup counter
-	movff	logbook_temp,logbook_temp_backup		; amount of dives drawn until now
-
+	movff	logbook_temp,logbook_temp_backup						; amount of dives drawn until now
 
 logbook_display_loop1:
-	decfsz	menupos1,F								; list full?
+	decfsz	menu_pos_cur,F							; list full?
 	bra		logbook2								; NO - search another dive for our current logbook page
 
 logbook_display_loop2:
@@ -376,80 +355,72 @@ logbook_display_loop2:
 	movlw	d'1'									; set cursor to position 1...
 	btfsc	return_from_profileview					; .. unless we are returning from a detail/profile view
 	movf	logbook_menupos_temp,W					; load last cursor position again
-	movwf	menupos1								; and set menupos1 byte
+	movwf	menu_pos_cur							; and set menu_pos_cur byte
 	bcf		return_from_profileview					; do this only once while the page is loaded again
 
 	bcf		logbook_page_not_empty					; obviously the current page is NOT empty
 
 	movlw	d'7'									; set cursor to position 7...
 	btfsc	keep_cursor_new_page					; ... if we came from the "new page" line
-	movwf	menupos1								; and set menupos1 byte
+	movwf	menu_pos_cur							; and set menu_pos_cur byte
 	bcf		keep_cursor_new_page
 
 	call	TFT_logbook_cursor						; show the cursor
 
-	call	logbook_preloop_tasks					; clear some flags and set to Speed_eco
-	call	menu_processor_bottom_line				; show bottom line
-
+logbook_loop_pre:
+	call	logbook_preloop_tasks					; clear timeout, some flags and switch on backlight
 logbook_loop:
-	btfsc	switch_left								; SET/MENU?
-	goto	next_logbook3							; adjust cursor or create new page
-	btfsc	switch_right							; ENTER?
-	bra		display_profile_or_exit					; view details/profile or exit logbook
-
-	rcall	log_screendump_and_onesecond			; check if we need to make a screen-shot and check for new second
-	btfsc	sleepmode								; timeout?
-	bra		exit_logbook							; YES
-	bra		logbook_loop							; NO  - wait for something to do
+	btfsc	switch_left								; left button pressed?
+	goto	next_logbook3							; YES - adjust cursor or create new page
+	btfsc	switch_right							; right button pressed?
+	bra		display_profile_or_exit					; YES - view details/profile or exit logbook
+	call	housekeeping							; NO to both - handle screen dump request, timeout and entering dive mode
+	bra		logbook_loop							;            - loop waiting for something to do
 
 display_profile_or_exit:
 	movlw	logbook_row_number+.2					; exit?
-	cpfseq	menupos1
-	bra		display_profile_or_exit2				; NO - check for "Next Page"
+	cpfseq	menu_pos_cur							; YES
+	bra		display_profile_or_exit2				; NO  - check for "Next Page"
 
 exit_logbook:
-;	call	TFT_DisplayOff
-;	call	TFT_boot
+	bcf		switch_right							; clear pending button events
+	bcf		switch_left								; ...
 	goto	do_main_menu2							; jump-back to menu_tree.asm
 
 display_profile_or_exit2:
-	movlw	logbook_row_number+.1					; next page?
-	cpfseq	menupos1
-	bra		display_profile							; NO - show details/profile
-	goto	next_logbook2							; next page
+	movlw	logbook_row_number+.1					;
+	cpfseq	menu_pos_cur							; do next page?
+	bra		display_profile							; NO  - show details/profile
+	goto	next_logbook2							; YES - next page
 
 display_profile:
-	bcf		FLAG_bailout_mode
-	bcf		gas6_changed							; clear event flags
-;	call	speed_fastest
-	movff	menupos1,logbook_menupos_temp			; store current cursor position
+	bcf		bailout_mode							; clear event flag
+	bcf		event_gas_change_gas6					; clear event flag
+	movff	menu_pos_cur,logbook_menupos_temp		; store current cursor position
 	bsf		return_from_profileview					; tweak search routine to exit after found
 
 	movf	logbook_page_number,W					; number of page
 	mullw	logbook_row_number
 	movf	PRODL,W
-	addwf	menupos1,W								; page * logbook_row_number + menupos1 =
+	addwf	menu_pos_cur,W							; page * logbook_row_number + menu_pos_cur =
 	movwf	divenumber								; # of dive to show
 
 display_profile2:
-;	call	speed_fastest
-	clrf	CCP1CON									; stop PWM
-	bcf		PORTC,2									; pull PWM out to GND
 	call	TFT_boot
-;	call	TFT_ClearScreen							; clear screen
+
 ; set ext_flash pointer to "#divenumber-oldest" dive
 ; compute read_int_eeprom .2 - divenumber
 ; read required header data for profile display
 ; look in header for pointer to begin of dive profile (Byte 2-4)
 ; set pointer (ext_flash_log_pointer:3) to this address, start drawing
 
-	decf	divenumber,F							;-1
+	decf	divenumber,F							; -1
 	read_int_eeprom .2
 	movf	EEDATA,W
 	bcf		STATUS,C
-	subfwb	divenumber,W							; max. dives (low value) - divenumber
+	subfwb	divenumber,W							; max. dives (low value) - dive number
 	movwf	lo										; result
-	incf	divenumber,F							;+1
+	incf	divenumber,F							; +1
 	; Set ext_flash_address:3 to TOC entry of this dive
 	; 1st: 200000h-200FFFh -> lo=0
 	; 2nd: 201000h-201FFFh -> lo=1
@@ -470,7 +441,7 @@ display_profile2:
 	; Now, show profile
 	LOG_POINT_TO log_samplingrate
 	call	ext_flash_byte_read						; read sampling rate
-	movff	ext_flash_rw,samplesecs_value			; needed later...
+	movff	ext_flash_rw,sampling_rate				; store for later use
 
 	LOG_POINT_TO .2
 	call	ext_flash_byte_read_plus				; read start address of profile
@@ -480,8 +451,7 @@ display_profile2:
 	call	ext_flash_byte_read_plus				; read start address of profile
 	movff	ext_flash_rw,ext_flash_log_pointer+2
 
-	clrf	logbook_sample_counter+0
-	clrf	logbook_sample_counter+1				; holds amount of read samples
+	CLRI	logbook_sample_counter					; holds amount of read samples
 
 	call	TFT_standard_color
 	call	logbook_show_divenumber					; show the dive number in medium font
@@ -501,7 +471,8 @@ display_profile2:
 	LOG_POINT_TO log_divemode
 	call	ext_flash_byte_read_plus				; read dive mode
 	movff	ext_flash_rw,lo							; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=pSCR
-	call	TFT_display_decotype_surface1			; "strcat_print"s divemode (OC, CC, Gauge, Apnea or pSCR)
+	call	TFT_decotype_logbook					; "strcat_print"s dive mode (OC, CC, Gauge, Apnea or pSCR)
+													; also sets aux_flag in case the dive was done in a deco mode
 
 	WIN_SMALL logbook_time_column, logbook_time_row
 	LOG_POINT_TO log_time
@@ -515,7 +486,7 @@ display_profile2:
 	output_99x										; minute
 	STRCAT_PRINT ""									; display 1st row of details
 
-	LOG_POINT_TO	log_profile_version
+	LOG_POINT_TO log_profile_version
 	call	ext_flash_byte_read_plus				; profile version
 	movlw	0x24
 	cpfslt	ext_flash_rw							; < 0x24 ?
@@ -530,16 +501,11 @@ log_skip_extra_icon:
 	movff	ext_flash_rw,lo
 	call	ext_flash_byte_read_plus				; read max depth
 	movff	ext_flash_rw,hi
-	movff	lo,xA+0									; calculate y-scale for profile display
-	movff	hi,xA+1
-	movlw	profile_height_pixels					; pixel height available for profile
-	movwf	xB+0
-	clrf	xB+1
+	MOVII	mpr,xA									; calculate y-scale for profile display
+	MOVLI	profile_height_pixels,xB				; pixel height available for profile
 	call	div16x16								; xC = xA / xB with xA as remainder
-	movff	xC+0,y_scale+0							; holds LOW  byte of y-scale (mbar/pixel!)
-	movff	xC+1,y_scale+1							; holds HIGH byte of y-scale (mbar/pixel!)
-	infsnz	y_scale+0,F								; increase one, because there may be a remainder
-	incf	y_scale+1,F
+	MOVII	xC,y_scale								; y-scale (mbar/pixel)
+	INCI	y_scale									; increase one, because there may be a remainder
 
 	movlw	LOW   ((profile_height_pixels+1)*.1000)
 	movwf	xC+0
@@ -549,15 +515,12 @@ log_skip_extra_icon:
 	movwf	xC+2
 	clrf	xC+3
 
-	movff	lo,xB+0									; max. Depth in mbar
-	movff	hi,xB+1									; max. Depth in mbar
-	call	div32x16								; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
-
-	movff	xC+0,x_scale+0
-	movff	xC+1,x_scale+1							; = Pixels/10m (For scale, draw any xx rows a scale-line)
+	MOVII	mpr,xB									; max. Depth in mbar
+	call	div32x16								; xC:4 = xC:4 / xB:2 with xA as remainder
+	MOVII	xC,x_scale								; Pixels/10m (for scale, draw any xx rows a scale-line)
 
 	movf	x_scale+0,W
-	iorwf	x_scale+1,W								; x_scale:2 = Null ?
+	iorwf	x_scale+1,W								; x_scale:2 = zero ?
 	bnz		display_profile_offset4					; NO  - continue
 	incf	x_scale+1,F								; YES - make x_scale+1>1 to make "display_profile2e" working
 
@@ -565,8 +528,8 @@ display_profile_offset4:
 	WIN_SMALL log_max_value_column,log_max_value_row
 
 	TSTOSS	opt_units								; 0=Meters, 1=Feets
-	bra		display_profile_offset4_metric
-	; display_profile_offset4_imperial:
+	bra		display_profile_offset4_metric			; 0 - do metric
+													; 1 - do imperial
 	call	convert_mbar_to_feet					; convert value in lo:hi from mbar to feet
 	PUTC	' '
 	bcf		leftbind
@@ -580,33 +543,25 @@ display_profile_offset4_metric:
 	STRCAT_TEXT_PRINT tMeters
 
 display_profile_offset4_common:
-	call	ext_flash_byte_read_plus				; divetime in minutes
+	call	ext_flash_byte_read_plus				; dive time in minutes
 	movff	ext_flash_rw,lo
 	call	ext_flash_byte_read_plus
-	movff	ext_flash_rw,hi							; divetime in minutes
+	movff	ext_flash_rw,hi							; dive time in minutes
 
-	movff	lo,xA+0									; calculate x-scale for profile display
-	movff	hi,xA+1									; calculate total diveseconds first
-	movlw	d'60'									; 60 seconds are one minute
-	movwf	xB+0
-	clrf	xB+1
-	call	mult16x16								; result is in xC:2 !
+	MOVII	mpr,xA									; calculate x-scale for profile display, calculate total dive seconds first
+	MOVLI	.60,xB									; 60 seconds are one minute
+	call	mult16x16								; result is in xC:2
 
 	WIN_SMALL log_divetime_value_column,log_divetime_value_row
 	bsf		leftbind
-	output_16										; divetime minutes
-	movlw	LOW  d'600'
-	movwf	xA+0
-	movlw	HIGH d'600'
-	movwf	xA+1									; a vertical line every 600 seconds
-	movff	samplesecs_value,xB+0					; copy sampling rate
-	clrf	xB+1
+	output_16										; dive time minutes
+	MOVLI	.600,xA									; a vertical line every 600 seconds
+	movff	sampling_rate,xB+0						; copy sampling rate to xB, low  byte
+	clrf	xB+1									; clear                 xB, high byte
 	call	div16x16								; xA/xB=xC with xA as remainder
-	movff	xC+0,vertical_interval+0
-	movff	xC+1,vertical_interval+1
-	; vertical_interval:2 holds interval of samples for vertical 10min line
+	MOVII	xC,vertical_interval					; vertical_interval:2 holds interval of samples for vertical 10min line
 
-	; Restore divetime in minutes:
+	; Restore dive time in minutes:
 	; get real sample time
 	LOG_POINT_TO log_total_seconds
 	call	ext_flash_byte_read_plus				; total sample time in seconds
@@ -616,77 +571,74 @@ display_profile_offset4_common:
 
 	PUTC	':'
 	LOG_POINT_TO log_divetime+.2
-	call	ext_flash_byte_read_plus				; read divetime seconds
+	call	ext_flash_byte_read_plus				; read dive time seconds
 	movff	ext_flash_rw,lo
-	movff	xC+0,xA+0								; now calculate x-scale value
-	movff	xC+1,xA+1
-	movlw	profile_width_pixels					; pix width available
-	movwf	xB+0
-	clrf	xB+1
+	MOVII	xC,xA									; now calculate x-scale value
+	MOVLI	profile_width_pixels,xB					; pix width available
 	call	div16x16								; xC = xA / xB with xA as remainder
-	movff	xC+0,xA+0
-	movff	xC+1,xA+1
-	movf	samplesecs_value,W						; divide through sample interval
-	movwf	xB+0
-	clrf	xB+1
+	MOVII	xC,xA
+	movff	sampling_rate,xB+0						; divide through sampling rate (time interval)
+	clrf	              xB+1
 	call	div16x16								; xC = xA / xB with xA as remainder
-	movff	xC+0,profile_temp1+0					; store value (use any #xC sample, skip xC-1) into temp registers
-	movff	xC+1,profile_temp1+1					; store value (use any #xC sample, skip xC-1) into temp registers
-	infsnz	profile_temp1+0,F						; increase by one, there might be a remainder
-	incf	profile_temp1+1,F
+	MOVII	xC,profile_temp1						; store value (use any #xC sample, skip xC-1) into temp registers
+	INCI	profile_temp1							; increase by one, there might be a remainder
 
 	bsf		leftbind
-	output_99x										; divetime seconds
+	output_99x										; dive time seconds
 	call	TFT_standard_color
 	STRCAT_PRINT ""
 
-	call	ext_flash_byte_read_plus				; read min. temperature
+	call	ext_flash_byte_read_plus				; read min. temperature, low  byte
 	movff	ext_flash_rw,logbook_min_tp+0
-	call	ext_flash_byte_read_plus				; read min. temperature
+	call	ext_flash_byte_read_plus				; read min. temperature, high byte
 	movff	ext_flash_rw,logbook_min_tp+1
 
-	; Set pointer to Gas 1 Type.
-	LOG_POINT_TO	log_gas1+.3
+	btfss	aux_flag								; dive done in a deco mode?
+	bra		logbook_set_gas_color					; NO - always use gas 1 color (white) then
+
+	; Set pointer to gas 1 type
+	LOG_POINT_TO log_gas1+.3
 	call	ext_flash_byte_read_plus				; read gas type
 	decfsz	ext_flash_rw,W							; = 1 (= "First") ?
 	bra		logbook_find_first_gas2					; NO
-	movlw	.1
+logbook_set_gas_color:
+	movlw	.1										; YES - select white color
 	movwf	ext_flash_rw
 	bra		logbook_find_first_gas_done
 logbook_find_first_gas2:
-	; Set pointer to Gas 2 Type.
+	; Set pointer to gas 2 type
 	LOG_POINT_TO log_gas2+.3
 	call	ext_flash_byte_read_plus				; read gas type
 	decfsz	ext_flash_rw,W							; = 1 (= "First") ?
 	bra		logbook_find_first_gas3					; NO
-	movlw	.2
+	movlw	.2										; YES - select green color
 	movwf	ext_flash_rw
 	bra		logbook_find_first_gas_done
 logbook_find_first_gas3:
-	; Set pointer to Gas 3 Type.
+	; Set pointer to gas 3 type
 	LOG_POINT_TO log_gas3+.3
 	call	ext_flash_byte_read_plus				; read gas type
 	decfsz	ext_flash_rw,W							; = 1 (= "First") ?
 	bra		logbook_find_first_gas4					; NO
-	movlw	.3
+	movlw	.3										; YES - select red color
 	movwf	ext_flash_rw
 	bra		logbook_find_first_gas_done
 logbook_find_first_gas4:
-	; Set pointer to Gas 4 Type.
+	; Set pointer to gas 4 type
 	LOG_POINT_TO log_gas4+.3
 	call	ext_flash_byte_read_plus				; read gas type
 	decfsz	ext_flash_rw,W							; = 1 (= "First") ?
 	bra		logbook_find_first_gas5					; NO
-	movlw	.4
+	movlw	.4										; YES - select yellow color
 	movwf	ext_flash_rw
 	bra		logbook_find_first_gas_done
 logbook_find_first_gas5:
-	movlw	.5										; must be Gas 5
+	movlw	.5										; must be gas 5, select cyan color
 	movwf	ext_flash_rw
 logbook_find_first_gas_done:
 	movff	ext_flash_rw,backup_color1				; keep copy to restore color
 	movff	ext_flash_rw,WREG						; copy gas number to WREG for color coding
-	call	TFT_color_code_gas						; back to normal profile color
+	call	TFT_color_code_gas						; set color
 	; Pointer is now trashed!
 
 	; Point to profile portion of this dive
@@ -794,7 +746,7 @@ display_profile2f:
 	bcf		end_of_profile							; clear flag
 
 	movlw	profile_left+.1
-	movwf	logbook_pixel_x_pos						; here: used as colum x2 (Start at Colum 5)
+	movwf	logbook_pixel_x_pos						; here: used as column x2 (start at column 5)
 
 	movlw	profile_top+.1							; zero-m row
 	movwf	fill_between_rows
@@ -810,7 +762,7 @@ display_profile2f:
 	clrf	logbook_last_tp							; also reset previous Y for Tp°
 	clrf	logbook_ceiling							; Ceiling = 0, correct value for no ceiling
 	movlw	profile_top+.1
-	movwf	logbook_min_temp_pos					; initialize for displaying the lowest temperature
+	movwf	logbook_min_temp_pos					; initialize for displaying the lowest  temperature
 	movlw	profile_top+profile_height_pixels
 	movwf	logbook_max_temp_pos					; initialize for displaying the highest temperature
 
@@ -834,12 +786,12 @@ profile_display_loop:
 	mullw	2
 	call	pixel_write_col320
 
-	movff	profile_temp1+0,profile_temp2+0
-	movff	profile_temp1+1,profile_temp2+1			; 16bit x-scaler
+	MOVII	profile_temp1,profile_temp2				; 16 bit x-scaler
+
 	incf	profile_temp2+1,F
-	tstfsz	profile_temp2+0							; must not be zero
-	bra		profile_display_loop2					; not Zero
-	incf	profile_temp2+0,F						; zero, increase
+	tstfsz	profile_temp2+0							; must not be zero, is zero?
+	bra		profile_display_loop2					; NO  - ok
+	incf	profile_temp2+0,F						; YES - increase by 1
 
 profile_display_loop2:
 	rcall	profile_view_get_depth					; reads depth, temp and profile data
@@ -856,21 +808,17 @@ profile_display_loop2:
 	bz		profile_display_skip_deco
 
 	mullw	.100									; YES - convert to mbar
-	movff	PRODL,sub_a+0
-	movff	PRODH,sub_a+1
-	movff	logbook_cur_depth+0,sub_b+0				; compare with UNSIGNED current depth (16bits)
-	movff	logbook_cur_depth+1,sub_b+1
-	call	subU16									; set (or not) neg_flag
+	MOVII	PROD,               sub_a				; ceiling depth
+	MOVII	logbook_cur_depth+0,sub_b				; current depth
+	call	cmpU16									; ceiling - current depth
 
 	movlw	color_dark_green						; dark green if ok
-	btfss	neg_flag
-	movlw	color_dark_red							; dark red if ceiling is violated
+	btfss	neg_flag								; current depth > ceiling ?
+	movlw	color_dark_red							; NO - dark red because ceiling is violated
 	call	TFT_set_color
 
-	movff	PRODL,xA+0
-	movff	PRODH,xA+1
-	movff	y_scale+0,xB+0							; divide pressure in mbar/quant for row offset
-	movff	y_scale+1,xB+1
+	MOVII	PROD,xA
+	MOVII	y_scale,xB								; divide pressure in mbar/quant for row offset
 	call	div16x16								; xC = xA / xB with xA as remainder
 
 	movlw	profile_top+.1							; starts right after the top line
@@ -889,7 +837,7 @@ profile_display_skip_deco:
 	incf	WREG
 	bz		profile_display_skip_temp				; NO - just skip drawing.
 
-	movlw	LOW  (((profile_height_pixels-.10)*.256)/.370)	 ; fixed tp° scale: (-2 .. +35°C * scale256 )/153pix
+	movlw	LOW  (((profile_height_pixels-.10)*.256)/.370)	; fixed tp° scale: (-2 .. +35°C * scale256 )/153pix
 	movwf	xB+0
 	movlw	HIGH (((profile_height_pixels-.10)*.256)/.370)
 	movwf	xB+1
@@ -918,7 +866,7 @@ profile_display_skip_deco:
 	call	TFT_set_color
 
 	movf	logbook_last_tp,W						; do we have a valid previous value?
-	bz		profile_display_temp_1					; NO - skip the vertical line.
+	bz		profile_display_temp_1					; NO - skip the vertical line
 	movwf	xC+1
 	call	profile_display_fill					; in this column between this row (xC+0) and the last row (xC+1)
 profile_display_temp_1:
@@ -929,14 +877,12 @@ profile_display_temp_1:
 	movwf	logbook_max_temp_pos					; highest row in the temp graph
 
 	movff	xC+0,logbook_last_tp
-	PIXEL_WRITE logbook_pixel_x_pos,xC+0			; set col(0..159) x row (0..239), put a current color pixel
+	PIXEL_WRITE logbook_pixel_x_pos,xC+0			; set col (0..159) x row (0..239), put a current color pixel
 
 profile_display_skip_temp:
 	;---- Draw depth curve ---------------------------------------------------
-	movff	y_scale+0,xB+0							; divide pressure in mbar/quant for row offset
-	movff	y_scale+1,xB+1
-	movff	logbook_cur_depth+0,xA+0
-	movff	logbook_cur_depth+1,xA+1
+	MOVII	y_scale,          xB					; divide pressure in mbar/quant for row offset
+	MOVII	logbook_cur_depth,xA
 	call	div16x16								; xC = xA / xB with xA as remainder
 	movlw	profile_top+.1
 	addwf	xC+0,F									; add 75 pixel offset to result
@@ -945,16 +891,16 @@ profile_display_skip_temp:
 	movff	fill_between_rows,xC+0
 
 	movff	backup_color1,WREG						; copy gas number to WREG for color-coding
-	call	TFT_color_code_gas						; back to normal profile color.
+	call	TFT_color_code_gas						; back to normal profile color
 
 	movff	fill_between_rows,xC+1
 	call	profile_display_fill					; in this column between this row (xC+0) and the last row (xC+1)
 	movff	xC+0,fill_between_rows					; store last row for fill routine
 
-	PIXEL_WRITE logbook_pixel_x_pos,xC+0			; set col(0..159) x row (0..239), put a std color pixel
+	PIXEL_WRITE logbook_pixel_x_pos,xC+0			; set col (0..159) x row (0..239), put a std color pixel
 	incf	logbook_pixel_x_pos,F					; next column
 
-	;---- Draw Marker square , if any ----------------------------------------
+	;---- Draw Marker square, if any -----------------------------------------
 	btfss	log_marker_found						; any marker to draw?
 	bra		profile_display_skip_marker				; NO
 
@@ -1032,7 +978,7 @@ profile_display_loop3:
 display_profile_no_profile:							; no profile available for this dive
 
 profile_display_loop_done:
-	btfss	FLAG_bailout_mode						; bailout during the dive?
+	btfss	bailout_mode							; bailout during the dive?
 	bra		profile_display_loop_done_nobail		; NO
 													; YES - show "Bailout"
 	movlw	color_pink
@@ -1040,14 +986,13 @@ profile_display_loop_done:
 	WIN_TINY logbook_bailout_column,logbook_bailout_row
 	STRCPY_TEXT_PRINT tDiveBailout					; bailout
 profile_display_loop_done_nobail:
-	btfss	gas6_changed							; Gas6
+	btfss	event_gas_change_gas6					; did a change to gas 6 occurred?
 	bra		profile_display_loop_done_nogas6		; NO
-	; Yes, show "Gas 6!"
-	movlw	color_pink
-	call	TFT_set_color
+	movlw	color_pink								; YES - select color
+	call	TFT_set_color							;     - set color
 	WIN_TINY logbook_bailout_column,logbook_bailout_row-.15
-	STRCPY_TEXT tGas								; gas
-	STRCAT_PRINT " 6!"
+	STRCPY_TEXT tGas								;     - print "Gas"
+	STRCAT_PRINT " 6!"								;     - print " 6!"
 
 profile_display_loop_done_nogas6:
 	decf	divenumber,F							; -1
@@ -1083,13 +1028,12 @@ profile_display_loop_done_nogas6:
 	movlw	color_orange							; use same color as tp° curve
 	call	TFT_set_color
 
-	movff	logbook_min_tp+0,lo
-	movff	logbook_min_tp+1,hi
+	MOVII	logbook_min_tp,mpr
 	lfsr	FSR2,buffer
 
 	TSTOSS	opt_units								; 0=°C, 1=°F
-	bra		logbook_show_temp_metric
-;logbook_show_temp_imperial:
+	bra		logbook_show_temp_metric				; 0 - do Celsius
+													; 1 - do Fahrenheit
 	call	TFT_convert_signed_16bit				; converts lo:hi into signed-short and adds '-' to POSTINC2 if required
 	call	convert_celsius_to_fahrenheit			; convert value in lo:hi from Celsius to Fahrenheit
 	lfsr	FSR2,buffer								; overwrite "-"
@@ -1100,8 +1044,7 @@ profile_display_loop_done_nogas6:
 	movlw	.15
 	subwf	logbook_max_temp_pos,W
 	movff	WREG,win_top							; Y position at max temperature
-	movff	logbook_max_tp+0,lo
-	movff	logbook_max_tp+1,hi
+	MOVII	logbook_max_tp,mpr
 	lfsr	FSR2,buffer
 	call	TFT_convert_signed_16bit				; converts lo:hi into signed-short and adds '-' to POSTINC2 if required
 	call	convert_celsius_to_fahrenheit			; convert value in lo:hi from Celsius to Fahrenheit
@@ -1122,8 +1065,7 @@ logbook_show_temp_metric:
 	movlw	.15
 	subwf	logbook_max_temp_pos,W
 	movwf	win_top									; Y position at max temperature
-	movff	logbook_max_tp+0,lo
-	movff	logbook_max_tp+1,hi
+	MOVII	logbook_max_tp,mpr
 	lfsr	FSR2,buffer
 	call	TFT_convert_signed_16bit				; converts lo:hi into signed-short and adds '-' to POSTINC2 if required
 	movlw	d'3'
@@ -1136,8 +1078,11 @@ logbook_show_temp_common:
 	bcf		leftbind
 	call	TFT_standard_color
 
-	; Get pointer to Gaslist
-	LOG_POINT_TO log_gas1
+	btfss	aux_flag								; dive done in a deco mode?
+	bra		logbook_show_gases_done					; NO
+
+	; show gases
+	LOG_POINT_TO log_gas1							; get pointer to gaslist
 	bsf		log_show_gas_short						; do the short version of log_show_gas
 	bsf		leftbind
 
@@ -1163,38 +1108,16 @@ logbook_show_temp_common:
 
 	bcf		leftbind
 
-	rcall	logbook_preloop_tasks					; clear some flags and set to Speed_eco
+logbook_show_gases_done:
+
+	rcall	logbook_preloop_tasks					; clear timeout, some flags and set to Speed_eco
 display_profile_loop:
-	btfsc	switch_right
-	bra		logbook_page2							; show more information
-	btfsc	switch_left
-	bra		exit_profileview						; back to list
-
-	rcall	log_screendump_and_onesecond			; check if we need to make a screen-shot and check for new second
-	btfsc	sleepmode								; timeout?
-	bra		exit_profileview						; back to list
-	bra		display_profile_loop					; wait for something to do
-
-	global	log_screendump_and_onesecond
-log_screendump_and_onesecond:						; check if we need to make a screen-shot and check for new second
-	btfsc	onesecupdate
-	call	timeout_surfmode						; timeout
-	btfsc	onesecupdate
-	call	set_dive_modes							; check if divemode needs to be entered
-	bcf		onesecupdate							; one second update
-	btfsc	divemode
-	goto	restart									; enter divemode if required
-
- IFDEF _screendump
-	btfsc	enable_screen_dumps						; screendump enabled?
-	call	TFT_dump_screen_check					; YES - check if requested and do it
- ENDIF
-
-	btfsc	vusb_in									; USB plugged in?
-	goto	comm_mode								; YES - start COMM mode and return
-
-	return
-
+	btfsc	switch_right							; right button pressed?
+	bra		logbook_page2							; YES - show more information
+	btfsc	switch_left								; left button pressed?
+	bra		exit_profileview						; YES - back to list
+	call	housekeeping							; NO to both - handle screen dump request, timeout and entering dive mode
+	bra		display_profile_loop					;            - loop waiting for something to do
 
 ;=============================================================================
 ; Draw a vertical line between xC+1 and xC+0, at current X position.
@@ -1205,12 +1128,12 @@ log_screendump_and_onesecond:						; check if we need to make a screen-shot and 
 profile_display_fill:
 	; First, check if xC+0 > fill_between_rows or xC+0 < aponoe_mins
 	movf	xC+0,W
-	cpfseq	xC+1									; xC+0 = apone_mins ?
+	cpfseq	xC+1									; xC+0 = apnoe_mins ?
 	bra		profile_display_fill2					; NO
 	return
 
 profile_display_fill2:
-	; Make sure to init X position.
+	; Make sure to init X position
 	movf	logbook_pixel_x_pos,W
 	mullw	2
 	decf	PRODL,F
@@ -1246,8 +1169,7 @@ profile_display_fill_up:							; fill upwards from xC+0 to apone_mins!
 
 
 profile_view_get_depth:
-	infsnz	logbook_sample_counter+0,F
-	incf	logbook_sample_counter+1,F				; count read pixels
+	INCI	logbook_sample_counter					; count read pixels
 
 	movf	logbook_sample_counter+0,W
 	cpfseq	vertical_interval+0
@@ -1256,8 +1178,7 @@ profile_view_get_depth:
 	cpfseq	vertical_interval+1
 	bra		profile_view_get_depth_no_line			; no need to draw a 10min line, continue
 	; draw a new 10min line here...
-	clrf	logbook_sample_counter+0
-	clrf	logbook_sample_counter+1				; clear counting registers for next line
+	CLRI	logbook_sample_counter					; clear counting registers for next line
 
 	; Vertical lines...
 	movlw	color_deepblue
@@ -1277,12 +1198,12 @@ profile_view_get_depth_no_line:
 	movff	ext_flash_rw,logbook_cur_depth+0		; low value
 	call	ext_flash_byte_read_plus_0x20			; read depth first
 	movff	ext_flash_rw,logbook_cur_depth+1		; high value
-	call	ext_flash_byte_read_plus_0x20			; read Profile Flag Byte
+	call	ext_flash_byte_read_plus_0x20			; read  Profile Flag Byte
 	movff	ext_flash_rw,gaslist_gas				; store Profile Flag Byte
 
-	bcf		event_occured							; clear flag
-	btfsc	gaslist_gas,7
-	bsf		event_occured							; we also have an event byte
+	bcf		event_occured							; clear flag by default
+	btfsc	gaslist_gas,7							; event recorded?
+	bsf		event_occured							; YES - we also have an event byte
 	bcf		gaslist_gas,7							; clear event byte flag (if any)
 	; gaslist_gas now holds the number of additional bytes to ignore (0-127)
 	movlw	0xFD									; end of profile bytes ?
@@ -1312,24 +1233,21 @@ profile_view_get_depth_new1:
 	movff	divisor_temperature,count_temperature	; restart counter
 
 	; Compute Tp° max on the fly...
-	movff	logbook_cur_tp+0,sub_a+0				; compare cur_tp > max_tp ?
-	movff	logbook_cur_tp+1,sub_a+1
-	movff	logbook_max_tp+0,sub_b+0
-	movff	logbook_max_tp+1,sub_b+1
+	MOVII	logbook_cur_tp,sub_a					; compare cur_tp > max_tp ?
+	MOVII	logbook_max_tp,sub_b
 	call	sub16									; SIGNED sub_a - sub_b
 	btfsc	neg_flag
 	bra		profile_view_get_depth_no_tp
 
-	; store max. temp only below start_dive_threshold (1,0m)
-	tstfsz	logbook_cur_depth+1						; > 2,56m ?
+	; store max. temp only below dive_threshold_norm_alt_start
+	tstfsz	logbook_cur_depth+1						; > 2.56 m ?
 	bra		profile_view_compute_max_temp			; YES - include in max. temp measurement
-	movlw	start_dive_threshold					; 1,0m
-	cpfsgt	logbook_cur_depth+0						; low value
-	bra		profile_view_get_depth_no_tp			; above 1,0m, ignore temp
+	movlw	dive_threshold_norm_alt_start+0			; get start-of-dive depth in mbar / cm, low byte
+	cpfsgt	logbook_cur_depth+0						; deeper that start-of-dive threshold?
+	bra		profile_view_get_depth_no_tp			; NO - ignore temperature
 
 profile_view_compute_max_temp:
-	movff	logbook_cur_tp+0,logbook_max_tp+0
-	movff	logbook_cur_tp+1,logbook_max_tp+1
+	MOVII	logbook_cur_tp,logbook_max_tp
 
 	;---- read deco, if any AND divisor=0 AND bytes available ----------------
 profile_view_get_depth_no_tp:
@@ -1354,40 +1272,40 @@ profile_view_get_depth_no_deco:
 	return
 
 profile_view_get_depth_events:
-	clrf	EventByte2								; clear EventByte2
+	clrf	event_byte2								; clear event byte 2
 	call	ext_flash_byte_read_plus_0x20			; read event byte
-	movff	ext_flash_rw,EventByte1					; store EventByte1
+	movff	ext_flash_rw,event_byte1				; store event byte 1
 	decf	gaslist_gas,F							; reduce counter
 
-	btfss	EventByte1,7							; another event byte?
+	btfss	event_byte1,7							; another event byte?
 	bra		profile_no_second_eventbyte				; NO
-	call	ext_flash_byte_read_plus_0x20			; read  EventByte2
-	movff	ext_flash_rw,EventByte2					; store EventByte2
+	call	ext_flash_byte_read_plus_0x20			; read  event byte 2
+	movff	ext_flash_rw,event_byte2				; store event byte 2
 	decf	gaslist_gas,F							; reduce counter
-	bcf		EventByte1,7							; clear flag
+	bcf		event_byte1,7							; clear flag
 
 profile_no_second_eventbyte:
 	; Check event flags in the EventBytes
-	btfsc	EventByte1,4							; manual gas changed?
+	btfsc	event_byte1,4							; manual gas changed?
 	rcall	logbook_event1							; YES
-	btfsc	EventByte1,5							; stored gas changed?
+	btfsc	event_byte1,5							; stored gas changed?
 	rcall	logbook_event4							; YES
-	btfsc	EventByte1,6							; setpoint change?
+	btfsc	event_byte1,6							; setpoint change?
 	rcall	logbook_event3							; YES
-	btfsc	EventByte2,0							; bailout?
+	btfsc	event_byte2,0							; bailout?
 	rcall	logbook_event2							; YES
-	; Any Alarm?
-	bcf		EventByte1,4							; clear bits already tested
-	bcf		EventByte1,5
-	bcf		EventByte1,6
-	movlw	.6										; manual marker?
-	cpfseq	EventByte1
-	return											; NO - return
-	bsf		log_marker_found						; manual marker, draw small yellow rectangle here
-	return
+	; any alarm?
+	bcf		event_byte1,4							; clear bits already tested
+	bcf		event_byte1,5
+	bcf		event_byte1,6
+	movlw	.6										; coding for manual marker
+	cpfseq	event_byte1								; manual marker set?
+	return											; NO  - done
+	bsf		log_marker_found						; YES - draw small yellow rectangle here
+	return											;     - done
 
 logbook_event4:										; stored gas changed
-	call	ext_flash_byte_read_plus_0x20			; read Gas#
+	call	ext_flash_byte_read_plus_0x20			; read gas number
 	decf	gaslist_gas,F							; reduce counter
 	movff	ext_flash_rw,backup_color1
 	movff	ext_flash_rw,WREG						; copy gas number to WREG for color-coding
@@ -1395,9 +1313,9 @@ logbook_event4:										; stored gas changed
 	return
 
 logbook_event1:										; gas 6 used
-	bsf		gas6_changed
-	movlw	.6										; use Gas6 color
-	movwf	backup_color1
+	bsf		event_gas_change_gas6					; set event flag
+	movlw	.6										; use gas 6 color
+	movwf	backup_color1							; select color for gas 6
 	call	TFT_color_code_gas						; set profile color
 	incf_ext_flash_address_0x20 .2					; skip two bytes
 	decf	gaslist_gas,F							; reduce counter
@@ -1405,11 +1323,11 @@ logbook_event1:										; gas 6 used
 	return
 
 logbook_event2:										; bailout
-	bsf		FLAG_bailout_mode						; set flag
+	bsf		bailout_mode							; set flag
 	movff	backup_color1,backup_color2				; backup last gas color in case we return to CCR
 	movlw	.6										; use Gas6 color
 	movwf	backup_color1
-	call	TFT_color_code_gas						; use Gas6 color
+	call	TFT_color_code_gas						; use gas 6 color
 	incf_ext_flash_address_0x20 .2					; skip two bytes
 	decf	gaslist_gas,F							; reduce counter
 	decf	gaslist_gas,F							; reduce counter
@@ -1418,7 +1336,7 @@ logbook_event2:										; bailout
 logbook_event3:										; setpoint change
 	incf_ext_flash_address_0x20 .1					; skip one byte
 	decf	gaslist_gas,F							; reduce counter
-	btfss	FLAG_bailout_mode						; are we in bailout?
+	btfss	bailout_mode							; in bailout?
 	return											; NO - return
 	; We were in bailout before, restore profile color
 	movff	backup_color2,backup_color1				; restore color
@@ -1429,8 +1347,6 @@ logbook_event3:										; setpoint change
 ; ------------------------------------------------------------------------
 
 exit_profileview:
-;	call	speed_fastest
-	bcf		sleepmode
 	clrf	gaslist_gas								; restore all registers to build same page again
 	movff	logbook_divenumber_temp,logbook_divenumber
 	movff	logbook_max_dive_counter_temp,logbook_max_dive_counter
@@ -1438,103 +1354,66 @@ exit_profileview:
 	incf	logbook_max_dive_counter,F
 	decf	logbook_divenumber,F
 	bcf		all_dives_shown
-	clrf	menupos3								; here: used row on current page
+	clrf	menu_pos_max							; number of used rows on current logbook-page
 	movlw	logbook_row_number
-	movwf	menupos1								; here: active row on current page
-;	call	TFT_DisplayOff
+	movwf	menu_pos_cur							; here: active row on current page
 	call	TFT_boot
-	clrf	CCP1CON									; stop PWM
-	bcf		PORTC,2									; pull PWM out to GND
-	call	TFT_boot
-;	call	TFT_ClearScreen							; clear details/profile
 	goto	logbook2								; start search
 
 next_logbook2:
-	btfsc	all_dives_shown							; all shown
-	goto	logbook									; all reset
-	clrf	menupos3
+	btfsc	all_dives_shown							; all shown?
+	goto	logbook									; YES
+	clrf	menu_pos_max							; number of used rows on current logbook-page
 	movlw	logbook_row_number
-	movwf	menupos1
+	movwf	menu_pos_cur
 	incf	logbook_page_number,F					; start new screen
 	bsf		keep_cursor_new_page					; keep cursor on "next page"
-	clrf	CCP1CON									; stop PWM
-	bcf		PORTC,2									; pull PWM out to GND
 	call	TFT_boot
-;	call	TFT_ClearScreen
 	goto	logbook2								; start search
 
 next_logbook3:
-	incf	menupos1,F								; +1
+	incf	menu_pos_cur,F							; +1
 	movlw	logbook_row_number+.2
-	cpfsgt	menupos1								; = logbook_row_number+.3 ?
+	cpfsgt	menu_pos_cur							; = logbook_row_number + 3 ?
 	bra		next_logbook3a							; NO
 	movlw	.1
-	movwf	menupos1
+	movwf	menu_pos_cur
 	bra		next_logbook3b
 
 next_logbook3a:
-	incf	menupos3,W								; last entry in current page +1
-	cpfseq	menupos1								; same as cursor pos.?
+	incf	menu_pos_max,W							; last entry on current page +1
+	cpfseq	menu_pos_cur							; same as cursor position?
 	bra		next_logbook3b							; NO
-	movlw	logbook_row_number+.1					; YES - 
-	movwf	menupos1								;     - jump directly to "next page" if page is not full
+	movlw	logbook_row_number+.1					; YES - ...
+	movwf	menu_pos_cur							;     - ... jump directly to "next page" if page is not full
 
 	movlw	logbook_row_number
-	cpfseq	menupos3								; last dive was row logbook_row_number?
+	cpfseq	menu_pos_max							; last dive was row logbook_row_number?
 	bsf		all_dives_shown							; NO - set flag to load first page again (full reset)
 
 next_logbook3b:
-	clrf	timeout_counter2
 	call	TFT_logbook_cursor
-	bcf		switch_left
-	goto	logbook_loop
+	goto	logbook_loop_pre
 
 display_listdive:
 	bsf		logbook_page_not_empty					; page not empty
-	incf	menupos3,F
+	incf	menu_pos_max,F
 
-	bsf		leftbind
 	WIN_FONT FT_SMALL
 	WIN_LEFT logbook_list_left
 
-	decf	menupos3,W								; -1 into wreg
+	decf	menu_pos_max,W							; -1 into WREG
 	mullw	logbook_row_offset
 	movff	PRODL,win_top
+	lfsr	FSR2,buffer								; initialize output buffer
 
-	lfsr	FSR2,buffer
-	call	do_logoffset_common_read				; read into lo:hi
-	tstfsz	lo										; lo = 0 ?
-	bra		display_listdive1						; NO - adjust offset
-	tstfsz	hi										; hi = 0 ?
-	bra		display_listdive1						; NO - adjust offset
-	bra		display_listdive1b						; display now
-
-display_listdive1:
-	; Check limit (lo:hi must be <1000)
-	movlw	LOW		d'1000'							; compare to 1000
-	subwf	lo,W
-	movlw	HIGH	d'1000'
-	subwfb	hi,W
-	bc		display_listdive1b						; carry = no-borrow = > 1000, skip!
-
-	infsnz	lo,F
-	incf	hi,F									; hi:lo = hi:lo + 1
-	movff	lo,sub_a+0
-	movff	hi,sub_a+1
-	movff	logbook_divenumber,sub_b+0
-	clrf	sub_b+1
-	call	subU16									; sub_c = sub_a - sub_b
-	movff	sub_c+0,lo
-	movff	sub_c+1,hi
-	bra		display_listdive1a
-
-display_listdive1b:
-	clrf	hi
-	movff	logbook_divenumber,lo					; lo=0 and hi=0 -> show without applied offset
-display_listdive1a:
-	output_16_3										; displays only last three figures from a 16Bit value (0-999), # of dive
+	movf	logbook_divenumber,W					; log_compute_divenumber needs the list number
+	call	log_compute_divenumber					; compute dive number
+	bsf		leftbind
+	output_16_3										; show dive number, but only last three digits
+	bcf		leftbind
 	PUTC	' '
-	;display_listdive2:
+	; display_listdive2:
 	LOG_POINT_TO log_date+1							; point to month
 	call	ext_flash_byte_read_plus				; read month
 	movff	ext_flash_rw,hi							; month
@@ -1550,11 +1429,10 @@ display_listdive1a:
 	movff	ext_flash_rw,hi
 
 	TSTOSS	opt_units								; 0=Meters, 1=Feets
-	bra		display_listdive2_metric
-	;display_listdive2_imperial:
+	bra		display_listdive2_metric				; 0 - do metric
+													; 1 - do imperial
 	call	convert_mbar_to_feet					; convert value in lo:hi from mbar to feet
 	PUTC	' '
-	bcf		leftbind
 	output_16_3										; limit to 999 and display only (0-999)
 	STRCAT_TEXT tFeets1
 	bra		display_listdive3
@@ -1562,18 +1440,17 @@ display_listdive1a:
 display_listdive2_metric:
 	bsf		ignore_digit5							; no cm...
 	movlw	d'1'									; +1
-	movff	WREG,ignore_digits						; no 1000m
-	bcf		leftbind
+	movwf	ignore_digits							; no 1000 m
 	output_16dp .3									; xxx.y
 	STRCAT_TEXT tMeters
 	PUTC	' '
 
 display_listdive3:
 	call	ext_flash_byte_read_plus
-	movff	ext_flash_rw,lo							; read divetime minutes
+	movff	ext_flash_rw,lo							; read dive time minutes
 	call	ext_flash_byte_read_plus
 	movff	ext_flash_rw,hi
-	output_16_3										; divetime minutes (0-999min)
+	output_16_3										; dive time minutes (0-999min)
 	STRCAT_TEXT tMinutes
 	clrf	WREG
 	movff	WREG,buffer+.21							; limit to 21 chars
@@ -1583,37 +1460,22 @@ display_listdive3:
 ; ------------------------------------------------------------------
 
 logbook_show_divenumber:
-	call	do_logoffset_common_read				; read into lo:hi
-	tstfsz	lo										; lo = 0 ?
-	bra		logbook_show_divenumber2				; NO - adjust offset
-	tstfsz	hi										; hi = 0 ?
-	bra		logbook_show_divenumber2				; NO - adjust offset
-	movff	divenumber,lo							; lo = 0 and hi = 0 -> skip offset routine
-	bra		logbook_show_divenumber3				; display now
-
-logbook_show_divenumber2:
-	infsnz	lo,F
-	incf	hi,F									; hi:lo = hi:lo + 1
-	movff	lo,sub_a+0
-	movff	hi,sub_a+1
-	movff	divenumber,sub_b+0
-	clrf	sub_b+1
-	call	subU16									; sub_c = sub_a - sub_b
-	movff	sub_c+0,lo
-	movff	sub_c+1,hi
-
-logbook_show_divenumber3:
 	WIN_MEDIUM	logbook_divenumer_column, logbook_divenumer_row
+	movf	divenumber,W							; log_compute_divenumber needs the list number
+	call	log_compute_divenumber					; compute dive number
 	bsf		leftbind
-	output_16										; # of dive in logbook
+	output_16										; show dive number
 	bcf		leftbind
-	STRCAT_PRINT ""
-	return
+	STRCAT_PRINT ""									; finalize output
+	return											; done
 
 ; -------------------------------------------------------------------
 
 logbook_page2:										; show more info
 	rcall	log_details_header						; shows number, time/date and basic dive info
+
+	btfss	aux_flag								; dive done in a deco mode?
+	bra		logbook_page2_1							; NO
 
 	; Deco model
 	WIN_SMALL .5,.65
@@ -1637,12 +1499,12 @@ logbook_decomodel1:
 	STRCAT_PRINT "ZH-L16"
 	LOG_POINT_TO log_sat_mult
 	WIN_SMALL .5,.90
-	call	ext_flash_byte_read_plus				; read sat_mult
+	call	ext_flash_byte_read_plus				; read sat_mult or GF low
 	movff	ext_flash_rw,lo
 	output_8
 	STRCAT	"%/"
 logbook_decomodel_common:
-	call	ext_flash_byte_read_plus				; read desat_mult or GF_hi
+	call	ext_flash_byte_read_plus				; read desat_mult or GF high
 	movff	ext_flash_rw,lo
 	output_8
 	STRCAT_PRINT "%"
@@ -1651,9 +1513,9 @@ logbook_decomodel_common:
 	LOG_POINT_TO log_cns_start
 	WIN_SMALL .5,.115
 	STRCPY_TEXT tCNS2
-	call	ext_flash_byte_read_plus				; read cns low
+	call	ext_flash_byte_read_plus				; read CNS low
 	movff	ext_flash_rw,lo
-	call	ext_flash_byte_read_plus				; read cns high
+	call	ext_flash_byte_read_plus				; read CNS high
 	movff	ext_flash_rw,hi
 	bcf		hi,int_warning_flag						; clear warning   flag (fix for cases were the flags already got stored to EEPROM)
 	bcf		hi,int_attention_flag					; clear attention flag (fix for cases were the flags already got stored to EEPROM)
@@ -1668,6 +1530,8 @@ logbook_decomodel_common:
 	bcf		hi,int_attention_flag					; clear attention flag (fix for cases were the flags already got stored to EEPROM)
 	output_16
 	STRCAT_PRINT "%"
+
+logbook_page2_1:
 
 	; Salinity
 	WIN_SMALL	.5,.140
@@ -1684,14 +1548,17 @@ logbook_decomodel_common:
 	WIN_SMALL .5,.165
 	STRCPY_TEXT tAVG
 	LOG_POINT_TO log_avr_depth
-	call	ext_flash_byte_read_plus				; read avr low
+	call	ext_flash_byte_read_plus				; read average low
 	movff	ext_flash_rw,lo
-	call	ext_flash_byte_read_plus				; read avr high
+	call	ext_flash_byte_read_plus				; read average high
 	movff	ext_flash_rw,hi
 	movf	backup_divedata,W						; salinity for this dive
-	call	adjust_depth_with_salinity_log			; computes salinity setting (FROM WREG!) into lo:hi [mbar]
+	call	adjust_depth_with_salinity_log			; compute salinity setting (FROM WREG!) into lo:hi [mbar]
 	output_16dp .3
 	STRCAT_PRINT "m"
+
+	btfss	aux_flag								; dive done in a deco mode?
+	bra		logbook_page2_2							; NO
 
 	; Last deco
 	LOG_POINT_TO log_last_stop
@@ -1702,101 +1569,103 @@ logbook_decomodel_common:
 	output_8
 	STRCAT_PRINT "m"
 
+logbook_page2_2:
+
 	movlw	color_lightblue
 	call	TFT_set_color
-	WIN_FRAME_COLOR16 .63,.220,.2,.105				; Top, Bottom, Left, Right
+	WIN_FRAME_COLOR16 .63,.220,.2,.105				; top, bottom, left, right
 
 	; Firmware
-    call    TFT_standard_color
-    WIN_SMALL .110,.65
-    STRCAT    "V:"
-    LOG_POINT_TO log_firmware
-    call    ext_flash_byte_read_plus                ; read firmware major number
-    movf    ext_flash_rw,W                            ; copy to WREG
-    movwf    hi                                        ; copy from WREG to hi
-    movwf    lo                                        ; copy from WREG to lo, too
-    bsf        leftbind                                ; print left-aligned
-    output_8                                        ; print major number
-    PUTC    "."                                        ; print "."
-    call    ext_flash_byte_read_plus                ; read firmware minor number
-    movff    ext_flash_rw,lo                            ; store in lo
-    output_99x                                        ; print minor version in 2 digit format
-    STRCAT_PRINT ""                                    ; finalize output
+	call	TFT_standard_color
+	WIN_SMALL .110,.65
+	STRCAT	"V:"
+	LOG_POINT_TO log_firmware
+	call	ext_flash_byte_read_plus				; read firmware major number
+	movf	ext_flash_rw,W							; copy to WREG
+	movwf	hi										; copy from WREG to hi
+	movwf	lo										; copy from WREG to lo, too
+	bsf		leftbind								; print left-aligned
+	output_8										; print major number
+	PUTC	"."										; print "."
+	call	ext_flash_byte_read_plus				; read firmware minor number
+	movff	ext_flash_rw,lo							; store in lo
+	output_99x										; print minor version in 2 digit format
+	STRCAT_PRINT ""									; finalize output
 
-    movf    hi,W                                    ; get major into WREG
-    xorlw    .3                                        ; major == 3 ?
-    bz        logbook_battery_percent                    ; YES - show battery %
+	movf	hi,W									; get major into WREG
+	xorlw	.3										; major == 3 ?
+	bz		logbook_battery_percent					; YES - show battery %
 
-    movf    hi,W                                    ; get major into WREG (again)
-    xorlw    .2                                        ; major == 2 ?
-    bnz        logbook_battery_voltage                    ; NO  - skip battery %
-    movlw    .14                                        ; YES - check minor version
-    cpfsgt    lo                                        ;     - minor > 14 ?
-    bra        logbook_battery_voltage                    ; NO  - skip battery %
-    ;bra    logbook_battery_percent                    ;       YES - show battery %
+	movf	hi,W									; get major into WREG (again)
+	xorlw	.2										; major == 2 ?
+	bnz		logbook_battery_voltage					; NO  - skip battery %
+	movlw	.14										; YES - check minor version
+	cpfsgt	lo										;     - minor > 14 ?
+	bra		logbook_battery_voltage					;       NO  - skip battery %
+	;bra	logbook_battery_percent					;       YES - show battery %
 
-    ; Battery %
+	; Battery %
 logbook_battery_percent:
-    WIN_SMALL .110,.140                                ; show battery percent
-    LOG_POINT_TO log_batt_info                        ; address battery percent
-    call    ext_flash_byte_read_plus                ; read battery percent
-    movff    ext_flash_rw,lo                            ; copy battery percent to lo
-    output_8                                        ; print battery percent
-    STRCAT_PRINT "%"                                ; print "%" and finalize output
+	WIN_SMALL .110,.140								; show battery percent
+	LOG_POINT_TO log_batt_info						; address battery percent
+	call	ext_flash_byte_read_plus				; read  battery percent
+	movff	ext_flash_rw,lo							; copy  battery percent to lo
+	output_8										; print battery percent
+	STRCAT_PRINT "%"								; print "%" and finalize output
 
-    ; Battery Voltage
-logbook_battery_voltage: 
+	; Battery Voltage
+logbook_battery_voltage:
 	WIN_SMALL .110,.90
 	STRCAT_PRINT "Batt:"
 	WIN_SMALL .110,.115
-	LOG_POINT_TO log_battery						; battery voltage
-	call	ext_flash_byte_read_plus				; read battery low
-	movff	ext_flash_rw,lo
-	call	ext_flash_byte_read_plus				; read battery high
-	movff	ext_flash_rw,hi
-	output_16dp .2
-	STRCAT_PRINT "V"
+	LOG_POINT_TO log_battery						; address battery voltage
+	call	ext_flash_byte_read_plus				; read    battery voltage, low  byte
+	movff	ext_flash_rw,lo							; store in lo
+	call	ext_flash_byte_read_plus				; read    battery voltage, high byte
+	movff	ext_flash_rw,hi							; store in hi
+	output_16dp .2									; print battery voltage
+	STRCAT_PRINT "V"								; ...
 
-	; surface pressure in mbar
-	LOG_POINT_TO log_surface_press
-	call	ext_flash_byte_read_plus				; read surface pressure
-	movff	ext_flash_rw,lo
-	call	ext_flash_byte_read_plus				; read surface pressure
-	movff	ext_flash_rw,hi
-	WIN_SMALL .110,.165
-	lfsr	FSR2,buffer
-	bsf		leftbind
-	output_16										; air pressure before dive
-	STRCAT_TEXT tMBAR
-	clrf	WREG
+	LOG_POINT_TO log_surface_press					; address surface pressure in mbar
+	call	ext_flash_byte_read_plus				; read surface pressure, low  byte
+	movff	ext_flash_rw,lo							; store in lo
+	call	ext_flash_byte_read_plus				; read surface pressure, high byte
+	movff	ext_flash_rw,hi							; store in hi
+	WIN_SMALL .110,.165								; set output position
+	lfsr	FSR2,buffer								; set base address of output buffer
+	bsf		leftbind								; print without leading spaces
+	output_16										; print air pressure before dive
+	STRCAT_TEXT tMBAR								; ...
+	clrf	WREG									; string terminator
 	movff	WREG,buffer+7							; limit to 7 chars
-	STRCAT_PRINT ""
+	STRCAT_PRINT ""									; dump buffer to screen
 
-	movlw	color_greenish
-	call	TFT_set_color
-	WIN_FRAME_COLOR16 .63,.220,.107,.159			; Top, Bottom, Left, Right
+	movlw	color_greenish							; select color
+	call	TFT_set_color							; ...
+	WIN_FRAME_COLOR16 .63,.220,.107,.159			; draw a frame around coordinates top, bottom, left, right
 
-	rcall	logbook_preloop_tasks					; clear some flags and set to Speed_eco
+	rcall	logbook_preloop_tasks					; clear timeout and remaining button events
 display_details_loop:
-	btfsc	switch_right
-	bra		logbook_page3							; details, 2nd page
-	btfsc	switch_left
-	bra		exit_profileview						; back to list
-	rcall	log_screendump_and_onesecond			; check if we need to make a screenshot and check for new second
-	btfsc	sleepmode								; timeout?
-	bra		exit_profileview						; back to list
-	bra		display_details_loop					; wait for something to do
+	btfss	switch_right							; right button pressed?
+	bra		display_details_loop_1					; NO
+	btfsc	aux_flag								; YES - dive done in a deco mode?
+	bra		logbook_page3							;       YES - show more details, 2nd page
+	goto	display_profile2						;       NO  - show the profile view again
+display_details_loop_1:
+	btfsc	switch_left								; left button pressed?
+	bra		exit_profileview						; YES - back to list
+	call	housekeeping							; NO to both - handle screen dump request, timeout and entering dive mode
+	bra		display_details_loop					;            - loop waiting for something to do
 
-	global	logbook_preloop_tasks
+
 logbook_preloop_tasks:
 	movlw	CCP1CON_VALUE							; see hwos.inc
 	movwf	CCP1CON									; power-on backlight
-	call	TFT_standard_color
-	bcf		sleepmode								; clear some flags
-	bcf		switch_right
-	bcf		switch_left
-	clrf	timeout_counter2
-	goto	speed_normal							; and return
+	call	TFT_standard_color						; revert to standard color
+	call	reset_timeout_surfmode					; reset timeout
+	bcf		switch_left								; clear left-over left  button event
+	bcf		switch_right							; clear left-over right button event
+	return											; done
 
 
 logbook_page3:										; show even more info
@@ -1830,7 +1699,7 @@ logbook_page3:										; show even more info
 	WIN_COLOR color_greenish
 	LOG_POINT_TO log_divemode
 	call	ext_flash_byte_read_plus				; 0=OC, 1=CC, 2=Gauge, 3=Apnea into ext_flash_rw
-	decfsz	ext_flash_rw,w							; =1 (CC)? 
+	decfsz	ext_flash_rw,w							; =1 (CC)?
 	bra		logbook_page3a
 	STRCPY_TEXT_PRINT tGaslistCC
 	bra		logbook_page3b
@@ -1839,18 +1708,16 @@ logbook_page3a:
 logbook_page3b:
 	movlw	color_lightblue
 	call	TFT_set_color
-	WIN_FRAME_COLOR16 .63,.220,.2,.90+.24			; Top, Bottom, Left, Right (added .24 to the right as extra space needed for gas typ markings)
+	WIN_FRAME_COLOR16 .63,.220,.2,.90+.24			; top, bottom, left, right (added .24 to the right as extra space needed for gas typ markings)
 
-	rcall	logbook_preloop_tasks					; clear some flags and set to Speed_eco
+	rcall	logbook_preloop_tasks					; clear timeout, some flags and set to Speed_eco
 display_details2_loop:
-	btfsc	switch_right
-	goto	logbook_page4							; show more info
-	btfsc	switch_left
-	bra		exit_profileview						; back to list
-	rcall	log_screendump_and_onesecond			; check if we need to make a screen shot and check for new second
-	btfsc	sleepmode								; timeout?
-	bra		exit_profileview						; back to list
-	bra		display_details2_loop					; wait for something to do
+	btfsc	switch_right							; right button pressed?
+	goto	logbook_page4							; YES - show more info
+	btfsc	switch_left								; left button pressed?
+	bra		exit_profileview						; YES - back to list
+	call	housekeeping							; NO to both - handle screen dump request, timeout and entering dive mode
+	bra		display_details2_loop					;            - loop waiting for something to do
 
 logbook_page4:										; show even more info in CC mode
 	LOG_POINT_TO log_divemode
@@ -1878,33 +1745,28 @@ logbook_page4:										; show even more info in CC mode
 
 	movlw	color_greenish
 	call	TFT_set_color
-	WIN_FRAME_COLOR16 .63,.220,.2,.112				; Top, Bottom, Left, Right
+	WIN_FRAME_COLOR16 .63,.220,.2,.112				; top, bottom, left, right
 
-	rcall	logbook_preloop_tasks					; clear some flags and set to Speed_eco
+	rcall	logbook_preloop_tasks					; clear timeout, some flags and set to Speed_eco
 display_details3_loop:
-	btfsc	switch_right
-	goto	display_profile2						; show the profile view again
-	btfsc	switch_left
-	bra		exit_profileview						; back to list
-	rcall	log_screendump_and_onesecond			; check if we need to make a screenshot and check for new second
-	btfsc	sleepmode								; timeout?
-	bra		exit_profileview						; back to list
-	bra		display_details3_loop					; wait for something to do
+	btfsc	switch_right							; right button pressed?
+	goto	display_profile2						; YES - show the profile view again
+	btfsc	switch_left								; left button pressed?
+	bra		exit_profileview						; YES - back to list
+	call	housekeeping							; NO to both - handle screen dump request, timeout and entering dive mode
+	bra		display_details3_loop					;            - loop waiting for something to do
 
 
 log_details_header:
-	clrf	CCP1CON									; stop PWM
-	bcf		PORTC,2									; Pull PWM out to GND
 	call	TFT_boot
-;	call	TFT_ClearScreen							; clear screen
 
 ; Set ext_flash pointer to "#divenumber-oldest" dive
 ; compute read_int_eeprom .2 - divenumber
 ; read required header data for profile display
-; look in header for pointer to begin of diveprofile (Byte 2-4)
+; look in header for pointer to begin of diveprofile (byte 2-4)
 ; Set pointer (ext_flash_log_pointer:3) to this address, start drawing
 
-	decf	divenumber,F							;-1
+	decf	divenumber,F							; -1
 	read_int_eeprom .2
 	movf	EEDATA,W
 	bcf		STATUS,C
@@ -1959,8 +1821,8 @@ log_details_header:
 	movff	ext_flash_rw,hi
 
 	TSTOSS	opt_units								; 0=Meters, 1=Feets
-	bra		logbook_page2_depth_metric
-	; imperial
+	bra		logbook_page2_depth_metric				; 1 - do metric
+													; 0 - do imperial
 	call	convert_mbar_to_feet					; convert value in lo:hi from mbar to feet
 	PUTC	' '
 	bcf		leftbind
@@ -1975,26 +1837,26 @@ logbook_page2_depth_metric:
 
 logbook_page2_depth_common:
 	STRCAT	" - "
-	call	ext_flash_byte_read_plus				; divetime in minutes
+	call	ext_flash_byte_read_plus				; dive time in minutes
 	movff	ext_flash_rw,lo
 	call	ext_flash_byte_read_plus
-	movff	ext_flash_rw,hi							; divetime in minutes
+	movff	ext_flash_rw,hi							; dive time in minutes
 
 	bsf		leftbind
-	output_16										; divetime minutes
+	output_16										; dive time minutes
 	PUTC	"m"
 	LOG_POINT_TO log_divetime+.2
-	call	ext_flash_byte_read_plus				; read divetime seconds
+	call	ext_flash_byte_read_plus				; read dive time seconds
 	movff	ext_flash_rw,lo
 	bsf		leftbind
-	output_99x										; divetime seconds
+	output_99x										; dive time seconds
 	call	TFT_standard_color
 	STRCAT_PRINT "s"
 ;	; Dive mode
 ;	LOG_POINT_TO log_divemode
-;	call	ext_flash_byte_read_plus				; read divemode
+;	call	ext_flash_byte_read_plus				; read dive mode
 ;	movff	ext_flash_rw,lo
-;	call	TFT_display_decotype_surface1			; "strcat_print"s divemode (OC, CC, APNEA or GAUGE)
+;	call	TFT_decotype_logbook					; "strcat_print"s dive mode (OC, CC, APNEA or GAUGE)
 	return
 
 ; ----------------------------------------------------------------
@@ -2013,11 +1875,10 @@ log_show_sp:
 	movff	ext_flash_rw,lo
 
 	TSTOSS	opt_units								; 0=Meter, 1=Feet
-	bra		log_show_sp_metric
-	movf	lo,W
+	bra		log_show_sp_metric						; 0 - do metric
+	movf	lo,W									; 1 - do imperial
 	mullw	.100									; convert meters to mbar
-	movff	PRODL,lo
-	movff	PRODH,hi
+	MOVII	PROD,mpr
 	call	convert_mbar_to_feet					; convert value in lo:hi from mbar to feet
 	output_16_3
 	PUTC	" "
@@ -2039,7 +1900,7 @@ log_show_gas:										; show gas data
 	movff	ext_flash_rw,lo
 	call	ext_flash_byte_read_plus				; read gas He fraction
 	movff	ext_flash_rw,hi
-	call	customview_show_mix						; Put "Nxlo", "Txlo/hi", "Air" or "O2" into Postinc2
+	call	gaslist_show_mix						; put "Nxlo", "Txlo/hi", "Air" or "O2" into Postinc2
 	call	ext_flash_byte_read_plus				; read change depth
 	movff	ext_flash_rw,up
 	call	ext_flash_byte_read_plus				; read gas type - just to increment the pointer
@@ -2069,11 +1930,10 @@ log_show_gas_3:
 log_show_gas_4:
 	PUTC	" "										; put one space between gas type marking and change depth
 	TSTOSS	opt_units								; 0=Meter, 1=Feet
-	bra		log_show_gas_metric
-	movf	up,W
+	bra		log_show_gas_metric						; 0 - do metric
+	movf	up,W									; 1 - do imperial
 	mullw	.100									; convert meters to mbar
-	movff	PRODL,lo
-	movff	PRODH,hi
+	MOVII	PROD,mpr
 	call	convert_mbar_to_feet					; convert value in lo:hi from mbar to feet
 	output_16_3										; limit to 999 and display only 0-999
 	STRCAT_TEXT tFeets								; "ft"
@@ -2085,6 +1945,34 @@ log_show_gas_metric:
 log_show_gas_common:
 	STRCAT_PRINT ""
 	return
+
+
+log_compute_divenumber:
+	movwf	mpr+2									; store current dive number to mpr+2
+	call	do_logoffset_common_read				; read log offset into mpr
+	; check if offset = 0
+	tstfsz	mpr+0									; mpr+0 (low  byte) = 0 ?
+	bra		log_compute_divenumber_2				; NO - apply offset
+	tstfsz	mpr+1									; mpr+1 (high byte) = 0 ?
+	bra		log_compute_divenumber_2				; NO - apply offset
+log_compute_divenumber_1:							; YES to both - no offset
+	movff	mpr+2,mpr+0								; use plain number from dive list
+	clrf	mpr+1									; set high byte to 0
+	return											; done
+log_compute_divenumber_2:
+	; check limit (offset must be < 10000)
+	MOVLI	.9999,sub_a								; sub_a = 9999
+	MOVII	mpr,  sub_b								; sub_b = offset
+	call	cmpU16									; 9999 - offset
+	btfsc	neg_flag								; result negative, i.e. offset > 9999 ?
+	bc		log_compute_divenumber_1				; YES - ignore offset
+	INCI	mpr										; NO  - increment offset by 1
+	MOVII	mpr,sub_a								;     - sub_a = offset + 1
+	movff	mpr+2,sub_b+0							;     - sub_b = number from list (low byte)
+	clrf	sub_b+1									;     -         high byte is 0
+	call	subU16									;     - sub_c = offset + 1 - (number from list)
+	MOVII	sub_c,mpr								;     - copy result back to mpr
+	return											;     - done
 
 ; ----------------------------------------------------------------
 

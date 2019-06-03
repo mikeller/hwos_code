@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File convert.asm												## V2.98c
+;   File convert.asm                           combined next generation V3.0.1
 ;
 ;   Converts register values to string
 ;
@@ -13,7 +13,7 @@
 
 #include "hwos.inc"						; Mandatory header
 
-convert		CODE
+convert	CODE
 
 ;=============================================================================
 
@@ -22,6 +22,7 @@ output99_call:
 	clrf	ignore_digits
 	incf	ignore_digits,F
 	clrf	cvt_temp4
+	;bra	output99
 
 
 	global	output99
@@ -29,8 +30,8 @@ output99:
 	movlw	d'99'
 	cpfslt	lo
 	movwf	lo							; limit to 99
-	movff	lo,lo_temp
-	clrf	hi_temp
+	movff	lo,cvt_temp_lo
+	clrf	cvt_temp_hi
 	bcf		pre_zero_flag				; do not display leading zeros
 
 LCD_val99_2:
@@ -55,8 +56,8 @@ output99x_call:
 	movlw	d'99'
 	cpfslt	lo
 	movwf	lo							; limit to 99
-	movff	lo, lo_temp
-	clrf	hi_temp
+	movff	lo,cvt_temp_lo
+	clrf	cvt_temp_hi
 	bsf		pre_zero_flag				; display leading zeros
 	bra		LCD_val99_2
 
@@ -68,8 +69,8 @@ output8_call:
 	clrf	cvt_temp4
 
 output8:
-	movff	lo, lo_temp
-	clrf	hi_temp
+	movff	lo,cvt_temp_lo
+	clrf	cvt_temp_hi
 	bcf		pre_zero_flag				; do not display leading zeros
 	movlw	.100						; 100
 	movwf	cvt_temp2
@@ -81,27 +82,26 @@ output8:
 	global	output16_4_call
 output16_4_call:						; limit to 9999
 	bsf		show_last4
-	; 9999 = 27 0F = [39][15]
+										; 9999 = 27 0F = [39][15]
 	movlw	.40
 	cpfslt	hi							; hi < 40 ?
-	bra		output16_4_call_2			; NO - hi >= 40, do limit
-	; Yes, hi <= 39
+	bra		output16_4_call_2			; NO  - hi >= 40, do limit
+										; YES - hi <= 39
 	movlw	.39
 	cpfseq	hi							; hi = 39 ?
-	bra		output16_4_call_3			; NO - hi < 39, no limit needed
-	; Yes, hi = 39
+	bra		output16_4_call_3			; NO  - hi < 39, no limit needed
+										; YES - hi = 39
 	movlw	.15
 	cpfslt	lo							; lo < 15
-	movwf	lo							; NO - lo >= 15, set lo = 15.
-	; Yes, lo <= 14 or lo set to =15
-	bra		output16_4_call_3			; done
+	movwf	lo							; NO  - lo >= 15, set lo = 15
+										; YES - lo <= 14 or lo set to =15
+	bra		output16_4_call_3			;     - done
+
 output16_4_call_2:						; set to 9999
-	movlw	LOW  .9999
-	movwf	lo
-	movlw	HIGH .9999
-	movwf	hi
+	MOVLI	.9999,mpr
 output16_4_call_3:
 	bra		output16_call
+
 
 	global	output16_3_call
 	global	output16_call
@@ -111,7 +111,7 @@ output16_3_call:						; limit to 999
 	; Limit to 3
 	movlw	.4
 	cpfslt	hi
-	bra	output16_3_call_2
+	bra		output16_3_call_2
 	movlw	.3
 	cpfseq	hi							; = 3 ?
 	bra		output16_3_call_3			; NO - done
@@ -120,10 +120,7 @@ output16_3_call:						; limit to 999
 	movwf	lo
 	bra		output16_3_call_3			; done
 output16_3_call_2:						; set to .999
-	movlw	LOW  .999
-	movwf	lo
-	movlw	HIGH .999
-	movwf	hi
+	MOVLI	.999,mpr
 output16_3_call_3:
 output16_call:
 	clrf	ignore_digits
@@ -138,8 +135,8 @@ output16:
 	bsf		DP_done2
 	tstfsz	cvt_temp4
 	bcf		DP_done2					; decimal point not yet set
-	movff	lo, lo_temp
-	movff	hi, hi_temp
+	movff	lo,cvt_temp_lo				; copy hi:lo to cvt_temp_hi:cvt_temp_lo
+	movff	hi,cvt_temp_hi				; ...
 	bcf		pre_zero_flag				; do not display leading zeros
 	movlw	b'00010000'					; 10000s
 	movwf	cvt_temp2
@@ -235,21 +232,21 @@ DEC2ASCII:
 	clrf	cvt_temp1					; converts into ASCII code
 DEC2ASCII_2:
 	movf	cvt_temp3,W
-	subwf	hi_temp,W
+	subwf	cvt_temp_hi,W
 	btfss	STATUS,C
 	bra		DEC2ASCII_4
 	bnz		DEC2ASCII_3
 	movf	cvt_temp2,W
-	subwf	lo_temp,W
+	subwf	cvt_temp_lo,W
 	btfss	STATUS,C
 	bra		DEC2ASCII_4
 DEC2ASCII_3:
 	movf	cvt_temp3,W
-	subwf	hi_temp,F
+	subwf	cvt_temp_hi,F
 	movf	cvt_temp2,W
-	subwf	lo_temp,F
+	subwf	cvt_temp_lo,F
 	btfss	STATUS,C
-	decf	hi_temp,F
+	decf	cvt_temp_hi,F
 	incf	cvt_temp1,F
 	bsf		pre_zero_flag
 	bra		DEC2ASCII_2

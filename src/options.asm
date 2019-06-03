@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File options.asm								REFACTORED VERSION V2.99g
+;   File options.asm                          next combined generation V3.03-1
 ;
 ;   Manage all options data.
 ;
@@ -24,6 +24,7 @@
 	extern	read_eeprom
 	extern	eeprom_serial_save,eeprom_opt_backup
 	extern	option_table_begin,option_table_end
+	extern	convert_meter_to_feet
 
 options		CODE
 
@@ -79,13 +80,13 @@ option_reset_all_2:
 ; OUTPUT: none
 ; TRASH:  TBLPTR, TABLAT, WREG, FSR0, FSR1, FSR2
 ;
-	global	option_check_all				; check all options and reset options if out of min/max boundary
+	global	option_check_all				; check all option and reset option if out of min/max boundary
 option_check_all:
+	bcf		option_repaired					; no option needed repair up to now
 	movlw	LOW(option_table_begin)			; point to option table begin
 	movwf	FSR0L
 	movlw	HIGH(option_table_begin)
 	movwf	FSR0H
-
 option_check_all_1:
 	movlw	LOW(option_table_end)			; get low byte of end of table address
 	cpfseq	FSR0L							; does it equal the current pointer position?
@@ -97,15 +98,18 @@ option_check_all_1:
 option_check_all_2:
 	rcall	option_check					; check one option...
 	bra		option_check_all_1				; ... and loop
-
 option_check_all_3:
-	bsf		FLAG_diluent_setup				; setup checking diluents
+	bsf		is_diluent_menu					; setup checking diluents
 	call	gaslist_cleanup_list			; check and correct multiple or none First diluent
-	bcf		FLAG_diluent_setup				; setup checking gases
+	bcf		is_diluent_menu					; setup checking gases
 	call	gaslist_cleanup_list			; check and correct multiple or none First gas
-	call	option_cleanup_oCCRMode			; check and correct sensor mode
+ IFDEF _ccr_pscr
+	call	option_cleanup_oCCRMode			; check and correct CCR / pSCR mode
+ ENDIF
 	call	option_cleanup_GF				; check and correct GFlow <= GFhigh
 	return									; all done
+
+
 
 ;=============================================================================
 ; Read option handle
@@ -114,13 +118,13 @@ option_check_all_3:
 ; TRASH:  TBLPTR, TABLAT, WREG, FSR0, FSR1
 ;
 option_read:
-	movff	FSR0L,TBLPTRL
-	movlw	HIGH(option_table_begin)		; get 8 high bits.
-	andlw	0xF0							; keep only the 4 highest ones
-	iorwf	FSR0H,W							; cat with the known 4 lower ones
-	movwf	TBLPTRH							; we have the high byte
-	movlw	UPPER(option_table_begin)
-	movwf	TBLPTRU
+	movff	FSR0L,TBLPTRL					; set memory address of option data set, low byte
+	movlw	HIGH(option_table_begin)		; get table begin address, high byte
+	andlw	0xF0							; keep only the upper nibble
+	iorwf	FSR0H,W							; add the memory address of the option data set, high byte
+	movwf	TBLPTRH							; set the resulting memory address, high byte
+	movlw	UPPER(option_table_begin)		; get table begin address, upper byte
+	movwf	TBLPTRU							; set memory address of option data set, upper byte
 
 	; Read type, default and register from table
 	tblrd*+
@@ -143,7 +147,7 @@ option_read:
 	movff	TABLAT,FSR1L
 	tblrd*+
 	movff	TABLAT,FSR1H
-	movff	TBLPTRL,FSR0L					; advance handle, too, for reset_all
+	movff	TBLPTRL,FSR0L					; advance handle to next option data set (used for reset_all)
 	movff	TBLPTRH,FSR0H
 	return
 
@@ -159,10 +163,10 @@ option_check:
 
 	; Switch on type
 	movf	opt_type,W						; get option type
-	xorlw	2								; type == STRING ?
+	xorlw	.2								; type == STRING ?
 	bz		option_check_string				; YES
 	movf	opt_type,W						; get option type (again)
-	xorlw	1								; type == ENUM8 ?
+	xorlw	.1								; type == ENUM8 ?
 	bz		option_check_enum8				; YES - check if lower then max. value only
 											; NO to all - must be integer then
 	tstfsz	opt_min							; opt_min = 0 ?
@@ -171,17 +175,18 @@ option_check:
 
 option_check_both:
 	decf	opt_min,W						; check against minimum value
-	cpfsgt	INDF1							; bigger then opt_min - 1 ?
+	cpfsgt	INDF1							; bigger than opt_min - 1 ?
 	bra		option_check_reset				; NO - reset option
 option_check_enum8:							; check against maximum value
 	infsnz	opt_max,W						; max = 255?
 	return									; YES - ignore the max. test
 	cpfslt	INDF1							; NO  - smaller then opt_max + 1 ?
 	bra		option_check_reset				;       NO  - reset option
-	return									;       YES - in range, return
+	return									;       YES - within range, return
 
 option_check_reset:
 	movff	opt_default,INDF1				; reset option to default
+	bsf		option_repaired					; flag that an option was repaired
 	return									; done
 
 option_check_string:
@@ -270,19 +275,19 @@ option_save:
 	movf	opt_type,W						; get option type
 	xorlw	2								; option type is string ?
 	bz		option_save_string				; YES
-	movff	INDF1,EEDATA					; one byte to be saved to EEPROM
-	btfss	EEADRH,1						; EEADR:EEADRH < 512 ?
-	call	write_eeprom					; YES - write
-	return
+	movff	INDF1,EEDATA					; NO  - one byte to be saved to EEPROM
+	btfss	EEADRH,1						;     - EEADR:EEADRH < 512 ?
+	call	write_eeprom					;       YES  - write
+	return									;       (NO) - done
 option_save_string:
 	movff	POSTINC1,EEDATA					; write one byte
 	btfss	EEADRH,1						; EEADR:EEADRH < 512 ?
-	call	write_eeprom					; Yes - write
-	infsnz	EEADR,F
-	incf	EEADRH,F
-	decfsz	opt_max							; decrement string length
-	bra		option_save_string				; loop while not finished
-	return
+	call	write_eeprom					; YES  - write
+	infsnz	EEADR,F							; (NO) - increment EEPROM address
+	incf	EEADRH,F						;      - ...
+	decfsz	opt_max							;      - decrement string length, done?
+	bra		option_save_string				;        NO  - loop
+	return									;        YES
 
 ;=============================================================================
 
@@ -440,14 +445,17 @@ option_inc_enum8:							; always +1
 	clrf	WREG
 	movwf	INDF1
 option_inc_enum8_1:
+ IFDEF _ccr_pscr
 	; Now some rather crude hack into this routine to unify CCR & pSCR mode setting
 	movlw	.25								; EEPROM address of option oCCRMode
 	cpfseq	opt_eeprom						; editing oCCRMode right now?
 	bra		option_inc_enum8_2				; NO  - check next option
+ IFDEF _external_sensor
 	btfsc	analog_o2_input					; YES - does hosting OSTC have an analog interface?
 	bra		option_inc_enum8_1a				;       YES - setting 'sensor' allowed
 	btfsc	optical_input					;       does hosting OSTC have an optical interface?
 	bra		option_inc_enum8_1a				;       YES - setting 'sensor' allowed
+ ENDIF	; _external_sensor
 	movf	INDF1,W							;       NO to both - get mode (=0: fixed SP, =1: Sensor, =2: AutoSP)
 	xorlw	.1								;                  - in sensor mode?
 	bnz		option_inc_enum8_1a				;                    NO  - continue with next check
@@ -459,26 +467,39 @@ option_inc_enum8_1a:
 	bcf		INDF1,1							; YES - clear bit 1 because opt_ccr_mode may only be 0 or 1 (reverts AutoSP to calculated SP)
 option_inc_enum8_1_exit:
 	return									; done
+ ENDIF	; _ccr_pscr
 option_inc_enum8_2:
 											; (unused)
 option_inc_enum8_3:
-
- IFDEF _rx_functions
-	global	option_cleanup_oTrMode_CCR		; embedded clean-up entry-point
-	global	option_cleanup_oTrMode_no_CCR	; embedded clean-up entry-point
 	; Now some rather crude hack to correct opt_TR_mode in dependency of opt_dive_mode
 	movlw	.8								; EEPROM address of option opt_dive_mode
 	cpfseq	opt_eeprom						; editing opt_dive_mode right now?
 	bra		option_inc_enum8_4				; NO  - check next option
-	movff	opt_dive_mode,WREG				; YES - get dive mode: 0=OC, 1=CCR, 2=Gauge, 3=Apnea, 4=pSCR
-	decfsz	WREG,W							;       dive mode = 1 CCR?
-	bra		option_inc_enum8_3a				;       NO  - in any other mode
+	movf	INDF1,W							; YES - get option value: 0=OC, 1=CCR, 2=Gauge, 3=Apnea, 4=pSCR
+	xorlw	.1								;       in CCR mode?
+	bnz		option_inc_enum8_3a				;       NO  - in some other mode
+ IFNDEF _ccr_pscr
+	incf	INDF1,f							;       YES - no CCR mode compiled in, advance to gauge mode
+	bra		option_inc_enum8_3_exit			;           - done
+ ENDIF	; _ccr_pscr
+ IFDEF _rx_functions
+	global	option_cleanup_oTrMode_CCR		; embedded clean-up entry-point
 option_cleanup_oTrMode_CCR:					; entry point from cleanup during restart
-	movff	opt_TR_mode,WREG				;       YES - get TR mode
-	xorlw	.2								;           - mode = 2 (ind.double)?
-	bnz		option_inc_enum8_3_exit			;             NO  - done
-	bra		option_inc_enum8_3_reset		;             YES - revert mode to 1 (on)
+	movff	opt_TR_mode,WREG				; get TR mode
+	xorlw	.2								; mode = 2 (ind.double)?
+	bnz		option_inc_enum8_3_exit			; NO  - done
+	bra		option_inc_enum8_3_reset		; YES - revert mode to 1 (on)
+ ENDIF	; _rx_functions
 option_inc_enum8_3a:						; any mode other than CCR
+ IFNDEF _ccr_pscr
+	movf	INDF1,W							; get option value: 0=OC, 1=CCR, 2=Gauge, 3=Apnea, 4=pSCR
+	xorlw	.4								; in pSCR mode?
+	bnz		option_inc_enum8_3b				; NO  - in some other mode
+	clrf	INDF1							; YES - no pSCR mode compiled in, advance to 0 "OC"
+	bra		option_inc_enum8_3_exit			;     - done
+ ENDIF	; _ccr_pscr
+option_inc_enum8_3b:
+	global	option_cleanup_oTrMode_no_CCR	; embedded clean-up entry-point
 option_cleanup_oTrMode_no_CCR:				; entry point from cleanup during restart
 	movff	opt_TR_mode,WREG				; get TR mode
 	xorlw	.3								; mode = 3 (CCR Dil+O2)?
@@ -489,6 +510,7 @@ option_inc_enum8_3_reset:					; YES - revert to mode 1 (on)
 option_inc_enum8_3_exit:
 	return									; done
 option_inc_enum8_4:
+ IFDEF _rx_functions
 	; Now some rather crude hack to advance opt_TR_mode in dependency of opt_dive_mode
 	movlw	.222							; EEPROM address of option opt_TR_mode
 	cpfseq	opt_eeprom						; editing opt_TR_mode right now?
@@ -508,8 +530,7 @@ option_inc_enum8_4a:						; any mode other than CCR
 	clrf	INDF1							; YES - advance option value to 0 "off"
 option_inc_enum8_4_exit:
 	return									; done
- ENDIF
-
+ ENDIF	; _rx_functions
 option_inc_enum8_5:
 	return
 
@@ -518,58 +539,66 @@ option_inc_string:							; no editing available
 	return
 
 
+ IFDEF _ccr_pscr
 	global	option_cleanup_oCCRMode
 	global	option_cleanup_oCCRMode_pSCR
 	global	option_cleanup_oCCRMode_CCR
 option_cleanup_oCCRMode:					; in pSCR mode, revert AutoSP (2) to calculated SP (0), in pSCR and CCR revert Sensor to fixed SP if no sensor interface available
-	banksel	opt_dive_mode					; select options bank
-	movf	opt_dive_mode,W					; get dive mode: 0=OC, 1=CCR, 2=Gauge, 3=Apnea, 4=pSCR
+	movff	opt_dive_mode,WREG				; get dive mode into WREG (0=OC, 1=CCR, 2=Gauge, 3=Apnea, 4=pSCR)
 	xorlw	.4								; in pSCR mode?
 	bnz		option_cleanup_oCCRMode_CCR		; NO  - check if sensor is available on hosting OSTC
 option_cleanup_oCCRMode_pSCR:				; jump-in from start.asm if known to be in pSCR mode
-	banksel	opt_ccr_mode					; select options bank
-	bcf		opt_ccr_mode,1					; YES - clear bit 1 because opt_ccr_mode may only be 0 or 1 (reverts AutoSP to calculated SP)
+	banksel	opt_ccr_mode					; YES - select options bank
+	bcf		opt_ccr_mode,1					;     - clear bit 1 because opt_ccr_mode may only be 0 or 1 (reverts AutoSP to calculated SP, keeps sensor)
+	banksel	common							;     - back to bank common
+	bsf		option_repaired					;     - flag that an option was repaired
 option_cleanup_oCCRMode_CCR:				; continue from above & jump-in from start.asm if known to be in CCR mode
-	banksel	common							; flags are located in bank common
-	btfsc	analog_o2_input					; does hosting OSTC have an analog interface?
-	bra		option_cleanup_oCCRMode_exit	; YES - setting 'sensor' allowed
+ IFDEF _external_sensor
+	btfsc	analog_o2_input					; analog interface available?
+	return									; YES - setting 'sensor' allowed
 	btfsc	optical_input					; does hosting OSTC have an optical interface?
-	bra		option_cleanup_oCCRMode_exit	; YES - setting 'sensor' allowed
-	banksel	opt_ccr_mode					; NO to both - select options bank
-	movf	opt_ccr_mode,W					;            - get CCR mode
-	xorlw	.1								;            - CCR mode = sensor?
-	bnz		option_cleanup_oCCRMode_exit	;              NO  - ok
-	clrf	opt_ccr_mode					;            - YES - set CCR mode to fixed SP (0)
-option_cleanup_oCCRMode_exit:
-	banksel	common							; back to bank common
-	return									; done
+	return									; YES - setting 'sensor' allowed
+ ENDIF
+	movff	opt_ccr_mode,WREG				; NO to both - get CCR mode
+	xorlw	.1								;            - coding for sensor
+	tstfsz	WREG							;            - CCR mode = sensor?
+	return									;              NO  - setting allowed
+	banksel	opt_ccr_mode					;              YES - setting not allowed, select options bank
+	clrf	opt_ccr_mode					;                  - revert setting to 0 (fixed or calculated SP)
+	banksel	common							;                  - back to bank common
+	bsf		option_repaired					;                  - flag that an option was repaired
+	return									;                  - done
+ ENDIF	; _ccr_pscr
+
 
 option_cleanup_GF:
 	; cleanup normal GF
 	movff	opt_GF_high,WREG				; copy normal GF high to WREG
-	movff	opt_GF_low,lo					; copy normal GF low  to lo
-	cpfsgt	lo								; GF low > GF high ?
+	movff	opt_GF_low,mpr					; copy normal GF low  to mpr
+	cpfsgt	mpr								; GF low > GF high ?
 	bra		option_cleanup_GF_2				; NO  - option ok, check next option
-	movwf	lo								; YES - copy GF high to lo
+	movwf	mpr								; YES - copy GF high to mpr
 	movlw	.100							;     - load GF low limit of 100% into WREG
-	cpfsgt	lo								;     - lo > 100 ?
+	cpfsgt	mpr								;     - mpr > 100 ?
 	bra		option_cleanup_GF_1				;       NO  - correct GF low to GF high
-	movwf	lo								;       YES - correct GF low to 100%
+	movwf	mpr								;       YES - correct GF low to 100%
 option_cleanup_GF_1:
-	movff	lo,opt_GF_low					; store corrected GF low
+	movff	mpr,opt_GF_low					; store corrected GF low
+	bsf		option_repaired					; flag that an option was repaired
 option_cleanup_GF_2:
 	; cleanup alternative GF
 	movff	opt_aGF_high,WREG				; copy alternative GF high to WREG
-	movff	opt_aGF_low,lo					; copy alternative GF low  to lo
-	cpfsgt	lo								; GF low > GF high ?
+	movff	opt_aGF_low,mpr					; copy alternative GF low  to mpr
+	cpfsgt	mpr								; GF low > GF high ?
 	bra		option_cleanup_GF_4				; NO  - option ok, check next option
-	movwf	lo								; YES - copy GF high to lo
+	movwf	mpr								; YES - copy GF high to mpr
 	movlw	.100							;     - load GF low limit of 100% into WREG
-	cpfsgt	lo								;     - lo > 100 ?
+	cpfsgt	mpr								;     - mpr > 100 ?
 	bra		option_cleanup_GF_3				;       NO  - correct GF low to GF high
-	movwf	lo								;       YES - correct GF low to 100%
+	movwf	mpr								;       YES - correct GF low to 100%
 option_cleanup_GF_3:
-	movff	lo,opt_aGF_low					; store corrected GF low
+	movff	mpr,opt_aGF_low					; store corrected GF low
+	bsf		option_repaired					; flag that an option was repaired
 option_cleanup_GF_4:
 	return									; done
 
@@ -584,18 +613,31 @@ option_draw:
 
 	; Switch on type
 	movf	opt_type,W
-	bz		option_draw_uint8
+	bz		option_draw_uint8				; type0 = INT8
 	dcfsnz	WREG
-	bra		option_draw_enum8
+	bra		option_draw_enum8				; type1 = ENUM
 	dcfsnz	WREG
-	bra		option_draw_string
+	bra		option_draw_string				; type2 = string
+	dcfsnz	WREG
+	bra		option_draw_uint8_depth			; type3 = INT8 with automatic display in meters or feet
 	return									; unknown, return
+
 option_draw_string:
 	movff	POSTINC1,POSTINC2
 	decfsz	opt_max
 	bra		option_draw_string
 	return
 
+option_draw_uint8_depth:
+	TSTOSS	opt_units						; using metric units (0=m, 1=ft)?
+	bra		option_draw_uint8				; YES - handle with standard output
+	movff	INDF1,lo						; NO  - imperial, get value to lo
+	call	convert_meter_to_feet			;     - convert value in lo from meter to feet
+	bsf		leftbind						;     - print with left alignment
+	output_16_3								;     - display only last three digits from a 16 bit value (0-999)
+	bcf		leftbind						;     - back to normal alignment
+	STRCAT_TEXT	tFeets						;     - print unit
+	bra		option_draw_uint8_common		;     - continue with common part
 
 option_draw_uint8:
 	movff	INDF1,lo						; draw value
@@ -606,6 +648,7 @@ option_draw_uint8:
 	movf	opt_unit+0,W					; is there a unit to append?
 	iorwf	opt_unit+1,W
 	rcall	option_draw_unit				; YES
+option_draw_uint8_common:
 	movf	opt_default,W					; get default value
 	cpfseq	lo								; compare with current value, equal?
 	bra		option_draw_uint8_2				; NO  - not default, add *
@@ -613,6 +656,7 @@ option_draw_uint8:
 option_draw_uint8_2:
 	PUTC	"*"								; print "*"
 	return									; done
+
 option_draw_unit:
 	movff	opt_unit+0,FSR1L
 	movff	opt_unit+1,FSR1H
@@ -632,5 +676,6 @@ option_draw_enum8:
 	movwf	FSR1H							; ...into FSR1
 	goto	strcat_text
 
+;-----------------------------------------------------------------------------
 
 	END

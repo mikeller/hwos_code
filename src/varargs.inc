@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;    File varargs.inc
+;    File varargs.inc                          combined next generation V3.0.1
 ;
 ;    Utilities to pass multiple arguments in compact code stream.
 ;
@@ -60,4 +60,3 @@ VARARGS_END macro
 	addwfc	TOSH,F
 	addwfc	TOSU,F
 	endm
-

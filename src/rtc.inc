@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File rtc.inc
+;   File rtc.inc                               combined next generation V3.0.1
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.

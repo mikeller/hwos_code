@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File start.asm									REFACTORED VERSION	V2.99g
+;   File start.asm                            combined next generation V3.03.2
 ;
 ;   Startup subroutines
 ;
@@ -11,7 +11,6 @@
 
 #include "hwos.inc"							; mandatory header
 #include "ms5541.inc"
-#include "isr.inc"
 #include "shared_definitions.h"				; mailbox from/to p2_deco.c
 #include "eeprom_rs232.inc"
 #include "math.inc"
@@ -20,14 +19,17 @@
 #include "wait.inc"
 #include "rtc.inc"
 #include "external_flash.inc"
-#include "convert.inc"
 #include "strings.inc"
 #include "tft_outputs.inc"
 #include "adc_lightsensor.inc"
 #include "i2c.inc"
+#include "divemode.inc"
+#include "rx_ops.inc"
+
 
 	extern	init_ostc
 	extern	option_restore_all
+	extern	backup_flash_page
 	extern	restore_decodata_from_eeprom
 	extern	oPressureAdjust
 	extern	option_reset
@@ -35,50 +37,63 @@
 	extern	option_save_all
 	extern	option_check_all
 	extern	do_new_battery_select
-	extern	use_old_batteries
+	extern	get_battery_data
 	extern	use_old_prior_209
 	extern	get_first_gas_to_WREG
-	extern	get_first_dil_to_WREG
+
+ IFDEF _ccr_pscr
 	extern	option_cleanup_oCCRMode_pSCR
 	extern	option_cleanup_oCCRMode_CCR
+	extern	get_first_dil_to_WREG
+ ENDIF
 
  IFDEF _rx_functions
 	extern	option_cleanup_oTrMode_CCR
 	extern	option_cleanup_oTrMode_no_CCR
+	extern	rx_firmware_new_major
+	extern	rx_firmware_new_minor
  ENDIF
+
+;-----------------------------------------------------------------------------
 
 
 ;=============================================================================
 ; Reset Vector: entry point on device wake-up and hard reset
 ;
-reset_v code 0x00000
+reset_v		CODE 0x00000
+	goto	0x1FF00							; jump to bootloader
 
-;	goto	start
-	goto	0x1FF00							; bootloader
-
-	ORG		0x00004							; needed for second-level bootloader
+start_v		CODE 0x00004					; jump to application (cold-)start
 	goto	start
 
 ;=============================================================================
 
-boot		CODE
+boot	CODE
 
 ;=============================================================================
-
+; Entry point after cold start
+;
 	global	start
 start:
-	lfsr	FSR0,0x000						; clear ram-banks 0-14
-clear_rambank:
-	clrf	POSTINC0
-	movlw	0x0F
-	cpfseq	FSR0H							; bank 14 done?
-	bra		clear_rambank					; NO - loop
+	; clear RAM banks 0-14
+	lfsr	FSR0,0x000						; load start address into FSR0
+	movlw	0x0F							; load end   address into WREG (actually its high byte)
+start_clear_rambank:
+	clrf	POSTINC0						; clear memory location and increment FSR0
+	cpfseq	FSR0H							; has FSR0 reached begin of bank 15, i.e. banks 0-14 done?
+	bra		start_clear_rambank				; NO - loop
 
-	call	init_ostc						; initialize hardware (ports, timers, etc.)
+	; initialize hardware (ports, timers, interrupts, etc.)
+	call	init_ostc						; also selects bank common and sets CPU to normal speed
 
-	; get button type from Bootloader-Info
-	movlw	.16
-	movff	WREG,analog_counter				; initialize averaging
+	; flag that later restart origins from a cold start
+	bsf		cold_start
+
+	; initialize averaging for analog buttons
+	movlw	.16								; set averaging span
+	movff	WREG,analog_counter				; write to counter
+
+	; get button type from bootloader info
 	bsf		analog_switches
 	movlw	0x7C
 	movwf	TBLPTRL
@@ -86,21 +101,21 @@ clear_rambank:
 	movwf	TBLPTRH
 	movlw	0x01
 	movwf	TBLPTRU
-	TBLRD*+									; reads 0x07 for analog buttons
-	movlw	0x07
-	cpfseq	TABLAT
-	bcf		analog_switches
+	TBLRD*+									; read configuration byte
+	movlw	0x07							; coding for analog buttons
+	cpfseq	TABLAT							; equal?
+	bcf		analog_switches					; NO - no analog buttons
 
-	; get screen type (2) from Bootloader-Info
-	bsf	screen_type2
+	; get screen type (2) from bootloader info
+	bsf		screen_type2
 	movlw	0x80
-	movwf	TBLPTRL							; only adjust low byte, high and upper are still 0x01F7...
-	TBLRD*+									; reads 0x83 if OSTC has screen type 2
-	movlw	0x83
-	cpfseq	TABLAT
-	bcf		screen_type2
+	movwf	TBLPTRL							; only low byte adjustment needed, high and upper are still at 0x01F7xx
+	TBLRD*+									; read configuration byte
+	movlw	0x83							; coding for screen type 2
+	cpfseq	TABLAT							; equal?
+	bcf		screen_type2					; NO - not screen type 2
 
-	; read button polarity
+	; get button polarity from configuration data (EEPROM)
 	movlw	LOW  .897
 	movwf	EEADR
 	movlw	HIGH .897
@@ -109,257 +124,223 @@ clear_rambank:
 	clrf	EEADRH							; reset EEADRH
 	movff	EEDATA,button_polarity			; 0xFF (both normal), 0x00 (both inverted), 0x01 (left inverted only), 0x02 (right inverted only)
 
-	; air pressure compensation after reset
+	; initialize pressure sensor calibration
 	call	get_calibration_data			; get calibration data from pressure sensor
-	banksel	common							; get_calibration_data uses isr_backup
-
 	call	TFT_DisplayOff					; turn off display
-	bsf		LEDr							; turn on  red LED
-	bcf		pressure_refresh
-	; first pass will not have valid temperature
-	btfss	pressure_refresh				; air pressure compensation
-	bra		$-2
-	; second pass
-	bcf		pressure_refresh
-	btfss	pressure_refresh				; air pressure compensation
-	bra		$-2
-	bcf		LEDr
 
-	clrf	rel_pressure+0
-	clrf	rel_pressure+1
-	clrf	surface_interval+0
-	clrf	surface_interval+1
+	; wait for calibration data to take effect
+	bsf		LEDr							; turn on red LED
 
-	SAFE_2BYTE_COPY amb_pressure, last_surfpressure
+	; first pass, will not have valid temperature yet
+	bcf		trigger_pres_update				; make sure ISR pressure update confirmation is not older than from now on
+	btfss	trigger_pres_update				; has the ISR confirmed a pressure update?
+	bra		$-2								; NO  - not yet, loop waiting for the ISR to kick in
 
-	movlw	LOW  max_surfpressure
-	movff	WREG,sub_a+0					; max. "allowed" air pressure in mbar
-	movlw	HIGH max_surfpressure
-	movff	WREG,sub_a+1					; max. "allowed" air pressure in mbar
-	movff	last_surfpressure+0,sub_b+0
-	movff	last_surfpressure+1,sub_b+1
-	call	subU16							; sub_c = sub_a - sub_b
-	btfss	neg_flag						; is 1080 mbar < amb_pressure ?
-	bra		start_copy_pressure				; NO - current air pressure is lower then "allowed" air pressure, ok
+	; second pass - complete sensor initialization
+	bcf		trigger_pres_update				; make sure ISR pressure update confirmation is not older than from now on
+	btfss	trigger_pres_update				; has the ISR confirmed a pressure update?
+	bra		$-2								; NO  - not yet, loop waiting for the ISR to kick in
 
-	; not ok - overwrite with max. "allowed" air pressure
-	movlw	LOW  max_surfpressure
-	movff	WREG,last_surfpressure+0		; max. "allowed" air pressure in mbar
-	movlw	HIGH max_surfpressure
-	movff	WREG,last_surfpressure+1		; max. "allowed" air pressure in mbar
+	; sensor calibration completed, first valid pressure value is available
+	bcf		LEDr							; turn off red LED again
 
-start_copy_pressure:
-	movff	last_surfpressure+0,last_surfpressure_15min+0
-	movff	last_surfpressure+1,last_surfpressure_15min+1
-	movff	last_surfpressure+0,last_surfpressure_30min+0
-	movff	last_surfpressure+1,last_surfpressure_30min+1	; resets all air pressure registers
+	; load surface pressure into ISR
+	; initially needs to be done twice in order to shift the current absolute pressure through the
+	; 15 minutes sampling buffer into the reference buffer from where it is loaded by the ISR
+	rcall	sample_surface_pressure			; 1st pass
+	rcall	sample_surface_pressure			; 2nd pass
+	btfsc	update_surface_pressure			; has the ISR confirmed loading of the surface pressure?
+	bra		$-2								; NO - not yet, loop until ISR has confirmed loading
 
-	; initialize GF high (needed by deco engine for color-coding the GF value)
-	movff	opt_GF_high,char_I_GF_High_percentage
-
-	SAFE_2BYTE_COPY amb_pressure,int_I_pres_respiration		; breathing at surface
-	movff	int_I_pres_respiration+0,int_I_pres_surface+0	; surface pressure
-	movff	int_I_pres_respiration+1,int_I_pres_surface+1
-
-	call	deco_clear_tissue				; set all tissues to Pamb * N2_ratio (code located in p2_deco.c)
-	banksel	common							; back to bank 1, needed after every return from C code
-
-	call	rtc_init						; init clock
-
-	movlw	HIGH .512						; =2
-	movwf	EEADRH
-	read_int_eeprom	.0
-	clrf	EEADRH
-	movlw	0xAA
-	cpfseq	EEDATA							; =0xAA
-	bra		no_deco_restore					; NO
-	call	restore_decodata_from_eeprom	; reload deco data and date/time from eeprom
-no_deco_restore:
-	call	deco_calc_dive_interval_1min	; calculate deco in surface mode
-	call	deco_calc_desaturation_time		; calculate desaturation and no-fly time
+	; reset all tissue pressures to surface pressure equilibrium state by default
+	call	deco_clear_tissue				; (C-code)
 	banksel	common
 
-	bcf		menubit							; clear menu flag
+	; restore tissue pressures from EEPROM (if available)
+	movlw	HIGH .512						; =2
+	movwf	EEADRH							; set EEPROM address, high byte
+	read_int_eeprom	.0
+	clrf	EEADRH
+	movlw	0xAA							; coding for tissue pressures available
+	cpfseq	EEDATA							; tissue pressures available?
+	bra		start_1							; NO  - no tissue pressures available
+	call	restore_decodata_from_eeprom	; YES - reload tissue pressures from EEPROM
 
-	; check for power-on reset here
+start_1:
+	bsf		reset_surface_interval			; request ISR to reset the surface interval timer
 
-	; *****************************************************************************
-	; "do_new_battery_menu" and "use_old_batteries" 'goto' back to "power_on_return"
-	; *****************************************************************************
+;	call	rtc_init						; initialize the real time clock (will reset to firmware creation date)
 
-	; Try to migrate the old battery status from firmware 2.09 or earlier..
+	; check for power-on reset
 	btfsc	RCON,POR						; was this a power-on reset?
-	call	use_old_prior_209				; NO
+	call	use_old_prior_209				; NO - migrate the last battery status from firmware 2.09 or earlier
 
-	bcf		use_old_batt_flag
+	bcf		use_old_batt_flag				; default to no reload of last battery data
 	btfsc	RCON,POR						; was this a power-on reset?
-	bsf		use_old_batt_flag				; NO
- 
+	bsf		use_old_batt_flag				; NO - reload last battery data
+
 	call	lt2942_get_status				; check for gauge IC
 	btfss	battery_gauge_available			; cR or 2 hardware?
-	bra		check_firmware_new				; NO  - skip next
-	movlw	.30								; YES - reset button sensitivity
-	movff	WREG,opt_cR_button_right
-	movff	WREG,opt_cR_button_left			; reset on power-on reset
-	call	piezo_config					; configure buttons
-	call	piezo_config					; configure buttons (2 times)
+	bra		start_check_new_firmware		; NO  - skip next
+	movlw	.30								; YES - load default button sensitivity
+	movff	WREG,opt_cR_button_right		;     - set default for left  button
+	movff	WREG,opt_cR_button_left			;     - set default for right button
+	call	piezo_config					;     - configure buttons, 1st pass
+	call	piezo_config					;     - configure buttons, 2nd pass
 
-check_firmware_new:
-	call	TFT_boot						; initialize TFT (includes clear screen)
-	clrf	CCPR1L							; backlight off
+start_check_new_firmware:
+	call	TFT_boot						; initialize TFT (includes clear screen & backlight switch-off)
 
+	; show heinrichsweikamp logo
 	WIN_TOP  .40
 	WIN_LEFT .10
-	TFT_WRITE_PROM_IMAGE_BY_ADDR hw_logo_block ; show heinrichsweikamp logo
+	TFT_WRITE_PROM_IMAGE_BY_ADDR hw_logo_block
 
-	call	TFT_standard_color
-
-	WIN_SMALL .20,.100
-	STRCPY_PRINT "Update successful!"		; hard coded since language switch does not work here
-
-	WIN_SMALL .20,.140
-	STRCPY	"New Firmware: "
-	call	TFT_cat_firmware				; show firmware version x.y and color-code if outdated
-	STRCAT_PRINT ""							; finalize output
-	bcf		win_invert						; reset inverted output if firmware is outdated
-	call	TFT_standard_color				; reset color           if firmware is outdated
-
-	WIN_SMALL .60,.180
-	call	TFT_cat_beta_release			; if it is a beta version, show "BETA" + issue, else "Release"
-	STRCAT_PRINT ""							; finalize output
-	call	TFT_standard_color				; reset color
-
-	call	TFT_Display_FadeIn				; display resulting surface screen
-
-	; check if a new firmware was loaded, if yes reset Custom Function oPressureAdjust
-	movlw	d'1'
-	movwf	EEADR							; =1
-	movwf	EEADRH							; =1
-	call	read_eeprom						; read current version x
-	movff	EEDATA,lo
-	incf	EEADR,F							; set to 0x102
-	call	read_eeprom						; read current version y
-	movff	EEDATA,hi
+	; check if a new firmware was loaded, if yes reset option oPressureAdjust
+	movlw	d'1'							; set EEPROM address to 0x101
+	movwf	EEADR							; = 0x001
+	movwf	EEADRH							; = 0x101
+	call	read_eeprom						; read current version, major
+	movff	EEDATA,lo						; store major in lo
+	incf	EEADR,F							; set EEPROM address to 0x102
+	call	read_eeprom						; read current version, minor
+	movff	EEDATA,hi						; store minor in hi
 	clrf	EEADRH							; reset EEADRH
 
-	movlw	softwareversion_x
-	cpfseq	lo								; compare version x
-	bra		check_firmware_new4				; is not equal -> reset CF and store new version in EEPROM
+	movlw	softwareversion_x				; get current major version
+	cpfseq	lo								; compare with stored version, equal?
+	bra		start_check_new_firmware_new	; NO - reset some options and store new version in EEPROM
 
-	movlw	softwareversion_y
-	cpfseq	hi								; compare version y
-	bra		check_firmware_new4				; is not equal -> reset CF and store new version in EEPROM
-	bra		check_firmware_new5				; x and y are equal -> do not reset CF
+	movlw	softwareversion_y				; get current minor version
+	cpfseq	hi								; compare with stored version, equal?
+	bra		start_check_new_firmware_new	; NO  - reset some options and store new version in EEPROM
+	bra		start_check_new_firmware_old	; YES - both equal, do not reset options
 
-check_firmware_new4:
+start_check_new_firmware_new:
+	; new firmware version detected
+	call	show_fw_mesg_update				; show firmware update message
+
 	; place "after-update reset" here...
-	lfsr	FSR0,oPressureAdjust
+	lfsr	FSR0,oPressureAdjust			; memory address of option data
 	call	option_reset					; reset oPressureAdjust to factory default
-	lfsr	FSR0,oPressureAdjust
-	call	option_save						; save new value of oPressureAdjust in EEPROM
+	lfsr	FSR0,oPressureAdjust			; memory address of option data
+	call	option_save						; save reseted value of oPressureAdjust in EEPROM
 
-check_firmware_new5:
-	rcall	backup_flash_page				; backup the first 128 bytes from flash to EEPROM
-
-	movlw	d'1'							; store current version in EEPROM
-	movwf	EEADR							; =1
-	movwf	EEADRH							; =1
-	movlw	softwareversion_x
-	movwf	EEDATA
-	call	write_eeprom					; write version, major number
-	incf	EEADR,F							; set to 0x102
-	movlw	softwareversion_y
-	movwf	EEDATA
-	call	write_eeprom					; write version, minor number
+	; store current version in EEPROM
+	movlw	d'1'							; set EEPROM address to 0x101
+	movwf	EEADR							; = 0x001
+	movwf	EEADRH							; = 0x101
+	movlw	softwareversion_x				; get version, major number
+	movwf	EEDATA							; prepare write
+	call	write_eeprom					; execute write
+	incf	EEADR,F							; set EEPROM address to 0x102
+	movlw	softwareversion_y				; get version, minor number
+	movwf	EEDATA							; prepare write
+	call	write_eeprom					; execute write
 	clrf	EEADRH							; reset EEADRH
+	bra		start_check_new_firmware_common	;
 
-	; wait 10 seconds
-	movlw	.10								; load loop counter
-check_firmware_new6:
-	call	wait_1s							; wait (about) 1 second
-	decfsz	WREG,W							; YES - decrement loop counter, did it became zero?
-	bra		check_firmware_new6				;       NO  - loop
-	;bra	restart							;       YES - proceed with restart
+start_check_new_firmware_old:
+	call	show_fw_mesg_kept				; show firmware is kept message
+
+start_check_new_firmware_common:
+	call	TFT_Display_FadeIn				; display resulting screen
+	call	backup_flash_page				; back-up the first 128 bytes from program flash memory to EEPROM
+
+	; pause 5 seconds
+	movlw	.5								; load loop counter
+start_check_new_firmware_wait:
+	call	wait_1s							; wait <= 1 second
+	decfsz	WREG,W							; decrement loop counter, did it became zero?
+	bra		start_check_new_firmware_wait	; NO  - loop
+	;bra	restart							; YES - proceed with restart
 
 
+;=============================================================================
+; Entry point after warm start
+;
+; called on leaving sleep mode, surface menu, communication mode, and
+; when a start of a dive is detected in all modes except surface mode.
+;
 	global	restart
 restart:
-	clrf	STKPTR							; never return from here
+	banksel	common							; for safety purpose only
+	clrf	STKPTR							; clear return addresses stack
 	clrf	CCP1CON							; stop PWM
 	bcf		PORTC,2							; pull PWM out to GND
 
-	btfsc	menubit							; return from Menu/COMM mode or timeout?
+	call	request_speed_normal			; request CPU speed change to normal speed (for safety only)
+
+	; manage the option settings
+	btfsc	surfmode_menu					; was restart entered by return from surface menu or comm mode?
 	call	option_save_all					; YES - save all settings into EEPROM
 
-	call	option_restore_all				; restore everything from EEPROM into RAM
-	call	option_check_all				; check all options (and reset if not within their min/max boundaries)
-	call	option_save_all					; save all settings into EEPROM after they have been checked
+	btfss	surfmode_menu					; was restart entered by return from surface menu or comm mode?
+	call	option_restore_all				; NO  - load all settings from EEPROM
 
-	clrf	flag1							; clear all flags
-	clrf	flag2
-	clrf	flag3
-	clrf	flag4
-	clrf	flag5
-	clrf	flag6
-	clrf	flag7
-	clrf	flag8
-	clrf	flag9
-	clrf	flag10 ; Clears flag "enable_screen_dumps" - making screen dumps impossible... TODO
-	; do not clear flag11 (sensor calibration and charger status)
-	clrf	flag12
-	; do not clear flag13 (important hardware flags)
-	clrf	flag14
-	clrf	flag15
-	clrf	flag16
-	clrf	flag17
-	; do not clear flag18 (important hardware flags)
-	
-	clrf	cvt_flags
+	call	option_check_all				; check all options and repair them if not within their min/max boundaries
 
-	clrf	tft_update_flags+0
-	clrf	tft_update_flags+1
-	clrf	tft_update_flags+2
+	btfsc	option_repaired					; errors found & repaired during options check?
+	call	option_save_all					; YES - save corrected settings into EEPROM
 
-	clrf	hardware_flag1					; hardware descriptor 1
-	;		hardware_flag2					; hardware descriptor 2 - do not clear here!
+	; clear flag groups
+	clrf	HW_descriptor					; hardware - OSTC model descriptor
+	clrf	HW_flags_state					; hardware - status
+	clrf	DM_flags_sensor					; hardware - O2 sensors
 
-	bsf		tft_is_dimming					; TFT is dimming up (soon), ignore ambient sensor!
+	clrf	OS_flags_ISR1					; operating system - ISR control 1
+	clrf	OS_flags_ISR2					; operating system - ISR control 2
 
-	; configure hardware descriptor 1
+	clrf	eventbase						; event triggers generated by ISR
+
+	clrf	DM_flags_deco					; dive deco modes
+
+	clrf	MS_flags_control				; menu system - control
+	clrf	MS_flags_imprint				; menu system - data imprinting
+
+	clrf	CVT_flags1						; convert and display functions
+	clrf	CVT_flags2						; convert and display functions
+
+	; TFT will be dimming soon, ignore ambient sensor
+	bsf		tft_is_dimming
+
+	; configure the OSTC model descriptor (stored in HW_descriptor)
 	bcf		tft_power						; inverted, here needed for I2C_probe_OSTC_rx, to wake-up RX circuity
-	bsf		ambient_sensor					; set flag
-	bsf		optical_input					; set flag
+	bsf		ambient_sensor					; set ambient light sensor as available by default
+	bsf		optical_input					; set optical input        as available by default
 
 	call	lt2942_get_status				; check for gauge IC
-	btfss	battery_gauge_available			; cR/2 hardware?
+	btfss	battery_gauge_available			; OSTC 2, cR or TR?
 	bra		restart2						; NO
-	call	lt2942_init						; YES - initialize battery gauge IC
-	bcf		optical_input					; clear flag
 
-	banksel	0xF16
+	; OSTC 2, cR or TR
+	call	lt2942_init						; initialize battery gauge IC
+	bcf		optical_input					; OSTC 2, cR and TR do not have an optical input
+
+	banksel	ANCON0							; ANCON0 is outside access RAM
 	bcf		ANCON0,7						; AN7 digital input
-	banksel	common
+	banksel	common							; back to bank common
 	bcf		lightsen_power					; power-down ambient light sensor
-	bcf		ambient_sensor					; clear flag
+	bcf		ambient_sensor					; no ambient light sensor by default
 	nop
-	btfss	PORTF,2							; light sensor available?
+	btfss	PORTF,2							; ambient light sensor available?
 	bsf		ambient_sensor					; YES
-	banksel	0xF16
+	banksel	ANCON0							; ANCON0 is outside access RAM
 	bsf		ANCON0,7						; AN7 analog again
-	banksel	common
+	banksel	common							; back to bank common
 	bsf		lightsen_power					; power-up ambient light sensor again
 
 restart2:
-	btfsc	vusb_in
-	bra		restart3						; USB (and powered on)
-	bcf		PORTE,0							; start comms
-	WAITMS	d'5'
-	btfss	vusb_in
-	bra		restart3						; USB (and powered off)
-	bsf		ble_available					; BLE available
+	btfsc	vusb_in							; USB power detected?
+	bra		restart3						; YES
+	bcf		PORTE,0							; start comm
+	WAITMS	d'5'							; wait 5 ms
+	btfss	vusb_in							; USB power detected?
+	bra		restart3						; NO
+	bsf		ble_available					; YES - BLE available
 
 restart3:
-	bsf		PORTE,0							; stop comms
+	bsf		PORTE,0							; stop comm
 	btfsc	ble_available					; BLE available?
 	bra		restart4						; YES - can't be a cR
 	btfss	battery_gauge_available			; rechargeable?
@@ -367,193 +348,271 @@ restart3:
 	bsf		analog_o2_input					; set flag for analog
 
 restart4:
+	bsf		lv_core							; default to low voltage core
+	movlw	0x80							; point to 0x1F780
+	movwf	TBLPTRL
+	movlw	0xF7
+	movwf	TBLPTRH
+	movlw	0x01
+	movwf	TBLPTRU
+	TBLRD*+									; read from 0x1F780
+	movlw	0x83							; coding for low voltage core, part 1
+	cpfseq	TABLAT							; equal?
+	bra		restart4a						; NO - no low voltage core then
+	movlw	0x81							; point to  0x1F781
+	movwf	TBLPTRL
+	TBLRD*+									; read from 0x1F781
+	movlw	0x94 							; coding for low voltage core, part 2
+	cpfseq	TABLAT							; equal?
+restart4a:
+	bcf		lv_core							; NO - no low voltage core then
+
+
  IFDEF _rx_functions
-	WAITMS	d'200'
-	call	I2C_probe_OSTC_rx				; set ostc_rx_present flag if this is an OSTC TR model
 
-	; The hardware descriptor is now:
-	; 0x11: 2 with BLE
-	; 0x12; Sport
-	; 0x13: +/2 with BLE & ambient			; PLUS ??? OSTC 3 (2016) ???
-	; 0x05: cR
-	; 0x0A: 3
-	; 0x1A: 3 with BLE
-	; 0x33: 2 TR
+	; set TR functions as deactivated by default
+	bcf		tr_functions_activated			; clear flag
 
-	btfss	ostc_rx_present					; OSTC TR detected?
+	; search for TR module
+	WAITMS	.200							; wait 200 ms while RX module boots up
+	call	I2C_probe_OSTC_rx				; check for RX module and set ostc_rx_present flag if found
+	btfss	ostc_rx_present					; RX module detected?
 	bra		restart5						; NO
-	movff	opt_TR_mode,WREG				; YES - get user-selected TR mode
-	tstfsz	WREG							;       TR functions switched on?
-	bsf		FLAG_tr_enabled					;       YES - switch on displays and calculation functions
- ENDIF
 
-	; configure hardware descriptor 2
-	; flag  screen_type                  will be configured on each call of TFT_boot
-	; flags compass_type & compass_type2 will be configured on each call of I2C_init_compass
-	; flag  analog_switches              will be configured directly after hard start (in start:)
+	; check if TR module firmware is up to date
+	movff	rx_firmware_cur_major,hi		; copy current firmware on RX module to bank common, major
+	movff	rx_firmware_cur_minor,lo		; copy current firmware on RX module to bank common, minor
+	call	rx_firmware_new_major			; get latest firmware version into WREG,  major
+	cpfseq	hi								; equal to current firmware on RX module, major ?
+	bra		restart4b						; NO  - update
+	call	rx_firmware_new_minor			; YES - get latest firmware version into WREG,  minor
+	cpfseq	lo								;     - equal to current firmware on RX module, minor ?
+	bra		restart4b						;       NO  - update TR module
+	bra		restart4e						;       YES - no need to update
+
+restart4b:
+	; print TR module update message
+	call	TFT_boot						; initialize TFT (includes clear screen & backlight switch-off)
+	WIN_TOP  .40							; show heinrichsweikamp logo
+	WIN_LEFT .10
+	TFT_WRITE_PROM_IMAGE_BY_ADDR hw_logo_block
+	WIN_SMALL .10,.130
+	STRCAT_PRINT "Updating TR Module..."	; print update message
+	call	TFT_Display_FadeIn				; display screen
+	WIN_SMALL .10,.160
+	STRCAT	"TR Update "					; prepare result message
+
+	; update firmware in RX module
+	call	I2C_sleep_accelerometer			; stop accelerometer
+	call	I2C_sleep_compass				; stop compass
+	call	update_tr_module				; update TR module
+
+	WIN_SMALL .10,.160						; set next output position
+	STRCAT	"Update "						; common part of result message
+	btfss	ostc_rx_present					; data transfer successful and TR module up & running again?
+	bra		restart4c						; NO
+	STRCAT	"to "							; YES - print success message
+	call	TFT_print_firmware_rx			;     - print installed version
+	STRCAT_PRINT " done"					;     - complete result message
+	bra		restart4d						;     - show message for a while
+
+restart4c:
+	STRCAT_PRINT "failed"					; complete result message - failure
+
+restart4d:
+	call	wait_1s							; wait (up to)        1 second
+	call	wait_1s							; wait (another full) 1 second
+	call	wait_1s							; wait (another full) 1 second
+
+restart4e:
+	btfss	ostc_rx_present					; TR module up & running?
+	bra		restart5						; NO
+	movff	opt_TR_mode,WREG				; YES - get TR mode
+	tstfsz	WREG							;     - TR mode <> off ?
+	bsf		tr_functions_activated			;       YES - set TR functions as activated
+
+ ENDIF	; _rx_functions
+
 
 restart5:
-	; Select high altitude (fly) mode?
-	movff	last_surfpressure_30min+0,sub_b+0
-	movff	last_surfpressure_30min+1,sub_b+1
-	movlw	HIGH high_altitude_threshold
-	movwf	sub_a+1
-	movlw	LOW  high_altitude_threshold	; hard-wired 880 hPa
-	movwf	sub_a+0
-	call	subU16							; sub_c = sub_a - sub_b
-	btfss	neg_flag						; result negative (ambient > 880 hPa)?
-	bsf		high_altitude_mode				; NO - set flag
+	; manage hardware
+	btfss	analog_o2_input					; OSTC with analog input?
+	bsf		TRISB,3							; NO - shut down power supply for S8 bulkhead
 
-	btfss	analog_o2_input
-	bsf		TRISB,3
-	btfss	battery_gauge_available
-	bsf		TRISG,0
+	btfss	battery_gauge_available			; OSTC with gauge IC?
+	bsf		TRISG,0							; NO
+
 	call	ext_flash_disable_protection	; disable write protection for external flash
 
-	bsf		flip_screen						; select screen flip 180°
-	TSTOSS	opt_flip_screen					; shall actually flip? (=1: flip the screen)
-	bcf		flip_screen						; NO - revert to normal orientation
+	btfsc	use_old_batt_flag				; shall reload last battery data?
+	call	get_battery_data				; YES - get last battery data
 
-	btfsc	use_old_batt_flag				; =1: load old battery information after power-on reset
-	goto	use_old_batteries				; returns to surface loop
+	; set screen orientation
+	bcf		flip_screen						; set default screen orientation
+	TSTOSC	opt_flip_screen					; shall show screen outputs upside down? (=1: flip the screen)
+	bsf		flip_screen						; YES - set upside-down orientation
+
+	; check if high-altitude mode is applicable
+	bcf		high_altitude_mode				; disable high altitude mode by default
+	MOVII	pressure_abs_ref,         sub_a	; copy last surface pressure to sub_a
+	MOVLI	high_altitude_threshold+1,sub_b	; copy high-altitude threshold (880 mbar) + 1 to sub_a
+	call	cmpU16							; sub_a - sub_b = pressure_abs_ref - (high_altitude_threshold + 1)
+	btfsc	neg_flag						; result negative (absolute pressure <= 880 mbar) ?
+	bsf		high_altitude_mode				; YES - enable high altitude mode
+
+	; check if there was a cold start, if yes do initial computation of further deco data
+	btfss	cold_start						; did a cold start?
+	bra		restart6						; NO
+	bcf		cold_start						; YES - clear flag
+	call	deco_calc_dive_interval_1min	;     - calculate tissues for 1 minute at surface conditions (C-code)
+	call	deco_calc_desaturation_time		;     - calculate desaturation and no-fly/no-altitude time   (C-code)
+	banksel	common							;     - back to bank common
+
+restart6:
+	; the dive mode flag can not be set right after cold start, must have been in surface mode before
+	btfsc	divemode						; shall enter dive mode?
+	goto	diveloop						; YES
 
 	btfsc	RCON,POR						; was this a power-on reset?
-	goto	surfloop						; NO - jump to surface loop
-	bsf		RCON,POR						; set bit for next detection
-	; Things to do after a power-on reset
-	goto	do_new_battery_select			; returns to surface loop
+	goto	surfloop						; NO  - enter surface mode
+	bsf		RCON,POR						; YES - acknowledge detection and re-arm detector
+	goto	do_new_battery_select			;     - prompt for battery selection, will proceed to surface mode
+
 
 ;=============================================================================
-; Setup all flags and parameters for divemode and simulator computations.
+; Setup all flags and parameters for dive mode and simulator computations
+;
+; called from divemode.asm, menu_tree.asm and surfmode.asm
 ;
 	global	restart_set_modes_and_flags
-restart_set_modes_and_flags:				; "Call"ed from dive mode as well
-	call	option_restore_all				; restore everything from EEPROM
+restart_set_modes_and_flags:
+	call	option_restore_all				; restore all options settings from EEPROM
 
-	; Setup sampling rate
-	movlw	.2
-	movwf	samplingrate
-	TSTOSS	opt_sampling_rate				; =1: 10s, =0: 2s
-	bra		restart_set_modes_and_flags1
-	movlw	.10
-	movwf	samplingrate
+ IFDEF _external_sensor
+	call	disable_ir_s8					; switch off IR/S8 digital interface by default
+ ENDIF
+
+	; setup sampling rate
+	movlw	.2								; default to 2 seconds
+	movwf	sampling_rate					; write setting
+	TSTOSS	opt_sampling_rate				; check option: 1= 10s, 0= 2s
+	bra		restart_set_modes_and_flags1	; 0 - 2 seconds selected, done
+	movlw	.10								; 1 - change to 10 seconds
+	movwf	sampling_rate					;   - write setting
 
 restart_set_modes_and_flags1:
-	bcf		FLAG_gauge_mode
-	bcf		FLAG_apnoe_mode
-	bcf		FLAG_oc_mode
-	bcf		FLAG_ccr_mode
-	bcf		FLAG_pscr_mode
-	bcf		FLAG_bailout_mode
-	call	disable_ir_s8					; IR off
+	clrf	DM_flags_deco					; clear all deco mode flags
 
- IFDEF _cave_mode
-	bsf		FLAG_cave_mode					; enable cave mode by default
-	movff	opt_calc_asc_gasvolume,WREG		; get gas needs calculation mode (0=off, 1=on, 2=cave mode)
-	xorlw	.2								; coding for cave mode
-	tstfsz	WREG							; cave mode enabled?
-	bcf		FLAG_cave_mode					; NO - disable cave mode again
-	bcf		FLAG_cave_mode_shutdown			; clear flag for cave mode shutdown
-	bcf		FLAG_dive_turned				; clear flag for dive turned
-	bcf		gas_needs_mode_last				; set last gas calculation results as direct ascent needs
- ENDIF
-
-	; Initialize active_gas and active_dil for surface mode pressure display
+	; initialize active_gas and active_dil for surface mode pressure display
 	call	get_first_gas_to_WREG
 	movwf	active_gas
+
+ IFDEF _ccr_pscr
 	call	get_first_dil_to_WREG
 	movwf	active_dil
-
-	; Setup char_I_saturation_multiplier and char_I_desaturation_multiplier
-	movff	opt_sat_multiplier_gf,char_I_saturation_multiplier
-	movff	opt_desat_multiplier_gf,char_I_desaturation_multiplier
-	movff	char_I_deco_model,lo			; 0 = ZH-L16, 1 = ZH-L16-GF
-	tstfsz	lo
-	bra		restart_set_modes_and_flags1b
-	movff	opt_sat_multiplier_non_gf,char_I_saturation_multiplier
-	movff	opt_desat_multiplier_non_gf,char_I_desaturation_multiplier
-
-restart_set_modes_and_flags1b:
-	movff	opt_dive_mode,lo				; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
-	tstfsz	lo
-	bra		restart_set_modes_and_flags2
-
-	; OC Mode
-	bsf		FLAG_oc_mode					; =1: OC mode active
- IFDEF _rx_functions
-	call	option_cleanup_oTrMode_no_CCR	; revert TR mode from 'CCR Dil+O2' to 'on'
  ENDIF
-	return
+
+	; configure saturation / desaturation safety factors
+	movff	opt_sat_multiplier_gf,  char_I_saturation_multiplier		; use factors for GF mode by default
+	movff	opt_desat_multiplier_gf,char_I_desaturation_multiplier		; ...
+	TSTOSC	char_I_deco_model											; get deco model ZH-L16-GF (1) selected?
+	bra		restart_set_modes_and_flags2								; YES - keep them
+	movff	opt_sat_multiplier_non_gf,  char_I_saturation_multiplier	; NO  - overwrite them with non-GF factors
+	movff	opt_desat_multiplier_non_gf,char_I_desaturation_multiplier	;     - ...
 
 restart_set_modes_and_flags2:
-	decfsz	lo,F
-	bra		restart_set_modes_and_flags3
+	; configure GF settings, GF high is needed for color-coding the current GF (supersaturation) factor
+	movff	opt_GF_low, char_I_GF_Low_percentage
+	movff	opt_GF_high,char_I_GF_High_percentage
 
-	; CCR Mode
-	bsf		FLAG_ccr_mode					; =1: CCR mode (Fixed SP, Auto SP or Sensor) active
-	call	option_cleanup_oCCRMode_CCR		; revert CCR mode 'Sensor' to 'fixed SP' if no sensor interface available
+	movff	opt_dive_mode,lo				; get dive mode: 0= OC, 1= CCR, 2= gauge, 3= apnea, 4= pSCR
+	tstfsz	lo								; OC?
+	bra		restart_set_modes_and_flags3	; NO
+	bsf		FLAG_oc_mode					; YES - set OC flag
  IFDEF _rx_functions
-	call	option_cleanup_oTrMode_CCR		; revert TR mode from 'ind.double' to 'on'
+	call	option_cleanup_oTrMode_no_CCR	;     - revert TR mode from 'CCR Dil+O2' to 'on'
  ENDIF
-	call	enable_ir_s8					; enable IR/S8 port
-	return
+	return									;     - done
 
 restart_set_modes_and_flags3:
-	decfsz	lo,F
-	bra		restart_set_modes_and_flags4
-
-	; Gauge Mode
-	bsf		FLAG_gauge_mode					; =1: in gauge mode
+	decfsz	lo,F							; CCR mode?
+	bra		restart_set_modes_and_flags4	; NO
+ IFDEF _ccr_pscr
+	bsf		FLAG_ccr_mode					; YES - set CCR flag
+	call	option_cleanup_oCCRMode_CCR		;     - revert CCR mode 'Sensor' to 'fixed SP' if no sensor interface available
  IFDEF _rx_functions
-	call	option_cleanup_oTrMode_no_CCR	; revert TR mode from 'CCR Dil+O2' to 'on'
- ENDIF
-	return
+	call	option_cleanup_oTrMode_CCR		;     - revert TR mode from 'ind.double' to 'on'
+ ENDIF	; _rx_functions
+ IFDEF _external_sensor
+	call	enable_ir_s8					;     - enable IR/S8 digital interface
+ ENDIF	; _external_sensor
+ ENDIF	; _ccr_pscr
+	return									;     - done
 
 restart_set_modes_and_flags4:
-	decfsz	lo,F
-	bra		restart_set_modes_and_flags5
-
-	; Apnea Mode
-	bsf		FLAG_apnoe_mode					; =1: in Apnea mode
+	decfsz	lo,F							; Gauge mode?
+	bra		restart_set_modes_and_flags5	; NO
+	bsf		FLAG_gauge_mode					; YES - set gauge flag
  IFDEF _rx_functions
-	call	option_cleanup_oTrMode_no_CCR	; revert TR mode from 'CCR Dil+O2' to 'on'
+	call	option_cleanup_oTrMode_no_CCR	;     - revert TR mode from 'CCR Dil+O2' to 'on'
  ENDIF
-	return									; start in surface mode
+	return									;     - done
 
 restart_set_modes_and_flags5:
-	; pSCR Mode
-	bsf		FLAG_pscr_mode					; set pSCR mode flag
-	call	option_cleanup_oCCRMode_pSCR	; in pSCR mode, revert AutoSP (2) to calculated SP (0), additionally revert Sensor to fixed SP if no sensor interface available
+	decfsz	lo,F							; Apnea mode?
+	bra		restart_set_modes_and_flags6	; NO
+	bsf		FLAG_apnoe_mode					; YES - set apnea flag
+	movlw	samplingrate_apnoe				; get apnoe sampling rate
+	movwf	sampling_rate					; overwrite user-selected 2/10 seconds setting with apnoe default
  IFDEF _rx_functions
-	call	option_cleanup_oTrMode_no_CCR	; revert TR mode from 'CCR Dil+O2' to 'on'
+	call	option_cleanup_oTrMode_no_CCR	;     - revert TR mode from 'CCR Dil+O2' to 'on'
  ENDIF
-	call	enable_ir_s8					; enable IR/S8 port
-	return									; start in surface mode
+	return									;     - done
+
+restart_set_modes_and_flags6:
+											; pSCR mode then
+ IFDEF _ccr_pscr
+	bsf		FLAG_pscr_mode					;     - set pSCR mode flag
+	call	option_cleanup_oCCRMode_pSCR	;     - revert AutoSP to calculated SP, additionally revert Sensor to fixed SP if no sensor interface available
+ IFDEF _rx_functions
+	call	option_cleanup_oTrMode_no_CCR	;     - revert TR mode from 'CCR Dil+O2' to 'on'
+ ENDIF	; _rx_functions
+ IFDEF _external_sensor
+	call	enable_ir_s8					;     - enable IR/S8 digital interface
+ ENDIF	; _external_sensor
+ ENDIF	; _ccr_pscr
+	return									;     - done
 
 
-; backup the first 128 bytes from flash to EEPROM
-backup_flash_page:
-	; Start address in internal flash
-	movlw	0x00
-	movwf	TBLPTRL
-	movwf	TBLPTRH
-	movwf	TBLPTRU
+;=============================================================================
+; Sample and store the current surface pressure, update ISR and deco engine
+; with the surface pressure sampled on last invocation.
+;
+	global	sample_surface_pressure
+sample_surface_pressure:
+	; make sure the ISR does not read the surface pressure reference buffer while it is updated
+	bcf		update_surface_pressure			; cancel any pending load request
 
-	movlw	.128
-	movwf	lo								; byte counter
-	clrf	EEADR
-	movlw	.3
-	movwf	EEADRH							; setup backup address
+	; propagate the surface pressure sampled on last invocation to the reference pressure buffer
+	MOVII	pressure_abs_sampled,pressure_abs_ref
 
-	TBLRD*-									; dummy read to be in 128 byte block
-backup_flash_loop:
-	tblrd+*									; table read with pre-increment
-	movff	TABLAT,EEDATA					; put 1 byte
-	call	write_eeprom					; save it in EEPROM
-	incf	EEADR,F
-	decfsz	lo,F							; 128 byte done?
-	bra		backup_flash_loop				; NO - loop
-	clrf	EEADRH							; reset EEADRH
-	return									; done
+	; update surface pressure in the ISR
+	bsf		update_surface_pressure			; request ISR to update its surface pressure
+
+	; update surface pressure in the deco engine
+	MOVII	pressure_abs_ref,int_I_pres_surface
+
+	; sample current absolute pressure (ISR-safe 2 byte copy)
+	SMOVII	pressure_abs,pressure_abs_sampled
+
+	; limit sampled pressure to max allowed surface pressure
+	MOVLI	max_surfpressure,    sub_a		; load upper limit    into sub_a
+	MOVII	pressure_abs_sampled,sub_b		; copy sampled pressure to sub_b
+	call	cmpU16							; sub_a - sub_b = max_surfpressure - pressure_abs_sampled
+	btfss	neg_flag						; sampled pressure > max_surfpressure ?
+	return									; NO  - below limit, done
+	MOVII	sub_a,pressure_abs_sampled		; YES - limit to max_surfpressure (still stored in sub_a)
+	return									;     - done
+
 
 	END

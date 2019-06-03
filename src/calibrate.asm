@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File calibration.asm							REFACTORED VERSION V2.98b
+;   File calibration.asm                      combined next generation V3.03.1
 ;
 ;   o2 sensor calibration subroutines
 ;
@@ -12,20 +12,22 @@
 #include "math.inc"
 #include "adc_lightsensor.inc"
 #include "eeprom_rs232.inc"
-#include "isr.inc"	
 
 
 calibrate	CODE
 
+;=============================================================================
+
+ IFDEF _external_sensor
 
 	global	transmit_setpoint				; transmit current setpoint from WREG (in cbar) to external electronics
 transmit_setpoint:
-	return									; 					!!!! FUNCTION IS CURRENTLY DISABLED !!!!
-	btfss	s8_digital						; S8 Digital connection existing?
+	return									; !!!! FUNCTION IS CURRENTLY DISABLED !!!!
+	btfss	s8_digital_avail				; do we have a digital S8 interface?
 	return									; NO  - ignore
 											; YES - transmit setpoint from WREG
 	clrf	lo								; initialize checksum
-	movwf	hi								; store setpoint
+	movff	char_I_const_ppO2,hi			; copy setpoint value to hi
 	movlw	0xAA							; start byte
 	rcall	tx_to_HUD						; transmit to HUD
 	movlw	0x60							; command new SP
@@ -54,8 +56,11 @@ calibrate_mix:
 	bsf		sensor2_calibrated_ok
 	bsf		sensor3_calibrated_ok
 
+	; ISR-safe 2 byte copy of the current pressure to xB for later use
+	SMOVII	pressure_abs,xB
+
 	; check for HUD
-	btfss	s8_digital						; S8 Digital connection existing?
+	btfss	s8_digital_avail				; do we have a digital S8 interface?
 	bra		calibrate_mix1					; NO  - skip HUD part
 
 	; calibrate any S8-connected HUD
@@ -66,84 +71,70 @@ calibrate_mix:
 	rcall	tx_to_HUD						; transmit to HUD
 	movff	opt_calibration_O2_ratio,WREG	; calibration gas %O2
 	rcall	tx_to_HUD						; transmit to HUD
-	movff	amb_pressure+0,WREG				; ambient pressure low byte
+	movff	xB+0,WREG						; current absolute pressure low byte
 	rcall	tx_to_HUD						; transmit to HUD
-	movff	amb_pressure+1,WREG				; ambient pressure high byte
+	movff	xB+1,WREG						; current absolute pressure high byte
 	rcall	tx_to_HUD						; transmit to HUD
 	movff	lo,WREG							; checksum
 	rcall	tx_to_HUD_cs					; transmit to HUD
 ;	bra		calibrate_mix2
 
 	; calibrate internal sensors
-calibrate_mix1:								; compute %O2 * 100 * ambient_pressure[mbar] / 100
+calibrate_mix1:								; compute %O2 * 100 * absolute pressure [mbar] / 100
 	movff	opt_calibration_O2_ratio,WREG
 	mullw	.100
-	movff	PRODL,xA+0
-	movff	PRODH,xA+1
-	SAFE_2BYTE_COPY amb_pressure,xB 
+	MOVII	PROD,xA
 	call	mult16x16						; xA*xB=xC
-	movlw	LOW  .100
-	movwf	xB+0
-	movlw	HIGH .100
-	movwf	xB+1
-	call	div32x16						; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
+	MOVLI	.100,xB
+	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
 
 	; keep a copy of the result
-	movff	xC+0,lo
-	movff	xC+1,hi
-	movff	xC+2,up
-	movff	xC+3,ex
+	movff	xC+0,mpr+0
+	movff	xC+1,mpr+1
+	movff	xC+2,mpr+2
+	movff	xC+3,mpr+3
 
 	; compute factor for sensor 1
-	movff	o2_mv_sensor1+0,xB+0
-	movff	o2_mv_sensor1+1,xB+1
-	call	div32x16						; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
-	movff	xC+0,opt_x_s1+0					; xC= ppO2/mV as factor for sensor 1
-	movff	xC+1,opt_x_s1+1
+	MOVII	sensor1_mv,xB
+	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
+	MOVII	xC,opt_x_s1						; xC = ppO2/mV as factor for sensor 1
 
 	; restore result
-	movff	lo,xC+0
-	movff	hi,xC+1
-	movff	up,xC+2
-	movff	ex,xC+3
+	movff	mpr+0,xC+0
+	movff	mpr+1,xC+1
+	movff	mpr+2,xC+2
+	movff	mpr+3,xC+3
 
 	; compute factor for sensor 2
-	movff	o2_mv_sensor2+0,xB+0
-	movff	o2_mv_sensor2+1,xB+1
-	call	div32x16						; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
-	movff	xC+0,opt_x_s2+0					; xC= ppO2/mV as factor for sensor 2
-	movff	xC+1,opt_x_s2+1
+	MOVII	sensor2_mv,xB
+	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
+	MOVII	xC,opt_x_s2						; xC = ppO2/mV as factor for sensor 2
 
 	; restore result
-	movff	lo,xC+0
-	movff	hi,xC+1
-	movff	up,xC+2
-	movff	ex,xC+3
+	movff	mpr+0,xC+0
+	movff	mpr+1,xC+1
+	movff	mpr+2,xC+2
+	movff	mpr+3,xC+3
 
 	; compute factor for sensor 3
-	movff	o2_mv_sensor3+0,xB+0
-	movff	o2_mv_sensor3+1,xB+1
-	call	div32x16						; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
-	movff	xC+0,opt_x_s3+0					; xC= ppO2/mV as factor for sensor 3
-	movff	xC+1,opt_x_s3+1
+	MOVII	sensor3_mv,xB
+	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
+	MOVII	xC,opt_x_s3						; xC = ppO2/mV as factor for sensor 3
 
 	; check sensor 1 for min/max mV
-	movff	o2_mv_sensor1+0, sub_a+0		; get mV from sensor 1
-	movff	o2_mv_sensor1+1, sub_a+1
+	MOVII	sensor1_mv,sub_a				; get mV from sensor 1
 	rcall	calibrate_mix_helper			; check mV for min/max thresholds, returns with WREG = 0 if ok, else WREG = 1
 	TSTFSZ	WREG							; sensor mV within thresholds?
 	bcf		use_O2_sensor1					; NO - clear usage flag
 
 	; check sensor 2 for min/max mV
-	movff	o2_mv_sensor2+0, sub_a+0		; get mV from sensor 2
-	movff	o2_mv_sensor2+1, sub_a+1
+	MOVII	sensor2_mv,sub_a				; get mV from sensor 2
 	rcall	calibrate_mix_helper			; check mV for min/max thresholds, returns with WREG = 0 if ok, else WREG = 1
 	TSTFSZ	WREG							; sensor mV within thresholds?
 	bcf		use_O2_sensor2					; NO - clear usage flag
 
 	; check sensor 3 for min/max mV
-	movff	o2_mv_sensor3+0, sub_a+0		; get mV from sensor 3
-	movff	o2_mv_sensor3+1, sub_a+1
+	MOVII	sensor3_mv,sub_a				; get mV from sensor 3
 	rcall	calibrate_mix_helper			; check mV for min/max thresholds, returns with WREG = 0 if ok, else WREG = 1
 	TSTFSZ	WREG							; sensor mV within thresholds?
 	bcf		use_O2_sensor3					; NO - clear usage flag
@@ -153,7 +144,7 @@ calibrate_mix2:
 	btfss	hud_connection_ok				; HUD connection existing?
 	bra		calibrate_mix3					; NO - skip HUD part
 
-	; Copy disable flags from HUD digital input
+	; copy disable flags from HUD digital input
 	btfss	sensor1_active
 	bcf		use_O2_sensor1
 	btfss	sensor2_active
@@ -170,40 +161,32 @@ calibrate_mix3:
 	btfss	use_O2_sensor3					; sensor 3 out of range?
 	bcf		sensor3_calibrated_ok			; YES - disable this sensor
 
-	; When no sensor is found, enable all three to show error state and clear calibration factors
+	; when no sensor is found, enable all three to show error state and clear calibration factors
 	btfsc	use_O2_sensor1
 	return
 	btfsc	use_O2_sensor2
 	return
 	btfsc	use_O2_sensor3
 	return
-	; Enable all sensors
+
+	; enable all sensors
 	bsf		use_O2_sensor1
 	bsf		use_O2_sensor2
 	bsf		use_O2_sensor3
-	; Clear calibration factors
-	banksel opt_x_s1+0
-	clrf	opt_x_s1+0
-	clrf	opt_x_s1+1
-	clrf	opt_x_s2+0
-	clrf	opt_x_s2+1
-	clrf	opt_x_s3+0
-	clrf	opt_x_s3+1
-	banksel	common
+	; clear calibration factors
+	banksel	opt_x_s1						; switch to bank options table
+	CLRI	opt_x_s1
+	CLRI	opt_x_s2
+	CLRI	opt_x_s3
+	banksel	common							; back to bank common
 	return
 
 calibrate_mix_helper:
-	movlw	LOW  min_mv						; load minimum threshold...
-	movwf	sub_b+0							; ...into sub_b
-	movlw	HIGH min_mv
-	movwf	sub_b+1
+	MOVLI	min_mv,sub_b					; load minimum threshold into sub_b
 	call	sub16							; sub_c = sub_a - sub_b
 	btfsc	neg_flag						; sensor mV lower than minimum threshold?
 	retlw	.1								; YES - return signaling threshold violation
-	movlw	LOW  max_mv						; load maximum threshold...
-	movwf	sub_b+0							; ...into sub_b
-	movlw	HIGH max_mv
-	movwf	sub_b+1
+	MOVLI	max_mv,sub_b					; load maximum threshold into sub_b
 	call	sub16							; sub_c = sub_a - sub_b
 	btfss	neg_flag						; sensor mV higher than maximum threshold?
 	retlw	.1								; YES - return signaling threshold violation
@@ -212,40 +195,36 @@ calibrate_mix_helper:
 
 	global	compute_mvolts_for_all_sensors
 compute_mvolts_for_all_sensors:				; compute mV or all sensors (S8 mode)
-; compute AD results in 100µV steps (16bit/sensor)
-; 24bit AD result is in 244,1406541nV
-; Divide 24bit value through 409,5999512 -> 410 (0,01% error)
+	; compute AD results in 100 µV steps (16 bit/sensor)
+	; 24 bit AD result is in 244.1406541 nV
+	; divide 24 bit value by 409.5999512 -> 410 with only 0.01% error
 	#DEFINE	ad2mv_factor .410
-	movlw	LOW  ad2mv_factor
-	movwf	xB+0
-	movlw	HIGH ad2mv_factor
-	movwf	xB+1
-	; Sensor 1
-	clrf	xC+3
-	movff	s8_rawdata_sensor1+2,xC+2
-	movff	s8_rawdata_sensor1+1,xC+1
-	movff	s8_rawdata_sensor1+0,xC+0
-	call	div32x16						; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
-	movff	xC+1,o2_mv_sensor1+1
-	movff	xC+0,o2_mv_sensor1+0			; in 100 uV steps
-	; Sensor 2
-	clrf	xC+3
-	movff	s8_rawdata_sensor2+2,xC+2
-	movff	s8_rawdata_sensor2+1,xC+1
-	movff	s8_rawdata_sensor2+0,xC+0
-	call	div32x16						; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
-	movff	xC+1,o2_mv_sensor2+1
-	movff	xC+0,o2_mv_sensor2+0			; in 100 uV steps
-	; Sensor 3
-	clrf	xC+3
-	movff	s8_rawdata_sensor3+2,xC+2
-	movff	s8_rawdata_sensor3+1,xC+1
-	movff	s8_rawdata_sensor3+0,xC+0
-	call	div32x16						; xC:4 / xB:2 = xC+3:xC+2 with xC+1:xC+0 as remainder
-	movff	xC+1,o2_mv_sensor3+1
-	movff	xC+0,o2_mv_sensor3+0			; in 100 uV steps
 
-	bcf		new_s8_data_available			; clear flag
+	MOVLI	ad2mv_factor,xB
+
+	; Sensor 1
+	SMOVTT	s8_rawdata_sensor1,xC			; ISR-safe copy of 3 bytes to xC
+	clrf	xC+3							; clear MSB of xC
+	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
+	MOVII	xC,sensor1_mv					; in 100 µV steps
+
+	; Sensor 2
+	SMOVTT	s8_rawdata_sensor2,xC			; ISR-safe copy of 3 bytes to xC
+	clrf	xC+3							; clear MSB of xC
+	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
+	MOVII	xC,sensor2_mv					; in 100 µV steps
+
+	; Sensor 3
+	SMOVTT	s8_rawdata_sensor3,xC			; ISR-safe copy of 3 bytes to xC
+	clrf	xC+3							; clear MSB of xC
+	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
+	MOVII	xC,sensor3_mv					; in 100 µV steps
+
 	return									; done
+
+
+ ENDIF	; _external_sensor
+
+;=============================================================================
 
 	END

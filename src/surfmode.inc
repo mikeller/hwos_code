@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File surfmode.inc								REFACTORED VERSION V2.97
+;   File surfmode.inc                           combined next generation V2.97
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -8,9 +8,12 @@
 ; HISTORY
 ;  2011-08-07 : [mH] moving from OSTC code
 
+
 	extern surfloop
-	extern	timeout_surfmode
-	extern	timeout_testmode
+	extern reset_timeout_surfmode
+	extern reset_timeout_time
+	extern housekeeping
+
 
 ; Surfacemode/Homescreen layout:
 ; row=0...239
