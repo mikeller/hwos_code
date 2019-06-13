@@ -444,6 +444,8 @@
 #DEFINE cc_active				HW_variants,6		; =1: constant current charging active (cR hardware only)
 #DEFINE cv_active				HW_variants,7		; =1: constant voltage charging active (cR hardware only)
 
+ #DEFINE compass_type3			HW_variants2,0		; =1: compass 3, =0: compass 0, 1 or 2
+
 
 ;---- Hardware - States (stored in access RAM)
 #DEFINE analog_sw1_pressed		HW_flags_state,0	; =1: analog switch 1 pressed
@@ -813,6 +815,7 @@ retry:
 
 	extern	HW_descriptor
 	extern	HW_variants
+	extern	HW_variants2
 
 	extern	HW_flags_state
 

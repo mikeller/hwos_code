@@ -43,7 +43,8 @@ ac_ram		udata_acs	ac_ram				; access RAM data
 ;---- Flags - Hardware Descriptors
 HW_descriptor					res 1		; OSTC - model descriptor (cleared & rebuilt in restart)
 HW_variants						res 1		; OSTC - model variants   (NOT cleared in restart)
-
+HW_variants2						res 1		; OSTC - model variants   (NOT cleared in restart)
+						
 ;---- Flags - Hardware States
 HW_flags_state					res 1		; hardware - states
 
@@ -99,10 +100,11 @@ hud_battery_mv					res 2		; hud/ppo2 monitor battery voltage in mV     | between
 ; 32 byte tmp  data placed by C compiler
 ; 20 byte variables placed by math library
 ; ==
-; 80 byte used, 16 byte free (96 byte total available)
+; 81 byte used, 15 byte free (96 byte total available)
 
 	global	HW_descriptor
 	global	HW_variants
+	global	HW_variants2
 	global	HW_flags_state
 	global	OS_flags_persist
 	global	OS_flags_ISR1
