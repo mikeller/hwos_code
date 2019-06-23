@@ -348,7 +348,7 @@
 #DEFINE compass_type2			hardware_flag2,2	; =1: compass 2, =0: compass 0 or 1
 #DEFINE analog_switches			hardware_flag2,3	; =1: analog switches available
 #DEFINE	screen_type2			hardware_flag2,4	; =1: display 2, =0: display 0 or 1
-;								hardware_flag2,5	; --- unused
+#DEFINE compass_type3			hardware_flag2,5	; =1: compass 3, =0: compass 0 or 1 or 2
 ;								hardware_flag2,6	; --- unused
 ;								hardware_flag2,7	; --- unused
 

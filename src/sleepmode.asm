@@ -66,7 +66,8 @@ sleeploop:									; enter sleep mode
 	clrf	sm_timer1
 	clrf	sm_timer2
 	clrf	sm_timer3
-	call	speed_normal
+;	call	speed_normal
+	call	speed_eco
 	bsf		no_sensor_int					; inhibit sensor interrupts
 	clrf	ADCON0							; power-down ADC module
 
@@ -127,6 +128,7 @@ sleeploop_loop:
 	bra		deepsleep						; YES
 
 no_deepsleep:
+	bcf	deep_sleep					; Clear flag to avoid putting the unit into deep sleep immediately when removed from charger
 	rcall	sleepmode_sleep					; wait at least 35 ms (every 62.5ms timer7 wakeup)
 
 	; Any button pressed in sleep?
@@ -143,6 +145,8 @@ no_deepsleep:
 deepsleep:
 	btfss	analog_switches
 	bra		no_deepsleep					; no analog switches, no deep sleep required
+	btfsc	cc_active			; Charging?
+	bra	no_deepsleep			; Yes, no deep sleep required
 
 	bcf		PIE1,0							; stop timer 1 interrupt
 	bcf		PIE2,1							; stop timer 2 interrupt
@@ -161,6 +165,9 @@ deepsleep_loop:
 	btfsc	onesecupdate					; one second in sleep?
 	rcall	onesec_sleep					; YES - check switches, check pressure sensor, etc.
 
+	btfsc	cc_active			; Charging?
+	bcf	deep_sleep			; Yes, no deep sleep required
+	
 	rcall	sleepmode_sleep
 
 	btfss	deep_sleep						; enter normal sleep mode?
@@ -191,6 +198,7 @@ onesec_deepsleep:
 deepsleep_get_accel:
 	call	I2C_init_compass				; required for compass1
 	call	I2C_init_accelerometer			; required for compass2
+	rcall	sleepmode_sleep
 	call	I2C_RX_accelerometer			; read accelerometer
 	call	I2C_sleep_compass				; required for compass1
 	call	I2C_sleep_accelerometer			; required for compass2

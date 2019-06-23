@@ -234,11 +234,11 @@ compass_calibration_gainset:			; Reduce the gain, set bank here!
 	clrf	opt_compass_gain			; Yes, keep at zero
 
 	banksel	common
-	call	I2C_init_accelerometer
 	call	I2C_init_compass
+	call	I2C_init_accelerometer
 
-;	btfsc	compass_type				; compass1?
-;	bra	compass_calibration_loop1		; Yes, skip gain stuff
+	btfsc	compass_type3				; compass3?
+	bra	compass_calibration_loop1		; Yes, skip gain stuff
 
 	rcall	TFT_compass_show_gain		; show the current compass gain
 

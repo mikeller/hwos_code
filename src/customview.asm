@@ -243,8 +243,8 @@ surf_customview_init_view5:				; view 5: tissue diagram
 	bra		customview_toggle_exit		; done
 
 surf_customview_init_view6:				; view 6: compass
-	call	I2C_init_accelerometer		; start accelerometer
 	call	I2C_init_compass			; start compass
+	call	I2C_init_accelerometer		; start accelerometer
 	call	TFT_surface_compass_mask	; show compass mask
 	bra		customview_toggle_exit		; done
 
@@ -592,8 +592,8 @@ init_gf_factors:
 	bra		customview_toggle_exit
 
 init_TFT_dive_compass:					; compass
-	call	I2C_init_accelerometer		; start accelerometer
 	call	I2C_init_compass			; start compass
+	call	I2C_init_accelerometer		; start accelerometer
 	call	TFT_dive_compass_mask		; show compass mask
 	bra		customview_toggle_exit
 

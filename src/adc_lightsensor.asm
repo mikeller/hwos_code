@@ -546,7 +546,8 @@ get_analog_switches:						; start ADC and wait until finished
 get_analog_switches2:
 	btfsc	adc_running						; ADC in use?
 	return									; YES - abort
-											; NO
+	btfsc	cc_active						; Charging?
+	return								; YES - abort
 	movlw	b'00001001'						; left justified
 	movwf	ADCON2
 ;	movlw	b'00000000'						; Vref+ = Vdd
