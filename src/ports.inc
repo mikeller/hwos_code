@@ -15,8 +15,8 @@
 ; TRIS=b'00000000'
 
 ; PORTB
-#DEFINE	switch_left1	PORTB,1			; switch
-#DEFINE	switch_right2	PORTB,0			; switch
+#DEFINE	switch_left1		PORTB,1			; switch
+#DEFINE	switch_right2		PORTB,0			; switch
 #DEFINE	mcp_power		PORTB,2			; RX power supply
 #DEFINE	s8_npower		PORTB,3			; power supply for S8 bulkhead (inverted)
 #DEFINE	LEDg			PORTB,4			; LED green / active_reset_ostc_rx (<- do no longer use this LED unless for debugging)

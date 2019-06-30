@@ -765,10 +765,12 @@ I2C_WaitforACK:
 	btfss	SSP1CON2,ACKSTAT			; checks for ACK bit from slave
 	return
 I2CFail:
+	bsf		active_reset_ostc_rx		; RESET RX circuitry (Which may be the cause for the hang up)
 	rcall	I2CReset					; I2C Reset
 	bcf		PIR1,SSP1IF
 	clrf	i2c_temp1
 	bsf		i2c_error_flag				; set error flag
+	bcf		active_reset_ostc_rx		; release RESET from RX circuitry
 	return
 
 I2CReset:								; something went wrong (slave holds SDA low?)

@@ -198,9 +198,9 @@ init_ostc:
 ;	movlw	b'00000000'			; init port
 	clrf	PORTD
 
-;	movlw	b'00000000'			; 1= input, RE1 -> Power_IR, RE2 -> CS_MCP, RE3 -> LED_blue, RE4 -> power_sw1, RE5 -> set to 1 for cR hardware
-	clrf	TRISE
-	movlw	b'00110001'			; init port
+	movlw	b'00100000'			; 1= input, RE0 -> NPOWER_BLE, RE1 -> Power_IR, RE2 -> CS_MCP, RE3 -> LED_blue, RE4 -> power_sw1, RE5 -> leave as input
+	movwf	TRISE
+	movlw	b'00010001'			; init port
 	movwf	PORTE
 
 	movlw	b'01111110'			; 1= input, (RF1, RF2, RF3, RF4, RF5) -> Analog
