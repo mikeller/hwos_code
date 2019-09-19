@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File convert.inc                           combined next generation V3.0.1
+;   File convert.inc                          combined next generation V3.04.2
 ;
 ;   Converts register values to string
 ;
@@ -43,8 +43,18 @@ output_99	macro				; displays only last two digits from a 8 bit value (0-99)
 	endm
 
 	extern	output99x_call
-output_99x	macro				; displays only last two figures from a 8 bit value with leading zero (00-99)
+output_99x	macro				; displays only last two digits from a 8 bit value with leading zero (00-99)
 	call	output99x_call
+	endm
+
+	extern	output99dd_call
+output_99dd	macro				; displays only last two digits from a 8 bit value, prints double-dots if zero - small fonts
+	call	output99dd_call
+	endm
+
+	extern	output99DD_call
+output_99DD	macro				; displays only last two digits from a 8 bit value, prints double-dots if zero - big   fonts
+	call	output99DD_call
 	endm
 
 	extern	outputHEX_call

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File logbook.asm                          combined next generation V3.03.4
+;   File logbook.asm                          combined next generation V3.03.5
 ;
 ;   Logbook
 ;
@@ -101,8 +101,8 @@
 
 ; Logbook Coordinates
 #DEFINE logbook_list_left			.10				; column of dive# in list
-#DEFINE logbook_row_offset			.28				; distance between rows of list (needs to be <= 32)
-#DEFINE logbook_row_number			.6				; amount of rows in the list
+#DEFINE logbook_row_offset			.27				; distance between rows of list
+#DEFINE logbook_row_number			.7				; amount of rows in the list
 
 ; Profile display
 #DEFINE profile_height_pixels		.157			; amount of pixels height for profile display
@@ -236,7 +236,7 @@ logbook		CODE
 ;=============================================================================
 
 TFT_logbook_cursor:
-	WIN_BOX_BLACK .0, .240-.16, logbook_list_left-.8, logbook_list_left-.1	; top, bottom, left, right
+	WIN_BOX_BLACK .0, .239, logbook_list_left-.8, logbook_list_left-.1    ; top, bottom, left, right
 
 	WIN_LEFT logbook_list_left-.8					; set horizontal position
 	WIN_FONT FT_SMALL								; select small font
@@ -346,8 +346,9 @@ logbook_display_loop2:
 	; TFT_mask...
 
 	WIN_LEFT	logbook_list_left
-	WIN_TOP		logbook_row_offset*logbook_row_number
+	WIN_TOP		logbook_row_offset*(logbook_row_number+.0)
 	STRCPY_TEXT_PRINT tNextLog						; "Next Page"
+
 	WIN_LEFT	logbook_list_left
 	WIN_TOP		logbook_row_offset*(logbook_row_number+.1)
 	STRCPY_TEXT_PRINT tExit							; "Exit"
@@ -360,7 +361,7 @@ logbook_display_loop2:
 
 	bcf		logbook_page_not_empty					; obviously the current page is NOT empty
 
-	movlw	d'7'									; set cursor to position 7...
+	movlw	d'8'									; set cursor to position 7...
 	btfsc	keep_cursor_new_page					; ... if we came from the "new page" line
 	movwf	menu_pos_cur							; and set menu_pos_cur byte
 	bcf		keep_cursor_new_page
@@ -1410,7 +1411,9 @@ display_listdive:
 	movf	logbook_divenumber,W					; log_compute_divenumber needs the list number
 	call	log_compute_divenumber					; compute dive number
 	bsf		leftbind
-	output_16_3										; show dive number, but only last three digits
+	movlw	.3										; start with 3rd digit (i.e. suppress the thousands)
+	movwf	ignore_digits
+	output_16dp .0									; show dive number
 	bcf		leftbind
 	PUTC	' '
 	; display_listdive2:

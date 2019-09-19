@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File adc_lightsensor.asm                  combined next generation V3.03.2
+;   File adc_lightsensor.asm                  combined next generation V3.03.5
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -219,7 +219,7 @@ get_battery_voltage_9:
 
 
 	global	get_ambient_level				; called from ISR only, in context bank isr_backup
-get_ambient_level:							; starts ADC and waits until finished
+get_ambient_level:
 	btfsc	sleepmode						; in sleep mode?
 	return									; YES - done
 	btfsc	adc_is_running					; NO  - ADC in use?
@@ -486,6 +486,7 @@ get_analog_switches:						; start ADC and wait until finished
 	banksel	HW_variants						; switch to bank where OSTC model variant is stored
 	btfsc	analog_switches					; does the OSTC have analog switches?
 	bra		get_analog_switches_1			; YES
+get_analog_switches0:	
 	banksel	common							; NO  - back to bank common
 	bcf		analog_sw1_pressed				;     - clear flag for analog switch 1
 	bcf		analog_sw2_pressed				;     - clear flag for analog switch 2
@@ -495,10 +496,13 @@ get_analog_switches_1:
 	banksel	common							; back to bank common
 	btfsc	adc_is_running					; ADC in use?
 	return									; YES - abort
-	;bra	get_analog_switches_2			; NO  - read switches
+	btfsc	cc_active						; NO  - charging?
+	bra	get_analog_switches0					;       YES - abort (And clear both flags)
+	;bra	get_analog_switches_2			;       NO  - read switches
 
 get_analog_switches_2:
-	movlw	b'00001001'						; left justified
+	bsf	adc_is_running
+	movlw	b'00001010'						; left justified
 	movwf	ADCON2
 ;	movlw	b'00000000'						; Vref+ = Vdd
 	clrf	ADCON1
@@ -610,9 +614,9 @@ get_analog_switches_sw1_pressed:
 	bsf		analog_sw1_pressed				; set right button as pressed
 
 get_analog_switches_4:
-	movlw	b'10001101'						; restore to right justified
+	movlw	b'10001010'						; restore to right justified
 	movwf	ADCON2
-
+	bcf	adc_is_running
 	banksel	common							; back to bank common
 	btfsc	analog_sw1_pressed				; right button pressed?
 	return									; YES - done

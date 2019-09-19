@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File rx_firmware.asm                      combined next generation V3.03.4
+;   File rx_firmware.asm                      combined next generation V3.03.5
 ;
 ;   Firmware for the RX Co-Processor
 ;
@@ -15,14 +15,15 @@ rx_firmware_storage	code	0x18000
 
 ;-----------------------------------------------------------------------------
 
- IFDEF _rx_functions
+ IFDEF _rx_update
 
 	global	rx_firmware_storage
 rx_firmware_storage:
 
 ;#include	"rx_firmware-1-33.inc"
 ;#include	"rx_firmware-1-37.inc"
-#include	"rx_firmware-1-38.inc"
+;#include	"rx_firmware-1-38.inc"
+#include	"rx_firmware-1-39.inc"
 
 
 	global	rx_firmware_new_major
@@ -33,6 +34,6 @@ rx_firmware_new_minor:
 	retlw	rx_firmware_minor			; defined in firmware include file
 
 
- ENDIF	; _rx_functions
+ ENDIF	; _rx_update
 
 	END

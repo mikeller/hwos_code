@@ -9,8 +9,6 @@
 ;  2012-10-24 : [mH] Creation
 
 	extern	I2C_RX_accelerometer
-	extern	I2C_init_accelerometer
-	extern	I2C_sleep_accelerometer
 	extern	I2C_init_compass
 	extern	I2C_sleep_compass
 
@@ -24,6 +22,9 @@
  IFDEF _rx_functions
 	extern	I2C_probe_OSTC_rx				; set ostc_rx_present bit if present
 	extern	I2C_get_tankdata				; get the tank data
+ ENDIF
+
+ IFDEF _rx_update
 	extern	I2C_update_OSTC_rx				; load new firmware into RX processor
  ENDIF
 

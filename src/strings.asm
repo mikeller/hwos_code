@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File strings.asm                          combined next generation V3.03.1
+;   File strings.asm                          combined next generation V3.03.5
 ;
 ;   Implementation code various string functions.
 ;
@@ -213,12 +213,11 @@ start_large_block:
 	movlw	4
 	bra		start_common
 
- IFDEF _huge_font
 	global	start_huge_block
 start_huge_block:
 	movlw	5
 	;bra	start_block_common
- ENDIF
+
 
 start_common:
 	movff	WREG,win_font			; needs a bank-safe move here !

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File rx_ops.asm                           combined next generation V3.03.1
+;   File rx_ops.asm                           combined next generation V3.03.7
 ;
 ;   RX (Tank Pressure Transmitter) Routines.
 ;
@@ -19,9 +19,12 @@
 
 
 	extern	get_first_gas_to_WREG
-	extern	I2C_update_OSTC_rx
 	extern	I2C_probe_OSTC_rx
+
+ IFDEF _rx_update
+	extern	I2C_update_OSTC_rx
 	extern	rx_firmware_storage
+ ENDIF
 
  IFDEF _ccr_pscr
 	extern	get_first_dil_to_WREG
@@ -271,9 +274,9 @@ get_transmitter_id_by_slot:
 ;
 ; pres_accu_1st				res 4		; accumulator for pressure drop      in 1/(160 * 2^16) bar
 ; pres_accu_2nd				res 4		; accumulator for pressure drop      in 1/(160 * 2^16) bar
-; time_accu_1st				res 1		; accumulator for reading  periods   in seconds
+; time_accu_1st				res 2		; accumulator for reading  periods   in seconds
 ; gas__last_1st				res 1		; last gas assignment
-; time_accu_2nd				res 1		; accumulator for reading  periods   in seconds
+; time_accu_2nd				res 2		; accumulator for reading  periods   in seconds
 ; gas__last_2nd				res 1		; last gas assignment
 ; pres_last_1st				res 2		; last pressure   reading  pressure  in 1/160 bar
 ; pres_last_2nd				res 2		; last pressure   reading  pressure  in 1/160 bar
@@ -287,9 +290,9 @@ get_transmitter_id_by_slot:
 
 ; relative positioning of 16 bit ASM variables
 #DEFINE offset_FSR1_time_accu	.0		; offset  0 == base address of 1st/2nd
-#DEFINE offset_FSR1_gas__last	.1		; offset  1 to base address of 1st/2nd
-#DEFINE offset_FSR1_pres_last	.4		; offset  4 ...
-#DEFINE offset_FSR1_time_last	.8		; offset  8 ...
+#DEFINE offset_FSR1_gas__last	.2		; offset  1 to base address of 1st/2nd
+#DEFINE offset_FSR1_pres_last	.6		; offset  6 ...
+#DEFINE offset_FSR1_time_last	.10		; offset 10 ...
 
 ; relative positioning of shared integer variables
 #DEFINE offset_FSR2_press_curr	.0		; offset 0 == base address of 1st/2nd
@@ -298,9 +301,9 @@ get_transmitter_id_by_slot:
 
 calc_pres_drop_1st:
 	; set up base addresses
-	lfsr	FSR0,pres_accu_1st-1		; load base address - 1 of pressure accumulator
-	lfsr	FSR1,time_accu_1st			; load base address     of other ASM  variables
-	lfsr	FSR2,int_IO_pressure_value+0; load base address     of the shared variables
+	lfsr	FSR0,pres_accu_1st			; load base address of pressure accumulator
+	lfsr	FSR1,time_accu_1st			; load base address of other ASM  variables
+	lfsr	FSR2,int_IO_pressure_value+0; load base address of the shared variables
 
 	; get the currently assigned gas into lo
 	movff	char_I_pressure_gas+0,lo
@@ -324,11 +327,11 @@ calc_pres_drop_2nd:
 	movff	char_I_pressure_age+1,hi
 
 calc_pres_drop_common:
-	; load the pressure accumulator into xC - FSR0 has been initialized to base address -1
-	movff	PREINC0,xC+0				; copy  pressure accumulator to xC, lowest  byte
-	movff	PREINC0,xC+1				; copy  pressure accumulator to xC, second  byte
-	movff	PREINC0,xC+2				; copy  pressure accumulator to xC, third   byte
-	movff	PREINC0,xC+3				; copy  pressure accumulator to xC, highest byte
+	; load the pressure accumulator into xC - after copying, FSR0 stays on highest byte
+	movff	POSTINC0,xC+0				; copy  pressure accumulator to xC, lowest  byte
+	movff	POSTINC0,xC+1				; copy  pressure accumulator to xC, second  byte
+	movff	POSTINC0,xC+2				; copy  pressure accumulator to xC, third   byte
+	movff	INDF0,   xC+3				; copy  pressure accumulator to xC, highest byte
 
 	; check if the assigned gas has changed
 	movlw	offset_FSR1_gas__last		; load index of last assigned gas
@@ -342,9 +345,9 @@ calc_pres_drop_common:
 	bra		calc_pres_drop_reset		; YES - reset everything
 
 calc_pres_drop_common_1:
-	; load the time accumulator into xB
-	movff	INDF1,xB+0					; load  time accumulator, low  byte (had been stored)
-	clrf	xB+1						; clear time accumulator, high byte (will be reset to 0 each round)
+	; load the time accumulator into xB  - after copying, FSR1 will have been restored to initial address
+	movff	POSTINC1,xB+0				; load time accumulator, low  byte
+	movff	POSTDEC1,xB+1				; load time accumulator, high byte
 
 	; get the current pressure value into divA - after copying, FSR2 will have been restored to initial address
 	movff	POSTINC2,divA+0				; copy current pressure value to divA, low  byte
@@ -412,6 +415,8 @@ calc_pres_drop_common_1:
 	addwf	xB+0,F						; add to time_accu (xB),           low  byte
 	movf	hi,W						; copy   time_curr (mpr) to WREG,  high byte
 	addwfc	xB+1,F						; add to time_accu (xB),           high_byte
+	btfsc	STATUS,C					; did the accumulator over-run ?
+	bra		calc_pres_drop_restart		; YES - reset both accumulators and set average pressure drop to not available
 
 	; subtract the last pressure time from time accumulator: time_accu (xB) -= time_last (sub_b)
 	movf	sub_b+0,W					; copy          time_last (sub_b) to WREG, low  byte
@@ -421,15 +426,11 @@ calc_pres_drop_common_1:
 	btfss	STATUS,C					; did the accumulator under-run (result negative) because of a wrap-around of the current time?
 	bra		calc_pres_drop_restart		; YES - reset both accumulators and set average pressure drop to not available
 
-	; check if the time accumulator (xB) is or has become too large
-	; this will happen if the last valid pressure reading is older than (256 - time_accu target) seconds
-	tstfsz	xB+1						; is the time accumulator < 256 [seconds], i.e. high byte = 0 ?
-	bra		calc_pres_drop_restart		; NO  - reset both accumulators and set average pressure drop to not available
-
 calc_pres_drop_common_2:
 	; check if the time accumulator is or has become zero to avoid a div/0
 	; as long as no valid pressure value is available, the time accumulator will stay at 0 and the pressure drop calculation kept in reset
-	movf	xB+0,W						; copy time accumulator low byte to WREG, does it set the zero flag?
+	movf	xB+0,W						; copy         time accumulator low  byte   to WREG
+	iorwf	xB+1,W						; inclusive-or time accumulator high byte into WREG, is result = zero ?
 	bz		calc_pres_drop_restart		; YES - reset both accumulators and set average pressure drop to not available
 
 	; duplicate pressure and time accumulators to other variables because xC and xB will get destroyed in div32x16 operation
@@ -444,9 +445,12 @@ calc_pres_drop_common_2:
 	call	div32x16					; xC = xC / xB, xC is average pressure drop in 1/(160 * 2^16) bar/sec
 
 	; is the time accumulator above target level? (only the low byte needs to be evaluated)?
-	incf	ul,W						; load the target threshold, +1 (incf) transforms cpfslt from < to <= operation
-	cpfslt	divA+0						; is the time accumulator > target threshold ?
-	rcall	calc_pres_drop_reduce_accus	; YES - do an accumulator reduction
+	tstfsz	divA+1						; is the time accumulator > 255 seconds?
+	bra		calc_pres_drop_common_2a	; YES - do an accumulator reduction
+	incf	ul,W						; NO  - load the target threshold, +1 (incf) transforms cpfslt from < to <= operation
+	cpfslt	divA+0						;     - is the time accumulator > target threshold ?
+calc_pres_drop_common_2a:
+	rcall	calc_pres_drop_reduce_accus	;       YES - do an accumulator reduction
 
 	; do an additional half-rate (every 2nd second) accumulator reduction
 	btfsc	timebase_1sec				; are we on an even second?
@@ -456,10 +460,11 @@ calc_pres_drop_common_2:
 	movff	mpr+3,POSTDEC0				; store pressure accumulator, highest byte
 	movff	mpr+2,POSTDEC0				; store pressure accumulator, third   byte
 	movff	mpr+1,POSTDEC0				; store pressure accumulator, second  byte
-	movff	mpr+0,POSTDEC0				; store pressure accumulator, lowest  byte
+	movff	mpr+0,INDF0					; store pressure accumulator, lowest  byte
 
-	; store the time accumulator
-	movff	divA+0,INDF1				; store time accumulator (only the low byte will be stored)
+	; store the time accumulator - after copying, FSR1 will have been restored to initial address
+	movff	divA+0,POSTINC1				; store time accumulator, low  byte
+	movff	divA+1,POSTDEC1				; store time accumulator, high byte
 
 	; check if the average pressure drop for transfer to p2deco needs to be limited
 	tstfsz	xC+3						; check if the highest byte is all zero
@@ -485,11 +490,15 @@ calc_pres_drop_common_3:
 	bsf		divA+1,int_not_avail_flag	; YES - set pressure drop to not available, too
 
 	; set the average pressure drop as outdated if time_accu (divA) < (target threshold / 2)
-	rrncf	ul,W						; load time accumulator target value / 2 into WREG
-	decf	WREG,W						; subtract 1 to transform cpfsgt from > to >= operation
+	movlw	offset_FSR1_time_accu+1		; address high byte of time accumulator
+	tstfsz	PLUSW1						; time accumulator > 255 ?
+	bra		calc_pres_drop_common_3a	; YES - can not be outdated then
+	rrncf	ul,W						; NO  - load time accumulator target value / 2 into WREG
+	decf	WREG,W						; subtract 1 to transform cpfsgt from > into >= operation
 	cpfsgt	INDF1						; time accumulator < (target threshold / 2) ?
 	bsf		divA+1,int_outdated_flag	; YES - set outdated flag
 
+calc_pres_drop_common_3a:
 	; write average pressure drop to p2deco interface
 	movlw	offset_FSR2_press_drop+0	; load index of average pressure drop, low  byte
 	movff	divA+0,PLUSW2				; store         average pressure drop, low  byte
@@ -545,8 +554,9 @@ calc_pres_drop_restart:
 	clrf	POSTDEC0					; clear pressure accumulator, second  byte
 	clrf	POSTDEC0					; clear pressure accumulator, lowest  byte
 
-	; clear time accumulator
-	clrf	INDF1						; clear time accumulator
+	; clear time accumulator - after clearing, FSR1 will have been restored to initial address
+	clrf	POSTINC1					; clear time accumulator, low  byte
+	clrf	POSTDEC1					; clear time accumulator, high byte
 
 	; clear pressure drop and set it to not available
 	movlw	offset_FSR2_press_drop+0	; load index of average  pressure drop, low  byte
@@ -605,6 +615,9 @@ configure_sac_calculation_5:
 ;-----------------------------------------------------------------------------
 ; Update TR module
 ;
+
+ IFDEF _rx_update
+
 	global	update_tr_module
 update_tr_module:
 	movlw	LOW   rx_firmware_storage	; setup program memory read for embedded TR firmware
@@ -657,6 +670,7 @@ update_tr_module_done:
 	call	I2C_probe_OSTC_rx			;     - give it a 2nd try
 	return								;     - finally done (whatever result on 2nd tray)
 
+ ENDIF	; _rx_update
 
 ;=============================================================================
 

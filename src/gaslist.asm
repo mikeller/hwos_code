@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File gaslist.asm                          combined next generation V3.03.2
+;   File gaslist.asm                          combined next generation V3.03.5
 ;
 ;   Managing OSTC gas list
 ;
@@ -427,18 +427,21 @@ gaslist_strcat_gas_better1:
 gaslist_strcat_gas_type:
 	lfsr	FSR1,opt_gas_type			; load base address of gas types
 	movf	gaslist_gas,W				; load index to WREG (0-4 for gases, 5-9 for diluents)
-	decf	PLUSW1,W					; read gas/dil type into WREG and...
-										; ...decrement by 1  (-1 for disabled,  0 for first,  1 for travel/normal, 2 for deco)
-	bnz		gaslist_strcat_gas_type_1	; type = first? NO  - continue with checking for deco gas
+	decf	PLUSW1,W					; get and decrement gas type (-1 for disabled,  0 for first,  1 for work/normal, 2 for deco)
+	bnz		gaslist_strcat_gas_type_1	; type = first? NO  - continue with checking for work and deco gas
 	PUTC	"*"							;               YES - print "*" for first
 	return								;                   - done
 gaslist_strcat_gas_type_1:
-	decf	WREG,W						; decrement gas type (-2 for disabled, -1 for first,  0 for travel/normal, 1 for deco)
-	decf	WREG,W						; decrement gas type (-3 for disabled, -2 for first, -1 for travel/normal, 0 for deco)
-	bnz		gaslist_strcat_gas_type_2	; type = deco? NO  - neither first nor deco
+	decf	WREG,W						; decrement gas type (-2 for disabled, -1 for first,  0 for work/normal, 1 for deco)
+	bnz		gaslist_strcat_gas_type_2	; type = work? NO  - continue with checking for deco gas
+	PUTC	"\xb8"						;              YES - print down-arrow for a work gas
+	return								;                  - done
+gaslist_strcat_gas_type_2:
+	decf	WREG,W						; decrement gas type (-3 for disabled, -2 for first, -1 for work/normal, 0 for deco)
+	bnz		gaslist_strcat_gas_type_3	; type = deco? NO  - neither first nor deco
 	PUTC	"="							;              YES - print "=" for a deco gas
 	return								;                   - done
-gaslist_strcat_gas_type_2:
+gaslist_strcat_gas_type_3:
 	PUTC	" "							; neither first nor deco, print a space
 	return
 
@@ -825,28 +828,31 @@ gaslist_spdepthminus2:
 
 
 ;----------------------------------------------------------------------------
-; Compute MOD from char_I_ppO2_max_work/char_I_ppO2_max_deco and current O2 ratio
+; Compute MOD from O2 ratio and char_I_ppO2_max_work / char_I_ppO2_max_deco
+; Compute MOD from O2 ratio and char_I_ppO2_max_deco
 ;
 ; Input:  gaslist_gas                   = current gas index.
 ;         opt_gas_O2_ratio[gaslist_gas] = current O2 ratio
 ; Output: WREG                          = MOD [m]
 ;
 gaslist_calc_mod:
-	movf	gaslist_gas,W				; load index (0...9)
-	lfsr	FSR1,opt_gas_O2_ratio		; load base address of opt_gas_O2_ratio
-	movff	PLUSW1,xB+0					; read O2 ratio into xB+0
 	lfsr	FSR1,opt_gas_type			; load base address of opt_gas_type
-	movff	PLUSW1,xA+0					; read gas/dil type into xA+0     (used as temp here)
-	movff	char_I_ppO2_max_deco,xB+1	; get max ppO2 for deco into xB+1 (used as temp here)
+	movf	gaslist_gas,W				; load index (0...9)
+	movff	PLUSW1,xA+0					; read gas/dil type     into xA+0 (used as temp here)
+	movff	char_I_ppO2_max_work,xB+1	; get max ppO2 for deco into xB+1 (used as temp here)
 	movlw	.3							; type code for deco gases
-	cpfseq	xA+0						; is it a deco gas?
-	movff	char_I_ppO2_max_work,xB+1	; NO - overwrite ppO2 max with working phase max
-	movf	xB+1,W						; copy resulting ppO2 max into WREG
+	cpfslt	xA+0						; is it a deco gas?
+gaslist_calc_mod_deco:
+	movff	char_I_ppO2_max_deco,xB+1	; YES - overwrite/get ppO2 max with/for work
+	lfsr	FSR1,opt_gas_O2_ratio		; load base address of opt_gas_O2_ratio
+	movf	gaslist_gas,W				; load index (0...9)
+	movff	PLUSW1,xB+0					; read O2 ratio into xB+0
+	movf	xB+1,W						; copy ppO2 max into WREG
 	clrf	xB+1						; clear xB+1 for div16x16 operation
 	mullw	.10							; multiply ppO2 max value with 10
 	MOVII	PROD,xA						; copy result to xA
 	call	div16x16					; xC = xA / xB with xA as remainder
-	movf	xC+0,W						; copy   low  byte of the result to WREG
+	movf	xC+0,W						; copy low  byte of the result to WREG
 	addlw	-.10						; subtract 10 cbar
 	return								; return with final result [in meters] in WREG
 
@@ -925,16 +931,24 @@ gaslist_MOD_END:
 ;
 	global	gaslist_reset_mod_title
 gaslist_reset_mod_title:
-	STRCAT_TEXT tDepthReset
-	rcall	gaslist_calc_mod			; compute MOD into WREG
-	movwf	lo							; copy result to lo
+	STRCAT_TEXT tDepthReset				; print "Reset to MOD:"
+	PUTC	" "							; add a space char
 	lfsr	FSR1,opt_gas_change			; load base address of opt_gas_change
 	movf	gaslist_gas,W				; load index (0-9)
-	movf	PLUSW1,W					; read change depth into WREG
+	movff	PLUSW1,hi					; read change depth into hi
+	rcall	gaslist_calc_mod			; compute MOD for ppO2 max work/deco dependent on gas type into WREG
+	movwf	lo							; copy (true) MOD   to lo
+	movf	hi,W						; copy change depth to WREG
 	cpfslt	lo							; change depth > MOD ?
-	bra		gaslist_strcat_depth		; NO  - return
-	call	TFT_warning_color			; YES - use red color
-	bra		gaslist_strcat_depth		;     - return
+	bra		gaslist_strcat_depth		; NO  - print MOD from value in lo
+	call	TFT_attention_color			; YES - use attention color
+	rcall	gaslist_calc_mod_deco		;     - compute MOD for ppO2 max deco into WREG
+	movwf	up							;     - copy result to up
+	movf	hi,W						;     - copy change depth to WREG again
+	cpfslt	up							;     - change depth > MOD deco ?
+	bra		gaslist_strcat_depth		;       NO  - print MOD from value in lo, keeping attention color
+	call	TFT_warning_color			;       YES - switch to warning color
+	bra		gaslist_strcat_depth		;           - print MOD from value in lo
 
 
 ; set change depth of gas in gaslist_gas (0-9) to its MOD

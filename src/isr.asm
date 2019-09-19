@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File isr.asm                              combined next generation V3.03.4
+;   File isr.asm                              combined next generation V3.03.7
 ;
 ;   INTERUPT subroutines
 ;
@@ -40,7 +40,6 @@ HighInt:
 	; initialize interrupt code
 	banksel	isr_backup					; default bank for all ISR code is bank ISR data
 	rcall	isr_registers_backup		; back-up registers
-
 	; serve buttons
 	btfsc	PIR1,TMR1IF					; timer 1 interrupt (button hold-down timer)?
 	rcall	timer1int					; YES - reset timer
@@ -55,6 +54,9 @@ HighInt:
 	rcall	isr_uart2					; YES - get a byte from the IR/S8 link
 	btfsc	PIR2,TMR3IF					; timer 3 interrupt?
 	rcall	isr_timer3					; YES - check bytes received from IR/S8 link for being a valid telegram
+ ELSE	
+    	bcf	PIR3,RC2IF					; Clear UART 2 interrupt?
+	bcf	PIR2,TMR3IF					; Clear timer 3 interrupt?
  ENDIF
 
 	; serve pressure and temperature sensor
@@ -151,6 +153,7 @@ isr_registers_restore:
 ; Take a byte received on IR/S8 link and slot it into the RX buffer
 ;
 isr_uart2:
+	bcf	PIR3,RC2IF					; Clear UART 2 interrupt flag
 	banksel	RCREG2						; RC*2 is outside access RAM
 	movff	RCREG2,isr_lo				; copy received byte to isr_lo
 	bcf		RCSTA2,CREN					; clear receiver status
@@ -239,10 +242,10 @@ isr_timer3_s8:
 	movff	ir_s8_buffer+.14,hud_battery_mv+1
 
 	btfsc	trigger_S8_data_update		; last data already processed?
-	bra		isr_timer3_reload			; NO  - skip copying new results
+	bra		isr_timer3_exit			; NO  - skip copying new results (And not reload the timeout)
 	bsf		trigger_S8_data_update		; YES - set flag for new data available
-										;     - copy more data
 
+	;     - copy more data
 	movff	ir_s8_buffer+.4, s8_rawdata_sensor1+0
 	movff	ir_s8_buffer+.5, s8_rawdata_sensor1+1
 	movff	ir_s8_buffer+.6, s8_rawdata_sensor1+2
@@ -331,6 +334,13 @@ isr_tmr7_1a:
 	clrf	sensor1_ppO2				; ...
 	clrf	sensor2_ppO2				; ...
 	clrf	sensor3_ppO2				; ...
+	banksel	s8_rawdata_sensor1
+	CLRI	s8_rawdata_sensor1			; clear all sensor data (raw data)
+	clrf	s8_rawdata_sensor1+2
+	CLRI	s8_rawdata_sensor2			; clear all sensor data (raw data)
+	clrf	s8_rawdata_sensor2+2
+	CLRI	s8_rawdata_sensor3			; clear all sensor data (raw data)
+	clrf	s8_rawdata_sensor3+2
 	banksel	isr_backup					; back to ISR default bank
 
 	bsf		trigger_S8_data_update		; signal a data update
@@ -426,7 +436,7 @@ isr_sensor_state2_2:
 isr_sensor_state2_3:
 	; reset state counter and set update flag
 	clrf	sensor_state_counter				; reset state counter
-	bsf		trigger_pres_update					; signal a pressure update
+;	bsf		trigger_pres_update					; signal a pressure update
 	btfss	reset_max_pressure					; shall clear the max pressure?
 	bra		isr_sensor_state2_3a				; NO  - continue with checking for pressure change
 	bcf		reset_max_pressure					; YES - clear request flag
@@ -520,23 +530,25 @@ sensor_int_state_exit:
 
 
 isr_dimm_tft:							; adjust until max_CCPR1L = CCPR1L
+	btfsc	screen_type3				; screen type 3 ?
+	return								; YES - ignore, no dimming function with screen type 3
 	btfsc	tft_is_dimming				; is the display dimming?
 	return								; YES - ignore
 	movf	max_CCPR1L,W				; NO  - proceed
-	cpfsgt	CCPR1L						; CCPR1L > max_CCPR1L ?
-	bra		isr_dimm_tft2				; NO  - dim up
-	decf	CCPR1L,F					; YES - dim down
-	return								;     - done
+	cpfsgt	CCPR1L						;     - CCPR1L > max_CCPR1L ?
+	bra		isr_dimm_tft2				;       NO  - dim up
+	decf	CCPR1L,F					;       YES - dim down
+	return								;           - done
 isr_dimm_tft2:
-	movf	max_CCPR1L,W
-	sublw	ambient_light_min_eco
+	movf	max_CCPR1L,W				;
+	sublw	ambient_light_min_eco		;
 	cpfsgt	CCPR1L						; CCPR1L > max_CCPR1L - ambient_light_min_eco ?
 	bra		isr_dimm_tft3				; NO  - dim up slow
-	movlw	.10							; YES - dim up faster
-	addwf	CCPR1L,F
+	movlw	.10							; YES - dim up faster (+10)
+	addwf	CCPR1L,F					;     - add to dimming value
 isr_dimm_tft3:
-	incf	CCPR1L,F					; +1
-	return								; done
+	incf	CCPR1L,F					;     - dim up (+1)
+	return								;     - done
 
 
 ;=============================================================================

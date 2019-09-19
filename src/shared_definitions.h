@@ -1,6 +1,6 @@
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ;
-;    shared_definitions.h                     combined next generation V3.03.1
+;    shared_definitions.h                     combined next generation V3.04.3
 ;
 ;    Declare variables used both in C and ASM code
 ;
@@ -89,7 +89,7 @@
 #ifdef __18CXX
 	//---- BANK 3 DATA -------------------------------------------------------
 	// Gather all Data C-Code --> ASM-Code
-	// Memory usage: 240 Byte used, 16 Byte free
+	// Memory usage: 247 Byte used, 9 Byte free
 #   pragma udata overlay bank3=0x300
 #else
 	; in ASM, put the same bank, in overlay mode, at the same address
@@ -158,7 +158,6 @@ VAR_UCHAR (char_I_desaturation_multiplier);		// safety factor, 100 = no conserva
 VAR_UCHAR (char_I_GF_High_percentage);			// GF model high value
 VAR_UCHAR (char_I_GF_Low_percentage);			// GF model low value
 
-VAR_UCHAR (char_I_deco_distance);				// assumed extra depth below required depth for CNS and gas volumes calculations
 VAR_UCHAR (char_I_depth_last_deco);				// depth of the last deco stop in meters
 
 VAR_UCHAR (char_I_deco_model);					// deco model selection: 0 = ZH-L16, 1 = ZH-L16-GF (with gradient factors)
@@ -210,7 +209,7 @@ TAB_UCHAR (char_I_pressure_gas, 2);				// pressure reading, associated gas (1-5)
 TAB_UCHAR (char_I_pressure_age, 2);				// pressure reading, age of data
 TAB_UCHAR (char_I_pressure_stat,2);				// pressure reading, transmitter status data
 
-VAR_UCHAR (char_I_backtrack_time);				// index (in minutes) of backtrack entries in char_I_backtrack_depth
+TAB_UCHAR (char_O_deco_time_for_log, NUM_STOPS_LOG);	// times of the shallowest NUM_STOPS_LOG deco stops
 
 VAR_UINT  (int_O_profiling_overrun);			// current scheduling overrun in ms
 VAR_UINT  (int_O_profiling_overrun_max);		// maximum scheduling overrun in ms
@@ -218,7 +217,16 @@ VAR_UCHAR (char_O_profiling_overrun_phase);		// calculation phase causing the ma
 VAR_UCHAR (char_O_profiling_runs_norm);			// runs per cycle for normal      plan
 VAR_UCHAR (char_O_profiling_runs_alt);			// runs per cycle for alternative plan
 
-TAB_UCHAR (char_O_deco_time_for_log, NUM_STOPS_LOG);	// times of the shallowest NUM_STOPS_LOG deco stops
+VAR_UINT  (int_O_tank_pressure);				// tank pressure for logging in [bar]
+VAR_UINT  (int_O_gas_density);					// gas density of currently breathed mix in multiples of 0.01 grams per liter
+
+VAR_UCHAR (char_I_backtrack_time);				// index (in minutes) of backtrack entries in char_I_backtrack_depth
+VAR_UCHAR (char_I_gas_contingency);				// =1: switch to alternative gas if best gas is depleted
+
+VAR_UCHAR (char_I_gas_density_att);				// threshold for gas density attention [0.1 grams/l]
+VAR_UCHAR (char_I_gas_density_warn);			// threshold for gas density warning   [0.1 grams/l]
+
+VAR_UCHAR (char_I_dil_ppO2_check);				// =1: check ppO2 of the pure diluent against current setpoint
 
 
 #ifdef __18CXX

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File option_table.asm                     combined next generation V3.03.3
+;   File option_table.asm                     combined next generation V3.04.3
 ;
 ;   The Option Table
 ;
@@ -119,6 +119,12 @@ lbl:	db		.2, LOW(defText)	; type2 = STRING
 	extern	char_I_ascent_speed, char_I_descent_speed, tMeterMinute
 	extern	char_I_gas_change_time
 	extern	char_I_max_pres_diff
+	extern	char_I_gas_density_att, char_I_gas_density_warn
+	extern	char_I_dil_ppO2_check
+
+ IFDEF _gas_contingency
+	extern	char_I_gas_contingency
+ ENDIF
 
 
 ;	Option Table - Format:
@@ -135,9 +141,6 @@ lbl:	db		.2, LOW(defText)	; type2 = STRING
 option_table_begin:
 ;=============================================================================
 ; Manage Deco Planer & Dive Parameters
-	OPTION_UINT8p10	odiveInterval,		.0,				.240,			.0,		tMinutes,	volatile,	opt_surface_interval			; transfer register used for deco calculator and simulator
-	OPTION_UINT8p2	obottomTime,		.2,				.60,			.10,	tMinutes,	volatile,	char_I_bottom_time				; transfer register used for deco calculator
-	OPTION_UINT8p3d	obottomDepth,		.12,			.120,			.21,	tMeters,	volatile,	char_I_bottom_depth				; transfer register used for deco calculator and simulator
 	OPTION_ENUM8	oDiveMode,			.5,								.0,		tDvOC,			.8,		opt_dive_mode					; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=PSCR
 	OPTION_ENUM8	oDecoMode,			.2,								.1,		tZHL16,			.9,		char_I_deco_model				; 0 = ZH-L16, 1 = ZH-L16-GF
 	;																							.10										; in use, see below
@@ -189,11 +192,11 @@ option_table_begin:
 	OPTION_UINT8	oGas4He,			.0,				gaslist_max_He,	.0,		tPercent,		.47,	opt_gas_He_ratio+3
 	OPTION_UINT8	oGas5O2,			gaslist_min_o2,	.100,			.21,	tPercent,		.48,	opt_gas_O2_ratio+4				; O2 % of gas 5
 	OPTION_UINT8	oGas5He,			.0,				gaslist_max_He,	.0,		tPercent,		.49,	opt_gas_He_ratio+4				; He % of gas 5
-	OPTION_UINT8d	oGas1Depth,			.0,	gaslist_max_change_depth,	.66,	tMeters,		.50,	opt_gas_change+0				; change depth of gas 1
-	OPTION_UINT8d	oGas2Depth,			.0,	gaslist_max_change_depth,	.66,	tMeters,		.51,	opt_gas_change+1
-	OPTION_UINT8d	oGas3Depth,			.0,	gaslist_max_change_depth,	.66,	tMeters,		.52,	opt_gas_change+2
-	OPTION_UINT8d	oGas4Depth,			.0,	gaslist_max_change_depth,	.66,	tMeters,		.53,	opt_gas_change+3
-	OPTION_UINT8d	oGas5Depth,			.0,	gaslist_max_change_depth,	.66,	tMeters,		.54,	opt_gas_change+4				; change depth of gas 5
+	OPTION_UINT8d	oGas1Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.50,	opt_gas_change+0				; change depth of gas 1
+	OPTION_UINT8d	oGas2Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.51,	opt_gas_change+1
+	OPTION_UINT8d	oGas3Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.52,	opt_gas_change+2
+	OPTION_UINT8d	oGas4Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.53,	opt_gas_change+3
+	OPTION_UINT8d	oGas5Depth,			.0,	gaslist_max_change_depth,	.56,	tMeters,		.54,	opt_gas_change+4				; change depth of gas 5
 	OPTION_UINT8	oDil1O2,			gaslist_min_o2,	.100,			.21,	tPercent,		.55,	opt_dil_O2_ratio+0				; O2 % of diluent 1
 	OPTION_UINT8	oDil1He,			.0,				gaslist_max_He,	.0,		tPercent,		.56,	opt_dil_He_ratio+0				; He % of diluent 1
 	OPTION_UINT8	oDil2O2,			gaslist_min_o2,	.100,			.21,	tPercent,		.57,	opt_dil_O2_ratio+1
@@ -267,11 +270,10 @@ option_table_begin:
 	OPTION_UINT8	oCCmaxFracO2,		.80,			.100,			.90,	tPercent,		.183,	char_I_CC_max_frac_O2			; max. O2 % in Loop
 	OPTION_UINT8	oSimSetpoint,		.1,				.5,				.1,		tblank,			.184,	opt_sim_setpoint_number			; setpoint to use for deco calculation
 	OPTION_ENUM8	oCalcAscGas,		calc_gas_options,				.0,		tNo,			.185,	opt_calc_asc_gasvolume			; calculate OC gas volume needs for ascent: no, yes, cave
-	OPTION_BOOL		oSimAGF,											.0,					volatile,	opt_sim_use_aGF					; use GF (no) or aGF (yes) for deco calculation
 	OPTION_ENUM8	oAltMode,			.4,								.0,		tAltModeFly,	.186,	char_I_altitude_wait			; no-fly time calculation for: 0=no-fly, 1=1000m, 2=2000m, 3=3000m
 	OPTION_BOOL		oEnable_IBCD,										.1,						.187,	opt_enable_IBCD					; =1: IBCD warning activated
 	OPTION_UINT8	oAscentSpeed,		.5,				.10,			.10,	tMeterMinute,	.188,	char_I_ascent_speed				; [meter/minute] ascent speed
-	OPTION_UINT8	oGasChangeTime,		.0,				.3,				.1,		tMinutes,		.189,	char_I_gas_change_time			; (extra) time at a stop to change the gas
+	OPTION_UINT8	oGasChangeTime,		.0,				.3,				.0,		tMinutes,		.189,	char_I_gas_change_time			; (extra) time at a stop to change the gas
 	OPTION_UINT8p5	osatmult,			.100,			.140,			.110,	tPercent,		.190,	opt_sat_multiplier_non_gf		; saturation   factor for NON-GF Mode
 	OPTION_UINT8p5	odesatmult,			.60,			.100,			.90,	tPercent,		.191,	opt_desat_multiplier_non_gf		; desaturation factor for NON-GF Mode
 	OPTION_UINT8	oTransID1_0,		.0,				.255,			.0,		notext,			.192,	opt_transmitter_id_1+0			; ID of transmitter for gas 1 (LOW)
@@ -309,16 +311,18 @@ option_table_begin:
 	OPTION_ENUM8	oTr2ndPres,			tr_pres_options,				.0,		tTrPresNone,	.224,	opt_TR_2nd_pres					; TR functions - 2nd pressure assignment
 	OPTION_ENUM8	oTrBailPres,		tr_pres_options,				.1,		tTrPresNone,	.225,	opt_TR_Bail_pres				; TR functions - bailout pressure assignment
 	OPTION_UINT8p5	oTrMaxDeltaPres,	max_pres_diff_min,max_pres_diff_max,.5,	tbar,			.226,	char_I_max_pres_diff			; TR functions - maximum delta pressure in independent double mode
-	OPTION_BOOL		oRealGasFactorUse,									.0,						.227,	opt_ZfactorUse					; =1: figure in compression factor Z when converting gas volume <-> gas pressure [future option, not used yet]
-	OPTION_UINT8p5	oRealGasFactorTemp,	.0,				.30,			.15,	tLogTunitC,		.228,	opt_ZfactorTemp					; temperature setpoint for compression factor Z                                  [future option, not used yet]
+	;																							.227									; spare / unused
+	;																							.228									; spare / unused
 	OPTION_ENUM8	o2ndDepthDisp,		.2,								.0,		tMaxDepth,		.229,	opt_2ndDepthDisp				; =1: show average depth instead of max depth
 	OPTION_UINT8d	oMaxDepth,			.5,	ostc_depth_max,	ostc_depth_max,		tMeters,		.230,	opt_max_depth					; depth at which a warning will be given
-	OPTION_UINT8	oDescentSpeed,		.5,				.30,			.10,	tMeterMinute,	.231,	char_I_descent_speed			; descent speed for deco calculator                                              [future option, not used yet]
-	OPTION_BOOL		oStoreApnoeDive,									.0,						.232,	opt_store_apnoe_dive			; =1: store dives in apnoe mode into logbook                                     [future option, not used yet]
+	OPTION_UINT8	oDescentSpeed,		.5,				.30,			.10,	tMeterMinute,	.231,	char_I_descent_speed			; descent speed for deco calculator          [future option, not used yet]
+	OPTION_BOOL		oStoreApnoeDive,									.0,						.232,	opt_store_apnoe_dive			; =1: store dives in apnoe mode into logbook
 	OPTION_ENUM8	oTissueGraphics,	tissue_graphics_options,		.0,		tTissuePresSat,	.233,	opt_tissue_graphics 			; =0: show N2 and He pressures, =1: show pressures and saturations
-	OPTION_ENUM8	oLogOffsetStep,		.4,								.0,		tLogOffStep1, volatile,	opt_logoffset_step				; step size when adjusting the log offset
 	OPTION_ENUM8	oLayout,			.2,								.0,		tLayoutNormal,	.234,	opt_layout						; initial layout of dive mode screen =0: normal, =1: big
-	OPTION_BOOL		oExtendedStops,										.1,						.235,	opt_extended_stops				; =1: allow placement of gas switches below the depth of the 1st stop
+	OPTION_BOOL		oExtendedStops,										.1,						.235,	opt_extended_stops				; =1: place gas switches also below 1st stop depth
+	OPTION_UINT8	oGasDensityAttention,.40,			.80,			.60,	notext,			.236,	char_I_gas_density_att			; threshold for gas density attention [0.1 grams/l]
+	OPTION_UINT8	oGasDensityWarning,	.40,			.80,			.65,	notext,			.237,	char_I_gas_density_warn			; threshold for gas density warning   [0.1 grams/l]
+	OPTION_BOOL		oDilppO2Check,										.1,						.238,	char_I_dil_ppO2_check			; =1: check ppO2 of the pure diluent against current setpoint
 
 	;	+---------------------------+
 	;	| /|\                       |
@@ -330,6 +334,20 @@ option_table_begin:
 	OPTION_UINT8p10	oPPO2MinCC,		ppo2_warning_loop_lowest,	ppo2_warning_loop_highest,	ppo2_warning_loop_default,	notext,	.172,	char_I_ppO2_min_loop	; ppO2 min on Loop and for pure diluent in pSCR
 	OPTION_UINT8p10	oPPO2Max,		ppo2_warning_high_lowest,	ppo2_warning_high_highest,	ppo2_warning_high_default,	notext,	.10,	char_I_ppO2_max_work	; ppO2 max while in working phase
 	OPTION_UINT8p10	oPPO2MaxDeco,	ppo2_warning_deco_lowest,	ppo2_warning_deco_highest,	ppo2_warning_deco_default,	notext,	.171,	char_I_ppO2_max_deco	; ppO2 max while in deco stops phase
+
+
+;=============================================================================
+; volatile options
+
+	OPTION_UINT8p10	odiveInterval,		.0,				.240,			.0,		tMinutes,	volatile,	opt_surface_interval			; additional surface interval for deco calculator
+	OPTION_UINT8p2	obottomTime,		.2,				.60,			.10,	tMinutes,	volatile,	char_I_bottom_time				; bottom time  for deco calculator
+	OPTION_UINT8p3d	obottomDepth,		.12,			.120,			.21,	tMeters,	volatile,	char_I_bottom_depth				; bottom depth for deco calculator and simulator
+	OPTION_BOOL		oSimAGF,											.0,					volatile,	opt_sim_use_aGF					; use GF (no) or aGF (yes) in deco calculator
+	OPTION_ENUM8	oLogOffsetStep,		.4,								.0,		tLogOffStep1, volatile,	opt_logoffset_step				; step size when adjusting the log offset
+
+ IFDEF _gas_contingency
+	OPTION_BOOL		oGasContingency,									.0,					volatile,	char_I_gas_contingency			; =1: switch to alternative gas if best gas is depleted
+ ENDIF
 
 
 ;=============================================================================

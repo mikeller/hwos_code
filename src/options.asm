@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File options.asm                          next combined generation V3.03-1
+;   File options.asm                          next combined generation V3.04.3
 ;
 ;   Manage all options data.
 ;
@@ -103,6 +103,9 @@ option_check_all_3:
 	call	gaslist_cleanup_list			; check and correct multiple or none First diluent
 	bcf		is_diluent_menu					; setup checking gases
 	call	gaslist_cleanup_list			; check and correct multiple or none First gas
+ IFNDEF _gauge_mode
+	call	option_cleanup_gauge			; check and correct Gauge mode
+ ENDIF
  IFDEF _ccr_pscr
 	call	option_cleanup_oCCRMode			; check and correct CCR / pSCR mode
  ENDIF
@@ -227,6 +230,7 @@ opt_reset_string:
 ;
 	global	option_save_all					; save options to EEPROM
 option_save_all:
+	bcf	PIR3,RC2IE
 	;---- Save option serial into EEPROM to detect reset and new version
 	movlw	LOW(eeprom_serial_save)
 	movwf	EEADR
@@ -253,6 +257,7 @@ option_save_all_1:
 	movlw	HIGH(option_table_end)
 	cpfseq	FSR0H
 	bra		option_save_all_2				; not yet done...
+	bsf	PIR3,RC2IE
 	return									; all done
 option_save_all_2:
 	rcall	option_save						; save one option...
@@ -480,7 +485,7 @@ option_inc_enum8_3:
 	bnz		option_inc_enum8_3a				;       NO  - in some other mode
  IFNDEF _ccr_pscr
 	incf	INDF1,f							;       YES - no CCR mode compiled in, advance to gauge mode
-	bra		option_inc_enum8_3_exit			;           - done
+	bra		option_inc_enum8_3a				;           - check if gauge mode is available
  ENDIF	; _ccr_pscr
  IFDEF _rx_functions
 	global	option_cleanup_oTrMode_CCR		; embedded clean-up entry-point
@@ -491,14 +496,22 @@ option_cleanup_oTrMode_CCR:					; entry point from cleanup during restart
 	bra		option_inc_enum8_3_reset		; YES - revert mode to 1 (on)
  ENDIF	; _rx_functions
 option_inc_enum8_3a:						; any mode other than CCR
+ IFNDEF _gauge_mode
+	movf	INDF1,W							; get option value: 0=OC, 1=CCR, 2=Gauge, 3=Apnea, 4=pSCR
+	xorlw	.2								; in Gauge mode?
+	bnz		option_inc_enum8_3b				; NO  - in some other mode
+	incf	INDF1,f							;       YES - no Gauge mode compiled in, advance to Apnea mode
+	bra		option_inc_enum8_3_exit			;           - done (Apnea mode is always available)
+ ENDIF	; _gauge_mode
+option_inc_enum8_3b:
  IFNDEF _ccr_pscr
 	movf	INDF1,W							; get option value: 0=OC, 1=CCR, 2=Gauge, 3=Apnea, 4=pSCR
 	xorlw	.4								; in pSCR mode?
-	bnz		option_inc_enum8_3b				; NO  - in some other mode
+	bnz		option_inc_enum8_3c				; NO  - in some other mode
 	clrf	INDF1							; YES - no pSCR mode compiled in, advance to 0 "OC"
 	bra		option_inc_enum8_3_exit			;     - done
  ENDIF	; _ccr_pscr
-option_inc_enum8_3b:
+option_inc_enum8_3c:
 	global	option_cleanup_oTrMode_no_CCR	; embedded clean-up entry-point
 option_cleanup_oTrMode_no_CCR:				; entry point from cleanup during restart
 	movff	opt_TR_mode,WREG				; get TR mode
@@ -509,6 +522,7 @@ option_inc_enum8_3_reset:					; YES - revert to mode 1 (on)
 	movff	WREG,opt_TR_mode				; write to option
 option_inc_enum8_3_exit:
 	return									; done
+
 option_inc_enum8_4:
  IFDEF _rx_functions
 	; Now some rather crude hack to advance opt_TR_mode in dependency of opt_dive_mode
@@ -537,6 +551,19 @@ option_inc_enum8_5:
 
 option_inc_string:							; no editing available
 	return
+
+
+ IFNDEF _gauge_mode
+option_cleanup_gauge:
+	movff	opt_dive_mode,WREG				; get dive mode into WREG (0=OC, 1=CCR, 2=Gauge, 3=Apnea, 4=pSCR)
+	xorlw	.2								; in Gauge mode?
+	bnz		option_cleanup_gauge_1			; NO  - done
+	banksel	opt_dive_mode					; YES - setting not allowed, select options bank
+	clrf	opt_dive_mode					;     - reset to OC mode
+	banksel	common							;     - back to bank common
+option_cleanup_gauge_1:
+	return									; done
+ ENDIF
 
 
  IFDEF _ccr_pscr
@@ -665,16 +692,25 @@ option_draw_unit:
 
 ;---- Draw an enumerated value (set of translated strings)
 option_draw_enum8:
-	movf	INDF1,W							; get current value
-	cpfsgt	opt_max							; bound value
-	clrf	WREG
-	addwf	WREG							; *= 2
-	addwf	opt_inc,W						; base text + 2 * value
-	movwf	FSR1L
-	movlw	.0
-	addwfc	opt_min,W						; propagate carry...
+	movff	INDF1,lo						; memorize current value
+	movf	INDF1,W							; copy current value to WREG
+	cpfsgt	opt_max							; max value (= highest usable value + 1) > current value?
+	clrf	WREG							; NO  - to avoid printing rubbish, reset to first value
+	addwf	WREG							; current value *= 2
+	addwf	opt_inc,W						; base text + 2 * current value
+	movwf	FSR1L							; load FSR0
+	movlw	.0								; propagate carry...
+	addwfc	opt_min,W						; ...
 	movwf	FSR1H							; ...into FSR1
-	goto	strcat_text
+	call	strcat_text						; print text
+	movf	opt_default,W					; get default value
+	cpfseq	lo								; compare with memorized current value, equal?
+	bra		option_draw_enum8_1				; NO  - not default, add *
+	return									; YES - default, done
+option_draw_enum8_1:
+	PUTC	"*"								; print "*"
+	return									; done
+
 
 ;-----------------------------------------------------------------------------
 

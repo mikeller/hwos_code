@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File eeprom_rs232.asm                     combined next generation V3.03.1
+;   File eeprom_rs232.asm                     combined next generation V3.04.3
 ;
 ;   Internal EEPROM, RS232
 ;
@@ -90,12 +90,12 @@ write_eeprom:
 	movlw	0xAA
 	movwf	EECON2
 	bsf		EECON1,WR
-	bsf		INTCON,GIE					; ...but the flag for the ISR routines were still set, so they will interrupt now!
 
 write_eep2:
 	btfsc	EECON1,WR
 	bra		write_eep2					; wait about 4ms...
 	bcf		EECON1,WREN
+	bsf		INTCON,GIE					; ...but the flag for the ISR routines were still set, so they will interrupt now!
 	return
 
 ;=============================================================================
@@ -108,10 +108,10 @@ disable_ir_s8:
 	clrf	TXSTA2
 	clrf	RCSTA2
 	banksel	common						; back to bank common
-	bcf		ir_power					; IR off
-	bcf		mcp_power					; power-down instrumentation amp
-	bsf		s8_npower					; power-down S8 digital interface
-	bcf		s8_digital_avail			; digital S8 interface not available
+	bcf	ir_power					; IR off
+	bcf	mcp_power					; power-down instrumentation amp
+	bsf	s8_npower					; power-down S8 digital interface
+	bcf	s8_digital_avail				; digital S8 interface not available
 	return
 
 
@@ -138,16 +138,16 @@ enable_ir_s8:
 	return
 
 enable_s8:
-	; Check for Digital/Analog
-	bsf		s8_npower					; power-down S8 HUD
-	WAITMS	d'1'						; very short delay
-	bsf		mcp_power					; power-up instrumentation amp
-	btfss	mcp_power
-	bra		$-6
-	banksel	TXSTA2						; select bank for IO register access
+    	banksel	TXSTA2						; select bank for IO register access
 	clrf	TXSTA2
 	clrf	RCSTA2
 	banksel	common						; back to bank common
+	; Check for Digital/Analog
+	bsf		s8_npower					; power-down S8 HUD
+	WAITMS	d'2'						; very short delay
+	bsf		mcp_power					; power-up instrumentation amp
+	btfss	mcp_power
+	bra		$-4
 
 	; It may be digital, check for voltage when isolator is powered
 	bcf		s8_npower					; power S8 HUD
@@ -190,6 +190,7 @@ enable_rs232_1:
 	btfss	speed_is_normal				; speed = normal?
 	bra		enable_rs232_1				; NO - wait for ISR to adjust speed
 	bcf		PORTE,0						; start comm
+	bsf		PORTJ,2						; /Reset (for very old OSTC sport)
 	;initialize serial port1 (TRISC6/7)
 	movlw	b'00100100'					; BRGH=1, SYNC=0
 	movwf	TXSTA1
@@ -204,6 +205,7 @@ disable_rs232:
 	clrf	TXSTA1						; UART disable
 	bcf		PORTC,6						; TX hard to GND
 	bsf		PORTE,0						; stop comm
+	bcf		PORTJ,2						; /Reset (for very old OSTC sport)
 	return
 
 

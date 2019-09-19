@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File convert.asm                           combined next generation V3.0.1
+;   File convert.asm                          combined next generation V3.04.2
 ;
 ;   Converts register values to string
 ;
@@ -16,6 +16,26 @@
 convert	CODE
 
 ;=============================================================================
+
+	global	output99DD_call
+output99DD_call:
+	tstfsz	lo							; value = 0 ?
+	bra		output99_call				; NO  - do normal output
+	movlw	" "							; YES - print a space
+	movwf	POSTINC2					;     - ...
+	bra		output99dd_cont				;     - continue with the double dots
+
+
+	global	output99dd_call
+output99dd_call:
+	tstfsz	lo							; value = 0 ?
+	bra		output99_call				; NO  - do normal output
+output99dd_cont:
+	movlw	"."							; YES - print double dots
+	movwf	POSTINC2					;     - ...
+	movwf	POSTINC2					;     - ...
+	return								;     - done
+
 
 	global	output99_call
 output99_call:

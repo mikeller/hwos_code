@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File customview.asm                       combined next generation V3.03.2
+;   File customview.asm                       combined next generation V3.03.5
 ;
 ;   Custom Views in Surface and Dive Mode
 ;
@@ -98,9 +98,6 @@ surf_customview_toggle:
 	incf	active_customview,F			; number of custom view to show
 
  IFDEF _compass
-	movlw	.6							; index of surface custom view compass
-	cpfseq	active_customview			; will compass be shown in custom view?
-	call	I2C_sleep_accelerometer		; NO - stop accelerometer
 	movlw	.6							; index of surface custom view compass
 	cpfseq	active_customview			; will compass be shown in custom view?
 	call	I2C_sleep_compass			; NO - stop compass
@@ -234,7 +231,6 @@ surf_customview_init_view5:				; view 5: tissue diagram
 
 surf_customview_init_view6:				; view 6: compass
  IFDEF _compass
-	call	I2C_init_accelerometer		; start accelerometer
 	call	I2C_init_compass			; start compass
 	call	TFT_surface_compass_mask	; show compass mask
 	bra		customview_toggle_exit		; done
@@ -422,7 +418,7 @@ menuview_view8:
 menuview_view9:
 	btfsc	FLAG_apnoe_mode				; in apnoe mode?
 	bra		menuview_toggle				; YES - goto next option
-	STRCPY_PRINT "Layout"				; NO  - print "Layout"
+	STRCPY_TEXT_PRINT tDiveLayout		; NO  - print "Layout"
 	bra		menuview_exit				;     - done
 
 ;-----------------------------------------------------------------------------
@@ -432,9 +428,6 @@ menuview_view9:
 dive_customview_toggle:
 	incf	active_customview,F			; increment number of custom view to show
 
-	movlw	index_compass_dm			; index of custom view compass
-	cpfseq	active_customview			; will compass be shown in custom view?
-	call	I2C_sleep_accelerometer		; NO - stop accelerometer
 	movlw	index_compass_dm			; index of custom view compass
 	cpfseq	active_customview			; will compass be shown in custom view?
 	call	I2C_sleep_compass			; NO - stop compass
@@ -542,7 +535,6 @@ init_gf_factors:
 
 init_TFT_dive_compass:					; compass
  IFDEF _compass
-	call	I2C_init_accelerometer		; start accelerometer
 	call	I2C_init_compass			; start compass
 	call	TFT_dive_compass_mask		; show compass mask
 	bra		customview_toggle_exit		; done

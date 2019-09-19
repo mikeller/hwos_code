@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File aa_wordprocessor.asm                 combined next generation V3.03.1
+;   File aa_wordprocessor.asm                 combined next generation V3.03.7
 ;
 ;   Anti-aliased word processor
 ;
@@ -47,10 +47,7 @@
 	extern	aa_font34_block
 	extern	aa_font48_block
 	extern	aa_font90_block
-
- IFDEF _huge_font
 	extern	aa_font92_block
- ENDIF
 
 	extern	convert_for_display2
 
@@ -121,10 +118,8 @@ aa_char_3:
 
 	; 4: LARGE font ------------------------------------------------------
 aa_char_4:
- IFDEF _huge_font
 	decfsz	WREG				 	; requested large font?
 	bra		aa_char_5				; NO
- ENDIF
 	movlw	LOW   aa_font90_block
 	movwf	TBLPTRL
 	movlw	HIGH  aa_font90_block
@@ -133,7 +128,6 @@ aa_char_4:
 	movwf	TBLPTRU
 	bra		aa_char_99
 
- IFDEF _huge_font
 	; 5: XTRA LARGE font -------------------------------------------------
 aa_char_5:
 	movlw	LOW   aa_font92_block
@@ -142,7 +136,7 @@ aa_char_5:
 	movwf	TBLPTRH
 	movlw	UPPER aa_font92_block
 	movwf	TBLPTRU
- ENDIF
+
 
 	; Execute font block -------------------------------------------------
 aa_char_99:
@@ -155,7 +149,7 @@ aa_char_99:
 aa_char_30:
 	tblrd*+							; read FROM char
 	movf	TABLAT,W				; get it, and set Z,N
-	bz		aa_char_32				; branch if end of translation table reached
+	bz		aa_char_32				; break at end of translations
 
 	tblrd*+							; read TO char
 	cpfseq	PRODL					; FROM == current char ?
@@ -426,6 +420,8 @@ aa_decode_3:
 
 	btfsc	screen_type2			; display 2 ?
 	bra		aa_decode_3_display2	; YES
+	btfsc	screen_type3			; display 3 ?
+	bra		aa_decode_3_display3	; YES
 
 	movff	PRODH,PORTA				; move high byte to PORTA
 	movff	PRODL,PORTH				; move low  byte to PORTH
@@ -448,6 +444,17 @@ aa_decode_3_display2:
 	bsf		tft_nwr					; tick
 	decf	aa_bitlen,F
 	bnz		aa_decode_3_display2
+	bra		aa_decode_3_done
+
+aa_decode_3_display3:
+	movff	PRODH,PORTH				; move high byte to PORTH (DISPLAY is big endian)
+	bcf		tft_nwr
+	bsf		tft_nwr					; tick
+	movff	PRODL,PORTH				; move low byte to PORTH
+	bcf		tft_nwr
+	bsf		tft_nwr					; tick
+	decf	aa_bitlen,F
+	bnz		aa_decode_3_display3
 
 aa_decode_3_done:
 	;---- BYTE-CODE LOOP -------------------------------------------------
@@ -464,7 +471,7 @@ aa_decode_3_done:
 ;------------------------------------------------------------------------------
 ; Setup pointers for a char:
 ; Inputs : buffer : string to print (NULL TERMINATED)
-; Output : TFT commands on port D + clocks
+; Output : TFT commands on PORTH (Upper) and PORTA (lower) + clocks
 ;
 	global	aa_wordprocessor		; callable from C-code
 aa_wordprocessor:

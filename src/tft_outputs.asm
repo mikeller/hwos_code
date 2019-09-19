@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft_outputs.asm                      next combined generation V3.03.4
+;   File tft_outputs.asm                      next combined generation V3.04.3
 ;
 ;   high-level Display Outputs
 ;
@@ -40,6 +40,7 @@
 ;---- external Texts ---------------------------------------------------------
 
 	extern	tFirmware
+	extern	tHardware
 	extern	tSerial
 	extern	tTotalDives
 	extern	tBatteryV
@@ -225,7 +226,7 @@ TFT_color_code_tank_pres_3:
 
 
 	global	TFT_color_code_gaslist
-TFT_color_code_gaslist:					; color-code current row in gaslist (%O2 in hi) according to current absolute pressure
+TFT_color_code_gaslist:					; color-code a gas (%O2 in hi) according to current absolute pressure
 ; Check very high ppO2 manually
 	MOVII	pressure_abs_10,xA
 	movff	hi,xB+0
@@ -247,14 +248,14 @@ TFT_color_code_gaslist:					; color-code current row in gaslist (%O2 in hi) acco
 	bra		TFT_warning_color			; YES - set warning color and return
 ; Check for high ppO2
 	movff	char_O_deco_info,WREG		; bank-safe copy of deco info vector
-	btfsc	WREG,deco_flag				; are we in deco?
+	btfsc	WREG,deco_mode				; are we in deco?
 	bra		TFT_color_code_gaslist_deco	; YES - check against ppO2 max deco only
 										; NO  - check against ppO2 max travel/normal and deco
 ; Check for ppO2 max travel/normal
 	movff	char_I_ppO2_max_work,WREG	; ppo2 max during working phase
 	mullw	d'100'						; char_I_ppO2_max_work*100
-	MOVII	PRODL,sub_b
-	INCI	sub_b						; add 1 mbar to avoid warning on equal
+	ADDLI	ppO2_margin_on_max,PROD		; add ppO2 margin on max value to compensate for surface pressures > 1000 hPa
+	MOVII	PRODL,sub_b					; copy result to sub_b
 	call	cmpU16						; compare (sub_a - sub_b)
 	btfss	neg_flag					; higher than ppO2 max travel/deco?
 	rcall	TFT_attention_color			; YES - set attention color
@@ -262,8 +263,8 @@ TFT_color_code_gaslist:					; color-code current row in gaslist (%O2 in hi) acco
 TFT_color_code_gaslist_deco:
 	movff	char_I_ppO2_max_deco,WREG	; ppo2 max for deco
 	mullw	d'100'						; char_I_ppO2_max_deco * 100
-	MOVII	PRODL,sub_b					; copy product to sub_b
-	INCI	sub_b						; add 1 mbar to avoid warning on equal
+	ADDLI	ppO2_margin_on_max,PROD		; add ppO2 margin on max value to compensate for surface pressures > 1000 hPa
+	MOVII	PRODL,sub_b					; copy result to sub_b
 	call	cmpU16						; compare (sub_a - sub_b)
 	btfss	neg_flag					; higher than ppO2 max deco?
 	bra		TFT_warning_color			; YES - set warning color and return
@@ -294,7 +295,7 @@ TFT_color_code_stop:					; color-code the stop depth: memo      color if below s
 	movff	char_O_deco_gas+0,WREG		; get flag for invalid deco data
 	btfsc	WREG,char_invalid_flag		; is the invalid flag set?
 	bra		TFT_disabled_color			; YES - set to disabled color and return
-	movff	char_O_deco_depth,WREG		; NO  - get depth of first stop in meters into WREG
+	movff	char_O_deco_depth+0,WREG	; NO  - get depth of first stop in meters into WREG
 	subwf	depth_meter,W				;     - compute current depth - stop depth
 	btfsc	STATUS,C					;     - result negative?
 	bra		TFT_color_code_stop_1		;       NO  - not shallower than stop depth, check for ascent advice
@@ -307,15 +308,14 @@ TFT_color_code_stop:					; color-code the stop depth: memo      color if below s
 	bra		TFT_warning_color			;                   YES - set to warning   color and return
 	bra		TFT_attention_color			;                   NO  - set to attention color and return
 TFT_color_code_stop_1:
-	movff	char_O_deco_info,WREG		; get deco info vector
-	btfss	WREG,deco_flag				; in deco mode?
-	bra		TFT_memo_color				; NO  - set to memo color and return
-	movff	char_O_deco_depth,WREG		; YES - get depth of first stop in meters into WREG
-	incf	WREG,W						;     - compute stop depth + 1 meter
-	subwf	depth_meter,W				;     - compute current depth - (stop depth + 1 meter)
-	btfss	STATUS,C					;     - result negative?
-	bra		TFT_memo_color				;       YES - within 1 meter of stop depth
-	bsf		win_invert					;       NO  - deeper that 1 meter below stop depth, give ascent advice
+	movff	char_O_deco_depth+0,WREG	; get depth of first stop in meters into WREG
+	incf	WREG,W						; compute stop depth + 1 meter
+	subwf	depth_meter,W				; compute current depth - (first stop depth + 1 meter)
+	btfss	STATUS,C					; result negative?
+	bra		TFT_memo_color				; YES - within 1 meter of stop depth, use memo color
+	btfss	deco_region					; NO  - within deco stops region?
+	bra		TFT_memo_color				;       NO  - use memo color
+	bsf		win_invert					;       YES - give ascent advice, ...
 	bra		TFT_advice_color			;           - ... and return
 
 
@@ -366,7 +366,7 @@ TFT_color_code_cns:						; color-code CNS values (CNS in hi:lo [%])
 	bcf		hi,int_warning_flag			;       clear warning   flag (it may be set)
 	bcf		hi,int_attention_flag		;       clear attention flag (it may be set)
 	bra		TFT_disabled_color			;       set to disabled color and return
-TFT_color_code_cns_1
+TFT_color_code_cns_1:
 	btfss	hi,int_warning_flag			; is the warning flag set?
 	bra		TFT_color_code_cns_2		; NO
 	bcf		hi,int_warning_flag			; YES - clear warning   flag
@@ -417,7 +417,7 @@ TFT_color_code_ppo2_2:
 
 TFT_color_code_ppo2_hud:				; color-code ppO2 values (ppO2 in --:lo [cbar]) by its value
 	movff	char_O_deco_info,WREG		; get the deco info vector
-	btfss	WREG,deco_flag				; are we in deco?
+	btfss	WREG,deco_mode				; are we in deco?
 	bra		TFT_color_code_ppo2_hud_a	; NO  - load normal max value as threshold
 	movff	char_I_ppO2_max_deco,WREG	; YES - load deco value as threshold
 	bra		TFT_color_code_ppo2_hud_b
@@ -447,8 +447,10 @@ TFT_color_code_ppo2_hud_cont:
 ;=============================================================================
 
 TFT_color_code_battery:					; color-code the battery display, with battery percent in lo
-	movlw	color_code_battery_low		; get warning threshold
-	cpfsgt	lo							; is battery percent < threshold?
+	movlw	battery_warn_level_36+1		; get threshold for 3.6 Volt battery warning, incremented by 1
+	btfss	battery_is_36v				; actually a 3.6 Volt battery detected?
+	movlw	battery_warn_level_15+1		; NO - replace with 1.5 Volt battery warning, incremented by 1
+	cpfsgt	batt_percent				; is battery percent < threshold?
 	bra		TFT_warning_color			; YES - set to warning color and return
 	bra		TFT_memo_color				; NO  - set to memo    color and return
 
@@ -967,7 +969,17 @@ TFT_show_ndl_mask:
 										;     - set position
 	WIN_STD dm_ndl_text_column, dm_ndl_text_row
 	STRCPY_TEXT_PRINT tNDL				;     - print "NDL"
-	bra		TFT_standard_color			;     - done
+	btfss	deco_region					;     - was the dive within deco stops region?
+	bra		TFT_standard_color			;       NO  - done
+	btfsc	safety_stop_active			;       YES - safety stop shown?
+	bra		TFT_standard_color			;             YES - done
+TFT_show_slow_reminder:
+	call	TFT_attention_color			;             NO  - set color
+										;                 - set position
+	WIN_STD dm_safetystop_text_column+.5,dm_safetystop_text_row+.5
+	STRCPY_TEXT  tSlow					;                 - print "SLOW" reminder
+	STRCAT_PRINT 0x94					;                 - append an up-arrow
+	bra		TFT_standard_color			;                 - done
 
 
 	global	TFT_show_tts
@@ -1025,16 +1037,20 @@ TFT_show_ndl:
 	btfsc	dive_main_menu				; is the dive mode menu shown?
 	return								; YES - abort
 	movff	char_O_NDL_norm,lo			; NO  - get NDL time in normal plan
-	btfsc	alt_layout_active			;     - alternative layout active?
-	bra		TFT_show_ndl_alt			;       YES - use alternative layout
-	;bra	TFT_show_ndl_norm			;       NO  - use normal layout
+	btfsc	deco_locked					;     - was the dive in deco?
+	bra		TFT_show_ndl_norm			;       YES - use normal layout
+	btfsc	alt_layout_active			;       NO  - alternative layout active?
+	bra		TFT_show_ndl_alt			;             YES - use alternative layout
+	;bra	TFT_show_ndl_norm			;             NO  - use normal layout
 
 TFT_show_ndl_norm:						; set position
 	WIN_MEDIUM dm_ndl_value_col_norm,dm_ndl_value_row_norm
 	call	TFT_memo_color				; set color
 	output_8							; display 0...240
+TFT_show_ndl_exit_1:
 	STRCAT_PRINT "'"					; print minutes symbol
-	bra		TFT_standard_color			; done
+TFT_show_ndl_exit_2:
+	goto	TFT_standard_color			; done
 
 TFT_show_ndl_alt:
 	btfsc	safety_stop_active			; is the safety stop active?
@@ -1045,15 +1061,14 @@ TFT_show_ndl_alt:
 	call	TFT_memo_color				; set color
 	output_99							; display 0...99
 	STRCAT_PRINT ""						; finalize output
-	bra		TFT_standard_color			; done
+	bra		TFT_show_ndl_exit_2			; done
 
 TFT_show_ndl_alt_safety:
 	WIN_MEDIUM dm_ndl_value_col_norm,dm_ndl_value_row_norm
 	call	TFT_memo_color				; set color
 	PUTC	" "							; fill first digit position
 	output_99							; display 0...99
-	STRCAT_PRINT "'"					; print minutes symbol
-	goto	TFT_standard_color			; done
+	bra		TFT_show_ndl_exit_1			; print minutes symbol and done
 
 
 	global	TFT_divemode_sign_show
@@ -1212,13 +1227,7 @@ TFT_show_deco_alt:						; set position for depth
 
 TFT_display_deco_common:
 	movff	char_O_deco_time,lo			; get stop time of the first stop in minutes
-	tstfsz	lo							; stop time = 0 ?
-	bra		TFT_display_deco_1			; NO  - print minutes
-	STRCAT_PRINT " .."					; YES - special treatment
-	bra		TFT_display_deco_2			;     - continue with common part
-TFT_display_deco_1:
-	output_99							; print minutes
-TFT_display_deco_2:
+	output_99DD							; print minutes or double dots if null
 	STRCAT_PRINT "'"					; add minutes sign
 	bcf		win_invert					; back to non-inverted output
 TFT_display_exit_1:
@@ -1285,7 +1294,7 @@ TFT_decoplan_helper_3:
 	PUTC	" "							; put a space char between depth and time
 	movlw	NUM_STOPS					; offset between arrays holding depths and durations
 	movff	PLUSW0,lo					; get duration of the current stop
-	output_99							; output duration to POSTINC2
+	output_99dd							; print duration, prints double dots if duration is zero
 	STRCAT_PRINT "'"					; append symbol for minutes and print to screen
 	bsf		ex,1						; flag that a stop was shown
 	return
@@ -1300,7 +1309,9 @@ TFT_safety_stop_clear:
 										;       YES - clear safety stop area
 	WIN_BOX_BLACK dm_safetystop_row, dm_safetystop_bot, dm_safetystop_text_column, dm_safetystop_rgt ; top, bottom, left, right
 	bcf		safety_stop_active			;           - safety stop not shown any more
-	return								;           - done
+	btfsc	deco_region					;           - was the dive within deco stops region?
+	bra		TFT_show_slow_reminder		;             YES - show "SLOW" reminder
+	return								;             NO  - done
 
 
 	global	TFT_safety_stop_show
@@ -1312,10 +1323,10 @@ TFT_safety_stop_show:
 										;       NO  - clear area that may be polluted by alternative NDL
 	WIN_BOX_BLACK dm_safetystop_row, dm_tts_value_row, dm_ndl_value_col_alt, dm_safetystop_rgt ; top, bottom, left, right
 	call	TFT_divemask_color			;           - set color    for text
-										;           - set position for text
 	bsf		safety_stop_active			;           - flag safety stop is shown now
+										;           - set position for text
 	WIN_STD dm_safetystop_text_column, dm_safetystop_text_row
-	STRCPY_TEXT_PRINT tDiveSafetyStop	;           - print "Stop"
+	STRCPY_PRINT "Stop "				;           - print "Stop" with a trailing space to wipe away potential other remains
 TFT_safety_stop_show_time:
 	call	TFT_attention_color			; set color    for time
 										; set position for time
@@ -1342,12 +1353,21 @@ TFT_avr_stopwatch_mask:
  IFNDEF _min_depth_option
 
 	WIN_TINY dm_custom_avr_stop_column1+.2,dm_custom_avr_stop_title_row
-	TSTOSS	opt_2ndDepthDisp			; draw avg depth instead of max depth in main screen?
+	TSTOSS	opt_2ndDepthDisp			; show avg depth instead of max depth in main screen?
 	bra		TFT_avr_stopwatch_mask_1	; NO  - draw avg depth in custom view then
-	STRCPY_TEXT_PRINT tMaxDepth			; YES - draw max depth in custom view then
-	bra		TFT_avr_stopwatch_mask_2
+	btfss	alt_layout_active			; YES - in alternative layout?
+	bra		TFT_avr_stopwatch_mask_max	;       NO  - show max depth
+	;bra	TFT_avr_stopwatch_mask_avg	;       YES - show avg depth
+TFT_avr_stopwatch_mask_avg:
+	STRCPY_TEXT_PRINT tDiveTotalAvg		; mask for average depth
+	bra		TFT_avr_stopwatch_mask_2	; continue
 TFT_avr_stopwatch_mask_1:
-	STRCPY_TEXT_PRINT tDiveTotalAvg
+	btfss	alt_layout_active			; YES - in alternative layout?
+	bra		TFT_avr_stopwatch_mask_avg	;       NO  - show avg depth
+	;bra	TFT_avr_stopwatch_mask_max	;       YES - show max depth
+TFT_avr_stopwatch_mask_max:
+	STRCPY_TEXT_PRINT tMaxDepth			; mask for maximum depth
+	;bra	TFT_avr_stopwatch_mask_2	; continue
 TFT_avr_stopwatch_mask_2:
 	WIN_TINY dm_custom_avr_stop_column2+.3,dm_custom_avr_stop_title_row
 	STRCPY_TEXT_PRINT tDiveStopwatch
@@ -1377,13 +1397,23 @@ TFT_avr_stopwatch:
 
 	; total average depth or max depth
 	WIN_MEDIUM dm_custom_avr_stop_column1,dm_custom_avr_stop_row
-	TSTOSS	opt_2ndDepthDisp			; draw average depth instead of maximum depth in main screen?
-	bra		TFT_avr_stopwatch_01		; NO  - draw average depth in custom view then
-	MOVII	pressure_rel_max_cached,mpr	; YES - draw maximum depth in custom view then
-	bra		TFT_avr_stopwatch_02
-TFT_avr_stopwatch_01:
+	TSTOSS	opt_2ndDepthDisp			; show average depth instead of maximum depth in main screen?
+
+	bra		TFT_avr_stopwatch_1			; NO  - draw avg depth in custom view then
+	btfss	alt_layout_active			; YES - in alternative layout?
+	bra		TFT_avr_stopwatch_max		;       NO  - show max depth
+	;bra	TFT_avr_stopwatch_avg		;       YES - show avg depth
+TFT_avr_stopwatch_avg:
 	MOVII	pressure_rel_avg_total,mpr	; get total dive average depth into hi:lo
-TFT_avr_stopwatch_02:
+	bra		TFT_avr_stopwatch_2			; continue
+TFT_avr_stopwatch_1:
+	btfss	alt_layout_active			; YES - in alternative layout?
+	bra		TFT_avr_stopwatch_avg		;       NO  - show avg depth
+	;bra	TFT_avr_stopwatch_max		;       YES - show max depth
+TFT_avr_stopwatch_max:
+	MOVII	pressure_rel_max_cached,mpr	; get maximum depth into hi:lo
+	;bra	TFT_avr_stopwatch_2			; continue
+TFT_avr_stopwatch_2:
 	call	adjust_depth_with_salinity	; compute salinity setting into hi:lo [mbar]
 	TSTOSS	opt_units						 ; 0=m, 1=ft
 	bra		TFT_update_avr_stopwatch1_metric ; 0 - metric
@@ -1462,19 +1492,22 @@ TFT_avr_stopwatch_helper:
 	; stopped dive time  (will also be used by compass custom view)
 	WIN_MEDIUM dm_custom_avr_stop_column2,dm_custom_avr_stop_row
 TFT_update_stopwatch:					; jump-in point for stopped dive time in compass custom view
-	bsf		leftbind					; print numbers without leading spaces
 	MOVII	divesecs_avg_trip,mpr		; get the resettable dive time (stopwatch)
 	call	convert_time				; convert hi:lo in seconds to minutes (up:hi) and seconds (lo)
 	movlw	.100						; display layout will change if minutes become >= 100
 	cpfslt	hi							; minutes < 100 ?
 	bra		TFT_update_stopwatch_2		; NO  - display hours:minutes
-	;bra	TFT_update_stopwatch_1		; YES - display minutes:seconds
+	bcf		aux_flag					; will print minutes : seconds
 TFT_update_stopwatch_1:
 	movf	hi,W						; exchange lo and hi
 	movff	lo,hi						; ...
 	movwf	lo							; ...
-	output_8							; output minutes or hours
-	PUTC	':'
+	bcf		leftbind					; include leading spaces
+	output_99							; output minutes or hours ( 0 - 99)
+	movlw	":"							; load standard separator
+	btfsc	aux_flag					; will print hours : minutes ?
+	movlw	"'"							; YES - swap to alternative separator
+	movwf	POSTINC2					; print separator
 	movff	hi,lo						; restore lo
 	output_99x							; output seconds or minutes
 	movlw	.5
@@ -1487,6 +1520,7 @@ TFT_update_stopwatch_2:
 	movff	hi,lo						; transfer minutes (low  byte) to lo
 	movff	up,hi						; transfer minutes (high byte) to hi
 	call	convert_time				; convert hi:lo in minutes to hours (up:hi) and minutes (lo)
+	bsf		aux_flag					; will print hours : minutes
 	bra		TFT_update_stopwatch_1
 
 
@@ -1787,8 +1821,20 @@ TFT_sensor_mV:
 	SMOVII	sensor3_mv,mpr				; in 0.1mV steps
 	STRCAT	"3: "
 	rcall	TFT_sensor_mV_helper
-
 	bcf		leftbind
+	
+	WIN_SMALL surf_mV_sensor_column,surf_mV_sensor3_row+.24 ; 4th row
+	btfss	s8_digital_avail			;  do we have a digital S8 interface?
+	bra	TFT_sensor_mV_optical_analog
+	STRCAT_PRINT	"Digital"
+	bra		TFT_display_exit_3
+TFT_sensor_mV_optical_analog:
+	btfss	ir_power				;  do we have a optical digital interface?
+	bra	TFT_sensor_mV_analog
+	STRCAT_PRINT	"Optical"
+	bra		TFT_display_exit_3
+TFT_sensor_mV_analog:						; -> optical
+	STRCAT_PRINT	"Analog"
 	bra		TFT_display_exit_3
 
 TFT_sensor_mV_helper:
@@ -1861,12 +1907,8 @@ TFT_menu_calibrate_common:
 
 	global	TFT_time_surfmode
 TFT_time_surfmode:
- IFDEF _ostc_logo
-	WIN_SMALL surf_clock_column,surf_clock_row
- ELSE
 	WIN_SMALL surf_clock_column+.7,surf_clock_row
- ENDIF
-TFT_clock2:								; called from divemode clock
+TFT_clock2:								; called from dive mode clock
 	call	TFT_standard_color
 	SMOVSS	rtc_year,rtc_latched_year	; ISR-safe 6 byte copy of date and time
 	movff	rtc_latched_hour,lo
@@ -2213,7 +2255,9 @@ TFT_active_sp_label:
 	movff	opt_ccr_mode,WREG			; get setpoint mode =0: Fixed SP, =1: Sensor, =2: Auto SP
 	sublw	.1							; opt_ccr_mode = 1 (Sensor) ?
 	bnz		TFT_active_sp_label_1		; NO  - skip
-	PUTC	"*"							; YES - add "*"
+	btfsc	alt_layout_active			; YES - in alternative layout?
+	bra		TFT_active_sp_label_1		;       YES - no space available for the "*"
+	PUTC	"*"							;       NO  - add "*"
 TFT_active_sp_label_1:
  ENDIF
 	STRCAT_PRINT ""						; finalize output
@@ -2802,23 +2846,12 @@ TFT_batt_surfmode:
 	tstfsz	WREG					; any indicator or warning active (asked again)?
 	call	TFT_set_color			; YES - set color
 
- IFDEF _ostc_logo
-	WIN_TINY  batt_percent_column,batt_percent_row
- ELSE
 	WIN_SMALL batt_percent_column+.2,batt_percent_row
- ENDIF
-
 	output_16_3						; display only last three digits from a 16 bit value (0-999)
 	STRCAT_PRINT "% "
 	bcf		win_invert
 	call	TFT_standard_color
-
- IFDEF _ostc_logo
-	WIN_TINY batt_voltage_column,batt_voltage_row
- ELSE
 	WIN_TINY batt_voltage_column+.15,batt_voltage_row
- ENDIF
-
 	movff	battery_type,lo			; =0: 1.5V, =1: 3.6V Saft, =2: LiIon 3.7V/0.8Ah, =3: LiIon 3.7V/3.1Ah, =4: LiIon 3.7V/2.3Ah
 	PUTC	"T"
 	bsf		leftbind
@@ -3338,7 +3371,7 @@ TFT_cat_beta_3
 TFT_cat_beta_4
 	STRCAT "update!"				; print update cue
 	goto	TFT_attention_color		; and return
- ENDIF	; _DEBUG
+ ENDIF	; ELSE / _DEBUG
 
 ;-----------------------------------------------------------------------------
 ; show firmware update message
@@ -3385,8 +3418,8 @@ TFT_show_serial_and_firmware:
 	STRCPY	"#"
 	call	TFT_cat_serial
 	STRCAT	" "
-TFT_show_firmware:
 	STRCAT	"v"
+TFT_show_firmware:
 	call	TFT_cat_firmware				; will set win_invert if outdated
 	STRCAT	" "
 	call	TFT_cat_beta_release
@@ -3395,6 +3428,23 @@ TFT_show_firmware:
 	goto	TFT_standard_color				; ...and return
 
 ;-----------------------------------------------------------------------------
+; For the Information menu: append total dives
+
+	global	info_menu_total_dives
+info_menu_total_dives:
+	lfsr	FSR1,tTotalDives
+	call	strcat_text
+TFT_cat_total_dives:
+	read_int_eeprom	.2
+	movff	EEDATA,lo
+	read_int_eeprom	.3
+	movff	EEDATA,hi
+	bsf		leftbind
+	output_16
+	bcf		leftbind
+	return
+	
+;-----------------------------------------------------------------------------
 ; append firmware version to current string, including color-coding
 
 	global	TFT_cat_firmware
@@ -3402,7 +3452,7 @@ TFT_cat_firmware:
 	movlw	softwareversion_x
 	movwf	lo
 	bsf		leftbind
-	output_8								; print major in 1 digit format
+	output_8								; print major in 1 or 2 digit format
 	PUTC	'.'
 	movlw	softwareversion_y
 	movwf	lo
@@ -3450,7 +3500,7 @@ TFT_print_firmware_rx:
  ENDIF
 
 ;-----------------------------------------------------------------------------
-; For the Information menu: append serial number
+; For the Information menu: serial number
 
 	global	info_menu_serial
 	global	TFT_cat_serial
@@ -3472,24 +3522,26 @@ TFT_cat_serial:
 	return
 
 ;-----------------------------------------------------------------------------
-; For the Information menu: append total dives
+; For the Information menu: hardware / software configuration
 
-	global	info_menu_total_dives
-info_menu_total_dives:
-	lfsr	FSR1,tTotalDives
+	global	info_menu_config
+info_menu_config:
+	lfsr	FSR1,tHardware
 	call	strcat_text
-TFT_cat_total_dives:
-	read_int_eeprom	.2
-	movff	EEDATA,lo
-	read_int_eeprom	.3
-	movff	EEDATA,hi
-	bsf		leftbind
-	output_16
-	bcf		leftbind
+	call	I2C_init_compass		; start compass
+	movf	HW_descriptor,W			; copy hardware descriptor to WREG
+	output_hex						; print as hex
+	PUTC	"-"						; print a separator
+	movf	HW_variants,W			; copy hardware variants   to WREG
+	output_hex						; print as hex
+	PUTC	"-"						; print a separator
+	movlw	SW_CONF					; get software configuration
+	output_hex						; print as hex
 	return
 
+
 ;-----------------------------------------------------------------------------
-; For the Information menu: append battery voltage
+; For the Information menu: battery voltage
 
 	global	info_menu_battery_volts
 info_menu_battery_volts:
@@ -3506,7 +3558,7 @@ info_menu_battery_volts:
 	return
 
 ;-----------------------------------------------------------------------------
-; For the Information menu: append uptime
+; For the Information menu: uptime
 
 	global	info_menu_uptime
 info_menu_uptime:
@@ -3530,6 +3582,7 @@ info_menu_uptime_com:
 	bcf		leftbind
 	return					; done
 
+;-----------------------------------------------------------------------------
 
  IFDEF _compass
 
@@ -4423,18 +4476,24 @@ TFT_mask_ppo2b:							; OC mode or bailout
 	bra		TFT_custview_exit2			; and return...
 
 
-	global TFT_ppo2_ead_end_cns_mask	; mask for ppO2, END/EAD and CNS
+	global TFT_ppo2_ead_end_cns_mask	; mask for ppO2, END/EAD and CNS / gas density
 TFT_ppo2_ead_end_cns_mask:
-	rcall	TFT_show_ppo2_mask
 	call	TFT_divemask_color
-	WIN_TINY dm_custom_ead_column, dm_custom_eadend_title_row
+	WIN_TINY dm_custom_ppo2_column-.2, dm_custom_ppo2_title_row
+	STRCPY_TEXT_PRINT tppO2
+	WIN_TINY dm_custom_ead_column,     dm_custom_eadend_title_row
 	STRCPY_TEXT_PRINT tDiveEAD_END
-	WIN_TINY dm_custom_cns_column, dm_custom_cns_title_row
+ IFDEF _helium
+	WIN_TINY dm_custom_cns_column-.5,  dm_custom_eadend_title_row
+	STRCPY_TEXT_PRINT tGasDensity
+ ELSE
+	WIN_TINY dm_custom_cns_column,     dm_custom_cns_title_row
 	STRCPY_TEXT_PRINT tCNS2
+ ENDIF
 	bra		TFT_custview_exit2			; and return...
 
 
-	global	TFT_ppo2_ead_end_cns		; data for ppO2, END/EAD and CNS
+	global	TFT_ppo2_ead_end_cns		; data for ppO2, END/EAD and CNS / gas density
 TFT_ppo2_ead_end_cns:
 	; Show ppO2
 	WIN_MEDIUM dm_custom_ppo2_column, dm_custom_ppo2_row
@@ -4454,6 +4513,18 @@ TFT_ppo2_ead_end_cns:
 	STRCPY_TEXT tEND					; END:
 	movff	char_O_END,lo
 	rcall	TFT_end_ead_common			; print "lo m" (or ft) and limit to 8 chars
+ IFDEF _helium
+	; Show Gas Density
+	WIN_MEDIUM	dm_custom_cns_column-.5, dm_custom_cns_row
+	MOVII	int_O_gas_density,mpr		; get current gas density
+	call	TFT_color_code_cns_1		; color-code output
+	bsf		leftbind					; print left-aligned
+	movlw	.2							; suppress first and second digit
+	movwf	ignore_digits				; ...
+	output_16dp .2						; print as --x.yy
+	bcf		leftbind					; back to normal alignment
+	STRCAT_PRINT	""					; finalize output
+ ELSE
 	; Show CNS
 	WIN_STD	dm_custom_cns_column+.3, dm_custom_cns_row
 	MOVII	int_O_CNS_current,mpr		; get current CNS
@@ -4462,6 +4533,7 @@ TFT_ppo2_ead_end_cns:
 	output_16_3							; displays only 0...999
 	bcf		leftbind
 	STRCAT_PRINT "%"
+ ENDIF
 TFT_custview_exit2:
 	goto	TFT_standard_color			; and return...
 
@@ -5164,8 +5236,8 @@ TFT_pressures_SAC_helper_1:
 	btfss	hi,int_not_avail_flag			; pressure available?
 	bra		TFT_pressures_SAC_helper_1a		; YES - print pressure
 	call	TFT_disabled_color				; NO  - use disabled color as default
-	btfsc	ex,char_transmitter_lost		;     - transmitter lost?
-	call	TFT_attention_color				;       YES - use attention color
+;	btfsc	ex,char_transmitter_lost		;     - transmitter lost?
+;	call	TFT_attention_color				;       YES - use attention color
 	STRCAT_PRINT " ---"						;     - print " ---"
 	return
 TFT_pressures_SAC_helper_1a:

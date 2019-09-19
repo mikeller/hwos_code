@@ -325,7 +325,7 @@ ext_flash_erase_logbook:
 	clrf	ext_flash_address+1
 	clrf	ext_flash_address+2
 
-	setf	ext_flash_rw					; 256 * 12 kB = 3145728 bytes
+	clrf	ext_flash_rw					; 256 * 12 kB = 3145728 bytes
 ext_flash_erase_logbook_loop:
 	rcall	ext_flash_erase4kB				; 4kB
 	rcall	ext_flash_add_4kB				; increase ext_flash_address:3 by 4kB

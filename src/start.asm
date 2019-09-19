@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File start.asm                            combined next generation V3.03.2
+;   File start.asm                            combined next generation V3.04.3
 ;
 ;   Startup subroutines
 ;
@@ -50,6 +50,9 @@
  IFDEF _rx_functions
 	extern	option_cleanup_oTrMode_CCR
 	extern	option_cleanup_oTrMode_no_CCR
+ ENDIF
+
+ IFDEF _rx_update
 	extern	rx_firmware_new_major
 	extern	rx_firmware_new_minor
  ENDIF
@@ -108,12 +111,16 @@ start_clear_rambank:
 
 	; get screen type (2) from bootloader info
 	bsf		screen_type2
+	bsf		screen_type3
 	movlw	0x80
 	movwf	TBLPTRL							; only low byte adjustment needed, high and upper are still at 0x01F7xx
 	TBLRD*+									; read configuration byte
 	movlw	0x83							; coding for screen type 2
 	cpfseq	TABLAT							; equal?
-	bcf		screen_type2					; NO - not screen type 2
+	bcf		screen_type2					; NO  -  not screen type 2
+	movlw	0x84							; coding for screen type 3
+	cpfseq	TABLAT							; equal?
+	bcf		screen_type3					; NO  -  not screen type 3
 
 	; get button polarity from configuration data (EEPROM)
 	movlw	LOW  .897
@@ -132,14 +139,18 @@ start_clear_rambank:
 	bsf		LEDr							; turn on red LED
 
 	; first pass, will not have valid temperature yet
-	bcf		trigger_pres_update				; make sure ISR pressure update confirmation is not older than from now on
-	btfss	trigger_pres_update				; has the ISR confirmed a pressure update?
-	bra		$-2								; NO  - not yet, loop waiting for the ISR to kick in
+	call	wait_1s
+	call	wait_1s
+;	bcf		trigger_pres_update				; make sure ISR pressure update confirmation is not older than from now on
+;	btfss	trigger_pres_update				; has the ISR confirmed a pressure update?
+;	bra		$-2								; NO  - not yet, loop waiting for the ISR to kick in
 
 	; second pass - complete sensor initialization
-	bcf		trigger_pres_update				; make sure ISR pressure update confirmation is not older than from now on
-	btfss	trigger_pres_update				; has the ISR confirmed a pressure update?
-	bra		$-2								; NO  - not yet, loop waiting for the ISR to kick in
+	call	wait_1s
+	call	wait_1s
+;	bcf		trigger_pres_update				; make sure ISR pressure update confirmation is not older than from now on
+;	btfss	trigger_pres_update				; has the ISR confirmed a pressure update?
+;	bra		$-2								; NO  - not yet, loop waiting for the ISR to kick in
 
 	; sensor calibration completed, first valid pressure value is available
 	bcf		LEDr							; turn off red LED again
@@ -285,7 +296,8 @@ restart:
 
 	; clear flag groups
 	clrf	HW_descriptor					; hardware - OSTC model descriptor
-	clrf	HW_flags_state					; hardware - status
+	clrf	HW_flags_state1					; hardware - states
+	;										; do not clear HW_flags_state2 !
 	clrf	DM_flags_sensor					; hardware - O2 sensors
 
 	clrf	OS_flags_ISR1					; operating system - ISR control 1
@@ -331,12 +343,14 @@ restart:
 	bsf		lightsen_power					; power-up ambient light sensor again
 
 restart2:
+ IFNDEF _hwos_sport
 	btfsc	vusb_in							; USB power detected?
 	bra		restart3						; YES
 	bcf		PORTE,0							; start comm
 	WAITMS	d'5'							; wait 5 ms
 	btfss	vusb_in							; USB power detected?
 	bra		restart3						; NO
+ ENDIF
 	bsf		ble_available					; YES - BLE available
 
 restart3:
@@ -379,6 +393,8 @@ restart4a:
 	btfss	ostc_rx_present					; RX module detected?
 	bra		restart5						; NO
 
+ IFDEF _rx_update
+
 	; check if TR module firmware is up to date
 	movff	rx_firmware_cur_major,hi		; copy current firmware on RX module to bank common, major
 	movff	rx_firmware_cur_minor,lo		; copy current firmware on RX module to bank common, minor
@@ -403,7 +419,6 @@ restart4b:
 	STRCAT	"TR Update "					; prepare result message
 
 	; update firmware in RX module
-	call	I2C_sleep_accelerometer			; stop accelerometer
 	call	I2C_sleep_compass				; stop compass
 	call	update_tr_module				; update TR module
 
@@ -423,6 +438,8 @@ restart4d:
 	call	wait_1s							; wait (up to)        1 second
 	call	wait_1s							; wait (another full) 1 second
 	call	wait_1s							; wait (another full) 1 second
+
+ ENDIF	; _rx_update
 
 restart4e:
 	btfss	ostc_rx_present					; TR module up & running?
@@ -490,8 +507,8 @@ restart_set_modes_and_flags:
 
  IFDEF _external_sensor
 	call	disable_ir_s8					; switch off IR/S8 digital interface by default
+	WAITMS	d'100'						; Some delay to power down S8-HUD properly
  ENDIF
-
 	; setup sampling rate
 	movlw	.2								; default to 2 seconds
 	movwf	sampling_rate					; write setting

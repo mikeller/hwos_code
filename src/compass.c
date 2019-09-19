@@ -247,7 +247,7 @@ void compass(void)
 
 	//---- Calculate sine and cosine of roll angle Phi -----------------------
 	sincos(accel_DZ_f, accel_DY_f, &sin, &cos);
-
+    
 	//---- rotate by roll angle (-Phi) ---------------------------------------
 	iBfy = imul(iBpy, cos) - imul(iBpz, sin);
 	iBpz = imul(iBpy, sin) + imul(iBpz, cos);
@@ -255,7 +255,7 @@ void compass(void)
 
 	//---- calculate sin and cosine of pitch angle Theta ---------------------
 	sincos(Gz, -accel_DX_f, &sin, &cos);	 // NOTE: changed sin sign
-
+    
 	/* correct cosine if pitch not in range -90 to 90 degrees */
 	if( cos < 0 ) cos = -cos;
 

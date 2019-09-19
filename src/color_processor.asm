@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File File color_processor.asm             combined next generation V3.03.2
+;   File File color_processor.asm             combined next generation V3.03.7
 ;
 ;   Decompress and draw an image
 ;
@@ -154,6 +154,9 @@ color_image_pixel:
 
 	btfsc	screen_type2			; display type 2 ?
 	bra		color_image_display2	; YES
+	btfsc	screen_type3			; display type 3 ?
+	bra		color_image_display3	; YES
+
 	movff	PRODH,PORTA				; NO  - move color high byte to PORTA
 	movff	PRODL,PORTH				;     - move color low  byte to PORTH
 
@@ -183,6 +186,20 @@ color_image_pixel2_loop:
 	bra		color_image_pixel2_loop	; loop if not zero
 	decfsz	pixel_count+1			; decrement pixel counter, high byte
 	bra		color_image_pixel2_loop	; loop if not zero
+	bra		color_image_pixel_com	; all pixels transmitted
+
+color_image_display3:
+	movff	PRODH,PORTH				; move color high byte to PORTH
+	bcf		tft_nwr					; toggle write signal
+	bsf		tft_nwr					; ...
+	movff	PRODL,PORTH				; move color high byte to PORTH
+	bcf		tft_nwr					; toggle write signal
+	bsf		tft_nwr					; ...
+	decfsz	pixel_count+0			; decrement pixel counter, low  byte
+	bra		color_image_display3	; loop if not zero
+	decfsz	pixel_count+1			; decrement pixel counter, high byte
+	bra		color_image_display3	; loop if not zero
+;	bra		color_image_pixel_com	; all pixels transmitted
 
 color_image_pixel_com:
 	bsf		INTCON,GIE				; re-enable global interrupts

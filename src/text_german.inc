@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;	File text_german.asm                      next combined generation V3.03.3
+;	File text_german.asm                      next combined generation V3.04.3
 ;
 ;	German texts translation file.
 ;
@@ -77,7 +77,7 @@
 	TCODE	tTr1stPres,			"1.Druck: "				; 1st Pressure
 	TCODE	tTr2ndPres,			"2.Druck: "				; 2nd Pressure
 	TCODE	tTrBailPres,		"1.B/O  : "				; Bailout Pressure
-	TCODE	tTrMaxDeltaP,		"max Diff.: "			; independent double max diffenerce
+	TCODE	tTrMaxDeltaP,		"max Diff.: "			; independent double max difference
  ENDIF
 
  IFDEF _ccr_pscr
@@ -97,7 +97,7 @@
 	TCODE	tType,				"Type: "
 	TCODE	tGasDisabled,		"Deaktiviert"			; Disabled
 	TCODE	tGasFirst,			"Start"					; First
-	TCODE	tGasTravel,			"Reise"					; Travel
+	TCODE	tGasTravel,			"Arbeit"				; Work (Travel, Bottom)
 	TCODE	tGasDeco,			"Deko"					; Deco
 	TCODE	tDilDisabled,		"Deaktiviert"			; Disabled
 	TCODE	tDilFirst,			"Start"					; First
@@ -125,7 +125,7 @@
 	TCODE	tppO2Dil,			"ppO2(Dil)"				; ppO2(Dil)
 	TCODE	tppO2Mix,			"ppO2(Mix)"				; ppO2(Mix)
 	TCODE	tCCRMode,			"Modus:"				; Mode:
-	TCODE	tCCRModeFixedSP,	"fixeSP/Berech."		; 0 fixed for CCR / calculated for pSCR  | ENUM group
+	TCODE	tCCRModeFixedSP,	"fixe SP"				; 0 fixed for CCR / calculated for pSCR  | ENUM group
 	TCODE	tCCRModeSensor,		"Sensor"				; 1 Sensor                               |
 	TCODE	tCCRModeAutoSP,		"Auto SP"				; 2 Auto SP                              |
  ELSE
@@ -179,16 +179,18 @@
 	TCODE	tDkMode,			"Decotype: ZH-L16"
 	TCODE	tZHL16,				" "						; keep order, enum from here...
 	TCODE	tZHL16GF,			"+GF"					; ...up to here!
-	TCODE	tPPO2Max,			"Max.     :"
-	TCODE	tPPO2DECO,			"Max. Deko:"
-	TCODE	tPPO2MIN,			"Min.     :"
+	TCODE	tPPO2Max,			"Max. Arbeit:"
+	TCODE	tPPO2DECO,			"Max. Deko  :"
  IFDEF _ccr_pscr
-	TCODE	tPPO2MINCC,			"Min. Loop:"
+	TCODE	tPPO2MIN,			"Min. OC    :"
+	TCODE	tPPO2MINCC,			"Min. Loop  :"
+ ELSE
+	TCODE	tPPO2MIN,			"Min.       :"
  ENDIF
 	TCODE	tLastDecostop,		"Letzt.Stop  : "
 	TCODE	tAscentSpeed,		"Auf.Geschw. : "		; Ascent Speed
 	TCODE	tGasChangeTime,		"Gaswechsel  :+"		; additional Gas Change Time
-	TCODE	tExtendedStops,		"vor 1.Stopp : "		; gas switches before 1st stop
+	TCODE	tExtendedStops,		"erw. Stopps : "		; extended stops
 	TCODE	tTimeoutDive,		"TG-Ende nach: "		; Dive Timeout
 	TCODE	tStoreApnoeDive,	"Log Apnoe   : "		; Store Apnoe Dives
 	TCODE	tDecoparameters,	"Deko Parameter"
@@ -206,8 +208,8 @@
 	TCODE	tppO2settings,		"ppO2 Parameter"		; ppO2 Settings
 	TCODE	tsafetystopmenu,	"Sicherheitsstop:"		; Safety Stop:
 	TCODE	tGasUsage,			"Gasbedarf"				; Gas Usage
-	TCODE	tSetBotUse,			"Reise Gas: "			; Bottom Gas: (space)
-	TCODE	tSetDecoUse,		"Deko  Gas: "			; Deco   Gas: (space)
+	TCODE	tSetBotUse,			"Arbeits-Gas:"			; Bottom Gas:
+	TCODE	tSetDecoUse,		"Deko    Gas:"			; Deco   Gas:
 	TCODE	tCalcAscGas,		"Gasmenge(B/O):"		; Calculate Gas (Bail Out) needs?
 	TCODE	tSetup_Tank,		"Tank Einstellen"		; Setup Tank
 	TCODE	tTankSize,			"Tank Größe"
@@ -217,8 +219,12 @@
 	TCODE	t2ndDecoPlanMenu,	"2.Deko Plan"			; 2nd Deco Plan
 
  IFDEF _ccr_pscr
-	TCODE	tCCmaxFracO2,		"Loop %O2 max.:"
+	TCODE	tCCmaxFracO2,		"Loop %O2 max. : "		; max O2 percent (absolute) in the loop
+	TCODE	tDilppO2Check,		"Check Dil ppO2: "		; check ppO2 of the diluent against the setpoint
+	TCODE	tPSCR_O2_drop,		"pSCR O2 Abfall: "		; pSCR O2 drop
+	TCODE	tPSCR_lungratio,	"    L.Verhält.: "		; pSCR lung ratio
 	TCODE	tCopyDilToOC,		"Kopiere Dil.-> OC"		; copy diluent settings to OC gas
+	TCODE	tBackToLoop,		"auf Loop"				; back to loop (10 chars max)
  ENDIF
 
  IFDEF _rx_functions
@@ -261,7 +267,7 @@
 	TCODE	tMODwarning,		"Tiefe Warnung:"		; depth Warnings
 ;	TCODE	tIBCDwarning,		"IBCD  Warnung:"		; IBCD warning
 	TCODE	tLayout,			"Layout :"				; Layout
-	TCODE	t2ndDepth,			"2.Tiefe:"				; 2nd depth display content (10 chars max)
+	TCODE	t2ndDepth,			"2.Tiefe:"				; 2nd depth display content (11 chars max)
 	TCODE	tTissueGraphics,	"Grafik :"				; tissue graphics
 
 	TCODE	tLayoutNormal,		"normal"				; normal
@@ -287,7 +293,7 @@
 	TCODE	tImperial,			"ft/°F"
 								;         111         111         111         111         111
 	; 5 rows by 12 chars each:	 123456789012123456789012123456789012123456789012123456789012
-	TCODE	tDefName,			"  Lese die   Anleitung,  kenne  und verstehe die  Grenzen!"
+	TCODE	tDefName,		"HW OSTC"	;"  Lese die   Anleitung,  kenne  und verstehe die  Grenzen!"
 	TCODE	tButtonleft,		"Taster links :"		; Left button
 	TCODE	tButtonright,		"Taster rechts:"		; Right button
 	TCODE	tAltMode,			"Wartezeit:"
@@ -331,20 +337,28 @@
 	TCODE	tDivePlan,			"Tauchplan"				; Dive Plan (max. 10 chars)
 	TCODE	tNoDeco,			"Keine Deko"			; No Deco
 	TCODE	tMore,				"mehr"					; More
-	TCODE	tSelectSetpoint,	"Setpoint   :"
-	TCODE	tuseAGF,			"Benutze aGF:"
+	TCODE	tSelectSetpoint,	"Setpoint   : "
+	TCODE	tuseAGF,			"Benutze aGF: "
+ IFDEF _gas_contingency
+	TCODE	tGasContingency,	"Gas Cont. : "			; Gas Contingency			## translation pending
+ ENDIF
+
+; Decoplanner progress indication
+	TCODE	tNoBottomGas1,		"  kein auf der Tiefe"	; no usable Gas for Bottom Depth found (line 1, max. 22 chars)	## pending translation
+	TCODE	tNoBottomGas2,		"nutzbares Gas gefunden"; no usable Gas for Bottom Depth found (line 2, max. 22 chars)	## pending translation
 	TCODE	tCalculating,		"Berechnung läuft..."
 	TCODE	tCalcSurfInter,		"Oberflächenpause"		; Surface Interval
 	TCODE	tCalcBotSeg,		"Grundzeit"				; Bottom Segment
 	TCODE	tCalcBailout,		"Wechsel auf Bailout"	; Switch to Bailout
-	TCODE	tCalcAscent,		"Aufstieg"				; Ascent
+	TCODE	tCalcAscent,		"Aufstieg"				; Ascent (max. 8 chars)
 	TCODE	tNDLleft,			"übrig"					; time left within NDL
 
 
 ; Information menu
 	TCODE	tFirmware,			"Firmware: "			; Firmware: (space)
+	TCODE	tHardware,			"Hardware: "			; Hardware: (space)
 	TCODE	tSerial,			"Seriennr: "			; Serial  : (space)
-	TCODE	tTotalDives,		"Anzahl TG: "			; Total Dives:
+	TCODE	tTotalDives,		"Anzahl TG:"			; Total Dives:
 	TCODE	tBatteryV,			"Batterie: "			; Battery:
 	TCODE	tUptime,			"Laufzeit: "			; Uptime:
 
@@ -356,6 +370,7 @@
 ; Divemode screen
 	TCODE	tNDL,				" NZ"					; 3 chars max
 	TCODE	tTTS,				"TTS"					; 3 chars max
+	TCODE	tSlow,				"langsam"				; slow - max 7 chars
 	TCODE	tVelMetric,			"m/min"
 	TCODE	tVelImperial,		"ft/m "
 	TCODE	tGasSelect,			"Wähle Gas"				; Select Gas
@@ -390,7 +405,6 @@
 	TCODE	taGFactors,			"aGF Werte"				; aGF Values
 	TCODE	tGFInfo,			"Sättigung"				; Saturation
 	TCODE	tCeiling,			"Ceiling"				; Ceiling
-	TCODE	tDiveSafetyStop,	"Stop"					; Stop (four chars, right aligned)
 	TCODE	tDiveFallback,		"Fallback!"				; Fallback! (max. nine chars)
 	TCODE	tDecoInfo,			"Deko Zone"				; Deco info
 	TCODE	tSensorCheck,		"Sensor Test"			; Sensor Check
@@ -413,6 +427,7 @@
  IFDEF _helium
 	TCODE	tHe,				"He"					; He
 	TCODE	tIBCD,				"IBCD N2He"				; IBCD warning
+	TCODE	tGasDensity,		"Gasdichte"				; Gas Density
  ENDIF
 
  IFDEF _rx_functions
@@ -440,9 +455,10 @@
 
 
 ; Divemode menu
-	TCODE	tDivePreMenu,		"Menü?"					; Menu?       (max. 5 chars)
+	TCODE	tDivePreMenu,		"Menü?"					; Menu?  (max. 5 chars)
+	TCODE	tDiveLayout,		"Layout"				; Layout (max. 6 chars)
  IFDEF _compass
-	TCODE	tSetHeading,		"Kurs"					; set bearing (max. 6 chars)
+	TCODE	tSetHeading,		"Kurs"					; Course (max. 6 chars)
  ENDIF
 
 
@@ -518,15 +534,6 @@
 	TCODE	tColorSetName1,		"Rot"					; Red
 	TCODE	tColorSetName2,		"Grün"					; Green
 	TCODE	tColorSetName3,		"Blau"					; Blue
-
-
-; pSCR Menu and Settings
- IFDEF _ccr_pscr
-	TCODE	tPSCRMenu,			"pSCR Menü"				; PSCR Menu
-	TCODE	tPSCR_O2_drop,		"O2 Abfall  "			; O2 drop
-	TCODE	tPSCR_lungratio,	"L.Verhält. "			; lung ratio
-	TCODE	tBackToLoop,		"auf Loop"				; back to loop (10 chars max)
- ENDIF
 
 
 ; Language selection

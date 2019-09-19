@@ -8,7 +8,7 @@
 //////////////////////////////////////////////////////////////////////////////
 
 //  2015-05-22  [jDG] Make a smaller calibration code (15.6 --> 6.7 KB).
-//  2019-05-14  [rl]  make it even smaller again by another 2.000 byte
+//  2019-05-14  [rl]  make smaller again
 
 #include "configuration.inc"
 #include "compass.h"
@@ -39,7 +39,7 @@
 
 static unsigned short int compass_N;
 
-static float Su,  Sv,  Sw;					//						first  order moments
+static float Su, Sv, Sw;					//						first  order moments
 static float Suu, Svv, Sww, Suv, Suw, Svw;	//						second order moments
 static float Saa;							// Suu  + Svv  + Sww
 static float Saau;							// Suuu + Svvu + Swwu	third  order moment
@@ -49,19 +49,11 @@ static float Saaw;							// Suuw + Svvw + Swww	third  order moment
 static float yu, yv, yw;					// temp solution vector
 static float uc, vc, wc;					// temp sphere's center
 
-static float yh, uh, S0, S1, S2, S3;		// transfer vars for compass_solve_helper()
-static float discriminant, delta;			// transfer vars  for calc_discriminant()
-
+static float yh,uh,S0,S1,S2,S3;				// transfer vars for compass_solve_helper()
 
 //////////////////////////////////////////////////////////////////////////////
 
-#ifndef UNIX
-#	pragma code compass_calib
-#endif
-
-//////////////////////////////////////////////////////////////////////////////
-
-void compass_reset_calibration()								// 202 byte
+void compass_reset_calibration()
 {
 	RESET_C_STACK;
 
@@ -70,50 +62,36 @@ void compass_reset_calibration()								// 202 byte
 	Suu          = Svv          = Sww           = 0.0;
 	Suv          = Suw          = Svw           = 0.0;
 	Saau         = Saav         = Saaw          = 0.0;
-	compass_CX_f = compass_CY_f = compass_CZ_f  = 0;	// int16
+	compass_CX_f = compass_CY_f = compass_CZ_f  = 0;
 }
 
 //////////////////////////////////////////////////////////////////////////////
 
-void compass_add_calibration()									// 1488 byte
+void compass_add_calibration()
 {
-	overlay float SQR_yu, SQR_yv, SQR_yw;	// squared values;
-
 	RESET_C_STACK;
 
-	// get filtered/calibrated magnetic direction				// 276 byte
+	// get filtered/calibrated magnetic direction
 	yu = (compass_DX_f - compass_CX_f) / 32768.0f;
 	yv = (compass_DY_f - compass_CY_f) / 32768.0f;
 	yw = (compass_DZ_f - compass_CZ_f) / 32768.0f;
 
-	// compute squared values									// 156 byte
-	SQR_yu = yu*yu;
-	SQR_yv = yv*yv;
-	SQR_yw = yw*yw;
-
-	// increment count
+	// add to all moments
 	compass_N++;
 
-	// add to all moments										// 156 byte
 	Su   += yu;
 	Sv   += yv;
 	Sw   += yw;
 
-	//															// 156 byte
-	Suu  += SQR_yu;
-	Svv  += SQR_yv;
-	Sww  += SQR_yw;
-
-	//															// 312 byte
+	Suu  += yu*yu;
 	Suv  += yu*yv;
 	Suw  += yu*yw;
+	Svv  += yv*yv;
 	Svw  += yv*yw;
+	Sww  += yw*yw;
 
-	//															// 104 byte
-	Saa   = SQR_yu + SQR_yv + SQR_yw;
+	Saa   = yu*yu + yv*yv + yw*yw;
 
-
-	//															// 312 byte
 	Saau += yu * Saa;
 	Saav += yv * Saa;
 	Saaw += yw * Saa;
@@ -121,12 +99,13 @@ void compass_add_calibration()									// 1488 byte
 
 //////////////////////////////////////////////////////////////////////////////
 
-static void calc_discriminant(PARAMETER char column)
+static float compass_discriminent(PARAMETER char column)
 {
 	// basic symmetric matrix
-	overlay float a = Suu, d = Suv, g = Suw;
-	overlay float b = Suv, e = Svv, h = Svw;
-	overlay float c = Suw, f = Svw, i = Sww;
+	OVERLAY float a = Suu, d = Suv, g = Suw;
+	OVERLAY float b = Suv, e = Svv, h = Svw;
+	OVERLAY float c = Suw, f = Svw, i = Sww;
+	OVERLAY float result;
 
 	// substitute a column, if asked to
 	if( column==1 ) { a = yu; b = yv; c = yw; }
@@ -135,17 +114,16 @@ static void calc_discriminant(PARAMETER char column)
 
 	// do the math in a couple of single terms to reduce
 	// the amount of required ".tmpdata" memory
-	discriminant  = a * (e * i - f * h);
-	discriminant -= b * (d * i - f * g);
-	discriminant += c * (d * h - e * g);
+	result  = a * (e * i - f * h);
+	result -= b * (d * i - f * g);
+	result += c * (d * h - e * g);
 
-	// apply delta if column = 1/2/3
-	if( column ) discriminant *= delta;
+	return result;
 }
 
 //////////////////////////////////////////////////////////////////////////////
 
-static void compass_solve_helper(void)							// 338 byte
+static void compass_solve_helper(void)
 {
 	// computes:
 	//
@@ -163,23 +141,24 @@ static void compass_solve_helper(void)							// 338 byte
 	yh -= (Su*uh + 2*S1) * uc;
 	yh -= (Sv*uh + 2*S2) * vc;
 	yh -= (Sw*uh + 2*S3) * wc;
+
+	return;
 }
 
 //////////////////////////////////////////////////////////////////////////////
 
-void compass_solve_calibration()								// 1738 byte
+void compass_solve_calibration()
 {
-	overlay float inv_compass_N;
+	OVERLAY float delta;
 
 	RESET_C_STACK;
 
-	// compute center of measured magnetic directions			// 200 byte
-	inv_compass_N = 1 / compass_N;
-	uc = Su * inv_compass_N;
-	vc = Sv * inv_compass_N;
-	wc = Sw * inv_compass_N;
+	//---- Compute center of measured magnetic directions --------------------
+	uc = Su/compass_N;
+	vc = Sv/compass_N;
+	wc = Sw/compass_N;
 
-	// normalize partial sums
+	//---- Normalize partial sums --------------------------------------------
 	//
 	// We measured the (u, v, w) values, and need the centered (x, y, z) ones
 	// around the sphere center's (uc, vc, wc) as:
@@ -222,16 +201,19 @@ void compass_solve_calibration()								// 1738 byte
 	Saa = Suu + Svv + Sww;
 
 	// compute yu = Saau - Saa*uc - compass_dotc(Su*uc + 2*Suu, Sv*uc + 2*Suv, Sw*uc + 2*Suw);
-	//
-	uh = uc; S0 = Saau; S1 = Suu; S2 = Suv; S3 = Suw; compass_solve_helper(); yu = yh;
+	uh = uc; S0 = Saau; S1 = Suu; S2 = Suv; S3 = Suw;
+	compass_solve_helper();
+	yu = yh;
 
 	// compute yv = Saav - Saa*vc - compass_dotc(Su*vc + 2*Suv, Sv*vc + 2*Svv, Sw*vc + 2*Svw);
-	//
-	uh = vc; S0 = Saav; S1 = Suv; S2 = Svv; S3 = Svw; compass_solve_helper(); yv = yh;
+	uh = vc; S0 = Saav; S1 = Suv; S2 = Svv; S3 = Svw;
+	compass_solve_helper();
+	yv = yh;
 
 	// compute yw = Saaw - Saa*wc - compass_dotc(Su*wc + 2*Suw, Sv*wc + 2*Svw, Sw*wc + 2*Sww);
-	//
-	uh = wc; S0 = Saaw; S1 = Suw; S2 = Svw; S3 = Sww; compass_solve_helper(); yw = yh;
+	uh = wc; S0 = Saaw; S1 = Suw; S2 = Svw; S3 = Sww;
+	compass_solve_helper();
+	yw = yh;
 
 
 	//---- Solve the system --------------------------------------------------
@@ -241,15 +223,14 @@ void compass_solve_calibration()								// 1738 byte
 	//
 	// Note this is symmetric, with a positive diagonal, hence discriminant is always not null
 
-	//compute delta value
-	calc_discriminant(0); delta = 0.5f / discriminant;
+	delta = 0.5f / compass_discriminent(0);
 
-	// compute new center, with offset values
-	calc_discriminant(1); uc += discriminant;
-	calc_discriminant(2); vc += discriminant;
-	calc_discriminant(3); wc += discriminant;
+	// computed new center, with offset values:
+	uc += compass_discriminent(1) * delta;
+	vc += compass_discriminent(2) * delta;
+	wc += compass_discriminent(3) * delta;
 
-	// add correction due to already applied calibration
+	// add correction due to already applied calibration:
 	compass_CX_f += (short)(32768 * uc);
 	compass_CY_f += (short)(32768 * vc);
 	compass_CZ_f += (short)(32768 * wc);

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File i2c.asm                              combined next generation V3.03.2
+;   File i2c.asm                              combined next generation V3.03.5
 ;
 ;   I2C Interface
 ;
@@ -28,8 +28,8 @@
 ;    
 ;   Compass3
 ;   --------
-;   LSM303C's Compass read address	    (8-Bit): 0x3D
-;   LSM303C's Compass write address	    (8-Bit): 0x3C
+;   LSM303C's Compass read address          (8-Bit): 0x3D
+;   LSM303C's Compass write address         (8-Bit): 0x3C
 ;   LSM303C's Acceleration read address	    (8-Bit): 0x3B
 ;   LSM303C's Acceleration write address    (8-Bit): 0x3A
 ;
@@ -91,12 +91,14 @@ I2C_TwoBytesRX_div8_2:					; divide lo:hi/8 (signed) only
 
 	global	I2C_RX_accelerometer
 I2C_RX_accelerometer:
-        btfsc   compass_type3	    ; compass3
-	bra	    I2C_RX_accelerometer_compass3    ; yes
+	btfsc	compass_type3					; compass3 ?
+	bra		I2C_RX_accelerometer_compass3	; YES
 	btfsc	compass_type2					; compass2 ?
 	bra		I2C_RX_accelerometer_compass2	; YES
-	btfsc	compass_type					; compass1 ?
+	btfsc	compass_type1					; compass1 ?
 	bra		I2C_RX_accelerometer_compass1	; YES
+	;bra	I2C_RX_accelerometer_compass0	; NO  - compass0 then
+
 I2C_RX_accelerometer_compass0:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
@@ -170,7 +172,7 @@ I2C_RX_accelerometer_compass1:
 	bsf		SSP1CON2,RSEN				; repeated start condition (!)
 	rcall	WaitMSSP
 	movlw	0x3D						; address
-I2C_RX_accelerometer_compass1_xx:		;  compass2 and 3 continue here... 
+I2C_RX_accelerometer_compass1_xx:		; compass 2 and 3 continue here... 
 	rcall	I2C_TX
 
 	; Non-flipped screen:
@@ -258,19 +260,19 @@ I2C_RX_accelerometer_compass2:
 	bsf		SSP1CON2,RSEN				; repeated start condition (!)
 	rcall	WaitMSSP
 	movlw	0x33						; address
-	bra	I2C_RX_accelerometer_compass1_xx
+	bra		I2C_RX_accelerometer_compass1_xx
 
 I2C_RX_accelerometer_compass3:
-	bsf	SSP1CON2,SEN	    ; Start condition
+	bsf	SSP1CON2,SEN					; start condition
 	rcall	WaitMSSP
-	movlw	0x3A                ; address
-	rcall   I2C_TX
-	movlw	0x28		    ; 0x28 (OUT_X_L_A)
-	rcall   I2C_TX
-	bsf	SSP1CON2,RSEN	    ; Repeated start condition (!)
+	movlw	0x3A						; address
+	rcall	I2C_TX
+	movlw	0x28						; 0x28 (OUT_X_L_A)
+	rcall	I2C_TX
+	bsf		SSP1CON2,RSEN				; repeated start condition (!)
 	rcall	WaitMSSP
-	movlw	0x3B                ; address
-	bra	I2C_RX_accelerometer_compass1_xx
+	movlw	0x3B						; address
+	bra		I2C_RX_accelerometer_compass1_xx
 
 I2C_OneByteRX:
 	bsf		SSP1CON2,RCEN				; enable receive mode
@@ -284,12 +286,14 @@ I2C_OneByteRX:
 
 	global	I2C_RX_compass
 I2C_RX_compass:
-        btfsc   compass_type3				; compass3
-        bra	    I2C_RX_compass3				; YES
-	btfsc	compass_type2				; compass2 ?
+	btfsc	compass_type3				; compass 3 ?
+	bra		I2C_RX_compass3				; YES
+	btfsc	compass_type2				; compass 2 ?
 	bra		I2C_RX_compass2				; YES
-	btfsc	compass_type				; compass1 ?
+	btfsc	compass_type1				; compass 1 ?
 	bra		I2C_RX_compass1				; YES
+	;bra	I2C_RX_compass0				; NO  - compass 0 then
+
 I2C_RX_compass0:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
@@ -347,7 +351,7 @@ I2C_RX_compass0_2:
 	movff	SSP1BUF,compass_DZ+0		; data byte
 	rcall	I2C_OneByteRX				; get one byte
 	movff	SSP1BUF,compass_DX+1		; data byte
-	bsf		SSP1CON2, RCEN				; Enable receive mode
+	bsf		SSP1CON2,RCEN				; enable receive mode
 	rcall	WaitMSSP
 	movff	SSP1BUF,compass_DX+0		; data byte
 	bsf		SSP1CON2,PEN				; stop condition
@@ -362,7 +366,7 @@ I2C_RX_compass0_2:
 	banksel	common
 	return
 
-I2C_RX_compass1:						; new compass
+I2C_RX_compass1:						; compass type 1
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
 	movlw	0x3C						; address
@@ -414,7 +418,7 @@ I2C_RX_compass1_2:
 	bsf		SSP1CON2,PEN				; stop condition
 	bra		WaitMSSP					; ... and return
 
-I2C_RX_compass2:						; newest compass
+I2C_RX_compass2:						; compass type 2
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
 	movlw	0x3C						; address
@@ -425,7 +429,7 @@ I2C_RX_compass2:						; newest compass
 	rcall	WaitMSSP
 	movlw	0x3D						; address
 	rcall	I2C_TX
-I2C_RX_compass2_xx:    ; compass 3 enters here	
+I2C_RX_compass2_xx:						; compass 3 joins in here
 ;	rcall	WaitMSSP
 	rcall	I2C_OneByteRX				; get one byte
 	movff	SSP1BUF,lo					; data byte
@@ -462,20 +466,20 @@ I2C_RX_compass2_2:
 ;	rcall	I2C_TwoBytesRX_div8_2
 	MOVII	mpr,compass_DZ
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP ;(And return)
+	bra		WaitMSSP					; ...and return
 
-I2C_RX_compass3:
-	bsf		SSP1CON2,SEN	    ; Start condition
+I2C_RX_compass3:						; compass type 3
+	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
-	movlw	0x3C                ; address
-	rcall   I2C_TX
-	movlw	0xA8		    ; 0x28 with auto-increment (MSB=1)
-	rcall   I2C_TX
-	bsf	SSP1CON2,RSEN	    ; Repeated start condition (!)
+	movlw	0x3C						; address
+	rcall	I2C_TX
+	movlw	0xA8						; 0x28 with auto-increment (MSB=1)
+	rcall	I2C_TX
+	bsf		SSP1CON2,RSEN				; repeated start condition (!)
 	rcall	WaitMSSP
-	movlw	0x3D                ; address
-	rcall   I2C_TX
-	bra	I2C_RX_compass2_xx
+	movlw	0x3D						; address
+	rcall	I2C_TX
+	bra		I2C_RX_compass2_xx			; join with compass 2 code
 
  ENDIF	; _compass
 
@@ -485,37 +489,38 @@ I2C_RX_compass3:
 I2C_init_compass:
 	bsf		compass_enabled
 	bcf		compass_type2
-        bcf		compass_type3
-    
-    ; probe compass 3
-        bsf	SSP1CON2,SEN		; Start condition
-        rcall	WaitMSSP
-        movlw	0x3A			; Address byte + Write bit
-        movwf	SSP1BUF			; control byte
-        rcall	WaitMSSP
-        btfss	SSP1CON2,ACKSTAT	; ACK?
-        bsf	compass_type3		; ACK send. compass2 present
-        bsf	SSP1CON2,PEN		; Stop condition
-        rcall	WaitMSSP
-    
-	btfsc   compass_type3
-        bra	I2C_init_compass3		; Compass3
+	bcf		compass_type3
 
-	; check for compass2
+	; probe for compass 3
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
-	movlw	0x32						; address byte + Write bit
+	movlw	0x3A						; address byte + write bit
 	movwf	SSP1BUF						; control byte
 	rcall	WaitMSSP
 	btfss	SSP1CON2,ACKSTAT			; ACK?
-	bsf		compass_type2				; YES - ACK send, compass2 present
-	bsf		SSP1CON2,PEN				; NO  - stop condition
+	bsf		compass_type3				; YES - ACK was send, compass 3 present
+	bsf		SSP1CON2,PEN				; stop condition
 	rcall	WaitMSSP
-	btfsc	compass_type2
-	bra		I2C_init_compass2			; compass2
 
-	; check for compass0 or compass1...
-	bsf		compass_type				; set flag
+	btfsc	compass_type3				; compass 3 found?
+	bra		I2C_init_compass3			; YES - initialize compass 3
+
+	; probe for compass 2
+	bsf		SSP1CON2,SEN				; start condition
+	rcall	WaitMSSP
+	movlw	0x32						; address byte + write bit
+	movwf	SSP1BUF						; control byte
+	rcall	WaitMSSP
+	btfss	SSP1CON2,ACKSTAT			; ACK?
+	bsf		compass_type2				; YES - ACK send, compass 2 present
+	bsf		SSP1CON2,PEN				; stop condition
+	rcall	WaitMSSP
+
+	btfsc	compass_type2				; compass 2 found?
+	bra		I2C_init_compass2			; YES - initialize compass 2
+
+	; probe for compass 0 or 1
+	bsf		compass_type1				; set flag
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
 	movlw	0x3C						; address
@@ -530,25 +535,26 @@ I2C_init_compass:
 	movlw	0x3D						; address
 	rcall	I2C_TX
 	rcall	I2C_OneByteRX				; get one byte
-	movlw	0x49						; 0x49 = Compass1
+	movlw	0x49						; 0x49 = compass 1
 	cpfseq	SSP1BUF
-	bcf		compass_type				; clear flag
+	bcf		compass_type1				; clear flag
 	bsf		SSP1CON2,PEN				; stop condition
 	rcall	WaitMSSP
-	btfsc	compass_type				; compass1 ?
-	bra		I2C_init_compass1			; YES
 
-	; init compass0
+	btfsc	compass_type1				; compass 1 found?
+	bra		I2C_init_compass1			; YES - initialize compass 1
+	;bra	I2C_init_compass0			; NO  - must be compass 0 then
+
+I2C_init_compass0:
+	; magnetic
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
 	movlw	0x3C						; address
 	rcall	I2C_TX
 	movlw	0x00
 	rcall	I2C_TX
-;	movlw	b'01101001'					; ConfigA: 3 Hz, 8 samples averaged, test mode (positive bias)
 	movlw	b'01101000'					; ConfigA: 3 Hz, 8 samples averaged
 	rcall	I2C_TX
-I2C_init_compass_common:
 	movff	opt_compass_gain,i2c_temp1	; 0-7 (230 LSB/Gauss to 1370 LSB/Gauss)
 	swapf	i2c_temp1,F
 	comf	i2c_temp1,F
@@ -560,7 +566,47 @@ I2C_init_compass_common:
 	movlw	b'00000000'					; continuous mode
 	rcall	I2C_TX
 	bsf		SSP1CON2,PEN				; stop condition
+	rcall		WaitMSSP
+	
+	; accelerometer
+	rcall	I2C_sleep_accelerometer0		; registers can only be changed in standby mode
+
+	bsf		SSP1CON2,SEN				; start condition
+	rcall	WaitMSSP
+	movlw	0x38						; address
+	rcall	I2C_TX
+	movlw	0x0E						; XYZ_DATA_CFG
+	rcall	I2C_TX
+	movlw	b'00000000'					; high pass filter = 0, +/- 2 g range
+	rcall	I2C_TX
+	bsf		SSP1CON2,PEN				; stop condition
+	rcall	WaitMSSP
+	bsf		SSP1CON2,SEN				; start condition
+	rcall	WaitMSSP
+	movlw	0x38						; address
+	rcall	I2C_TX
+	movlw	0x2A						; CTRL_REG1
+	rcall	I2C_TX
+;	movlw	b'00110000'					; CTRL_REG1: 160 ms data rate, standby mode
+	movlw	b'00110100'					; CTRL_REG1: 160 ms data rate, standby mode, reduced noise mode
+	rcall	I2C_TX
+	movlw	b'00000010'					; CTRL_REG2: high-res in active mode
+	rcall	I2C_TX
+	bsf		SSP1CON2,PEN				; stop condition
+	rcall	WaitMSSP
+
+	bsf		SSP1CON2,SEN				; start condition
+	rcall	WaitMSSP
+	movlw	0x38						; address
+	rcall	I2C_TX
+	movlw	0x2A						; CTRL_REG1
+	rcall	I2C_TX
+;	movlw	b'00110001'					; CTRL_REG1: 160 ms data rate, active  mode
+	movlw	b'00110101'					; CTRL_REG1: 160 ms data rate, standby mode, reduced noise mode, active Mode
+	rcall	I2C_TX
+	bsf		SSP1CON2,PEN				; stop condition
 	bra		WaitMSSP					; ... and return
+
 
 I2C_init_compass1:
 	bsf		SSP1CON2,SEN				; start condition
@@ -581,7 +627,6 @@ I2C_init_compass1:
 	rcall	I2C_TX
 	movlw	b'01100100'					; CTRL5 HIGH res, 6.25 Hz
 	rcall	I2C_TX
-init_compass1_common:
 	movff	opt_compass_gain,i2c_temp1	; 0-7 (230 LSB/Gauss to 1370 LSB/Gauss)
 	movlw	b'01100000'					; CTRL6 Full scale (+/-12 Gauss -> 2730 LSB/Gauss)
 	dcfsnz	i2c_temp1,F					; = 1?
@@ -602,57 +647,105 @@ init_compass1_common:
 	movlw	b'00000000'					; CTRL7 Continuous Mode
 	rcall	I2C_TX
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; ... and return
+	bra	WaitMSSP					; (and return), no I2C_init_accelerometer1 needed (inits with magnetic sensor)
 
 I2C_init_compass2:
+	; magnetic
+	bsf		SSP1CON2,SEN	; Start condition
+	rcall	WaitMSSP
+	movlw	0x3C            ; address
+	rcall       I2C_TX
+	movlw	0xE0		; 0x60 with auto-increment (MSB=1)
+	rcall       I2C_TX
+	movlw	b'10000000'	; CFG_REG_A_M (10Hz, Continuous) 0x60 0x00
+	rcall       I2C_TX
+	movlw	b'00000011'	; CFG_REG_B_M (low-pass filter enabled) 0x61 (set pulse is released every 63 ODR)
+	rcall	I2C_TX
+	movlw	b'00010000'	; CFG_REG_C_M BDU=1 0x62 0x57
+	rcall	I2C_TX
+	bsf	SSP1CON2,PEN	; Stop condition
+	rcall	WaitMSSP
+	
+	; accelerometer
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
-	movlw	0x3C						; address
+	movlw	0x32						; address
 	rcall	I2C_TX
-	movlw	0xE0						; 0x60 with auto-increment (MSB=1)
+	movlw	0x9F						; 1F with auto-increment (MSB=1)
 	rcall	I2C_TX
-	movlw	b'00000000'					; CFG_REG_A_M        0x60 (10 Hz, continuous)
+	movlw	b'00000000'					; TEMP_CFG_REG_A (Temp sensor off)
 	rcall	I2C_TX
-	movlw	b'00000000'					; CFG_REG_B_M        0x61 (low-pass filter off, set pulse is released every 63 ODR)
+	movlw	b'00100111'					; CTRL_REG1_A (10Hz, x,y,z = ON)
 	rcall	I2C_TX
-	movlw	b'00000000'					; CFG_REG_C_M BDU=0  0x62
+	movlw	b'00000000'					; CTRL_REG2_A
 	rcall	I2C_TX
+	movlw	b'00000000'					; CTRL_REG3_A
+	rcall	I2C_TX
+	movlw	b'00001000'					; CTRL_REG4_A (BDU=0, +/-2g, HR=1)
+	rcall	I2C_TX
+;	movlw	b'00000000'					; CTRL_REG5_A
+;	rcall	I2C_TX
 	bsf		SSP1CON2,PEN				; stop condition
 	bra		WaitMSSP					; ... and return
 
+
 I2C_init_compass3:
-	bsf	SSP1CON2,SEN	; Start condition
+	; magnetic
+	bsf		SSP1CON2,SEN	; Start condition
 	rcall	WaitMSSP
 	movlw	0x3C            ; address
-	rcall   I2C_TX
+	rcall       I2C_TX
 	movlw	0xA0		; 0x20 with auto-increment (MSB=1)
-	rcall   I2C_TX
-	movlw	b'00010000'	; CTRL_REG1_M (10Hz) 0x20
-	rcall   I2C_TX
+	rcall       I2C_TX
+	movlw	b'01110000'	; CTRL_REG1_M (10Hz) 0x20
+	rcall       I2C_TX
 	movlw	b'01100000'	; CTRL_REG2_M (Full-scale: +/- 16gauss) 0x21
-	rcall   I2C_TX
+	rcall       I2C_TX
 	movlw	b'01000000'	; CTRL_REG3_M (Continuous) 0x22
-	rcall   I2C_TX
+	rcall       I2C_TX
 	movlw	b'00000000'	; CTRL_REG4_M (Z in Low-power mode) 0x23
-	rcall   I2C_TX
+	rcall       I2C_TX
 	movlw	b'00000000'	; CTRL_REG5_M 0x24
-	rcall   I2C_TX
+	rcall       I2C_TX
 	movlw	b'00000000'	; CTRL_REG5_M 0x24
-	rcall   I2C_TX
-	bsf	SSP1CON2,PEN	; Stop condition
-	bra	WaitMSSP	;(And return)
+	rcall       I2C_TX
+	bsf		SSP1CON2,PEN	; Stop condition
+	rcall	WaitMSSP
 	
+	;accelerometer
+	bsf	SSP1CON2,SEN		; Start condition
+        rcall	WaitMSSP
+	movlw	0x3A            ; address
+	rcall	I2C_TX
+	movlw	0x20
+	rcall   I2C_TX
+	movlw	b'10010111'	; CTRL_REG1_A (100Hz, x,y,z = ON, BDU=OFF) 0x20
+	rcall   I2C_TX
+	movlw	b'00000000'	; CTRL_REG2_A 0x21
+	rcall   I2C_TX
+	movlw	b'00000000'	; CTRL_REG3_A 0x22
+	rcall   I2C_TX
+        movlw	b'11001100'	; CTRL_REG4_A 0x23
+        rcall       I2C_TX
+	bsf	SSP1CON2,PEN		; Stop condition
+	bra	WaitMSSP	; (And return)
+
 
 	global	I2C_sleep_compass
 I2C_sleep_compass:
+	btfss	compass_enabled				; compass active?
+	return						; NO - return
 	bcf		compass_enabled
-        btfsc	compass_type3				; compass3?
+	btfsc	compass_type3				; compass 3 ?
 	bra		I2C_sleep_compass3			; YES
-	btfsc	compass_type2				; compass2 ?
+	btfsc	compass_type2				; compass 2 ?
 	bra		I2C_sleep_compass2			; YES
-	btfsc	compass_type				; compass1 ?
+	btfsc	compass_type1				; compass 1 ?
 	bra		I2C_sleep_compass1			; YES
+	;bra	I2C_sleep_compass0			; NO  - must be compass 0 then
+
 I2C_sleep_compass0:
+	; magnetic
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
 	movlw	0x3C						; address
@@ -664,6 +757,19 @@ I2C_sleep_compass0:
 	movlw	b'00100000'					; ConfigB
 	rcall	I2C_TX
 	movlw	b'00000010'					; idle mode
+	rcall	I2C_TX
+	bsf		SSP1CON2,PEN				; stop condition
+	rcall	WaitMSSP
+	
+I2C_sleep_accelerometer0:   ;(needed)
+	; accelerometer
+	bsf		SSP1CON2,SEN				; start condition
+	rcall	WaitMSSP
+	movlw	0x38						; address
+	rcall	I2C_TX
+	movlw	0x2A						; CTRL_REG1
+	rcall	I2C_TX
+	movlw	b'00000000'					; standby mode
 	rcall	I2C_TX
 	bsf		SSP1CON2,PEN				; stop condition
 	bra		WaitMSSP					; ... and return
@@ -688,7 +794,8 @@ I2C_sleep_compass1:
 	movlw	b'00000010'					; data for CTRL_REG7: magnetic sensor power-down mode
 	rcall	I2C_TX
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					;    and return
+	bra 	WaitMSSP					; (And return) - no I2C_sleep_accelerometer1 required (sleeps with magnetic sensor)
+	
 
 I2C_sleep_compass2:
 	; magnetic
@@ -707,21 +814,8 @@ I2C_sleep_compass2:
 	movlw	b'00000000'					; INT_CTRL_REG_M 0x63
 	rcall	I2C_TX
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; ... and return
+	rcall	WaitMSSP
 
-I2C_sleep_compass3:
-    ; magnetic
-        bsf	SSP1CON2,SEN	; Start condition
-        rcall	WaitMSSP
-        movlw	0x3C            ; address
-        rcall   I2C_TX
-	movlw	0xA2		; 0x22 with auto-increment (MSB=1)
-	movlw	b'01000010'	; CTRL_REG3_M (Power-down) 0x22
-	rcall   I2C_TX
-	bsf	SSP1CON2,PEN	; Stop condition
-	bra	WaitMSSP	;(And return)
-
-I2C_sleep_accelerometer2:
 	; accelerometer
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
@@ -736,19 +830,30 @@ I2C_sleep_accelerometer2:
 	bsf		SSP1CON2,PEN				; stop condition
 	bra		WaitMSSP					; ... and return
 
-I2C_sleep_accelerometer3:
-    ; accelerometer
-	bsf	SSP1CON2,SEN		; Start condition
+I2C_sleep_compass3:
+	; magnetic
+	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
-	movlw	0x3A            ; address
-	rcall   I2C_TX
-	movlw	0x20
-	rcall   I2C_TX
-	movlw	b'00000000'	; CTRL_REG1_A (100Hz, x,y,z = ON) 0x20
-	rcall   I2C_TX
-	bsf	SSP1CON2,PEN		; Stop condition
-	bra	WaitMSSP	; (And return)
+	movlw	0x3C						; address
+	rcall	I2C_TX
+	movlw	0xA2						; 0x22 with auto-increment (MSB=1)
+	rcall	I2C_TX
+	movlw	b'01000010'					; CTRL_REG3_M (power-down) 0x22
+	rcall	I2C_TX
+	bsf		SSP1CON2,PEN				; stop condition
+	rcall	WaitMSSP
 
+	; accelerometer
+	bsf		SSP1CON2,SEN				; start condition
+	rcall	WaitMSSP
+	movlw	0x3A						; address
+	rcall	I2C_TX
+	movlw	0x20
+	rcall	I2C_TX
+	movlw	b'00000000'					; CTRL_REG1_A (100Hz, x,y,z = OFF) 0x20
+	rcall	I2C_TX
+	bsf		SSP1CON2,PEN				; stop condition
+	bra	WaitMSSP					; ... and return
 
 WaitMSSP:
 	decfsz	i2c_temp1,F					; check for timeout during I2C action
@@ -762,16 +867,16 @@ WaitMSSP2:
 	return
 
 I2C_WaitforACK:
-	btfss	SSP1CON2,ACKSTAT			; checks for ACK bit from slave
-	return
-I2CFail:
-	bsf		active_reset_ostc_rx		; RESET RX circuitry (Which may be the cause for the hang up)
-	rcall	I2CReset					; I2C Reset
-	bcf		PIR1,SSP1IF
-	clrf	i2c_temp1
-	bsf		i2c_error_flag				; set error flag
-	bcf		active_reset_ostc_rx		; release RESET from RX circuitry
-	return
+	btfss	SSP1CON2,ACKSTAT			; ACK received from slave?
+	return								; YES
+I2CFail:								; NO
+	bsf		active_reset_ostc_rx		;    - reset RX circuitry (which may be the cause for the hang up)
+	rcall	I2CReset					;    - reset I2C
+	bcf		PIR1,SSP1IF					;    - 
+	clrf	i2c_temp1					;    - 
+	bsf		i2c_error_flag				;    - set error flag
+	bcf		active_reset_ostc_rx		;    - release reset from RX circuitry
+	return								;    - done
 
 I2CReset:								; something went wrong (slave holds SDA low?)
 	clrf	SSP1CON1					; wake-up slave and reset entire module
@@ -808,119 +913,10 @@ I2CReset_2:
 	movwf	SSP1CON1
 	movlw	b'00000000'
 	movwf	SSP1CON2
-	movlw	0x27
+	movlw	0x9C
 	movwf	SSP1ADD
 	return
 
-
-	global	I2C_init_accelerometer
-I2C_init_accelerometer:
-        btfsc   compass_type3				; compass3?
-	bra	    I2C_init_accelerometer3		; YES
-
-	btfsc	compass_type2				; compass2 ?
-	bra		I2C_init_accelerometer2		; YES
-
-	btfsc	compass_type				; compass1 ?
-	return								; YES - ignore
-
-	rcall	I2C_sleep_accelerometer		; registers can only be changed in standby mode
-
-	bsf		SSP1CON2,SEN				; start condition
-	rcall	WaitMSSP
-	movlw	0x38						; address
-	rcall	I2C_TX
-	movlw	0x0E						; XYZ_DATA_CFG
-	rcall	I2C_TX
-	movlw	b'00000000'					; high pass filter = 0, +/- 2g range
-	rcall	I2C_TX
-	bsf		SSP1CON2,PEN				; stop condition
-	rcall	WaitMSSP
-
-	bsf		SSP1CON2,SEN				; start condition
-	rcall	WaitMSSP
-	movlw	0x38						; address
-	rcall	I2C_TX
-	movlw	0x2A						; CTRL_REG1
-	rcall	I2C_TX
-;	movlw	b'00110000'					; CTRL_REG1: 160 ms data rate, standby mode
-	movlw	b'00110100'					; CTRL_REG1: 160 ms data rate, standby mode, reduced noise mode
-	rcall	I2C_TX
-	movlw	b'00000010'					; CTRL_REG2: high-res in active mode
-	rcall	I2C_TX
-	bsf		SSP1CON2,PEN				; stop condition
-	rcall	WaitMSSP
-
-	bsf		SSP1CON2,SEN				; start condition
-	rcall	WaitMSSP
-	movlw	0x38						; address
-	rcall	I2C_TX
-	movlw	0x2A						; CTRL_REG1
-	rcall	I2C_TX
-;	movlw	b'00110001'					; CTRL_REG1: 160 ms data rate, active  mode
-	movlw	b'00110101'					; CTRL_REG1: 160 ms data rate, standby mode, reduced noise mode, active Mode
-	rcall	I2C_TX
-	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; ... and return
-
-I2C_init_accelerometer2:
-	bsf		SSP1CON2,SEN				; start condition
-	rcall	WaitMSSP
-	movlw	0x32						; address
-	rcall	I2C_TX
-	movlw	0x9F						; 1F with auto-increment (MSB=1)
-	rcall	I2C_TX
-	movlw	b'00000000'					; TEMP_CFG_REG_A (Temp sensor off)
-	rcall	I2C_TX
-	movlw	b'01010111'					; CTRL_REG1_A (100Hz, x,y,z = ON)
-	rcall	I2C_TX
-	movlw	b'00000000'					; CTRL_REG2_A
-	rcall	I2C_TX
-;	movlw	b'00000000'					; CTRL_REG3_A
-;	rcall	I2C_TX
-;	movlw	b'00000000'					; CTRL_REG4_A (BDU=0, +/-2g,
-;	rcall	I2C_TX
-;	movlw	b'00000000'					; CTRL_REG5_A
-;	rcall	I2C_TX
-	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; ... and return
-
-I2C_init_accelerometer3:
-	bsf	SSP1CON2,SEN		; Start condition
-        rcall	WaitMSSP
-	movlw	0x3A            ; address
-	rcall	I2C_TX
-	movlw	0x20
-	rcall   I2C_TX
-	movlw	b'00110111'	; CTRL_REG1_A (100Hz, x,y,z = ON) 0x20
-	rcall   I2C_TX
-	movlw	b'00000000'	; CTRL_REG2_A 0x21
-	rcall   I2C_TX
-	movlw	b'00000000'	; CTRL_REG3_A 0x22
-	rcall   I2C_TX
-	bsf	SSP1CON2,PEN		; Stop condition
-	bra	WaitMSSP	; (And return)
-	
-
-	global	I2C_sleep_accelerometer
-I2C_sleep_accelerometer:
-        btfsc   compass_type3				; Compass3
-        bra	    I2C_sleep_accelerometer3		; YES
-	btfsc	compass_type2				; Compass2
-	bra		I2C_sleep_accelerometer2	; YES
-	btfsc	compass_type				; compass1?
-	return								; YES - ignore
-
-	bsf		SSP1CON2,SEN				; start condition
-	rcall	WaitMSSP
-	movlw	0x38						; address
-	rcall	I2C_TX
-	movlw	0x2A						; CTRL_REG1
-	rcall	I2C_TX
-	movlw	b'00000000'					; standby mode
-	rcall	I2C_TX
-	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; ... and return
 
 lt2942_init_again:
 	clrf	i2c_temp1
@@ -937,6 +933,7 @@ lt2942_init_again:
 	MOVII	battery_accumulated_charge,sub_a
 	; and init again...
 
+
 	global	lt2942_init
 lt2942_init:							; setup control register B
 	clrf	i2c_temp1
@@ -948,6 +945,7 @@ lt2942_init:							; setup control register B
 	rcall	I2C_WaitforACK
 	bsf		SSP1CON2,PEN				; stop condition
 	bra		WaitMSSP					; ... and return
+
 
 	global	lt2942_get_status
 lt2942_get_status:						; read status register
@@ -999,7 +997,7 @@ lt2942_get_temperature:					; read battery temperature
 	bsf		SSP1CON2,ACKEN				; master acknowledge
 	rcall	WaitMSSP
 	movff	SSP1BUF,xA+1				; store raw temperature, high byte
-	bsf		SSP1CON2, RCEN				; enable receive mode
+	bsf		SSP1CON2,RCEN				; enable receive mode
 	rcall	WaitMSSP
 	movff	SSP1BUF,xA+0				; store raw temperature, low byte
 	bsf		SSP1CON2,PEN				; stop condition
@@ -1075,6 +1073,9 @@ lt2942_get_accumulated_charge:			; read accumulated charge and compute percent
 	MOVII	battery_capacity,xB
 	call	div16x16					; xC = xA / xB with xA as remainder
 	movff	xC+0,batt_percent
+	movlw	.100						; max. value is  100 %
+	cpfslt	batt_percent				; batt_percent < 100 % ?
+	movwf	batt_percent				; NO  - limit to 100 %
 	return
 
 lt2942_set_to_zero_percent:
@@ -1089,6 +1090,7 @@ lt2942_set_to_zero_percent:
 	rcall	I2C_WaitforACK
 	bsf		SSP1CON2,PEN				; stop condition
 	bra		WaitMSSP					; ... and return
+
 
 	global	lt2942_charge_done
 lt2942_charge_done:						; reset accumulating registers to 0xFFFF
@@ -1122,7 +1124,7 @@ I2C_RX_GAUGE:
 	movwf	SSP1BUF						; control byte
 	rcall	WaitMSSP
 	rcall	I2C_WaitforACK
-	bsf		SSP1CON2, RCEN				; enable receive mode
+	bsf		SSP1CON2,RCEN				; enable receive mode
 	bra		WaitMSSP					; ... and return
 
 
@@ -1256,6 +1258,8 @@ I2C_get_tankdata_loop_read:
 	bra		WaitMSSP					; ... and return
 
 
+ IFDEF _rx_update
+
 	global	I2C_update_OSTC_rx
 I2C_update_OSTC_rx:						; transfer 64 byte to RX co-processor
 	; setup for write
@@ -1338,7 +1342,9 @@ I2C_update_OSTC_loop_read:
 	retlw	.0							; NO  - data transfered successfully
 	retlw	.255						; YES - error in data transfer occurred
 
- ENDIF
+ ENDIF	; _rx_update
+
+ ENDIF	; _rx_functions
 
 ;=============================================================================
 

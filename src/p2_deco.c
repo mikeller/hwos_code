@@ -1,5 +1,5 @@
 // ***************************************************************************
-// p2_deco.c                                  combined next generation V3.03.4
+// p2_deco.c                                  combined next generation V3.04.3
 //
 //  Created on: 12.05.2009
 //  Author: heinrichs weikamp, contributions by Ralph Lembcke and others
@@ -104,8 +104,12 @@
 
 // deco engine scheduling
 #define INVOKES_PER_SECOND				2		// number of invocations of the deco engine per second (use powers of 2 only: 1, 2, 4, ...)
-#define BUDGET_PER_SECOND				640		// [ms] total time budget per second for the deco engine, each invocation will preempt after BUDGET_PER_SECOND / INVOKES_PER_SECOND
 
+#ifdef _hwos_sport
+#define BUDGET_PER_SECOND				320		// [ms] total time budget per second for the deco engine, each invocation will preempt after BUDGET_PER_SECOND / INVOKES_PER_SECOND
+#else
+#define BUDGET_PER_SECOND				640		// [ms] total time budget per second for the deco engine, each invocation will preempt after BUDGET_PER_SECOND / INVOKES_PER_SECOND
+#endif
 
 // ambient pressure at different mountain heights
 #define P_ambient_1000m					0.880	// [bar]  based on 990 hPa and 20°C at sea level, 15°C at altitude
@@ -126,14 +130,16 @@
 #define HYST							1.0E-06	// threshold for tissue graphics on-gassing / off-gassing visualization
 
 // thresholds
-#define CNS_WARNING_THRESHOLD			100		// threshold for CNS  warning
-#define CNS_ATTENTION_THRESHOLD			 70		// threshold for CNS  attention
-#define ppO2_GAP_TO_SETPOINT			 10		// gap between setpoint and max. ppO2 of the pure diluent [cbar]
-#define GAS_NEEDS_ATTENTION_THRESHOLD	0.70	// threshold for gas needs attention [1.00 = 100%] 
+#define CNS_LIMIT_WARNING				100		// threshold for CNS  warning
+#define CNS_LIMIT_ATTENTION				 70		// threshold for CNS  attention
 #define PRESSURE_LIMIT_WARNING			200		// threshold for pressure reading warning  : 20.0 bar
 #define PRESSURE_LIMIT_ATTENTION		500		// threshold for pressure reading attention: 50.0 bar
+#define GAS_NEEDS_LIMIT_ATTENTION		0.70	// threshold for gas needs attention [1.00 = 100%]
 #define O2_CONSUMPTION_LIMIT_ATTENTION	 20		// threshold for O2 "SAC"         attention:  2.0 l/min
+#define ppO2_GAP_TO_SETPOINT			 10		// gap between setpoint and max. ppO2 of the pure diluent [cbar]
 #define ppO2_MARGIN_ON_MAX				  3		// [cbar] margin on ppO2 max to compensate for surface pressures > 1.000 mbar
+#define STOP_CHAINING_LIMIT				  5		// max. number of chained stop table entries before deco calculation is aborted
+
 
 // deco engine states and modes - (char_O_)main_status: controls current tissue and deco status calculation (as-is situation)
 #define CALC_VOLUME						0x01	// =1: calculate gas needs
@@ -162,7 +168,7 @@
 #define INITIALIZE						0x04	// input:    initialize deco engine
 #define INITIALIZE_START_NORM			0x05	// input:    initialize deco engine and start calculation of a normal       deco plan
 #define INITIALIZE_START_ALT			0x06	// input:    initialize deco engine and start calculation of an alternative deco plan
-//										0x08	// unused - reserved for further deco engine commands
+#define DECO_CALCULATOR_MODE			0x08	// input:    deco engine is run from deco calculator
 
 #define BAILOUT_MODE					0x10	// =1: allow gas switches before first deco stop
 #define DELAYED_ASCENT					0x20	// =1: figure in a delayed ascent (fTTS)
@@ -181,10 +187,10 @@
 #define DECO_WARNING_OUTSIDE			0x10	// tissue pressures outside the Buhlmann model now
 #define DECO_WARNING_OUTSIDE_lock		0x20	// tissue pressures outside the model sometime during the dive
 #define DECO_ATTENTION_OUTSIDE			0x40	// tissue pressures are very close to the Buhlmann limit
-#define DECO_WARNING_STOPTABLE_OVERFLOW	0x80	// internal error: no more space in the deco stops table
+#define DECO_WARNING_INCOMPLETE			0x80	// internal error: deco calculation incomplete
 
 // deco engine status (char_O_)deco_info
-#define DECO_FLAG						0x01	// =1: deco ppO2 levels are permitted
+#define DECO_MODE						0x01	// =1: deco ppO2 levels are permitted
 #define IND_DOUBLE_SWITCH_FLAG			0x02	// =1: switch to other tank advice active
 //										0x04	// --- unused
 #define DECO_ZONE						0x08	// =1: fTTS < TTS (not updated when in bailout mode)
@@ -202,29 +208,18 @@
 // deco engine control - next_planning_phase
 #define PHASE_00_DONE					0x00	// calculation cycle finished
 #define PHASE_10_DIVE_INIT				0x10	// once-per-dive    initialization of the deco engine
-#define PHASE_11_CYCLIC_INIT			0x11	// once-every-cycle initialization of the deco engine
-#define PHASE_20_EXTENDED_BOTTOM_TIME	0x20	// calculate extended bottom time
-#define PHASE_30_NDL_TIME				0x30	// calculate NDL time
-#define PHASE_40_CAVE_ASCENT			0x40	// calculate cave mode return/ascent
-#define PHASE_60_DECO_ASCENT			0x60	// calculate open water deco ascent
-#define PHASE_70_RESULTS				0x70	// results - initialization
-#define PHASE_71_RESULTS_STOPS_TABLE	0x71	// results - publish stops table
-#define PHASE_72_RESULTS_NDL			0x72	// results - publish data / within NDL
-#define PHASE_73_RESULTS_DECO			0x73	// results - publish data / in deco
-#define PHASE_80_GAS_NEEDS_SWITCHES		0x80	// calculate gas needs - find gas switches in NDL bailout mode
-#define PHASE_81_GAS_NEEDS_ASCENT		0x81	// calculate gas needs - needs of bottom segment and ascent
-#define PHASE_82_GAS_NEEDS_PRESSURES	0x82	// calculate gas needs - conversion from volumes to pressures
+#define PHASE_20_CYCLIC_INIT			0x20	// once-every-cycle initialization of the deco engine
+#define PHASE_30_EXTENDED_BOTTOM_TIME	0x30	// calculate extended bottom time
+#define PHASE_40_BOTTOM_GAS_NEED		0x40	// calculate gas needs for bottom segment
+#define PHASE_50_NDL_TIME				0x50	// calculate NDL time
+#define PHASE_60_CAVE_RETURN			0x60	// calculate cave mode  return
+#define PHASE_70_OPEN_WATER_ASCENT		0x70	// calculate open water ascent
+#define PHASE_80_RESULTS				0x80	// results - initialization
+#define PHASE_81_RESULTS_STOPS_TABLE	0x81	// results - publish stops table
+#define PHASE_82_RESULTS_NDL			0x82	// results - publish data / within NDL
+#define PHASE_83_RESULTS_DECO			0x83	// results - publish data / in deco
+#define PHASE_84_GAS_NEEDS_PRESSURES	0x84	// results - convert gas needs from volumes to pressures
 #define PHASE_90_FINISH					0x90	// finish calculation cycle
-
-
-// gas needs calculation - gas_needs_next_phase
-#define GAS_NEEDS_INIT					0x00	// initialization
-#define GAS_NEEDS_BOTTOM_SEGMENT		0x10	// demand during bottom segment
-#define GAS_NEEDS_INITIAL_ASCENT		0x20	// demand of initial ascent
-#define GAS_NEEDS_STOP					0x30	// demand on a stop
-#define GAS_NEEDS_INTERMEDIATE_ASCENT	0x40	// demand on ascent between two stops
-#define GAS_NEEDS_FINAL_ASCENT			0x50	// demand during final ascent
-#define GAS_NEEDS_DONE					0x60	// calculation finished
 
 
 // flags used with integer numbers
@@ -265,7 +260,7 @@ static void			 calc_hauptroutine_data_input(void);// Initializes environment dat
 // Functions combined for real Tissues & Deco Calculations
 static void			 calc_alveolar_pressures(void);		// Computes the partial pressures from the gas ratios and many more parameters,
 														// needs either calc_hauptroutine_data_input() be called beforehand or
-														// gas_find_current()/gas_find_better() and gas_set_ratios().
+														// gas_take_current() or gas_find_best()/gas_take_best() and gas_set_ratios().
 static void			 calc_tissues(void);				// Updates the tissues   dependent on the partial pressures of N2 and He.
 static void			 calc_CNS(void);					// Updates the CNS value dependent on the partial pressure  of the O2.
 static void			 calc_limit(PARAMETER float GF_current);
@@ -278,17 +273,15 @@ static void			 calc_TR_functions(void);			// Calculates SAC etc.
 
 // Functions dedicated to Deco Calculations
 static void			 clear_deco_table(void);			// Clears the deco stops table, invoked at the start of each calculation cycle.
-static void			 gas_find_current(void);			// Sets the first gas used for deco calculation, invoked at start of cycle, too.
-static unsigned char gas_find_better(void);				// Checks for, and eventually switches to, a better gas.
+static void			 gas_take_current(void);			// Sets the first gas used for deco calculation, invoked at start of cycle, too.
+static unsigned char gas_find_best(void);				// Searches for the best gas available.
+static void			 gas_take_best(void);				// Switches to the best gas that has been found found before by gas_find_best().
 static void			 gas_set_ratios(void);				// Sets the gas ratios for use in deco calculation (simulated tissues),
-														// needs to be called after each gas change (gas_find_current/_better).
+														// needs to be called after each gas change (gas_take_current/_better).
 static void			 calc_NDL_time_tissue(void);		// Calculates the remaining NDL time for a given tissue.
-static void			 find_NDL_gas_changes(void);		// Finds the gas changes in an OC bailout ascent that is within NDL.
 static unsigned char find_next_stop(void);				// Finds the next stop when in a deco ascent.
 static unsigned char update_deco_table(PARAMETER unsigned char time_increment);
 														// Enters a new stop or extends an existing stop in the deco stops table.
-static void			 calc_ascenttime(void);				// Calculates the ascent time from current depth and deco stop times.
-static void			 calc_gas_needs_ascent(void);		// Calculates required gas volumes and pressures from the data in stops table.
 static void			 calc_due_by_depth_time_sac(void);	// Calculates gas volume required for a given depth, time and usage (SAC rate).
 static void			 convert_gas_needs_to_press(void);	// Converts gas volumes into pressures and sets respective flags.
 
@@ -312,9 +305,10 @@ static void			 read_Buhlmann_ht(void);			// Reads the half-times from a ROM tabl
 static void			 adopt_Buhlmann_coefficients(void);	// Computes average a and b coefficient by the N2/He tissue ratio.
 static void			 push_tissues_to_vault(void);		// Stores the state of the real tissues during simulator runs.
 static void			 pull_tissues_from_vault(void);		// Restores the state of the real tissues after a simulator run.
-static void			 calc_N2_equilibrium(void);			// Calculate partial pressure of N2 in respired air at surface pressure
-static void			 get_saturation_factors(void);		// Get, safeguard and convert the saturation and desaturation factors
-static void			 apply_saturation_factors(void);	// Applies saturation and desaturation factors
+static void			 calc_sim_pres_respiration(void);	// Calculate sim_pres_respiration from char_depth_sim.
+static void			 calc_N2_equilibrium(void);			// Calculate partial pressure of N2 in respired air at surface pressure.
+static void			 get_saturation_factors(void);		// Get, safeguard and convert the saturation and desaturation factors.
+static void			 apply_saturation_factors(void);	// Applies saturation and desaturation factors.
 
 
 // *********************************************************************************************************************************
@@ -332,11 +326,11 @@ static void			 apply_saturation_factors(void);	// Applies saturation and desatur
 
 static float			pres_surface;					// absolute pressure at the surface
 
-static float			float_depth_real;				// current real      depth in meters, float
-static unsigned char	char_depth_real;				// current real      depth in meters, integer
-static unsigned char	char_depth_sim;					// current simulated depth in meters, integer
-static unsigned char	char_depth_last;				// last    simulated depth in meters, integer
-static unsigned char	char_depth_bottom;				// bottom            depth in meters, integer
+static float			float_depth_real;				// current real               depth in meters, float
+static unsigned char	char_depth_real;				// current real               depth in meters, integer
+static unsigned char	char_depth_sim_start;			// start   value of simulated depth in meters, integer
+static unsigned char	char_depth_sim;					// current value of simulated depth in meters, integer
+static unsigned char	char_depth_last;				// last    value of simulated depth in meters, integer
 
 static float			real_pres_respiration;			// current real depth in absolute pressure
 static float			real_O2_ratio;					// real breathed gas oxygen ratio
@@ -368,7 +362,7 @@ static float			GF_slope_norm;					// (GF_high - GF_low) / GF_low_depth_norm in n
 static float			GF_slope_alt;					// (GF_high - GF_low) / GF_low_depth_alt  in alternative plan
 
 static float			float_ascent_speed;				// ascent speed from options_table (5.0 .. 10.0 m/min)
-static float			float_deco_distance;			// additional depth below stop depth for tissue, CNS and gas volume calculation
+static float			float_deco_distance;			// additional depth below stop depth - not used any more
 static float			float_saturation_multiplier;	// safety factor for  on-gassing rates
 static float			float_desaturation_multiplier;	// safety factor for off-gassing rates
 
@@ -395,6 +389,7 @@ static unsigned char	NDL_tissue_start;				// tissue to start with               
 static unsigned char	NDL_tissue_lead;				// tissue with the shortest NDL time found in current cycle
 static unsigned char	NDL_tissue;						// tissue for which the NDL is calculated right now
 
+
 // Result Values from Calculation Functions (9 byte)
 
 static float			ceiling;						// minimum tolerated relative pressure (i.e. without surface pressure)
@@ -411,43 +406,26 @@ static float			pres_actual;					// current pressure of the compartment
 static unsigned short	int_time;						// time it takes for the compartment to reach the target pressure
 
 
-// Gas in Use and Gas Needs (30 byte)
+// Gas in Use and Gas Needs (26 byte)
 
+static unsigned char	sim_gas_last_num;				// number       of the last      used gas
 static unsigned char	sim_gas_current_num;			// number       of the currently used gas
 static unsigned char	sim_gas_current_depth;			// change depth of the currently used gas
 
-static unsigned char	gas_needs_stop_time;			// duration of the stop in minutes
-static unsigned char	gas_needs_stop_gas;				// gas used now    (1-5 or 0)
-static unsigned char	gas_needs_stop_gas_last;		// gas used before (1-5 or 0)
-static unsigned char	gas_needs_stop_depth;			// depth of the stop      in meters
-static unsigned char	gas_needs_stop_depth_last;		// depth of the last stop in meters
-static unsigned char	gas_needs_stop_index;			// index to the stop table
+static unsigned char	sim_gas_best_num;				// number       of the better gas
+static unsigned char	sim_gas_best_depth;				// change depth of the better gas
+
 static unsigned char	gas_needs_gas_index;			// index to the gas and tank data arrays
-static unsigned char	gas_needs_next_phase;			// next phase within the ascent gas needs calculation
+static float			gas_volume_need[NUM_GAS];		// gas volumes required  for return/ascent in liters
+static float			gas_volume_avail[NUM_GAS];		// gas volumes available for return/ascent in liters
 
-static float			gas_volume_need[NUM_GAS];		// gas volumes required for return/ascent in liters
 
+// Transfer Variables for calc_due_by_depth_time_sac() (7 byte)
 
-// Transfer Variables between calc_gas_needs_ascent() and calc_due_by_depth_time_sac() (13 byte)
-
-static float			gas_needs_float_depth;			// depth of the stop or half-way point
-static float			gas_needs_float_time;			// duration of the stop or ascent phase
-static unsigned char	gas_needs_stop_usage;			// gas usage in l/min
+static unsigned char	gas_needs_depth;				// depth of the stop or half-way point
+static unsigned char	gas_needs_time;					// duration of the stop or ascent phase
+static unsigned char	gas_needs_usage_rate;			// gas usage in l/min
 static float			gas_needs_volume_due;			// computed due of gas volume required
-
-
-// CNS Coefficients (10 byte)
-
-static float			var_cns_a;						// two coefficients approximation, gain
-static float			var_cns_b;						// two coefficients approximation, offset
-static unsigned short	var_cns_c;						// one coefficient  approximation, value
-
-
-// Transfer values for convert_float_int and convert_float_to_char() (7 byte)
-
-static float			float_value;					// input value,   float
-static unsigned short	int_value;						// output value, 16 bit
-static unsigned char	char_value;						// output value,  8 bit
 
 
 // Auxiliary Variables for Data Buffering (28 byte)
@@ -461,14 +439,7 @@ static float			pres_tissue;					// auxiliary variable to buffer total tissue pre
 static float			old_pres_respiration;			// auxiliary variable to buffer sim_pres_respiration
 
 
-// Performance Profiling (4 byte)
-
-static unsigned short	profiling_runtime;				// performance measurement: runtime of current invocation
-static unsigned char	profiling_runs;					// performance measurement: invocations per deco calculation cycle
-static unsigned char	profiling_phase;				// performance measurement: current calculation phase
-
-
-// 255 byte used, 1 byte left in this bank (4 bytes per float, 2 bytes per short, 1 byte per char)
+// 244 byte used, 12 byte left in this bank (4 bytes per float, 2 bytes per short, 1 byte per char)
 
 
 //---- Bank 6 parameters -----------------------------------------------------
@@ -482,7 +453,7 @@ static volatile unsigned short	tmr5_value;				// timer 5 value buffer		MUST be a
 static volatile unsigned char	tmr5_overflow;			// timer 5 overflow flag	MUST be at address 0x602
 
 
-// Modes, Sequencing and Indexing (11 byte)
+// Modes, Sequencing and Indexing (12 byte)
 
 static unsigned char	main_status;					// shadow register for char_O_main_status
 static unsigned char	deco_status;					// shadow register for char_O_deco_status
@@ -495,6 +466,8 @@ static unsigned char	ci;								// index to the Buhlmann tables (compartment ind
 static unsigned char	cns_i;							// index to the CNS      tables (ppO2 range  index)
 static unsigned char	i;								// general purpose loop counter and index
 static unsigned char	fast;							// selects 1 minute or 2 second ascent steps
+static unsigned char	stop_index;						// current stop table position
+static unsigned char	chained_stops;					// counter for chained stop entries
 
 
 // Result Values from Calculation Functions (28 byte)
@@ -526,6 +499,13 @@ static float			var_N2_ht;						// half-time,  for current N2 tissue
 static float			var_He_ht;						// half-time,  for current He tissue
 
 
+// CNS Coefficients (10 byte)
+
+static float			var_cns_a;						// two coefficients approximation, gain
+static float			var_cns_b;						// two coefficients approximation, offset
+static unsigned short	var_cns_c;						// one coefficient  approximation, value
+
+
 // Vault to back-up & restore Tissue related Data (134 byte)
 
 static float			vault_pres_tissue_N2[NUM_COMP];	// stores the nitrogen tissue pressures
@@ -535,10 +515,24 @@ static unsigned char	vault_deco_warnings;			// stores warnings status
 static unsigned char	vault_deco_info;				// stores info status
 
 
+// Transfer values for convert_float_int and convert_float_to_char() (7 byte)
+
+static float			float_value;					// input value,   float
+static unsigned short	int_value;						// output value, 16 bit
+static unsigned char	char_value;						// output value,  8 bit
+
+
+// Performance Profiling (4 byte)
+
+static unsigned short	profiling_runtime;				// performance measurement: runtime of current invocation
+static unsigned char	profiling_runs;					// performance measurement: invocations per deco calculation cycle
+static unsigned char	profiling_phase;				// performance measurement: current calculation phase
+
+
 // 7 byte occupied by compiler-placed vars
 
 
-// 223 byte used, 33 byte left in this bank (4 bytes per float, 2 bytes per short, 1 byte per char)
+// 245 byte used, 11 byte left in this bank (4 bytes per float, 2 bytes per short, 1 byte per char)
 
 
 
@@ -601,7 +595,7 @@ static char				md_pi_subst[256];				// overlay C-code data stack here, too
 #endif
 
 rom const float CNS_ab[2*11] = {
-// CNS increment per 2sec = 1 / (a*ppO2 + b) with ppO2 in [cbar]
+// CNS increment per 2 sec = 1 / (a*ppO2 + b) with ppO2 in [cbar]
 //   a          b       for ppO2 cbar range
 	-533.07,    54000,	//  51 -  60   (index  0)
 	-444.22,    48600,	//  61 -  70   (index  1)
@@ -616,8 +610,8 @@ rom const float CNS_ab[2*11] = {
 	-222.11,    37350	// 151 - 160   (index 10)
 };
 
-rom const unsigned short CNS_c[1*20] = {
-//  CNS increment per 2sec = c / 100000.0
+rom const unsigned short CNS_c[1*18] = {
+//  CNS increment per 2 sec = c / 100000.0
 //   c in [1/100000]   for ppO2 cbar range
 	  75,				// 161 - 165   (index  0)
 	 102,				// 166 - 170   (index  1)
@@ -636,9 +630,7 @@ rom const unsigned short CNS_c[1*20] = {
 	4820,				// 231 - 235   (index 14)
 	4820,				// 236 - 240   (index 15)
 	4820,				// 241 - 245   (index 16)
-	4820,				// 246 - 250   (index 17)
-	4820,				// 251 - 255   (index 18)
-	   0				// not used, just to fill up the memory block
+	4820				// 246 - 250   (index 17)
 };
 
 
@@ -668,7 +660,7 @@ rom const float Buhlmann_ab[4*16] = {
 };
 
 rom const float Buhlmann_ht[2*16] = {
-// Compartment half-life, in minute
+// Compartment half-life, in minutes
 //--- N2 ---- He ----------------------
 	  4.0,    1.51,
 	  8.0,    3.02,
@@ -689,7 +681,8 @@ rom const float Buhlmann_ht[2*16] = {
 };
 
 rom const float e2secs[2*16] = {
-// result of  1 - 2^(-1/(2sec*HT))
+// Integration constant for 2 seconds,
+// result of  1 - 2^(-1/(2sec/60sec * HT))
 //---- N2 ------------- He ------------
 	5.75958E-03,    1.51848E-02,
 	2.88395E-03,    7.62144E-03,
@@ -712,7 +705,7 @@ rom const float e2secs[2*16] = {
 
 rom const float e1min[2*16] = {
 // Integration constant for 1 minute,
-// Ie. 1- 2^(-1/HT)
+// result of  1 - 2^(-1/HT)
 //----- N2 --------- e 1min He --------
 	1.59104E-01,    3.68109E-01,
 	8.29960E-02,    2.05084E-01,
@@ -734,8 +727,8 @@ rom const float e1min[2*16] = {
 };
 
 rom const float e10min[2*16] = {
-// The 10 min Value in float notation:
-//  result of 1 - 2^(-10/ht)
+// Integration constant for 10 minutes,
+//  result of  1 - 2^(-10/ht)
 //---- N2 -------------- He -----------
 	8.23223E-01,    9.89851E-01,
 	5.79552E-01,    8.99258E-01,
@@ -764,7 +757,7 @@ rom const float e10min[2*16] = {
 // *********************************************************************************************************************************
 
 
-// moved from 0x0D000 to 0x0C000 in v.108
+// p2deco code moved from 0x0D000 to 0x0C000 in v.108
 #ifndef UNIX
 #	pragma code p2_deco = 0x0C000
 #endif
@@ -780,8 +773,8 @@ void assert_failed(PARAMETER short int line)
 
 
 //////////////////////////////////////////////////////////////////////////////
-// When calling C code from ASM context, the data stack pointer and
-// frames should be reset. Bank 8 is used by stack.
+// When calling C code from ASM context, the C data stack pointer need to be
+// reset. The C stack is located in bank 8.
 
 #ifdef CROSS_COMPILE
 #	define RESET_C_STACK
@@ -914,7 +907,7 @@ static void read_Buhlmann_coefficients(void)
 	// Note: We don't use far ROM pointer, because handling
 	//       24 bit is too complex, hence we have to set the
 	//       UPPER page ourself...
-	//       -> Set to zero if tables are moved to lower pages!
+	//       -> set to zero if tables are moved to lower pages!
 	_asm
 		movlw	1
 		movwf	TBLPTRU,0
@@ -1047,6 +1040,20 @@ static void adopt_Buhlmann_coefficients(void)
 
 
 //////////////////////////////////////////////////////////////////////////////
+// Calculate sim_pres_respiration from char_depth_sim
+//
+// Input:  char_depth_sim        simulated depth in meters
+//         pres_surface          surface pressure
+//
+// Output: sim_pres_respiration  simulated depth in absolute pressure
+//
+static void calc_sim_pres_respiration(void)
+{
+	sim_pres_respiration = (float)char_depth_sim * METER_TO_BAR + pres_surface;
+}
+
+
+//////////////////////////////////////////////////////////////////////////////
 // Calculate partial pressure of N2 in respired air at surface pressure
 //
 // Input:  pres_surface     surface pressure
@@ -1138,13 +1145,13 @@ static void convert_float_to_char(void)
 //
 // called from: divemode.asm
 //
-// Called every second during diving,
-// updates tissues on every second invocation.
+// Called two times per second during diving, updates the
+// tissues every second (i.e. on every second invocation).
 //
-// Every few seconds (or slower when TTS > 16):
+// On each computation cycle:
 // - Updates deco table (char_O_deco_time/depth) with new values,
 // - updates ascent time, and
-// - sets status to zero (so we can check there is new results).
+// - sets status to zero (so we can check a cycle has finished).
 //
 void deco_calc_hauptroutine(void)
 {
@@ -1166,6 +1173,7 @@ void deco_init_output_vars(void)
 	init_output_vars();
 }
 
+
 //////////////////////////////////////////////////////////////////////////////
 // deco_clear_tissue
 //
@@ -1173,7 +1181,7 @@ void deco_init_output_vars(void)
 //              menu_tree.asm
 //              simulator.asm
 //
-// Sets all tissues to equilibrium with Air at ambient pressure,
+// Sets all tissues to equilibrium with air at ambient pressure,
 // resets all CNS values, any warnings and resets all model output.
 //
 void deco_clear_tissue(void)
@@ -1188,9 +1196,9 @@ void deco_clear_tissue(void)
 //
 // called from: simulator.asm
 //
-// Updates tissues and CNS value for char_I_dive_interval minutes on air
-// at ambient pressure and calculates resulting GF factor and ceiling for
-// a GF-high of 100% (ceiling and GF factor not used by simulator.asm)
+// Updates tissues and CNS value for char_I_dive_interval minutes on air at
+// ambient pressure and calculates resulting saturation and ceiling for a
+// GF-high of 100% (ceiling and saturation not used by simulator.asm)
 //
 void deco_calc_dive_interval(void)
 {
@@ -1209,8 +1217,7 @@ void deco_calc_dive_interval(void)
 //              ghostwriter.asm
 //
 // Updates tissues and CNS value for 1 minute on air at ambient pressure and
-// calculates resulting GF factor and ceiling for a GF-high of 100% (ceiling
-// is not used by *.asm files).
+// calculates resulting saturation and ceiling for a GF-high of 100%.
 //
 void deco_calc_dive_interval_1min(void)
 {
@@ -1225,8 +1232,7 @@ void deco_calc_dive_interval_1min(void)
 // called from: sleepmode.asm
 //
 // Updates tissues and CNS value for 10 minutes on air at ambient pressure and
-// calculates resulting GF factor and ceiling for a GF-high of 100% (ceiling
-// is not used by sleepmode.asm).
+// calculates resulting saturation and ceiling for a GF-high of 100%.
 //
 void deco_calc_dive_interval_10min(void)
 {
@@ -1289,15 +1295,13 @@ void deco_pull_tissues_from_vault(void)
 
 
 //////////////////////////////////////////////////////////////////////////////
-// find_next_stop
+// Calculate the next deco stop
 //
 // INPUT, fixed during dive:
 //        pres_surface             : surface pressure (as absolute pressure)
 //        char_I_depth_last_deco   : depth of the last deco stop
 //
-// INPUT, changing during dive:
-//        float_depth_real         : current real depth in meters (float)
-//        char_depth_real          : current real depth in meters (integer)
+// INPUT, may change during dive:
 //        GF_high                  : GF high factor
 //        GF_low                   : GF low  factor
 //
@@ -1319,48 +1323,31 @@ static unsigned char find_next_stop(void)
 {
 	overlay unsigned char depth_1min;
 	overlay unsigned char depth_limit;
-	overlay unsigned char first_stop;
+	overlay unsigned char stop_depth;
+	overlay unsigned char next_stop;
 	overlay unsigned char need_stop;
 
 
-	// -----------------------------------------------------------------------
-	// we start with the assumption that a stop is not required
-	// -----------------------------------------------------------------------
-
-	need_stop = 0;
-
-	// remember the depth we came from
+	// memorize the depth we came from
 	char_depth_last = char_depth_sim;
 
-	// calculate the limit for the current depth
-	     if( char_I_deco_model == 0            ) calc_limit(1.0);											// straight Buhlmann
-	else if( char_depth_sim    >= GF_low_depth ) calc_limit(GF_low);										// with GF, below low depth reference
-	else                                         calc_limit(GF_high - GF_slope * (float)char_depth_sim);	// with GF, above low depth reference
+	// calculate the ceiling (minimum relative pressure) for the current depth
+	     if( char_I_deco_model == 0            ) calc_limit(1.0);											// deco or not - straight Buhlmann
+	else if( NDL_time                          ) calc_limit(GF_high);										// not in deco
+	else if( char_depth_sim    >= GF_low_depth ) calc_limit(GF_low);										// in deco with GF, below or at low depth reference
+	else                                         calc_limit(GF_high - GF_slope * (float)char_depth_sim);	// in deco with GF, above       low depth reference
 
-	// check if we can surface directly
-	if( ceiling <= 0.0 )
-	{
-		// YES - ascent to surface is allowed
-		char_depth_sim = 0;
+	// convert the ceiling from relative pressure to meters,
+	// rounded up (i.e. made deeper) to next full meter,
+	// limiting at surface.
+	depth_limit = (ceiling > 0.0) ? (unsigned char)(ceiling * BAR_TO_METER + 0.99) : 0;
 
-		//     - done
-		goto done;
-	}
-
-	// -----------------------------------------------------------------------
-	// a stop is required, but maybe not yet within the running minute
-	// -----------------------------------------------------------------------
-
-	// convert the depth we can ascent to from relative pressure to meters,
-	// rounded up (i.e. made deeper) to next full meter.
-	depth_limit = (unsigned char)(ceiling * BAR_TO_METER + 0.99);
-
-	// calculate the stop depth, i.e. round up to the next multiple of 3 meters
-	// using integer arithmetics
-	first_stop = 3 * ( (depth_limit + 2) / 3 );
+	// calculate the stop depth, i.e. round up (make deeper) to
+	// the next multiple of 3 meters using integer arithmetics
+	stop_depth = 3 * ( (depth_limit + 2) / 3 );
 
 	// apply correction for the shallowest stop
-	if( first_stop == 3 ) first_stop = char_I_depth_last_deco;
+	if( stop_depth == 3 ) stop_depth = char_I_depth_last_deco;
 
 	// compute depth in meters that will be reached in 1 minute of ascent
 	// at a speed of char_I_ascent_speed (5..10 m/min)
@@ -1373,36 +1360,53 @@ static unsigned char find_next_stop(void)
 		depth_1min = 0;
 	}
 
-	// is the stop shallower than the depth that can be reached within 1 minute?
-	if( depth_1min > first_stop )
+	// is the stop depth shallower than the depth that can be reached within 1 minute,
+	// or are we allowed to surface AND can we reach the surface within 1 minute?
+	if(    ( ( stop_depth <  depth_1min )                        )
+	    || ( ( stop_depth == 0          ) && ( depth_1min == 0 ) )
+	  )
 	{
 		// YES - report the depth that will be reached within 1 minute of ascent
 		char_depth_sim = depth_1min;
+
+		//     - no stop needed
+		need_stop = 0;
 
 		//     - done
 		goto done;
 	}
 
 	// -----------------------------------------------------------------------
-	// we need to make a stop now
+	// we need to make a stop now, or need to stay at the current stop depth
 	// -----------------------------------------------------------------------
 
 	// set stop data
 	need_stop      = 1;
-	char_depth_sim = first_stop;
+	char_depth_sim = stop_depth;
+
+	// Apply correction in case the stop is to be placed deeper than a
+	// previously recorded stop for a gas change. This may happen because
+	// the deco stops are placed at the next deeper multiple of 3 meters
+	// instead of the real stop's depth. Correction is to relocate the
+	// deco stop to the depth of the last gas change. The resulting combined
+	// stop's duration will be the sum of the configured gas change time plus
+	// the duration of the deco stop itself.
+	if( 0              < internal_deco_depth[stop_index] )
+	if( char_depth_sim > internal_deco_depth[stop_index] )
+		char_depth_sim = internal_deco_depth[stop_index];
 
 	// done so far if using straight Buhlmann
 	if( char_I_deco_model == 0 ) goto done;
 
 	// -----------------------------------------------------------------------
-	// we need to make a stop now and we are using the GF extension
+	// we need to make or hold a stop and we are using the GF extension
 	// -----------------------------------------------------------------------
 
-	// is the depth limit deeper than the GF low depth reference used up to now?
-	if( depth_limit > GF_low_depth )
+	// is the stop depth deeper than the GF low depth reference used up to now?
+	if( stop_depth > GF_low_depth )
 	{
 		// YES - update the reference
-		GF_low_depth = depth_limit;
+		GF_low_depth = stop_depth;
 		GF_slope     = (GF_high - GF_low) / (float)GF_low_depth;
 
 		// store for use in next cycles
@@ -1418,13 +1422,6 @@ static unsigned char find_next_stop(void)
 		}
 	}
 
-	// keep the stop as it is when it is the first stop
-	// (i.e. there are no stops in the stops table yet)
-	if( internal_deco_depth[0] == 0  ) goto done;
-
-	// keep the stop as it is when extended stops are activated
-	if( main_status & EXTENDED_STOPS ) goto done;
-
 	// We have a (first) stop. But with a steep GF slope, the stop(s) after this
 	// first stop may be allowed to ascent to, too. This is because the gradient
 	// factor that will be used at the next depth(s) will allow more tissue super-
@@ -1432,35 +1429,39 @@ static unsigned char find_next_stop(void)
 	// ascent to. So we have to probe the next stops that are within the reach of
 	// 1 minute of ascent as well.
 
-	// no need to probe for a stop that is beyond 1 minute of ascent
-	while( first_stop >= (depth_1min + 3) )
+	// probe all stop depths that are in reach of 1 minute of ascent
+	next_stop = stop_depth;
+
+	while(next_stop > 0)
 	{
-		overlay unsigned char next_stop;
+		// compute the depth of the next stop ...
+		if      ( next_stop <= char_I_depth_last_deco ) next_stop  = 0;
+		else if ( next_stop == 6                      ) next_stop  = char_I_depth_last_deco;
+		else                                            next_stop -= 3;
 
-		// compute the depth of the next stop
-		if      ( first_stop <= char_I_depth_last_deco ) next_stop = 0;
-		else if ( first_stop == 6                      ) next_stop = char_I_depth_last_deco;
-		else                                             next_stop = first_stop - 3;
-
-		// compute the depth limit at the next stop depth
-		calc_limit(GF_high - GF_slope * (float)next_stop);
-
-		// check if ascent to the next stop is allowed
-		if( next_stop < (unsigned char)(ceiling * BAR_TO_METER + 0.99) )
+		// would the next stop be beyond the 1 minute limit?
+		if( next_stop < depth_1min )
 		{
-			// NO - the next stop would be too shallow
-			break;
+			// YES - signal that probing is done
+			next_stop = 0;
 		}
 		else
 		{
-			// YES - the next stop is allowed
-			char_depth_sim = next_stop;
+			// NO - compute the ceiling at the next stop depth
+			calc_limit(GF_high - GF_slope * (float)next_stop);
 
-			//     - ascent to next stop
-			first_stop = next_stop;
+			//    - limit ceiling to positive values, i.e. the surface
+			if( ceiling < 0.0 ) ceiling = 0.0;
 
-			//     - loop to probe the stop following next
-			continue;
+			//    - check if this stop depth would be allowed
+			if( next_stop >= (unsigned char)(ceiling * BAR_TO_METER + 0.99) )
+			{
+				// YES - this stop depth is allowed
+				char_depth_sim = next_stop;
+
+				//     - no stop needed if stop depth actually is the surface
+				if( next_stop == 0 ) need_stop = 0;
+			}
 		}
 	}
 
@@ -1472,68 +1473,21 @@ static unsigned char find_next_stop(void)
 done:
 
 	// calculate absolute pressure at the depth found
-	sim_pres_respiration = char_depth_sim * METER_TO_BAR + pres_surface;
+	calc_sim_pres_respiration();
 
 	return need_stop;
 }
 
 
 //////////////////////////////////////////////////////////////////////////////
-// publish_deco_table
-//
-// Input:  internal_deco_depth[]      depth in internal stops table
-//         internal_deco_time[]       times ...
-//         internal_deco_gas[]        gases ...
-//
-// Output: char_O_deco_depth[]        depth in the external stops table
-//         char_O_deco_time[]         times ...
-//         char_O_deco_gas[]          gases ...
-//         char_O_deco_time_for_log   times in reverse order
-//
-static void publish_deco_table(void)
-{
-	overlay unsigned char x = 0;
-	overlay unsigned char y;
-
-
-	// copy all entries from internal to external stops table
-	for( y = 0; y < NUM_STOPS; y++ )
-	{
-		// remember index of last entry with a non-null depth
-		if( internal_deco_depth[y] > 0 ) x = y;
-
-		// copy depth, time and gas
-		char_O_deco_depth[y] = internal_deco_depth[y];
-		char_O_deco_time [y] = internal_deco_time [y];
-		char_O_deco_gas  [y] = internal_deco_gas  [y];
-	}
-
-
-	// copy times of shallowest stops to logging table
-	for( y = 0; y < NUM_STOPS_LOG; y++, --x )
-	{
-		char_O_deco_time_for_log[y] = internal_deco_time [x];
-
-		// stop when all entries are copied
-		if( x == 0 ) break;
-	}
-
-	// fill the remainder of the logging table with null
-	// if it is not completely filled already
-	for( y++; y < NUM_STOPS_LOG; y++ )
-		char_O_deco_time_for_log[y] = 0;
-}
-
-
-//////////////////////////////////////////////////////////////////////////////
-// Find current gas in the list (if any) and get its change depth
+// Find current gas in the list and get its change depth
 //
 // Input:  char_I_current_gas_num   number of current gas (1..5 or 6)
 //
 // Output: sim_gas_current_num      1..6 or 0 for the manually configured gas/dil
 //         sim_gas_current_depth    change depth (MOD) of the gas/dil in meters
 //
-static void gas_find_current(void)
+static void gas_take_current(void)
 {
 	assert( 1 <= char_I_current_gas_num && char_I_current_gas_num <= 6 );
 
@@ -1541,6 +1495,9 @@ static void gas_find_current(void)
 	{
 		sim_gas_current_num   = char_I_current_gas_num;
 		sim_gas_current_depth = char_I_deco_gas_change[sim_gas_current_num-1];
+
+		// capture case of non-configured change depth
+		if( sim_gas_current_depth == 0 ) sim_gas_current_depth = 255;
 	}
 	else
 	{
@@ -1551,34 +1508,27 @@ static void gas_find_current(void)
 
 
 //////////////////////////////////////////////////////////////////////////////
-// Find the deco gas with the shallowest change depth below or at the current depth
+// Find the gas with the shallowest change depth below or at the current depth
 //
 // Input:    char_depth_sim             simulated depth in meters
 //           sim_gas_current_num        number of the currently used gas/dil
-//           sim_gas_current_depth      change depth of the currently used gas/dil
 //           char_I_deco_gas_type[]     types         of the gases/dils
 //           char_I_deco_gas_change[]   change depths of the gases/dils
 //
-// Modified: sim_gas_current_num        index of the gas (1..5) - only if return value is true
-//           sim_gas_current_depth      switch depth            - only if return value is true
+// Modified: sim_gas_best_num           index of the gas (1..5) - only if return value is true
+//           sim_gas_best_depth         switch depth            - only if return value is true
 //
 // Return value is TRUE if a better gas is available
 //
-static unsigned char gas_find_better(void)
+static unsigned char gas_find_best(void)
 {
 	overlay unsigned char switch_depth = 255;
 	overlay unsigned char switch_gas   =   0;
 	overlay unsigned char j;
 
-	//	// no automatic gas changes in CCR mode
-	//	if( (deco_status & MODE_MASK) == MODE_CCR ) return 0;
-
-	// loop over all deco gases to find the shallowest one below or at current depth
+	// loop over all gases to find the shallowest one below or at current depth
 	for( j = 0; j < NUM_GAS; ++j )
 	{
-		// Is this gas not the one we are already breathing?
-		if( j+1 != sim_gas_current_num )
-
 		// Is this gas available?
 		if( char_I_deco_gas_type[j] > 0 )
 
@@ -1586,42 +1536,58 @@ static unsigned char gas_find_better(void)
 		// at least equal to the current depth?
 		if( char_I_deco_gas_change[j] >= char_depth_sim )
 
-		// Is the change depth of this gas shallower than the
-		// change depth of the gas we are currently on?
-		if( char_I_deco_gas_change[j] < sim_gas_current_depth )
+		// Is the change depth of this gas shallower than or
+		// at least equal to the change depth of the best gas
+		// found so far, or is it the first better gas found?
+		if( char_I_deco_gas_change[j] <= switch_depth )
 
-		// Is the change depth of this gas shallower than the change
-		// depth of the best gas found so far, or is it the first
-		// better gas found?
-		if( char_I_deco_gas_change[j] < switch_depth )
+#ifdef _gas_contingency
+		// Is there still enough of this gas or doesn't it matter?
+		if( ( gas_volume_need[j] < gas_volume_avail[j] ) || ( !char_I_gas_contingency ) )
+#endif
 
 		// If there is a yes to all these questions, we have a better gas!
 		{
-			switch_gas   = j+1;							// remember this gas (1..5)
-			switch_depth = char_I_deco_gas_change[j];	// remember its change depth
+			// memorize this gas (1..5) and its change depth
+			switch_gas   = j+1;
+			switch_depth = char_I_deco_gas_change[j];
 		}
-
 	}	// continue looping through all gases to eventually find an even better gas
 
-	// has a better gas been found?
+	// has a best gas been found?
 	if( switch_gas )
 	{
-		// YES - set the better gas as the new gas
-		sim_gas_current_num   = switch_gas;
+		// YES - export the best gas and its change depth
+		sim_gas_best_num   = switch_gas;
+		sim_gas_best_depth = switch_depth;
 
-		// set its change depth as the last used change depth
-		sim_gas_current_depth = switch_depth;
-
-		assert( sim_gas_current_depth < switch_depth );
-
-		// signal a better gas was found
-		return 1;
+		// is the best gas different from the current gas?
+		if( sim_gas_best_num != sim_gas_current_num )
+		{
+			// YES - signal advice for a gas change
+			return 1;
+		}
 	}
-	else
-	{
-		// NO - signal no better gas was found
-		return 0;
-	}
+
+	// no best gas found or current gas is the best gas
+	return 0;
+}
+
+
+//////////////////////////////////////////////////////////////////////////////
+// Switch to the best gas
+//
+// Input:    sim_gas_best_num           index of the best gas (1..5)
+//           sim_gas_best_depth         switch depth of the best gas
+//
+// Modified: sim_gas_current_num        index of the new gas (1..5)
+//           sim_gas_current_depth      switch depth of the new gas
+//
+static void gas_take_best(void)
+{
+	// set new gas
+	sim_gas_current_num   = sim_gas_best_num;
+	sim_gas_current_depth = sim_gas_best_depth;
 }
 
 
@@ -1699,7 +1665,7 @@ static void gas_set_ratios(void)
 //         sim_/real_pSCR_drop        : (simulated) pSCR O2 drop
 //         pres_surface               : surface pressure [bar]
 //         char_I_const_ppO2          : ppO2 reported from sensors or setpoint [cbar]
-//         float_deco_distance        : safety factor, additional depth below stop depth [bar]
+//         float_deco_distance        : safety factor, additional depth below stop depth [bar] - not used any more
 //         ppWater                    : water-vapor pressure inside respiratory tract [bar]
 //
 // Output: ppN2                       : respired N2 partial pressure
@@ -1758,6 +1724,8 @@ void calc_alveolar_pressures(void)
 
 		// correct sim_pres_respiration if shallower than calculated stop depth
 		calc_pres_respiration = ( real_pres_respiration < sim_pres_respiration ) ? real_pres_respiration : sim_pres_respiration;
+
+		// +++ pressure surcharge if outside deco stops area yet ???
 
 		status                = deco_status;
 		calc_O2_ratio         = sim_O2_ratio;
@@ -1866,8 +1834,8 @@ void calc_alveolar_pressures(void)
 
 	//---- calculate ppN2 and ppHe ---------------------------------------------------------------------
 
-	// add deco safety distance when working on simulated tissues
-	if( !(tissue_increment & TISSUE_SELECTOR) ) calc_pres_respiration += float_deco_distance;
+	// add deco safety distance when working on simulated tissues - not used any more
+	// if( !(tissue_increment & TISSUE_SELECTOR) ) calc_pres_respiration += float_deco_distance;
 
 	// compute ppN2 and ppHe, capture potential failure conditions first:
 	if( calc_pres_respiration > ppWater )
@@ -1891,12 +1859,29 @@ void calc_alveolar_pressures(void)
 		ppN2 = 0.0;
 		ppHe = 0.0;
 	}
+
+#ifdef _helium
+	// calculating real tissues?
+	if( tissue_increment & TISSUE_SELECTOR )
+	{
+		overlay unsigned char temp;
+
+		// compute gas density of current mix in multiples of 0.01 grams per liter
+		int_O_gas_density = (unsigned int)( 17.9 * ppHe + 125.1 * ppN2 + 142.8 * ppO2 );
+
+		// convert gas density into a 8 bit integer
+		temp = (unsigned char)( (int_O_gas_density + 9) / 10 );
+
+		// limit to display max and set warning or attention flag
+		     if( temp > 99                      ) int_O_gas_density  = 999 | INT_FLAG_WARNING;
+		else if( temp > char_I_gas_density_warn ) int_O_gas_density |=       INT_FLAG_WARNING;
+		else if( temp > char_I_gas_density_att  ) int_O_gas_density |=       INT_FLAG_ATTENTION;
+	}
+#endif
 }
 
 
 //////////////////////////////////////////////////////////////////////////////
-// init_output_vars
-//
 // Initializes all output variables to their default values
 //
 static void init_output_vars(void)
@@ -1939,14 +1924,19 @@ static void init_output_vars(void)
 	int_O_SAC_measured      = 0 + INT_FLAG_NOT_AVAIL;	// SAC rate
 	int_O_pressure_need[0]  = 0 + INT_FLAG_NOT_AVAIL;	// pressure need to reading 1
 	int_O_pressure_need[1]  = 0 + INT_FLAG_NOT_AVAIL;	// pressure need to reading 2
+	int_O_tank_pressure     = 0;						// tank pressure for logging
 #endif
 
+#ifdef _helium
+	int_O_gas_density = 0;
+#endif
+
+	// also clear any time++ request
+	char_I_sim_advance_time = 0;
 }
 
 
 //////////////////////////////////////////////////////////////////////////////
-// clear_tissue
-//
 // Reset all tissues to surface pressure equilibrium state
 //
 // Input:  int_I_pres_surface             current surface pressure in hPa (mbar)
@@ -2007,7 +1997,7 @@ static void clear_tissue(void)
 
 
 //////////////////////////////////////////////////////////////////////////////
-// calc_hauptroutine
+// Deco engine main code
 //
 // This is the major code in dive mode, it calculates the tissue pressures,
 // the bottom time, and it calculates the ascend with all deco stops, etc.
@@ -2021,7 +2011,6 @@ static void clear_tissue(void)
 //
 //           char_I_deco_model               selector for GF extension
 //           char_I_ascent_speed             ascent speed
-//           char_I_deco_distance            safety distance between stop depth and calculated depth
 //           char_I_saturation_multiplier    safety factor for tissue saturation
 //           char_I_desaturation_multiplier  safety factor for tissue desaturation
 //
@@ -2056,9 +2045,9 @@ static void clear_tissue(void)
 static void calc_hauptroutine(void)
 {
 	overlay unsigned short int_ppO2_min;
-	overlay unsigned short int_ppO2_max;
+	overlay unsigned short int_ppO2_max_warn;
+	overlay unsigned short int_ppO2_max_att;
 	overlay unsigned short int_ppO2_max_dil;
-	overlay unsigned short int_ppO2_max_max;
 	overlay float          EAD;
 	overlay float          END;
 
@@ -2112,7 +2101,7 @@ static void calc_hauptroutine(void)
 		char_O_deco_status &= ~COMMAND_MASK;
 
 		// set the calculation phase to start with to doing the cyclic initialization
-		next_planning_phase = PHASE_11_CYCLIC_INIT;
+		next_planning_phase = PHASE_20_CYCLIC_INIT;
 
 		// continue in CALCULATING
 
@@ -2155,7 +2144,7 @@ static void calc_hauptroutine(void)
 		// acquire current environmental data
 		calc_hauptroutine_data_input();
 
-		// calculate ppO2, ppN2 and ppHe
+		// calculate ppO2, ppN2 and ppHe for real tissues
 		calc_alveolar_pressures();
 
 		// add decent calculation here and include trigger in above if-statement
@@ -2239,52 +2228,56 @@ static void calc_hauptroutine(void)
 #endif
 
 
-		//---- Set/Reset Deco Mode --------------------------------------------------------------------
+		//---- Set/Clear Deco Mode ------------------------------------------------------------------
+
+		// Clear the deco mode flag if:
+		//      deco mode is set
+		// AND  we are deeper than 7 meters below the deepest deco stop
+		//      (7 meters chosen as to be 2 stop depth intervals plus 1 additional meter below)
+		if (    ( deco_info & DECO_MODE ) > 0                        )
+		if (    ( char_depth_real       ) > char_O_deco_depth[0] + 7 )
+				deco_info &= ~DECO_MODE;
 
 		// Set the deco mode flag if:
 		//     deco mode is not set
 		// AND     breathing an OC deco gas (gas type 3)
 		//     OR  breathing a gas or diluent that officially is disabled (type 0)
-		//     OR  there is a deco stop and we are less deep than 1 meter below the deepest deco stop
-		if (    ( deco_info & DECO_FLAG ) == 0                                                      )
-		if (    ( char_I_current_gas_type == 3                                                      )
-		     || ( char_I_current_gas_type == 0                                                      )
-		     || ( ( char_O_deco_depth[0]   > 0 ) && ( char_depth_real <= char_O_deco_depth[0] + 1 ) )
+		//     OR  there is a deco stop
+		if (    ( deco_info & DECO_MODE ) == 0 )
+		if (    ( char_I_current_gas_type == 3 )
+		     || ( char_I_current_gas_type == 0 )
+		     || ( char_O_deco_depth[0]     > 0 )
 		   )
-				deco_info |=  DECO_FLAG;
-
-		// Clear the deco mode flag if:
-		//      deco mode is set
-		// AND  deeper than 7 meters below deepest deco stop (7 meters = 2 stop depth intervals plus 1 meter below stop)
-		if (    ( deco_info   & DECO_FLAG      )  > 0                                               )
-		if (    ( char_depth_real                 > char_O_deco_depth[0] + 7                        )
-		   )
-				deco_info &= ~DECO_FLAG;
+				deco_info |=  DECO_MODE;
 
 
 		//---- Compute ppO2 Warnings ------------------------------------------------------------------
 
-		// compute conditional min values
+		// compute conditional min value
 #ifdef _ccr_pscr
 		int_ppO2_min = ( main_status & MODE_LOOP ) ? (unsigned short)char_I_ppO2_min_loop : (unsigned short)char_I_ppO2_min;
 #else
 		int_ppO2_min = (unsigned short)char_I_ppO2_min;
 #endif
 
-		// compute conditional max values
-		int_ppO2_max = ( deco_info   & DECO_FLAG ) ? (unsigned short)char_I_ppO2_max_deco : (unsigned short)char_I_ppO2_max_work;
+		// determine the absolute max value (should be the deco one, but who knows...)
+		int_ppO2_max_warn = ( char_I_ppO2_max_work > char_I_ppO2_max_deco) ? char_I_ppO2_max_work : char_I_ppO2_max_deco;
 
-		// add some margin on ppO2 max to compensate for surface pressures > 1.000 mbar
-		int_ppO2_max += ppO2_MARGIN_ON_MAX;
+		// add some margin to compensate for surface pressures > 1.000 mbar
+		int_ppO2_max_warn += ppO2_MARGIN_ON_MAX;
 
-		// get biggest of char_I_ppO2_max_work / char_I_ppO2_max_deco
-		int_ppO2_max_max = ( char_I_ppO2_max_deco > char_I_ppO2_max_work ) ? char_I_ppO2_max_deco : char_I_ppO2_max_work;
+		// determine the normal max value
+		int_ppO2_max_att = ( deco_info & DECO_MODE ) ? (unsigned short)char_I_ppO2_max_deco : (unsigned short)char_I_ppO2_max_work;
+
+		// add some margin to compensate for surface pressures > 1.000 mbar
+		int_ppO2_max_att  += ppO2_MARGIN_ON_MAX;
 
 #ifdef _ccr_pscr
-		// default value for the upper diluent ppO2 warning threshold is the normal upper warning threshold
-		int_ppO2_max_dil = int_ppO2_max;
+		// default value for the upper diluent ppO2 warning threshold is the upper warning threshold
+		int_ppO2_max_dil = int_ppO2_max_warn;
 
-		// when in CCR mode, the upper diluent warning threshold gets adjust according to the current setpoint
+		// when enabled and in CCR mode, the upper diluent warning threshold gets adjust according to the current setpoint
+		if(  char_I_dil_ppO2_check                )
 		if( (main_status & MODE_MASK) == MODE_CCR )
 		{
 			overlay unsigned short max_dil;
@@ -2293,8 +2286,8 @@ static void calc_hauptroutine(void)
 			// (the condition protects from negative numbers which would cause a wrap-around in unsigned integers)
 			max_dil = (char_I_const_ppO2 > ppO2_GAP_TO_SETPOINT) ? (unsigned short)(char_I_const_ppO2 - ppO2_GAP_TO_SETPOINT) : 0;
 
-			// ...but never above int_ppO2_max.
-			if( max_dil < int_ppO2_max ) int_ppO2_max_dil = max_dil;
+			// ...but never above int_ppO2_max_warn
+			if( max_dil < int_ppO2_max_warn ) int_ppO2_max_dil = max_dil;
 
 			// We do not need to guard int_ppO2_max_dil against becoming lower than char_I_ppO2_min because the check
 			// against char_I_ppO2_min is done first and will then raise a low warning and inhibit further checks.
@@ -2302,24 +2295,24 @@ static void calc_hauptroutine(void)
 #endif
 
 		// check for safe range of breathed gas
-		if      ( int_O_breathed_ppO2 <=                 int_ppO2_min         ) int_O_breathed_ppO2 |= INT_FLAG_WARNING + INT_FLAG_LOW;
-		else if ( int_O_breathed_ppO2 >=                 int_ppO2_max_max     ) int_O_breathed_ppO2 |= INT_FLAG_WARNING + INT_FLAG_HIGH;
-		else if ( deco_info           &                  DECO_FLAG            ) ; // no attention generated in deco mode
-		else if ( main_status         &                  MODE_LOOP            ) ; // no attention generated in loop modes
-		else if ( int_O_breathed_ppO2 >= (unsigned short)char_I_ppO2_max_work ) int_O_breathed_ppO2 |= INT_FLAG_ATTENTION;
+		if      ( int_O_breathed_ppO2 <=                 int_ppO2_min      ) int_O_breathed_ppO2 |= INT_FLAG_WARNING + INT_FLAG_LOW;
+		else if ( int_O_breathed_ppO2 >=                 int_ppO2_max_warn ) int_O_breathed_ppO2 |= INT_FLAG_WARNING + INT_FLAG_HIGH;
+		else if ( deco_info           &                  DECO_MODE         ) ; // no attention generated in deco mode
+		else if ( main_status         &                  MODE_LOOP         ) ; // no attention generated in loop modes
+		else if ( int_O_breathed_ppO2 >=                 int_ppO2_max_att  ) int_O_breathed_ppO2 |= INT_FLAG_ATTENTION;
 
 #ifdef _ccr_pscr
 		// check for safe range of pure oxygen
-		if      ( int_O_O2_ppO2       >=                 int_ppO2_max         ) int_O_O2_ppO2       |= INT_FLAG_WARNING + INT_FLAG_HIGH;
+		if      ( int_O_O2_ppO2       >=                 int_ppO2_max_warn ) int_O_O2_ppO2       |= INT_FLAG_WARNING + INT_FLAG_HIGH;
 
 		// check for safe range of pure diluent
-		if      ( int_O_pure_ppO2     <= (unsigned short)char_I_ppO2_min      ) int_O_pure_ppO2     |= INT_FLAG_WARNING + INT_FLAG_LOW;
-		else if ( int_O_pure_ppO2     >=                 int_ppO2_max         ) int_O_pure_ppO2     |= INT_FLAG_WARNING + INT_FLAG_HIGH;
-		else if ( int_O_pure_ppO2     >=                 int_ppO2_max_dil     ) int_O_pure_ppO2     |= INT_FLAG_ATTENTION;
+		if      ( int_O_pure_ppO2     <= (unsigned short)char_I_ppO2_min   ) int_O_pure_ppO2     |= INT_FLAG_WARNING + INT_FLAG_LOW;
+		else if ( int_O_pure_ppO2     >=                 int_ppO2_max_warn ) int_O_pure_ppO2     |= INT_FLAG_WARNING + INT_FLAG_HIGH;
+		else if ( int_O_pure_ppO2     >=                 int_ppO2_max_dil  ) int_O_pure_ppO2     |= INT_FLAG_ATTENTION;
 
 		// check for safe range of calculated pSCR loop gas
-		if      ( int_O_pSCR_ppO2     <=                 int_ppO2_min         ) int_O_pSCR_ppO2     |= INT_FLAG_WARNING + INT_FLAG_LOW;
-		else if ( int_O_pSCR_ppO2     >=                 int_ppO2_max         ) int_O_pSCR_ppO2     |= INT_FLAG_WARNING + INT_FLAG_HIGH;
+		if      ( int_O_pSCR_ppO2     <=                 int_ppO2_min      ) int_O_pSCR_ppO2     |= INT_FLAG_WARNING + INT_FLAG_LOW;
+		else if ( int_O_pSCR_ppO2     >=                 int_ppO2_max_warn ) int_O_pSCR_ppO2     |= INT_FLAG_WARNING + INT_FLAG_HIGH;
 #endif
 
 	} // tasks every second / on the first section of the second
@@ -2373,13 +2366,12 @@ static void calc_hauptroutine(void)
 		init_output_vars();
 
 		// safeguard input parameters that are constant during the course of the dive
-		if( char_I_deco_distance >  20 ) char_I_deco_distance =  20;
 		if( char_I_ascent_speed  <   5 ) char_I_ascent_speed  =   5;
 		if( char_I_ascent_speed  >  10 ) char_I_ascent_speed  =  10;
 
 		// convert input parameters to float numbers
-		float_deco_distance = 0.01 * char_I_deco_distance;
 		float_ascent_speed  = 1.00 * char_I_ascent_speed;
+
 
 		// initialize values that will be recalculated later on periodically
 		deco_warnings            = 0;		// reset all deco warnings
@@ -2389,9 +2381,26 @@ static void calc_hauptroutine(void)
 		NDL_tissue_start_alt     = 0;		// initialize the tissue to start with when calculating alternative NDL time
 
 		// enforce initialization of GF data on first cyclic initialization
-		GF_high_last             = 0;
-		GF_low_last              = 0;
+		GF_high_last             = 255;
+		GF_low_last              = 255;
 
+#ifdef _gas_contingency
+		// shall check for gas pan out?
+		if( char_I_gas_contingency )
+		{
+			overlay float reduction = 0.5 * (float)char_I_SAC_deco * (1.0 + (float)char_I_depth_last_deco / 10.0);
+
+			// YES - calculate volumes available for each gas
+			for( i = 0; i < NUM_GAS; i++ )
+			{
+				// total available volume = tank size * fill press, char_I_gas_avail_pres is in multiples of 10 bar
+				gas_volume_avail[i]  = (float)char_I_gas_avail_size[i] * (float)char_I_gas_avail_pres[i] * 10.0;
+
+				// reduce total available volumes by due for 1/2 minute on last stop
+				gas_volume_avail[i] -= reduction;
+			}
+		}
+#endif
 
 #ifdef _cave_mode
 		char_I_backtrack_time    = 0;		//clear backtracking time (index to char_I_backtrack_depth)
@@ -2407,16 +2416,16 @@ static void calc_hauptroutine(void)
 
 		// the next calculation phase will do the cyclic initialization of the deco engine if a
 		// normal or alternative plan shall be calculated, else the calculation cycle is done.
-		if( deco_status & PLAN_MASK ) next_planning_phase = PHASE_11_CYCLIC_INIT;
+		if( deco_status & PLAN_MASK ) next_planning_phase = PHASE_20_CYCLIC_INIT;
 		else                          next_planning_phase = PHASE_00_DONE;
 
 		break;
 
 
 		//
-		//---- once-per-cycle Initialization of the Deco Engine------------------------------------
+		//---- once-per-cycle Initialization of the Deco Engine -----------------------------------
 		//
-		case PHASE_11_CYCLIC_INIT:
+		case PHASE_20_CYCLIC_INIT:
 
 		// target the simulated tissues (flag bit 7 = 0)
 		tissue_increment = 0;
@@ -2435,15 +2444,16 @@ static void calc_hauptroutine(void)
 		if( char_I_deco_model != 0 )
 		{
 			// update GF parameters (GFs may have been switched between GF and aGF)
-			if( (char_I_GF_High_percentage != GF_high_last) || (char_I_GF_Low_percentage != GF_low_last) )
+			if( (char_I_GF_Low_percentage != GF_low_last) || (char_I_GF_High_percentage != GF_high_last) )
 			{
 				// store new values in integer format
-				GF_high_last = char_I_GF_High_percentage;
 				GF_low_last  = char_I_GF_Low_percentage;
+				GF_high_last = char_I_GF_High_percentage;
 
-				// store new values in float format
-				GF_high  = 0.01 * char_I_GF_High_percentage;
-				GF_low   = 0.01 * char_I_GF_Low_percentage;
+				// safeguard and store new values in float format
+				GF_low   = ( GF_low_last  > 10          ) ? 0.01 * GF_low_last  : 0.10  ;
+				GF_high  = ( GF_high_last > GF_low_last ) ? 0.01 * GF_high_last : GF_low;
+
 
 				// reset low depth references and slopes
 				GF_low_depth_norm = 0;
@@ -2468,26 +2478,21 @@ static void calc_hauptroutine(void)
 		// initialize the simulated CNS value with the current CNS value of the real tissues
 		CNS_fraction_sim = CNS_fraction_real;
 
-		// initialize the simulated depth with the current depth (in absolute pressure)
+		// initialize the simulated depth with the current depth,
+		// memorize current depth as start depth of the simulation
 		sim_pres_respiration = real_pres_respiration;
-
-		// compute the depth in meters where we are now
-		float_depth_real = (sim_pres_respiration - pres_surface) * BAR_TO_METER;
-
-		// convert to integer and round up to next full meter
-		char_depth_real = (unsigned char)(float_depth_real + 0.99);
-
-		// initialize depth for deco ascent calculation
-		char_depth_sim = char_depth_real;
+		char_depth_sim       = char_depth_real;
+		char_depth_sim_start = char_depth_real;
 
 		// Lookup the gas that is currently breathed with the real tissues and set it as
 		// the gas to be used with the simulated tissues, too. This gas will be used until
-		// gas_find_better() is invoked and finds a better gas to switch to.
-		gas_find_current();
+		// gas_find_best()/gas_take_best() is invoked and switches to a better gas.
+		gas_take_current();
 
-		// Setup the calculation ratio's for N2, He and O2 (sim_N2/He/_O2_ratio). These ratios
-		// can be kept until a gas switch is done. Thus, if a call to gas_find_better() has
-		// found a better gas and initiated a switch, gas_set_ratios() needs to be called again.
+		// Setup the calculation ratio's for N2, He and O2 (sim_N2/He/_O2_ratio).
+		// These ratios can be kept until a gas switch is done. Thus, if a call to
+		// gas_find_best() has found a better gas and this gas is taken by a call
+		// to gas_take_best(), gas_set_ratios() needs to be called again.
 		gas_set_ratios();
 
 		// compute ppO2, ppN2 and ppHe for current depth from sim_pres_respiration
@@ -2495,6 +2500,9 @@ static void calc_hauptroutine(void)
 
 		// initialize the no decompression limit (NDL) time to 240 minutes
 		NDL_time = 240;
+
+		// initialize the total ascent time to 0 minutes
+		ascent_time = 0;
 
 		// retrieve the tissue that had the shortest NDL time during last calculation
 		NDL_tissue_start = ( deco_status & CALC_NORM ) ? NDL_tissue_start_norm : NDL_tissue_start_alt;
@@ -2507,22 +2515,40 @@ static void calc_hauptroutine(void)
 		// start with 1 minute ascent steps when calculating the initial ascent
 		fast = 1;
 
-		// initialization for calc_gas_needs_ascent()
-		gas_needs_next_phase = GAS_NEEDS_INIT;
-
 		// initialization for convert_gas_needs_to_press()
 		gas_needs_gas_index  = 0;
 
+		// shall calculate gas needs?
+		if( main_status & CALC_VOLUME )
+		{
+			// set the usage rate (SAC rate), starting with working part of the dive
+			gas_needs_usage_rate = char_I_SAC_work;
+
+			// clear the gas volume needs for gases 1-5
+			for( i = 0; i < NUM_GAS; ++i ) gas_volume_need[i] = 0.0;
+
+#ifdef _rx_functions
+			// only for OSTC TR model with TR functions enabled
+			if( main_status & TR_FUNCTIONS )
+			{
+				// invalidate pressure needs to pressure readings
+				int_O_pressure_need[0] = 0 + INT_FLAG_NOT_AVAIL;
+				int_O_pressure_need[1] = 0 + INT_FLAG_NOT_AVAIL;
+			}
+#endif
+		}
 
 #ifdef _profiling
 		profiling_runs = 0;
 #endif
 
 		// The next calculation phase will
-		// - calculate the bottom segment if extended bottom time is configured (fTTS),
+		// - calculate the extended bottom segment if extended bottom time  is configured (fTTS),
+		// - calculate the bottom segment gas need if gas needs calculation is configured,
 		// - proceed with calculating the NDL time else.
-		if   ( deco_status & DELAYED_ASCENT ) next_planning_phase = PHASE_20_EXTENDED_BOTTOM_TIME;
-		else                                  next_planning_phase = PHASE_30_NDL_TIME;
+		if      ( deco_status & DELAYED_ASCENT ) next_planning_phase = PHASE_30_EXTENDED_BOTTOM_TIME;
+		else if ( main_status & CALC_VOLUME    ) next_planning_phase = PHASE_40_BOTTOM_GAS_NEED;
+		else                                     next_planning_phase = PHASE_50_NDL_TIME;
 
 		break;
 
@@ -2530,22 +2556,51 @@ static void calc_hauptroutine(void)
 		//
 		//---- extended Bottom Time ---------------------------------------------------------------
 		//
-		case PHASE_20_EXTENDED_BOTTOM_TIME:
+		case PHASE_30_EXTENDED_BOTTOM_TIME:
 
 		// program interval on simulated tissues (flag bit 7 = 0)
 		tissue_increment = char_I_extra_time;
 
-		// calculate ppO2, ppN2 and ppHe
-		calc_alveolar_pressures();
-
-		// update the tissues
+		// update the simulated tissues for tissue_increment (char_I_extra_time) minutes at depth,
+		// calc_alveolar_pressures() has already been called in cyclic initialization
 		calc_tissues();
 
-		// update the CNS value
+		// update the CNS value for tissue_increment (char_I_extra_time) minutes at depth
 		calc_CNS();
 
+		// the next calculation phase will
+		// - calculate the extended bottom segment gas needs if gas needs calculation is configured,
+		// - proceed with calculating the NDL time else.
+		if   ( main_status & CALC_VOLUME ) next_planning_phase = PHASE_40_BOTTOM_GAS_NEED;
+		else                               next_planning_phase = PHASE_50_NDL_TIME;
+
+		break;
+
+
+		//
+		//---- Bottom Segment Gas Need ------------------------------------------------------------
+		//
+		case PHASE_40_BOTTOM_GAS_NEED:
+
+		// on gas 1-5 ?
+		if( sim_gas_current_num )
+		{
+			// YES - set the bottom depth
+			gas_needs_depth = char_depth_sim_start;
+
+			// take either the whole bottom time or just the fTTS/bailout extra time
+			gas_needs_time = ( main_status & CALCULATE_BOTTOM ) ? char_I_bottom_time : char_I_extra_time;
+
+			// calculate gas demand
+			calc_due_by_depth_time_sac();
+
+			// take the result
+			gas_volume_need[sim_gas_current_num-1] = gas_needs_volume_due;
+		}
+
+
 		// the next calculation phase will calculate the NDL time
-		next_planning_phase = PHASE_30_NDL_TIME;
+		next_planning_phase = PHASE_50_NDL_TIME;
 
 		break;
 
@@ -2553,7 +2608,7 @@ static void calc_hauptroutine(void)
 		//
 		//---- NDL Time ---------------------------------------------------------------------------
 		//
-		case PHASE_30_NDL_TIME:
+		case PHASE_50_NDL_TIME:
 
 		// Calculate the remaining no decompression limit (NDL) time for the tissue NDL_tissue.
 		// NDL_time will be updated if the NDL time found is shorter than the current NDL_time.
@@ -2580,14 +2635,13 @@ static void calc_hauptroutine(void)
 
 			// done with calculating NDL time, set next calculation phase:
 			// - calculate return and ascent in cave mode if configured, else
-			// - proceed with gathering the results if within NDL time, or
-			// - proceed with the initial ascent    if beyond NDL time.
+			// - proceed with no-stop ascent              if within NDL time, or
+			// - proceed with deco ascent                 if beyond NDL time.
 #ifdef _cave_mode
-			if   ( main_status & CAVE_MODE ) next_planning_phase = PHASE_40_CAVE_ASCENT;
+			if   ( main_status & CAVE_MODE ) next_planning_phase = PHASE_60_CAVE_RETURN;
 			else
 #endif
-			if   ( NDL_time                ) next_planning_phase = PHASE_70_RESULTS;
-			else                             next_planning_phase = PHASE_60_DECO_ASCENT;
+			                                 next_planning_phase = PHASE_70_OPEN_WATER_ASCENT;
 		}
 
 		break;
@@ -2595,93 +2649,244 @@ static void calc_hauptroutine(void)
 
 #ifdef _cave_mode
 		//
-		//---- Cave Mode Return/Ascent ------------------------------------------------------------
+		//---- Cave Mode Return -------------------------------------------------------------------
 		//
-		case PHASE_40_CAVE_ASCENT:
+		case PHASE_60_CAVE_RETURN:
 
 		// TODO
 
 		// the next calculation phase will gather all results
-		next_planning_phase = PHASE_70_RESULTS;
+		next_planning_phase = PHASE_80_RESULTS;
 
 		break;
 #endif
 
 
 		//
-		//---- Open Water Ascent with Deco Stops --------------------------------------------------
+		//---- Open Water Ascent ------------------------------------------------------------------
 		//
-		case PHASE_60_DECO_ASCENT:
+		case PHASE_70_OPEN_WATER_ASCENT:
 
 		// program 1 minute interval on simulated tissues
 		tissue_increment = 1;
 
-		// ascent to the next stop depth or the depth that is reachable within one minute of ascent
-		// and decide if a stop is required (return value = 1/true) or not (return value = 0/false)
+		// memorize current gas in case there will be a gas change
+		sim_gas_last_num = sim_gas_current_num;
+
+		// find_next_stop():
+		// stays at the current stop depth, ascents to the next stop depth, or
+		// ascents to the depth that is reachable within one minute of ascent
+		// without needing to stop.
+		//
+		// return value    : 1/true if a stop is required, else 0/false
+		// char_depth_sim  : current depth (depth achieved)
+		// char_depth_last : last    depth (depth we came from)
+		//
 		if( find_next_stop() )
 		{
+			overlay unsigned char silent_stop = 0;
+			overlay unsigned char gas_change  = 0;
+
 			//---- stop required --------------------
 
 			// check if there is a better gas to switch to
-			if( gas_find_better() )
+			if( gas_find_best() )
 			{
+				// YES - memorize it
+				gas_change = 1;
+
+				// take the gas
+				gas_take_best();
+
 				// set the new calculation ratios for N2, He and O2
 				gas_set_ratios();
 
-				// doing extended stops?
-				if( main_status & EXTENDED_STOPS )
-				{
-					// YES - set char_depth_sim to the gas change depth
-					char_depth_sim = sim_gas_current_depth;
+				// add the gas change time to the stop time
+				tissue_increment += char_I_gas_change_time;
 
-					//     - adjust absolute pressure down to the change depth
-					sim_pres_respiration = char_depth_sim * METER_TO_BAR + pres_surface;
+				// extended stops option enabled and
+				// gas change depth deeper than the current depth ?
+				if( main_status & EXTENDED_STOPS           )
+				if( sim_gas_current_depth > char_depth_sim )
+				{
+					// YES - make a "silent" stop at the gas change depth
+					// to figure in the gas change
+					silent_stop = 1;
+
+					// locate the stop at the shallower one of the
+					// gas change depth or the depth we came from
+					char_depth_sim = (sim_gas_current_depth < char_depth_last) ?
+						sim_gas_current_depth : char_depth_last;
+
+					// calculate sim_pres_respiration for
+					// the adjusted value of char_depth_sim
+					calc_sim_pres_respiration();
+
+					// as we didn't travel the full distance,
+					// account for the gas change time only
+					tissue_increment = char_I_gas_change_time;
+
+					// if run from the deco calculator,
+					// put the gas change into the stops table or
+					// abort deco calculation if the table is full
+					if( deco_status & DECO_CALCULATOR_MODE   )
+					if( !update_deco_table(tissue_increment) )
+						next_planning_phase = PHASE_80_RESULTS;
+				}
+			} // better gas
+
+
+			// if the stop is not a silent one,
+			// add the stop to an existing stop or add a new stop,
+			// or abort deco calculation if the deco table is full
+			if( !silent_stop                         )
+			if( !update_deco_table(tissue_increment) )
+				next_planning_phase = PHASE_80_RESULTS;
+
+
+			// shall calculate gas needs?
+			if( main_status & CALC_VOLUME )
+			{
+				// encountered a stop, so switch to deco usage rate (SAC deco)
+				gas_needs_usage_rate = char_I_SAC_deco;
+
+				// set the depth for gas need calculation to the shallower one
+				// of the start depth (current real depth) and the stop depth
+				// (assumed depth to be) as we may be shallower than we should be
+				gas_needs_depth = ( char_depth_sim_start < char_depth_sim ) ?
+					char_depth_sim_start : char_depth_sim;
+
+				// did a gas change occur and last gas is 1-5 and a gas change time set?
+				if( gas_change && sim_gas_last_num && char_I_gas_change_time )
+				{
+					// YES - set time it takes for switching the gas
+					gas_needs_time = char_I_gas_change_time;
+
+					// calculate gas demand
+					calc_due_by_depth_time_sac();
+
+					// add the demand to the overall demand on the last gas
+					gas_volume_need[sim_gas_last_num-1] += gas_needs_volume_due;
 				}
 
-				// prime the deco stop with the gas change time
-				update_deco_table(char_I_gas_change_time);
-			}
+				// current gas is 1-5 ?
+				if( sim_gas_current_num )
+				{
+					// YES - time is 1 minute plus the gas change time (if set)
+					gas_needs_time = tissue_increment;
 
-			// add one minute to an existing stop or add a new stop at char_depth_sim,
-			// or abort stops calculation if the deco table is full
-			if( !update_deco_table(1) ) next_planning_phase = PHASE_70_RESULTS;
+					// calculate gas demand
+					calc_due_by_depth_time_sac();
+
+					// add the demand to the overall demand on the current gas
+					gas_volume_need[sim_gas_current_num-1] += gas_needs_volume_due;
+				}
+			} // gas need
 		}
 		else
 		{
 			//---- no stop required -----------------
 
-			// check if there is a better gas to switch to, but only:
+			// switch to a better gas, but only:
 			//
-			//     if extended stops are activated,
-			// OR  if in bailout mode.
+			//      if extended stops are activated OR if in bailout OR if within NDL
+			// AND  if the actual depth is below (deeper) or at the change depth of the
+			//      better gas (switch depth has not been passed yet)
+			// AND  if the depth of the last stop is above (shallower) or at the change
+			//      depth of the better gas (do not switch on final ascent)
 			//
-			// Attention: do not use a && formula over both 'if' terms, the extended stops / bailout
-			//            condition must be checked before a call to gas_find_better() is made!
+			// Attention: do not use a && formula over all 'if' terms, the
+			//            conditions need to be evaluated in the given order!
 			//
-			if( (main_status & EXTENDED_STOPS) || (deco_status & BAILOUT_MODE) )
-			if( gas_find_better() )
+			if( (main_status & EXTENDED_STOPS) || (deco_status & BAILOUT_MODE) || NDL_time )
+			if( gas_find_best()                                                            )
+			if( char_depth_real        >= sim_gas_best_depth                               )
+			if( char_I_depth_last_deco <= sim_gas_best_depth                               )
 			{
+				// YES - take the gas
+				gas_take_best();
+
 				// set the new calculation values for N2, He and O2
 				gas_set_ratios();
 
-				// stop duration is the gas change time, a change time of 0 minutes
-				// will set a tissue calculation interval of 2 seconds
-				tissue_increment += char_I_gas_change_time;
+				// set char_depth_sim to the gas change depth
+				char_depth_sim = sim_gas_current_depth;
 
-				// set char_depth_sim to the gas change depth, but not deeper than
-				// the depth we came from.
-				// (char_depth_last holds the depth from before the ascent step)
-				char_depth_sim = (sim_gas_current_depth < char_depth_last) ? sim_gas_current_depth : char_depth_last;
+				// calculate sim_pres_respiration for
+				// the adjusted value of char_depth_sim
+				calc_sim_pres_respiration();
 
-				// adjust sim_pres_respiration to the adjusted value of char_depth_sim
-				sim_pres_respiration = char_depth_sim * METER_TO_BAR + pres_surface;
+				// as we didn't travel the full distance,
+				// account for the gas change time only
+				tissue_increment = char_I_gas_change_time;
 
-				// create a stop for the gas change in the stops table
-				update_deco_table(char_I_gas_change_time);
-			}
-		}
+				// if in deco and
+				// if run from the deco calculator:
+				// create a stop for the gas change in the stops table,
+				// abort deco calculation if the deco table is full
+				if( !NDL_time                            )
+				if( deco_status & DECO_CALCULATOR_MODE   )
+				if( !update_deco_table(tissue_increment) )
+					next_planning_phase = PHASE_80_RESULTS;
 
-		//---- one minute has passed by now, update the tissues ----------------
+				// shall calculate gas needs and gas change time is set?
+				if( main_status & CALC_VOLUME )
+				if( char_I_gas_change_time    )
+				{
+					// YES - set depth to current depth
+					gas_needs_depth = char_depth_sim;
+
+					// set time it takes for switching the gas
+					gas_needs_time = tissue_increment;
+
+					// calculate gas demand
+					calc_due_by_depth_time_sac();
+
+					// add gas demand to the overall demand on the new gas
+					gas_volume_need[sim_gas_current_num-1] += gas_needs_volume_due;
+
+					// was the last gas one of the gases 1-5 ?
+					if( sim_gas_last_num )
+					{
+						// YES - add the same demand to the overall demand on the last gas
+						gas_volume_need[sim_gas_last_num-1] += gas_needs_volume_due;
+					}
+				} // gas switching needs
+			} // gas switch
+
+			// shall calculate gas needs and
+			// last (or still current) gas is 1-5 ?
+			if( main_status & CALC_VOLUME )
+			if( sim_gas_last_num          )
+			{
+				// YES - compute distance traveled
+				gas_needs_depth = char_depth_last - char_depth_sim;
+
+				// at least some positive distance traveled?
+				if( gas_needs_depth > 1 )
+				{
+					// YES - set depth to average depth along the distance
+					gas_needs_depth += 1;
+					gas_needs_depth /= 2;
+					gas_needs_depth += char_depth_sim;
+
+					// ascent time is 1 minute
+					gas_needs_time = 1;
+
+					// calculate gas demand
+					calc_due_by_depth_time_sac();
+
+					// add to overall demand
+					gas_volume_need[sim_gas_last_num-1] += gas_needs_volume_due;
+				}
+			} // gas travel needs
+
+		} // stop / no stop
+
+		// --- one or more minutes have passed by now ---
+
+		// update the ascent time
+		ascent_time += tissue_increment;
 
 		// compute current ppO2, ppN2 and ppHe
 		calc_alveolar_pressures();
@@ -2693,7 +2898,7 @@ static void calc_hauptroutine(void)
 		calc_CNS();
 
 		// finish stops calculation if the surface is reached
-		if( char_depth_sim == 0 ) next_planning_phase = PHASE_70_RESULTS;
+		if( char_depth_sim == 0 ) next_planning_phase = PHASE_80_RESULTS;
 
 		break;
 
@@ -2701,20 +2906,29 @@ static void calc_hauptroutine(void)
 		///
 		//--- Results - Initialization ------------------------------------------------------------
 		//
-		case PHASE_70_RESULTS:
+		case PHASE_80_RESULTS:
 
-		// The current depth is needed by calc_ascenttime(), find_NDL_gas_changes() and
-		// calc_gas_needs_ascent(). As we don't want it to be calculated multiple times,
-		// it is done here on stockpile.
-		char_depth_bottom = (unsigned char)((real_pres_respiration - pres_surface) * BAR_TO_METER + 0.5);
+		// convert the CNS value to integer
+		convert_sim_CNS_for_display();
+
+		if( deco_status & CALC_NORM )
+		{
+			// export the integer CNS value
+			int_O_CNS_norm  = int_sim_CNS_fraction;
+		}
+		else
+		{
+			// export the integer CNS value
+			int_O_CNS_alt   = int_sim_CNS_fraction;
+		}
 
 		// The next calculation phase will
 		// - publish the stops table if in normal plan mode,
 		// - proceed with remaining results dependent on if within NDL, or
 		// - in deco
-		if      ( deco_status & CALC_NORM ) next_planning_phase = PHASE_71_RESULTS_STOPS_TABLE;
-		else if ( NDL_time                ) next_planning_phase = PHASE_72_RESULTS_NDL;
-		else                                next_planning_phase = PHASE_73_RESULTS_DECO;
+		if      ( deco_status & CALC_NORM ) next_planning_phase = PHASE_81_RESULTS_STOPS_TABLE;
+		else if ( NDL_time                ) next_planning_phase = PHASE_82_RESULTS_NDL;
+		else                                next_planning_phase = PHASE_83_RESULTS_DECO;
 
 		break;
 
@@ -2722,7 +2936,7 @@ static void calc_hauptroutine(void)
 		///
 		//--- Publish Stops Table -----------------------------------------------------------------
 		//
-		case PHASE_71_RESULTS_STOPS_TABLE:
+		case PHASE_81_RESULTS_STOPS_TABLE:
 
 		// publish the stops table to the display functions
 		publish_deco_table();
@@ -2743,14 +2957,14 @@ static void calc_hauptroutine(void)
 		}
 
 		// update deco info vector
-		if( char_O_deco_depth[0] ) deco_info |=  DECO_STOPS;		// set flag for deco stops found
+		if( char_O_deco_depth[0] ) deco_info |=  DECO_STOPS;		// set   flag for deco stops found
 		else                       deco_info &= ~DECO_STOPS;		// clear flag for deco stops found
 
 		// The next calculation phase will publish the main results dependent on being
 		// - within NDL,
 		// - in deco.
-		if   ( NDL_time ) next_planning_phase = PHASE_72_RESULTS_NDL;
-		else              next_planning_phase = PHASE_73_RESULTS_DECO;
+		if   ( NDL_time ) next_planning_phase = PHASE_82_RESULTS_NDL;
+		else              next_planning_phase = PHASE_83_RESULTS_DECO;
 
 		break;
 
@@ -2758,7 +2972,7 @@ static void calc_hauptroutine(void)
 		///
 		//--- Results - within NDL ----------------------------------------------------------------
 		//
-		case PHASE_72_RESULTS_NDL:
+		case PHASE_82_RESULTS_NDL:
 
 		// results to publish depend on normal or alternative plan
 		if( deco_status & CALC_NORM )
@@ -2768,9 +2982,6 @@ static void calc_hauptroutine(void)
 
 			// clear the normal ascent time
 			int_O_TTS_norm  = 0;
-
-			// as we are in no stop, CNS at end of dive is more or less the same CNS as we have right now
-			int_O_CNS_norm  = int_O_CNS_current;
 		}
 		else
 		{
@@ -2779,18 +2990,13 @@ static void calc_hauptroutine(void)
 
 			// clear the alternative ascent time
 			int_O_TTS_alt  = 0;
-
-			// as we are in no stop, CNS at end of dive is more or less the same CNS as we have right now
-			int_O_CNS_alt  = int_O_CNS_current;
 		}
 
 		// The next calculation phase will
 		// - finish the calculation cycle if no gas needs calculation configured, else
-		// - find gas switches when in bailout mode (we are in NDL), or
-		// - calculate the gas needs along the ascent
+		// - calculate the gas needs pressures
 		if      ( !(main_status & CALC_VOLUME ) ) next_planning_phase = PHASE_90_FINISH;
-		else if (  (deco_status & BAILOUT_MODE) ) next_planning_phase = PHASE_80_GAS_NEEDS_SWITCHES;
-		else                                      next_planning_phase = PHASE_81_GAS_NEEDS_ASCENT;
+		else                                      next_planning_phase = PHASE_84_GAS_NEEDS_PRESSURES;
 
 		break;
 
@@ -2798,13 +3004,13 @@ static void calc_hauptroutine(void)
 		///
 		//--- Results - in Deco -------------------------------------------------------------------
 		//
-		case PHASE_73_RESULTS_DECO:
+		case PHASE_83_RESULTS_DECO:
 
-		// calculate the ascent time
-		calc_ascenttime();
+		// limit ascent time to display max.
+		if( ascent_time > 999) ascent_time = 999;
 
-		// convert the CNS value to integer
-		convert_sim_CNS_for_display();
+		// tag ascent time as invalid if there is an overflow in the stops table
+		if( deco_warnings & DECO_WARNING_INCOMPLETE ) ascent_time |= INT_FLAG_INVALID;
 
 		// results to publish depend on normal or alternative plan
 		if( deco_status & CALC_NORM )
@@ -2814,9 +3020,6 @@ static void calc_hauptroutine(void)
 
 			// export the ascent time
 			int_O_TTS_norm  = ascent_time;
-
-			// export the integer CNS value
-			int_O_CNS_norm  = int_sim_CNS_fraction;
 		}
 		else
 		{
@@ -2825,54 +3028,21 @@ static void calc_hauptroutine(void)
 
 			// export the ascent time
 			int_O_TTS_alt   = ascent_time;
-
-			// export the integer CNS value
-			int_O_CNS_alt   = int_sim_CNS_fraction;
 		}
 
 		// The next calculation phase will
 		// - finish the calculation cycle if no gas needs calculation configured, else
 		// - calculate the gas needs along the ascent
 		if      ( !(main_status & CALC_VOLUME ) ) next_planning_phase = PHASE_90_FINISH;
-		else                                      next_planning_phase = PHASE_81_GAS_NEEDS_ASCENT;
+		else                                      next_planning_phase = PHASE_84_GAS_NEEDS_PRESSURES;
 
 		break;
 
 
 		//
-		//--- Gas Needs - Switches ----------------------------------------------------------------
+		//--- Results - convert Gas Needs Volumes to Pressures ------------------------------------
 		//
-		case PHASE_80_GAS_NEEDS_SWITCHES:
-
-		// When in bailout mode and within NDL, find the gas switches along the ascent and put
-		// them into the stops table. The stops table can be "polluted" by now because the table
-		// has already been published in "clean" state before.
-		find_NDL_gas_changes();
-
-		// the next calculation phase will calculate the gas needs along the ascent
-		next_planning_phase = PHASE_81_GAS_NEEDS_ASCENT;
-
-		break;
-
-
-		//
-		//--- Gas Needs - calculate Ascent Needs using Data from Stop Table -----------------------
-		//
-		case PHASE_81_GAS_NEEDS_ASCENT:
-
-		// calculate the gas needs along the ascent
-		calc_gas_needs_ascent();
-
-		// if calculation has finished, advance to next calculation phase
-		if( gas_needs_next_phase == GAS_NEEDS_DONE ) next_planning_phase = PHASE_82_GAS_NEEDS_PRESSURES;
-
-		break;
-
-
-		//
-		//--- Gas Needs - convert Volumes to Pressures --------------------------------------------
-		//
-		case PHASE_82_GAS_NEEDS_PRESSURES:
+		case PHASE_84_GAS_NEEDS_PRESSURES:
 
 		// convert required volume of the gas pointed to by gas_needs_gas_index
 		// into the respective pressure and set the flags
@@ -2897,8 +3067,8 @@ static void calc_hauptroutine(void)
 		// thus BAILOUT_MODE must not be set while doing the alternative plan.
 		if( (deco_status & CALC_ALT) && !(deco_status & BAILOUT_MODE) )
 		{
-			if   ( int_O_TTS_alt <= int_O_TTS_norm ) deco_info |=  DECO_ZONE;
-			else                                     deco_info &= ~DECO_ZONE;
+			if( int_O_TTS_alt < int_O_TTS_norm ) deco_info |=  DECO_ZONE;
+			if( int_O_TTS_alt > int_O_TTS_norm ) deco_info &= ~DECO_ZONE;
 		}
 
 		// export updated deco infos and warnings
@@ -2992,6 +3162,14 @@ void calc_hauptroutine_data_input(void)
 	if( char_I_extra_time       > 127 ) char_I_extra_time       = 127;
 	if( char_I_gas_change_time  >  99 ) char_I_gas_change_time  =  99;
 
+
+	// compute the depth in meters where we are now
+	float_depth_real = (real_pres_respiration - pres_surface) * BAR_TO_METER;
+
+	// convert to integer and round up to next full meter
+	char_depth_real = (unsigned char)(float_depth_real + 0.99);
+
+
 	// calculate partial pressure of N2 in respired air at surface pressure
 	calc_N2_equilibrium();
 
@@ -3029,50 +3207,6 @@ void calc_hauptroutine_data_input(void)
 	real_pSCR_drop = IG_ratio * float_pSCR_factor;
 #endif
 
-}
-
-
-//////////////////////////////////////////////////////////////////////////////
-// Find gas changes on an NDL ascent
-//
-// This function is used for finding the gas changes in an OC bailout ascent
-// that is within NDL.
-//
-// Input:     char_depth_bottom       depth at which the ascent starts, in meters
-//
-// Output:    gas change stops put into stops table
-//
-// Destroyed: char_depth_sim
-//            sim_gas_current_num     number of current gas
-//            sim_gas_current_depth   change depth of current gas
-//
-void find_NDL_gas_changes(void)
-{
-	overlay unsigned char old_depth_limit;
-
-	// set gas to start with
-	gas_find_current();
-
-	// loop in ascending until reaching a depth of 3 meters, no gas switches considered thereafter
-	for( char_depth_sim = char_depth_bottom; char_depth_sim >= 3; )
-	{
-		// memorize the depth we came from
-		old_depth_limit = char_depth_sim;
-
-		// ascent - initially in steps of 10 m, then slowing down to 1 m steps to not miss a O2 gas
-		if   ( char_depth_sim > 10 ) char_depth_sim -= 10;
-		else                         char_depth_sim -=  1;
-
-		// check if there is a better gas to switch to
-		if( gas_find_better() )
-		{
-			// adjust char_depth_sim to the gas change depth, but not deeper than the depth we came from
-			char_depth_sim = (sim_gas_current_depth < old_depth_limit) ? sim_gas_current_depth : old_depth_limit;
-
-			// create a stop for the gas change in the stops table
-			update_deco_table(char_I_gas_change_time);
-		}
-	} // for()
 }
 
 
@@ -3684,60 +3818,6 @@ static void calc_NDL_time_tissue(void)
 
 
 //////////////////////////////////////////////////////////////////////////////
-// calc_ascenttime
-//
-// Sum up ascent from bottom to surface at char_I_ascent_speed, slowing down
-// to 1 minute per meter for the final ascent when in deco, and all stop times.
-//
-// Input:  char_I_depth_last_deco
-//         char_I_ascent_speed
-//         char_depth_bottom
-//         internal_deco_depth[]
-//         internal_deco_time[]
-//
-// Output: ascent_time
-//
-static void calc_ascenttime(void)
-{
-	// check if there are stops
-	if( internal_deco_depth[0] )
-	{
-		// YES - stops / in deco
-
-		// check if already at last stop depth or shallower
-		if( char_depth_bottom <= char_I_depth_last_deco)
-		{
-			// YES - final ascent part only
-			ascent_time = char_depth_bottom;
-		}
-		else
-		{
-			// NO  - ascent part from bottom to last stop
-			ascent_time = (char_depth_bottom - char_I_depth_last_deco) / char_I_ascent_speed + 1;
-
-			//     - ascent part from last stop to surface at 1 meter per minute
-			ascent_time += char_I_depth_last_deco;
-		}
-
-		// add all stop times
-		for( i=0; i < NUM_STOPS && internal_deco_depth[i]; i++ )
-			ascent_time += internal_deco_time[i];
-
-		// limit result to display max.
-		if( ascent_time > 999) ascent_time = 999;
-
-		// tag result as invalid if there is an overflow in the stops table
-		if( deco_warnings & DECO_WARNING_STOPTABLE_OVERFLOW ) ascent_time |= INT_FLAG_INVALID;
-	}
-	else
-	{
-		// NO - no stops / within NDL
-		ascent_time = char_depth_bottom / char_I_ascent_speed + 1;
-	}
-}
-
-
-//////////////////////////////////////////////////////////////////////////////
 // clear_deco_table
 //
 // Modified: internal_deco_time[]    stop durations
@@ -3753,8 +3833,12 @@ static void clear_deco_table(void)
 		internal_deco_gas[i]   = 0;
 	}
 
+	// reset stop table index and chained stops counter
+	stop_index    = 0;
+	chained_stops = 0;
+
 	// clear stop table overflow warning
-	deco_warnings &= ~DECO_WARNING_STOPTABLE_OVERFLOW;
+	deco_warnings &= ~DECO_WARNING_INCOMPLETE;
 }
 
 
@@ -3777,53 +3861,112 @@ static void clear_deco_table(void)
 //
 static unsigned char update_deco_table(PARAMETER unsigned char time_increment)
 {
-	overlay unsigned char x;
-
 	assert( char_depth_sim > 0 );		// no stop at surface
 
-	// loop through internal deco table
-	for( x = 0; x < NUM_STOPS; ++x )
+
+	// is there already a stop entry matching with the current depth and gas?
+	if( internal_deco_depth[stop_index] == char_depth_sim      )
+	if( internal_deco_gas  [stop_index] == sim_gas_current_num )
 	{
-		// In case the first deco stop is to be placed deeper than previously recorded
-		// stops for gas changes during the initial ascent (this may happen because the
-		// deco stops are placed at the next deeper multiple of 3 meters instead of the
-		// real stop's depth), relocate the deco stop to the depth of the last gas change.
-		// The resulting combined stop's duration will be the sum of the configured gas
-		// change time plus the duration of the deco stop itself.
-		if( internal_deco_depth[x] && (char_depth_sim > internal_deco_depth[x]) )
-			char_depth_sim = internal_deco_depth[x];
-
-		// Is there already a stop entry for our current depth?
-		if( internal_deco_depth[x] == char_depth_sim )
+		// YES - increment stop time if possible, stop time entries are
+		//       limited to 99 minutes because of display constraints
+		if( internal_deco_time[stop_index] < (100 - time_increment) )
 		{
-			// Yes - increment stop time if possible
-			// Stop time entries are limited to 99 minutes because of display constraints.
-			if( internal_deco_time[x] < (100 - time_increment) )
-			{
-				internal_deco_time[x] += time_increment;	// increment stop time
-				return 1;									// return with status 'success'
-			}
+			// YES - time increment fits into current stop entry,
+			//       increment stop time and return with status 'success'
+			internal_deco_time[stop_index] += time_increment;
+			return 1;
 		}
-
-		// If program flow passes here, there is either no stop entry for the current depth yet, or
-		// the existing entry is saturated with 99 minutes. So we are looking for the next unused
-		// table entry.
-		if( internal_deco_depth[x] == 0 )
+		else
 		{
-			internal_deco_time[x]  = time_increment;		// initialize entry with first stop's time,
-			internal_deco_depth[x] = char_depth_sim;		// ... depth, and
-			internal_deco_gas[x]   = sim_gas_current_num;	// ... gas
-			return 1;										// return with status 'success'
+			// NO - A chained stop entry will be created further down in the
+			//      code to continue the stop, but we will limit the number
+			//      of chained stop table entries in order to abort an ever-
+			//      running deco calculation. Too many chained entries?
+			if( ++chained_stops >= STOP_CHAINING_LIMIT )
+			{
+				// YES - set overflow warning and return with status 'failed'
+				deco_warnings |= DECO_WARNING_INCOMPLETE;
+				return 0;
+			}
 		}
 	}
 
-	// If program flow passes here, all deco table entries are used up.
+	// the current stop entry does not match the current depth and gas,
+	// or hasn't enough room left for the time increment
 
-	// set overflow warning
-	deco_warnings |= DECO_WARNING_STOPTABLE_OVERFLOW;
+	// is the current stop entry in use?
+	if( internal_deco_depth[stop_index] > 0 )
+	{
+		// YES - current entry is in use, need to move on
+		//       to next entry position if possible
 
-	// return with status 'failed'.
-	return 0;
+		// have all entry positions been used up?
+		if( stop_index < (NUM_STOPS - 1) )
+		{
+			// NO - move on to next entry position
+			stop_index += 1;
+		}
+		else
+		{
+			// YES - set overflow warning and return with status 'failed'
+			deco_warnings |= DECO_WARNING_INCOMPLETE;
+			return 0;
+		}
+	}
+
+	// initial use of a new (or the very first) stop entry,
+	// store all stop data and return with status 'success'
+	internal_deco_time [stop_index] = time_increment;
+	internal_deco_depth[stop_index] = char_depth_sim;
+	internal_deco_gas  [stop_index] = sim_gas_current_num;
+	return 1;
+}
+
+
+//////////////////////////////////////////////////////////////////////////////
+// publish_deco_table
+//
+// Input:  internal_deco_depth[]      depth in internal stops table
+//         internal_deco_time[]       times ...
+//         internal_deco_gas[]        gases ...
+//
+// Output: char_O_deco_depth[]        depth in the external stops table
+//         char_O_deco_time[]         times ...
+//         char_O_deco_gas[]          gases ...
+//         char_O_deco_time_for_log   times in reverse order
+//
+static void publish_deco_table(void)
+{
+	overlay unsigned char x = stop_index;
+	overlay unsigned char y;
+
+
+	// copy depth, time and gas from internal to external stops table
+	for( y = 0; y < NUM_STOPS; y++ )
+	{
+		char_O_deco_depth[y] = internal_deco_depth[y];
+		char_O_deco_time [y] = internal_deco_time [y];
+		char_O_deco_gas  [y] = internal_deco_gas  [y];
+	}
+
+	// copy times of shallowest stops to logging table
+	for(y = 0; y < NUM_STOPS_LOG; x-- )
+	{
+		// copy all stops that have a non-null stop time
+		if( internal_deco_time[x] )
+			char_O_deco_time_for_log[y++] = internal_deco_time[x];
+
+		// abort if all stops are copied
+		if( x == 0) break;
+	}
+
+	// fill the remainder of the logging table with null
+	// if it is not completely filled already
+	while( y < NUM_STOPS_LOG )
+	{
+		char_O_deco_time_for_log[y++] = 0;
+	}
 }
 
 
@@ -4301,6 +4444,9 @@ static void calc_CNS(void)
 		// calculate index for increment look-up
 		cns_i = (char_ppO2 - 161) / 5;	// integer division
 
+		// indexes > 17 use increment of index 17
+		if( cns_i > 17 ) cns_i = 17;
+
 		// read coefficient (increment)
 		read_CNS_c_coefficient();
 
@@ -4344,329 +4490,15 @@ static void calc_CNS(void)
 // rate. It uses a fixed surface pressure of 1.0 bar to deliver stable results
 // when used through the deco calculator.
 //
-// Input:  gas_needs_float_depth   depth     in meters
-//         gas_needs_float_time    time      in minutes
-//         gas_needs_stop_usage    gas usage in liters per minute at surface pressure
+// Input:  gas_needs_depth       depth     in meters
+//         gas_needs_time        time      in minutes
+//         gas_needs_usage_rate  gas usage in liters per minute at surface pressure
 //
-// Output: gas_needs_volume_due    required gas volume in liters
+// Output: gas_needs_volume_due  required gas volume in liters
 //
 static void calc_due_by_depth_time_sac(void)
 {
-	gas_needs_volume_due = (gas_needs_float_depth * METER_TO_BAR + 1.0) * gas_needs_float_time * gas_needs_stop_usage;
-}
-
-
-//////////////////////////////////////////////////////////////////////////////
-// calc_gas_needs_ascent
-//
-// calculates the gas needs along the ascent
-//
-// Input:  char_depth_bottom         depth of the bottom segment
-//         char_I_bottom_time        duration of the bottom segment
-//         char_I_extra_time         extra bottom time for fTTS / delayed ascent
-//         float_ascent_speed        ascent speed, in meters/minute
-//         internal_deco_depth[]     depth of the stops
-//         internal_deco_time[]      duration of the stops
-//         internal_deco_gas[]       gas breathed at the stops
-//         NDL_time                  remaining NDL time, used to adjust speed of final ascent
-//         char_I_SAC_work           gas consumption during bottom part and initial ascent, in liters/minute
-//         char_I_SAC_deco           gas consumption during stops and following ascents, in liters/minute
-//         char_I_gas_avail_size[]   size of the tanks for gas 1-5, in liters
-//         char_I_gas_avail_pres[]   fill pressure of the tanks
-//
-// Output: gas_volume_need[]         amount of gas needed, in liters
-//
-static void calc_gas_needs_ascent(void)
-{
-	switch (gas_needs_next_phase)
-	{
-		//---------------------------------------------------------------------
-
-		case GAS_NEEDS_INIT:
-
-		// set index to the first stop table entry
-		gas_needs_stop_index = 0;
-
-		// clear the gas volume needs
-		for( i = 0; i < NUM_GAS; ++i ) gas_volume_need[i] = 0.0;
-
-#ifdef _rx_functions
-		// only for OSTC TR model with TR functions enabled
-		if( main_status & TR_FUNCTIONS )
-		{
-			// invalidate pressure needs to pressure readings
-			int_O_pressure_need[0] = 0 + INT_FLAG_NOT_AVAIL;
-			int_O_pressure_need[1] = 0 + INT_FLAG_NOT_AVAIL;
-		}
-#endif
-
-		// terminate if in loop mode (CCR, pSCR) as there are no gas needs to calculate,
-		// else continue with the gas needs of the bottom segment
-		if   ( deco_status & MODE_LOOP ) gas_needs_next_phase = GAS_NEEDS_DONE;
-		else                             gas_needs_next_phase = GAS_NEEDS_BOTTOM_SEGMENT;
-
-		break;
-
-		//---------------------------------------------------------------------
-
-		case GAS_NEEDS_BOTTOM_SEGMENT:
-
-		// sim_gas_current_num   gas used during bottom segment (0, 1-5)
-		// char_depth_bottom     depth of the bottom segment
-
-		// get the gas used during bottom segment
-		gas_find_current();
-
-		// initialize variables
-		gas_needs_stop_gas_last = gas_needs_stop_gas = sim_gas_current_num;
-
-		// set the usage (SAC rate) to bottom usage rate for bottom part and initial ascent
-		gas_needs_stop_usage = char_I_SAC_work;
-
-		// volumes are only calculated for gases 1-5, but not the manually configured one
-		if( gas_needs_stop_gas )
-		{
-			// set the bottom depth
-			gas_needs_float_depth = (float)char_depth_bottom;
-
-			// calculate either whole bottom time or just the fTTS/bailout extra time
-			gas_needs_float_time = ( main_status & CALCULATE_BOTTOM ) ? (float)char_I_bottom_time : (float)char_I_extra_time;
-
-			// calculate gas demand
-			calc_due_by_depth_time_sac();
-
-			// take result
-			gas_volume_need[gas_needs_stop_gas-1] = gas_needs_volume_due;
-		}
-
-		// continue with initial ascent demand
-		gas_needs_next_phase = GAS_NEEDS_INITIAL_ASCENT;
-
-		break;
-
-
-		//---------------------------------------------------------------------
-
-		case GAS_NEEDS_INITIAL_ASCENT:
-
-		// gas_needs_stop_gas    : gas from bottom segment
-		// char_depth_bottom     : depth of the bottom segment
-		// internal_deco_depth[0]: depth of the first stop, may be 0 if no stop exists
-
-		// get the data of the first stop
-		gas_needs_stop_depth = internal_deco_depth[0];
-		gas_needs_stop_time  = internal_deco_time[0];
-
-		// volumes are only calculated for gases 1-5, but not the manually configured one
-		if( gas_needs_stop_gas )
-		{
-			// compute distance between bottom and first stop
-			gas_needs_float_depth = (float)char_depth_bottom - (float)gas_needs_stop_depth;
-
-			// initial ascent exists only if ascent distance is > 0
-			if( gas_needs_float_depth > 0.0 )
-			{
-				// compute ascent time
-				gas_needs_float_time = gas_needs_float_depth / float_ascent_speed;
-
-				// compute average depth between bottom and first stop
-				gas_needs_float_depth = (float)char_depth_bottom - gas_needs_float_depth * 0.5;
-
-				// calculate gas demand
-				calc_due_by_depth_time_sac();
-
-				// add to overall demand
-				gas_volume_need[gas_needs_stop_gas-1] += gas_needs_volume_due;
-			}
-		}
-
-		// switch the usage (SAC rate) to deco usage rate
-		// for stops, intermediate and final ascent
-		gas_needs_stop_usage = char_I_SAC_deco;
-
-		// is there a (first) stop?
-		if( gas_needs_stop_depth )
-		{
-			// YES - continue with stop demand
-			gas_needs_next_phase = GAS_NEEDS_STOP;
-
-			break;
-		}
-		else
-		{
-			// NO - add demand of a 3 minutes safety stop at 5 meters, at least for contingency...
-			gas_needs_float_time  = 3.0;
-			gas_needs_float_depth = 5.0;
-
-			// calculate gas demand
-			calc_due_by_depth_time_sac();
-
-			// add to overall demand
-			gas_volume_need[gas_needs_stop_gas-1] += gas_needs_volume_due;
-
-			// calculation finished
-			gas_needs_next_phase = GAS_NEEDS_DONE;
-
-			break;
-		}
-
-
-		//---------------------------------------------------------------------
-
-		case GAS_NEEDS_STOP:
-
-		// correct stop depth if shallower than calculated stop depth and convert to float
-		gas_needs_float_depth = ( char_depth_bottom < gas_needs_stop_depth ) ? (float)char_depth_bottom : (float)gas_needs_stop_depth;
-
-		// get the gas on this stop
-		gas_needs_stop_gas = internal_deco_gas[gas_needs_stop_index];
-
-		// do we have a gas change?
-		if( gas_needs_stop_gas_last && (gas_needs_stop_gas != gas_needs_stop_gas_last) )
-		{
-			// YES - spend an additional char_I_gas_change_time on the old gas
-			gas_needs_float_time = (float)char_I_gas_change_time;
-
-			// calculate gas demand
-			calc_due_by_depth_time_sac();
-
-			// add to overall demand
-			gas_volume_need[gas_needs_stop_gas_last-1] += gas_needs_volume_due;
-		}
-
-		// calculate demand of (new) gas for the full stop duration
-		if( gas_needs_stop_gas )
-		{
-			// get the duration of the stop
-			gas_needs_float_time = (float)gas_needs_stop_time;
-
-			// calculate gas demand
-			calc_due_by_depth_time_sac();
-
-			// add to overall demand
-			gas_volume_need[gas_needs_stop_gas-1] += gas_needs_volume_due;
-		}
-
-		// Continue with the demand of the intermediate ascent to the next stop.
-		// If there is no further stop, it will divert by itself to final ascent.
-		gas_needs_next_phase = GAS_NEEDS_INTERMEDIATE_ASCENT;
-
-		break;
-
-
-		//---------------------------------------------------------------------
-
-		case GAS_NEEDS_INTERMEDIATE_ASCENT:
-
-		// store last stop depth and last gas
-		gas_needs_stop_depth_last = gas_needs_stop_depth;
-		gas_needs_stop_gas_last   = gas_needs_stop_gas;
-
-		// check if end of stop table is reached
-		if( gas_needs_stop_index < NUM_STOPS-1 )
-		{
-			// NO - check if there is another stop entry
-			if( internal_deco_depth[gas_needs_stop_index+1] == 0 )
-			{
-				// NO - continue with final ascent demand
-				gas_needs_next_phase = GAS_NEEDS_FINAL_ASCENT;
-
-				break;
-			}
-			else
-			{
-				// YES - goto next stop entry
-				gas_needs_stop_index++;
-
-				// get the depth of the next stop entry
-				gas_needs_stop_depth = internal_deco_depth[gas_needs_stop_index];
-
-				// get the duration of the next stop
-				gas_needs_stop_time  = internal_deco_time[gas_needs_stop_index];
-			}
-		}
-		else
-		{
-			// YES - end of stop table reached
-			// We are stranded at some stop depth and do not know how many more
-			// stops there may be in front of us and how long they may be. So as
-			// as last resort to calculate at least something, we assume that the
-			// rest of the ascent will be done in deco final ascent pace, i.e. at
-			// 1 meter per minute. Because of the stop table overflow, the result
-			// will be flagged as being invalid later on.
-			//
-			gas_needs_next_phase = GAS_NEEDS_FINAL_ASCENT;
-
-			break;
-		}
-
-		// volumes are only calculated for gases 1-5, but not the manually configured one
-		if( gas_needs_stop_gas_last )
-		{
-			// compute distance between the two stops
-			gas_needs_float_depth = (float)(gas_needs_stop_depth_last - gas_needs_stop_depth);
-
-			// compute ascent time
-			gas_needs_float_time = gas_needs_float_depth / float_ascent_speed;
-
-			// compute average depth between the two stops
-			gas_needs_float_depth = (float)gas_needs_stop_depth_last - gas_needs_float_depth * 0.5;
-
-			// calculate gas demand
-			calc_due_by_depth_time_sac();
-
-			// add to overall demand
-			gas_volume_need[gas_needs_stop_gas_last-1] += gas_needs_volume_due;
-		}
-
-		// continue with calculation stop demand
-		gas_needs_next_phase = GAS_NEEDS_STOP;
-
-		break;
-
-
-		//---------------------------------------------------------------------
-
-		case GAS_NEEDS_FINAL_ASCENT:
-
-		// gas_needs_float_depth: still holds depth of the last stop
-		// gas_needs_stop_gas   : still holds gas from last stop (0 or 1-5)
-
-		// volumes are only calculated for gases 1-5, but not the manually configured one
-		if( gas_needs_stop_gas )
-		{
-			// set ascent time dependent on deco status
-			if( NDL_time )
-			{
-				// within NDL - ascent with float_ascent_speed
-				//
-				// Remark: When calculating a bailout ascent, there may be stops
-				//         for gas changes although the dive is still within NDL
-				//         and final ascent thus does not need to be slowed down.
-				gas_needs_float_time = gas_needs_float_depth / float_ascent_speed;
-			}
-			else
-			{
-				// in deco - reduce ascent speed to 1 meter per minute
-				gas_needs_float_time = gas_needs_float_depth;
-			}
-
-			// set half-way depth
-			gas_needs_float_depth *= 0.5;
-
-			// calculate gas demand
-			calc_due_by_depth_time_sac();
-
-			// add to overall demand
-			gas_volume_need[gas_needs_stop_gas-1] += gas_needs_volume_due;
-		}
-
-		// calculation finished
-		gas_needs_next_phase = GAS_NEEDS_DONE;
-
-		break;
-
-	} // switch
+	gas_needs_volume_due = ((float)gas_needs_depth * METER_TO_BAR + pres_surface) * gas_needs_time * gas_needs_usage_rate;
 }
 
 
@@ -4739,7 +4571,7 @@ static void calc_TR_functions(void)
 	pres_respiration_sac = real_pres_respiration;
 
 	// set threshold for SAC rate attention
-	max_sac_rate = (deco_info & DECO_FLAG) ? char_I_SAC_deco : char_I_SAC_work;
+	max_sac_rate = (deco_info & DECO_MODE) ? char_I_SAC_deco : char_I_SAC_work;
 
 	// char_I_SAC_deco / char_I_SAC_work are in l/min, max_sac_rate is in 0.1 l/min
 	max_sac_rate *= 10;
@@ -4821,6 +4653,19 @@ static void calc_TR_functions(void)
 		// reconfigure max SAC rate to O2 consumption attention threshold
 		max_sac_rate = O2_CONSUMPTION_LIMIT_ATTENTION;
 	}
+
+
+	// select which pressure reading to log
+	     if( char_I_SAC_mode == 1 ) int_O_tank_pressure = int_IO_pressure_value[0];
+	else if( char_I_SAC_mode == 2 ) int_O_tank_pressure = int_IO_pressure_value[1];
+	else                            int_O_tank_pressure = 0;
+
+	// strip flags
+	int_O_tank_pressure &= 0x0FFF;
+
+	// TODO: decide if log shall be in 0.1 bar of full bar only
+	// scale to full bar only
+	int_O_tank_pressure /= 10;
 
 
 	// calculate SAC - modes 1 & 2
@@ -4925,7 +4770,7 @@ static void convert_gas_needs_to_press(void)
 
 		// set warning and attention thresholds
 		int_pres_warn = 10.0 * (unsigned short)char_I_gas_avail_pres[i];
-		int_pres_attn = GAS_NEEDS_ATTENTION_THRESHOLD * int_pres_warn;
+		int_pres_attn = GAS_NEEDS_LIMIT_ATTENTION * int_pres_warn;
 
 		// convert ascent gas volume need from float to integer [in liter]
 		int_O_gas_need_vol[i]  = (unsigned short)gas_volume_need[i];
@@ -4943,7 +4788,7 @@ static void convert_gas_needs_to_press(void)
 	}
 
 	// set invalid flag if there is an overflow in the stops table
-	if( deco_warnings & DECO_WARNING_STOPTABLE_OVERFLOW ) int_O_gas_need_pres[i] |= INT_FLAG_INVALID;
+	if( deco_warnings & DECO_WARNING_INCOMPLETE ) int_O_gas_need_pres[i] |= INT_FLAG_INVALID;
 
 #ifdef _rx_functions
 	// only for OSTC TR model with TR functions enabled
@@ -4965,7 +4810,7 @@ static void convert_gas_needs_to_press(void)
 			int_pres_need = (int_pres_need > 400) ? 4000 | INT_FLAG_OUT_OF_RANGE : 10 * int_pres_need;
 
 			// tag as not available if there is an overflow in the stops table
-			if( deco_warnings & DECO_WARNING_STOPTABLE_OVERFLOW ) int_pres_need |= INT_FLAG_NOT_AVAIL;
+			if( deco_warnings & DECO_WARNING_INCOMPLETE ) int_pres_need |= INT_FLAG_NOT_AVAIL;
 
 			// copy to reading data (in both readings the same gas could be configured)
 			if( char_I_pressure_gas[0] == j ) int_O_pressure_need[0] = int_pres_need;
@@ -4989,8 +4834,8 @@ static void convert_cur_CNS_for_display(void)
 	float_value = CNS_fraction_real; convert_float_to_int(); int_O_CNS_current = int_value;
 
 	// set warning & attention flags
-	if      ( int_O_CNS_current    >= CNS_WARNING_THRESHOLD   ) int_O_CNS_current |= INT_FLAG_WARNING;
-	else if ( int_O_CNS_current    >= CNS_ATTENTION_THRESHOLD ) int_O_CNS_current |= INT_FLAG_ATTENTION;
+	if      ( int_O_CNS_current    >= CNS_LIMIT_WARNING   ) int_O_CNS_current |= INT_FLAG_WARNING;
+	else if ( int_O_CNS_current    >= CNS_LIMIT_ATTENTION ) int_O_CNS_current |= INT_FLAG_ATTENTION;
 }
 
 
@@ -5009,11 +4854,11 @@ static void convert_sim_CNS_for_display(void)
 	float_value = CNS_fraction_sim; convert_float_to_int(); int_sim_CNS_fraction = int_value;
 
 	// set warning & attention flags
-	if      ( int_sim_CNS_fraction >= CNS_WARNING_THRESHOLD   ) int_sim_CNS_fraction |= INT_FLAG_WARNING;
-	else if ( int_sim_CNS_fraction >= CNS_ATTENTION_THRESHOLD ) int_sim_CNS_fraction |= INT_FLAG_ATTENTION;
+	if      ( int_sim_CNS_fraction >= CNS_LIMIT_WARNING   ) int_sim_CNS_fraction |= INT_FLAG_WARNING;
+	else if ( int_sim_CNS_fraction >= CNS_LIMIT_ATTENTION ) int_sim_CNS_fraction |= INT_FLAG_ATTENTION;
 
 	// set invalid flag if there is an overflow in the stops table
-	if      ( deco_warnings & DECO_WARNING_STOPTABLE_OVERFLOW ) int_sim_CNS_fraction |= INT_FLAG_INVALID;
+	if      ( deco_warnings & DECO_WARNING_INCOMPLETE ) int_sim_CNS_fraction |= INT_FLAG_INVALID;
 }
 
 
@@ -5060,7 +4905,7 @@ static void convert_sat_for_display(void)
 //
 // Input:    ceiling         minimum depth permitted in float
 //
-// Output:   int_O_ceiling   minimum depth permitted in mbar
+// Output:   int_O_ceiling   minimum depth permitted in mbar (cm)
 //
 // Modified: deco_info       deco engine information vector
 //
@@ -5070,9 +4915,11 @@ static void convert_ceiling_for_display(void)
 	// Round up to next 10 cm so that the ceiling disappears only
 	// when the ceiling limit is really zero. This will coincident
 	// with TTS switching back to NDL time.
+	// The +1.5 term figures in the conversion factor of 10.015 m/bar
+	// which is used inside the deco engine but not outside of it.
 	if      ( ceiling <=  0.0 ) int_O_ceiling = 0;
 	else if ( ceiling >  16.0 ) int_O_ceiling = 16000;
-	else                        int_O_ceiling = (unsigned short)(ceiling * 1000 + 9);
+	else                        int_O_ceiling = (unsigned short)(ceiling * (1000+1.5) + 9);
 
 	// set/reset ceiling flag
 	if      ( int_O_ceiling   ) deco_info |=  DECO_CEILING;

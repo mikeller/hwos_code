@@ -24,7 +24,7 @@ mcp_sleep:
 	bcf		INTCON3,INT3IE			; disable INT3
 	bcf		mcp_power				; request IR receiver off
 	btfsc	mcp_power				; off confirmed?
-	bra		$-4						; NO  - loop waiting
+	bra		$-6						; NO  - loop waiting
 	return							; YES - done
 
  ENDIF

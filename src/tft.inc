@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft.inc                              combined next generation V3.03.2
+;   File tft.inc                              combined next generation V3.03.7
 ;
 ;   Declaring interfaces to the TFT screen and its Oxxx controler
 ;
@@ -51,7 +51,6 @@
 	extern	TFT_box_write
 	extern	TFT_box_write_16bit_win_left	; with column in PRODL:PRODH
 	extern	TFT_box
-	extern	TFT_box_16bit_win_left			; with column in PRODL:PRODH
 	extern	TFT_DataWrite_PROD
 	extern	TFT_set_color
 ;	extern	init_pixel_write

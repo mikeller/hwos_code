@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File surfmode.asm                         next combined generation V3.03.2
+;   File surfmode.asm                         next combined generation V3.04.3
 ;
 ;   Surface Mode
 ;
@@ -71,7 +71,7 @@ surfloop:
 	clrf	STKPTR					; clear return addresses stack
 ;	clrf	CCP1CON					; stop PWM
 ;	bcf		PORTC,2					; pull PWM output to GND
-	clrf	CCPR1L					; backlight off
+;	clrf	CCPR1L					; backlight off
 	call	TFT_boot				; initialize TFT (includes clear screen)
 
 	btfsc	restart_fast			; shall make a fast restart?
@@ -82,19 +82,12 @@ surfloop:
 	WIN_LEFT .10
 	TFT_WRITE_PROM_IMAGE_BY_ADDR hw_logo_block
 
- IFDEF _ostc_logo
-	; show graphical OSTC logo
-	WIN_TOP  .100
-	WIN_LEFT .34
-	TFT_WRITE_PROM_IMAGE_BY_LABEL ostc_logo_block
- ELSE
 	; show textual OSTC logo
 	WIN_COLOR color_white
 	WIN_STD .30,.90					; column, row
 	STRCPY_PRINT "Open Source"		; show OSTC banner text, line 1
 	WIN_STD .20,.130				; column, row
 	STRCPY_PRINT "Tauch-Computer"	; show OSTC banner text, line 2
- ENDIF
 
 	WIN_COLOR color_white
 	WIN_SMALL .35,.180
@@ -117,7 +110,6 @@ surfloop_1:
 	bsf		trigger_temp_changed	; set flag to have temperature written to display on first round of surface loop
 
 	call	I2C_sleep_compass		; shut down compass
-	call	I2C_sleep_accelerometer	; shut down accelerometer
 
 	clrf	ext_flash_address+0
 	clrf	ext_flash_address+1
@@ -141,6 +133,9 @@ surfloop_1:
 
 	btfsc	restart_fast			; shall make a fast restart?
 	bra		surfloop_2				; YES
+
+	call	deco_calc_desaturation_time	; calculate desaturation and no-fly/no-altitude time (C-code)
+	banksel	common						; back to bank common
 
 	call	wait_1s					; wait <= 1 second
 	call	wait_1s					; wait    1 second
@@ -167,12 +162,7 @@ surfloop_2:
 
 
 	;---- Logo in upper right corner -----------------------------------------
- IFDEF _ostc_logo
-	; show graphical OSTC logo
-	WIN_TOP  .0
-	WIN_LEFT .70
-	TFT_WRITE_PROM_IMAGE_BY_LABEL ostc_logo_block
- ELSE
+
 	; show textual OSTC logo
 	WIN_COLOR color_white				; set text color to white
 	WIN_STD .100,.2						; set output position
@@ -188,7 +178,6 @@ surfloop_2:
  ENDIF
 	WIN_TINY .100,.32					; set output position
 	call	TFT_show_firmware			; show firmware version
- ENDIF	; _ostc_logo
 
 
 	;---- fill screen --------------------------------------------------------
@@ -342,7 +331,7 @@ test_switches_surfmode3:				; left button pressed
 	btfsc	compass_menu				; YES - "set course" selection already shown?
 	bra		test_switches_surfmode3b	;       YES - remove it
 	call	TFT_surf_set_bearing		;       NO  - show it
-	return
+	return								;           - done
  ENDIF
 test_switches_surfmode3a:
 	bcf		compass_bearing_set			; clear course on entering menu
@@ -351,7 +340,7 @@ test_switches_surfmode3a:
 
  IFDEF _compass
 test_switches_surfmode3b:
-	WIN_BOX_BLACK	.158,.190, .15, .99	; clear "Course" label (top, bottom, left, right)
+	WIN_BOX_BLACK .158,.190, .15, .99	; clear "Course" label (top, bottom, left, right)
 	bcf		compass_menu				; clear flag for "set course" selection
 	return
  ENDIF

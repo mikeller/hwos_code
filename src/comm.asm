@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File comm.asm                             combined next generation V3.03.3
+;   File comm.asm                             combined next generation V3.04.3
 ;
 ;   RS232 via USB
 ;
@@ -91,7 +91,13 @@ comm_mode_common_2:
 	call	TFT_standard_color						; set standard color
 	WIN_TOP  .10									; positioning of USB/BLE logo, row
 	WIN_LEFT .1										; positioning of USB/BLE logo, column
-	TFT_WRITE_PROM_IMAGE_BY_ADDR usb_ble_logo_block	; show USB/BLE logo, respective logo is stored in bootloader section dependent on OSTC type
+	btfsc	battery_gauge_available					; "+" bootloader ?
+	bra		comm_mode_common_3						; NO
+	TFT_WRITE_PROM_IMAGE_BY_ADDR usb_ble_logo_2		; YES - show USB/BLE logo 2
+	bra		comm_mode_common_4
+comm_mode_common_3:
+	TFT_WRITE_PROM_IMAGE_BY_ADDR usb_ble_logo_1		; NO  - show USB/BLE logo 1
+comm_mode_common_4:
 	WIN_SMALL comm_status1_column,comm_status1_row	; positioning of status message
 	STRCPY_TEXT_PRINT tUsbStarting					; print status message "starting..."
 	WIN_TINY .40,.240-.16							; set output position to bottom line
@@ -127,6 +133,8 @@ comm_mode2a:
 	bra		comm_mode2c					; NO 
 	bra		comm_download_mode			; YES - received start byte for download mode
 comm_mode2c:
+	btfsc	ble_available				; BLE available?
+	bra		comm_mode4a					; YES - skip USB check check (required for very old OSTC sport)
 	btfss	vusb_in						; USB plugged in?
 	bra		comm_service_exit_nousb_delay; NO - disconnected, exit comm mode
 comm_mode4a:
@@ -170,7 +178,8 @@ comm_service_exit_nousb_delay:
 	WAITMS	d'200'						; wait 200 ms
 	btfsc	vusb_in						; USB plugged in?
 	bra		comm_mode4a					; YES - (still) connected, return
-comm_service_exit_nousb:				; NO  - disconnected
+comm_service_exit_nousb:
+	bcf		LEDr						; switch off red LED
 	WIN_SMALL comm_status3_column, comm_status3_row
 	STRCPY_TEXT_PRINT tUsbClosed		; print port closed message
 	bra		comm_service_exit_common	; exit to restart
@@ -410,18 +419,21 @@ comm_download_mode1:
 	dcfsnz	comm_timeout_timer,F		; decrement timeout, reached zero?
 	bra		comm_service_exit			; YES - exit
 comm_download_mode2:
-	rcall	comm_get_byte				; No - check for a byte
+	rcall	comm_get_byte				; NO - check for a byte
 	btfsc	comm_service_enabled		;      com service mode enabled?
 	btg		LEDr						;      YES - blink in service mode
+	btfsc	ble_available				;      BLE available?
+	bra		comm_download_mode3			;      YES - skip USB check (required for very old OSTC sport)
 	btfss	vusb_in						;      USB plugged in?
 	bra		comm_service_exit_nousb		;      NO  - disconnected -> exit
-	btfsc	switch_right				;      YES - shall abort?
-	bra		comm_service_exit			;            YES
-	btfsc	trigger_full_second			;            NO  - did 1 second elapsed meanwhile?
-	bra		comm_download_mode1			;                  YES - check for timeout
-	btfsc	rs232_rx_timeout			;                   NO  - got a byte?
-	bra		comm_download_mode2			;                         NO - loop waiting for command byte
-										;                         YES - command received
+comm_download_mode3:
+	btfsc	switch_right				; shall abort?
+	bra		comm_service_exit			; YES
+	btfsc	trigger_full_second			; NO  - did 1 second elapsed meanwhile?
+	bra		comm_download_mode1			;       YES - check for timeout
+	btfsc	rs232_rx_timeout			;       NO  - got a byte?
+	bra		comm_download_mode2			;             NO - loop waiting for command byte
+	; Command received
 	bcf		LEDr
 	movlw	0xFF
 	cpfseq	RCREG1
@@ -1176,9 +1188,15 @@ comm_read_setting:
 	dcfsnz	WREG
 	movff	opt_tissue_graphics,		TXREG1	; RCREG1=0x89
 	dcfsnz	WREG
-	movff	opt_layout,					TXREG1	; RCREG1=0x90
+	movff	opt_layout,					TXREG1	; RCREG1=0x8A
 	dcfsnz	WREG
-	movff	opt_extended_stops,			TXREG1	; RCREG1=0x91
+	movff	opt_extended_stops,			TXREG1	; RCREG1=0x8B
+	dcfsnz	WREG
+	movff	char_I_gas_density_att,		TXREG1	; RCREG1=0x8C
+	dcfsnz	WREG
+	movff	char_I_gas_density_warn,	TXREG1	; RCREG1=0x8D
+	dcfsnz	WREG
+	movff	char_I_dil_ppO2_check,		TXREG1	; RCREG1=0x8E
 
 comm_read_abort:
 comm_read_done:
@@ -1505,9 +1523,15 @@ comm_write_setting:
 	dcfsnz	WREG
 	movff	RCREG1, opt_tissue_graphics		; RCREG1=0x89
 	dcfsnz	WREG
-	movff	RCREG1, opt_layout				; RCREG1=0x90
+	movff	RCREG1, opt_layout				; RCREG1=0x8A
 	dcfsnz	WREG
-	movff	RCREG1, opt_extended_stops		; RCREG1=0x91
+	movff	RCREG1, opt_extended_stops		; RCREG1=0x8B
+	dcfsnz	WREG
+	movff	RCREG1, char_I_gas_density_att	; RCREG1=0x8C
+	dcfsnz	WREG
+	movff	RCREG1, char_I_gas_density_warn	; RCREG1=0x8D
+	dcfsnz	WREG
+	movff	RCREG1, char_I_dil_ppO2_check	; RCREG1=0x8E
 
 
 comm_write_abort:

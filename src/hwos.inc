@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File hwos.inc                             combined next generation V3.03.4
+;   File hwos.inc                             combined next generation V3.04.3
 ;
 ;   OSTC Platform Definitions
 ;
@@ -35,7 +35,8 @@
 
 ; Logo Address Vectors
 #DEFINE hw_logo_block			0x01E000	; color image data for heinrichsweikamp logo
-#DEFINE usb_ble_logo_block		0x01EEDE	; color image data for USB or BLE logo
+#DEFINE usb_ble_logo_1			0x01EEDE	; color image data for USB or BLE logo
+#DEFINE usb_ble_logo_2			0x01EA04	; color image data for USB or BLE logo, "+" bootloader
 
 
 ;-----------------------------EEPROM DATA ------------------------------------
@@ -71,7 +72,7 @@
 #DEFINE index_decoplan					 .8			; deco plan
 #DEFINE index_ceiling_GF_tissue			 .9			; ceiling, current GF and tissues
 #DEFINE index_CNS						.10			; CNS values
-#DEFINE index_ppo2_ead_end_cns			.11			; ppO2, END/EAD and CNS
+#DEFINE index_ppo2_ead_end_cns			.11			; ppO2, END/EAD and CNS or gas density
 #DEFINE index_gf_factors				.12			; GF factors
 #DEFINE index_clock_batt_surfpress		.13			; clock, battery and surface pressure
 #DEFINE index_cv_dm_max					.13			; highest index in use in dive mode custom view
@@ -112,7 +113,7 @@
 
 
 ; External O2 cell input Parameters
-#DEFINE min_mv							.80			; =   8 mV
+#DEFINE min_mv							.70			; =   7 mV
 #DEFINE max_mv							.2500		; = 250 mV
 #DEFINE ignore_mv						.3500		; = 350 mV (to suppress ghost readings for long, open cables)
 
@@ -129,7 +130,7 @@
 #DEFINE div_ppo2_sensors				.2			; x sampling rate [s]
 #DEFINE div_decoplan					.12			; x sampling rate [s]
 #DEFINE div_cns							.12			; x sampling rate [s]
-#DEFINE div_tank						.0			; x sampling rate [s]
+#DEFINE div_tank						.12			; x sampling rate [s]
 
 
 ; Profile Recording Data - Attention: Information Lengths must be < 16 !
@@ -139,13 +140,14 @@
 #DEFINE infolength_ppo2_sensors			.9			; [byte]
 #DEFINE infolength_decoplan				.15			; [byte]
 #DEFINE infolength_cns					.2			; [byte]
-#DEFINE infolength_tank					.0			; [byte]
+#DEFINE infolength_tank					.2			; [byte]
 
 
 ; RX Functions
-#DEFINE rx_packet_overdue_timeout		.60			; [seconds]
+#DEFINE rx_packet_overdue_timeout		.120		; [seconds] timeout for pressure measurements becomming declared as outdated (max. 255)
 #DEFINE max_pres_diff_min				.5			; [bar] minimum selectable pressure difference for ind.double mode
 #DEFINE max_pres_diff_max				.50			; [bar] maximum selectable pressure difference for ind.double mode
+
 
  IFDEF _ccr_pscr
 #DEFINE tr_pres_options					.15			; number of options for pressure measurement source / with diluents
@@ -182,7 +184,7 @@
 ; other Timeouts
 #DEFINE simulator_timeout				.15			; [s]
 #DEFINE apnoe_timeout					.15			; [min]
-
+#DEFINE	deep_sleep_10mins				.144		; [x 10mins] (24h in this example)
 
 ; Surface Mode Thresholds and Limits
 #DEFINE high_altitude_threshold			.880		; [mbar] ambient pressure at which to switch into high altitude mode
@@ -196,6 +198,7 @@
 #DEFINE dive_threshold_high_alt_start	 .325		; [mbar] relative pressure for high   altitude start-of-dive (equals depth in cm)
 #DEFINE dive_threshold_high_alt_end		  .75		; [mbar] relative pressure for high   altitude   end-of-dive (equals depth in cm)
 #DEFINE ostc_depth_max					 .120		; [m]    maximum allowed operational depth for OSTC 2, 3, cR, TR, Plus & Sport
+#DEFINE deco_region_distance			   .2		; [m]    distance below first stop for the deco region to begin
 
 
 ; Dive Mode Margins
@@ -213,16 +216,18 @@
 #DEFINE ppo2_warning_loop_highest		.60			; [cbar] maximum value for minimum ppO2 on loop
 
 #DEFINE ppo2_warning_high_lowest		.120		; [cbar] minimum value for maximum ppO2 in none-deco phase
-#DEFINE ppo2_warning_high_default		.140		; [cbar] default value for maximum ppO2 in none-deco phase
-#DEFINE ppo2_warning_high_highest		.160		; [cbar] maximum value for maximum ppO2 in none-deco phase
-
 #DEFINE ppo2_warning_deco_lowest		.120		; [cbar] minimum value for maximum ppO2 in deco phase
+
+#DEFINE ppo2_warning_high_default		.140		; [cbar] default value for maximum ppO2 in none-deco phase
 #DEFINE ppo2_warning_deco_default		.160		; [cbar] default value for maximum ppO2 in deco phase
+
+ IFDEF _high_ppO2_max
+#DEFINE ppo2_warning_high_highest		.200		; [cbar] maximum value for maximum ppO2 in none-deco phase
+#DEFINE ppo2_warning_deco_highest		.200		; [cbar] maximum value for maximum ppO2 in deco phase
+ ELSE
+#DEFINE ppo2_warning_high_highest		.160		; [cbar] maximum value for maximum ppO2 in none-deco phase
 #DEFINE ppo2_warning_deco_highest		.160		; [cbar] maximum value for maximum ppO2 in deco phase
-
-
-; Deco-Model Parameters
-#DEFINE deco_distance					.0			; [dm]		ex .10
+ ENDIF
 
 
 ; Color-Code Parameters for the Dive Mode
@@ -235,7 +240,7 @@
 #DEFINE simulator_startdepth			.200		; [mbar] initial depth (relative pressure) when entering simulator mode
 #DEFINE simulator_descent_threshold		.50			; [mbar] remaining distance to target pressure when to slow down descent
 #DEFINE simulator_ascent_threshold		.50			; [mbar] remaining distance to target pressure when to slow down ascent
-#DEFINE simulator_descent_rate			.4			; [mbar/0.125 sec] normal sescent speed, 4 equals 19 m/min
+#DEFINE simulator_descent_rate			.5			; [mbar/0.125 sec] normal descent speed, 5 equals 24 m/min
 #DEFINE simulator_ascent_rate			.2			; [mbar/0.125 sec] normal ascent  speed, 2 equals  9 m/min
 
 
@@ -246,7 +251,8 @@
 #DEFINE aa_15v_high						.1550		; [mV] Energizer 1.5 V E2 AA - highest possible voltage, value must be lower  than value of lithium_36v_low!
 #DEFINE aa_15v_low						.1100		; [mV] Energizer 1.5 V E2 AA - lowest  possible voltage, according to Energizer data sheet EBC-4201R, page 2
 #DEFINE battery_show_level				.30			; [%]  threshold when to show battery level
-#DEFINE color_code_battery_low			.30			; [%]  threshold for battery level color coding, also acts as threshold for setting display brightness level to ECO when in dive mode
+#DEFINE battery_warn_level_36			.15			; [%]  threshold for 3.6 V battery warning, also acts as threshold for setting display brightness level to ECO when in dive mode
+#DEFINE battery_warn_level_15			.25			; [%]  threshold for 1.5 V battery warning, also acts as threshold for setting display brightness level to ECO when in dive modebattery warning level, also acts as threshold for setting display brightness level to ECO when in dive mode
 
 
 ; 3.6 Volt Battery Sensing Data Points at 70 mA Load
@@ -255,11 +261,13 @@
 #DEFINE lithium_36v_25					.2600		; [mV]
 #DEFINE lithium_36v_10					.2500		; [mV]
 
+
 ; Capacity for 2.4 Ah Saft LS14500 and 0.8 Ah Panasonic UR14500P
 ; battery_gauge: 6 is nAs
 ; devide through 65536
 ;    a) devide through 364 -> result is in percent of a 2.4 Ah battery
 ; or b) devide through 121 -> result is in percent of a 0.8 Ah battery
+
 
 ; internal Battery Gauging
 #DEFINE capacity_saft_internal			.364
@@ -303,7 +311,7 @@
 
 
 ; IR Link Timeout
-#DEFINE ir_timeout_value				.64			; in multiples of 62.5 ms
+#DEFINE ir_timeout_value				.128			; in multiples of 62.5 ms
 
 
 ; Setpoint Control
@@ -352,7 +360,7 @@
 #DEFINE DECO_COMPLETED_NORM				.0			; =1: read:  calculation of a  normal      deco plan has completed
 #DEFINE DECO_COMPLETED_ALT				.1			; =1: read:  calculation of an alternative deco plan has completed
 #DEFINE DECO_INITIALIZE					.2			; =1: write: initialize deco engine (to be done only once at the begin of every dive)
-;										.3			; unused
+#DEFINE DECO_CALCULATOR_MODE			.3			; =1: deco engone is run from the deco calculator
 #DEFINE DECO_BAILOUT_FLAG				.4			; =1: allow gas switches before first deco stop (used in bailout plans)
 #DEFINE DECO_ASCENT_FLAG				.5			; =1: figure in a delayed ascent (fTTS)
 ;       DECO_MODE_LOOP_FLAG				.6			; =1: calculate simulated tissues in loop mode (CCR or pSCR)
@@ -367,11 +375,11 @@
 #DEFINE outside_warning					.4			; =1: currently outside the ZHL-16 model
 #DEFINE outside_warning_lock			.5			; =1: was outside the ZHL-16 model during the dive
 #DEFINE outside_attention				.6			; =1: currently near to the limits of the ZHL-16 model
-#DEFINE stoptable_overflow				.7			; =1: more stops needed than can be stored
+#DEFINE deco_plan_incomplete			.7			; =1: internal error: deco calculation incomplete
 
 
 ; Bit Flags for Communication with p2_deco.c - char_O_deco_info
-#DEFINE deco_flag						.0			; =1: in deco mode, deco ppO2 levels permitted
+#DEFINE deco_mode						.0			; =1: in deco mode, deco ppO2 levels permitted
 #DEFINE ind_double_switch				.1			; =1: switch to other tank advice active
 ;										.2			; --- unused
 #DEFINE deco_zone						.3			; =1: fTTS is <= TTS (not updated when in bailout mode)
@@ -435,27 +443,35 @@
 ;								HW_descriptor,7		; --- reserved
 
 ;---- Hardware - OSTC Model Variants (stored in access RAM, NOT cleared in restart)
-#DEFINE screen_type				HW_variants,0		; =1: display 1, =0; display 0
-#DEFINE screen_type2			HW_variants,1		; =1: display 2, =0: display 0 or 1
-#DEFINE compass_type			HW_variants,2		; =1: compass 1, =0: compass 0
-#DEFINE compass_type2			HW_variants,3		; =1: compass 2, =0: compass 0 or 1
-#DEFINE analog_switches			HW_variants,4		; =1: analog switches available
-#DEFINE battery_is_36v			HW_variants,5		; =1: a 3.6 Volt battery is detected
-#DEFINE cc_active				HW_variants,6		; =1: constant current charging active (cR hardware only)
-#DEFINE cv_active				HW_variants,7		; =1: constant voltage charging active (cR hardware only)
-
- #DEFINE compass_type3			HW_variants2,0		; =1: compass 3, =0: compass 0, 1 or 2
+#DEFINE screen_type1			HW_variants,0		; =1: display type 1, =0; display type 0
+#DEFINE screen_type2			HW_variants,1		; =1: display type 2, =0: display type 0 or 1
+#DEFINE screen_type3			HW_variants,2		; =1: display type 3, =0: display type 0 or 1 or 2
+#DEFINE compass_type1			HW_variants,3		; =1: compass type 1, =0: compass type 0
+#DEFINE compass_type2			HW_variants,4		; =1: compass type 2, =0: compass type 0 or 1
+#DEFINE compass_type3			HW_variants,5		; =1: compass type 3, =0: compass type 0 or 1 or 2
+#DEFINE analog_switches			HW_variants,6		; =1: analog switches available
+#DEFINE battery_is_36v			HW_variants,7		; =1: a 3.6 Volt battery is detected
 
 
-;---- Hardware - States (stored in access RAM)
-#DEFINE analog_sw1_pressed		HW_flags_state,0	; =1: analog switch 1 pressed
-#DEFINE analog_sw2_pressed		HW_flags_state,1	; =1: analog switch 2 pressed
-#DEFINE switch_left				HW_flags_state,2	; =1: left  button was pressed
-#DEFINE switch_right			HW_flags_state,3	; =1: right button was pressed
-#DEFINE flip_screen				HW_flags_state,4	; =1: screen is shown 180° turned
-#DEFINE adc_is_running			HW_flags_state,5	; =1: the ADC is in use
-#DEFINE tft_is_dimming			HW_flags_state,6	; =1: the TFT is dimming, ignore light sensor
-#DEFINE compass_enabled			HW_flags_state,7	; =1: the compass and accelerometer chip is active
+;---- Hardware - States 1 (stored in access RAM, cleared on restart)
+#DEFINE analog_sw1_pressed		HW_flags_state1,0	; =1: analog switch 1 pressed
+#DEFINE analog_sw2_pressed		HW_flags_state1,1	; =1: analog switch 2 pressed
+#DEFINE switch_left				HW_flags_state1,2	; =1: left  button was pressed
+#DEFINE switch_right			HW_flags_state1,3	; =1: right button was pressed
+#DEFINE flip_screen				HW_flags_state1,4	; =1: screen is shown 180° turned
+#DEFINE adc_is_running			HW_flags_state1,5	; =1: the ADC is in use
+#DEFINE tft_is_dimming			HW_flags_state1,6	; =1: the TFT is dimming, ignore light sensor
+#DEFINE compass_enabled			HW_flags_state1,7	; =1: the compass and accelerometer chip is active
+
+;---- Hardware - States 2 (stored in access RAM, NOT cleared on restart)
+#DEFINE cc_active				HW_flags_state2,0	; =1: constant current charging active (cR hardware only)
+#DEFINE cv_active				HW_flags_state2,1	; =1: constant voltage charging active (cR hardware only)
+;								HW_flags_state2,2	; --- unused
+;								HW_flags_state2,3	; --- unused
+;								HW_flags_state2,4	; --- unused
+;								HW_flags_state2,5	; --- unused
+;								HW_flags_state2,6	; --- unused
+;								HW_flags_state2,7	; --- unused
 
 
 ;---- Operating System - persistent Settings (stored in access RAM, NOT cleared in restart)
@@ -525,8 +541,8 @@
 #DEFINE dive_turned				DM_flags_state,2	; =1: dive is turned
 #DEFINE cave_mode				DM_flags_state,3	; =1: in cave mode (gas needs by backtracking)
 #DEFINE depth_limit_exceeded	DM_flags_state,4	; =1: depth limit exceeded
-;								DM_flags_state,5	; --- unused
-;								DM_flags_state,6	; --- unused
+#DEFINE deco_locked				DM_flags_state,5	; =1: in or has been in deco obligation       during the dive
+#DEFINE deco_region				DM_flags_state,6	; =1: in or has been in the deco stops region during the dive
 ;								DM_flags_state,7	; --- unused
 
 ;---- Dive Mode - O2 Sensors
@@ -815,9 +831,9 @@ retry:
 
 	extern	HW_descriptor
 	extern	HW_variants
-	extern	HW_variants2
 
-	extern	HW_flags_state
+	extern	HW_flags_state1
+	extern	HW_flags_state2
 
 	extern	OS_flags_persist
 	extern	OS_flags_ISR1
@@ -1203,7 +1219,7 @@ wait_counter					res 1
 ; -----------------------------------------------------------------------------
 ;	sleepmode		sleepmode.asm		(unused)			(unused)
 ;	surfmode		surfmode.asm*		(unused)			(unused)
-;	simulator		simulator.asm		(unused)			(unused)
+;	simulator		divemode.asm		divemode.asm		simulator.asm
 ;	divemode		divemode.asm		divemode.asm		ghostwriter.asm
 ;	logbook			logbook.asm			logbook.asm			logbook.asm
 ;
@@ -1265,7 +1281,7 @@ customview_divemode				res 1		; storage to remember last selected custom view in
 ;---- Menu Processor (8 byte)
 menustack						res 8		; menu stack
 
-;---- Graphical Compass (17 byte)
+;---- Graphical Compass (15 byte)
 xRD								res 2		; virtual compass ruler offset
 xRDr							res 2		; virtual compass ruler offset - right end
 xRD180							res 2		; virtual compass ruler offset for the -180 marker
@@ -1273,7 +1289,6 @@ xLO								res 1		; lo backup to prevent trashing
 xHI								res 1		; hi backup to prevent trashing
 xCM								res 1		; compass bearing relative position
 compass_heading_new				res 2		; corrected heading (in 1°) : -180 .. 180
-compass_heading_old				res 2		; old heading (for smoother display)
 compass_heading_shown			res 2		; displayed heading
 compass_bearing					res 2		; displayed bearing
 
@@ -1306,13 +1321,13 @@ rx_firmware_cur_major			res 1		; TR module current firmware, major
 rx_firmware_cur_minor			res 1		; TR module current firmware, minor
  ENDIF
 
-;---- SAC Calculation on Pressure Readings 1 & 2 (20 byte)
+;---- SAC Calculation on Pressure Readings 1 & 2 (22 byte)
  IFDEF _rx_functions
 pres_accu_1st					res 4		; accumulator for pressure drop    in 1/160 bar  | ATTENTION: do not
 pres_accu_2nd					res 4		; accumulator for pressure drop    in 1/160 bar  |            change the
-time_accu_1st					res 1		; accumulator for reading ages     in seconds    |            position
+time_accu_1st					res 2		; accumulator for reading ages     in seconds    |            position
 gas__last_1st					res 1		; last gas assignment                            |            of these
-time_accu_2nd					res 1		; accumulator for reading ages     in seconds    |            variables
+time_accu_2nd					res 2		; accumulator for reading ages     in seconds    |            variables
 gas__last_2nd					res 1		; last gas assignment                            |            relative
 pres_last_1st					res 2		; last pressure reading pressure   in 1/160 bar  |            to each
 pres_last_2nd					res 2		; last pressure reading pressure   in 1/160 bar  |            other!

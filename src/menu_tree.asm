@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File menu_tree.asm                        next combined generation V3.03.3
+;   File menu_tree.asm                        next combined generation V3.04.3
 ;
 ;   OSTC Surface Menus
 ;
@@ -116,12 +116,11 @@ do_ccr_menu:
 	bra		do_ccr_menu_cR
  ENDIF
 
-	MENU_BEGIN	tCCRSetup, .6			; OSTC3 menu (and currently also the OSTC2 menu)
+	MENU_BEGIN	tCCRSetup, .5			; OSTC3 menu (and currently also the OSTC2 menu)
 		MENU_OPTION		tCCRMode,					oCCRMode,				0
 		MENU_CALL		tDiluentSetup,				do_diluent_setup
 		MENU_CALL		tFixedSetpoints,			do_fixed_setpoints
-		MENU_CALL		tPSCRMenu,					do_PSCR_menu
-		MENU_OPTION		tCCmaxFracO2,				oCCmaxFracO2,			0
+		MENU_CALL		tMore,						do_ccr_menu_more
 		MENU_CALL		tBack,						do_return_main_menu
 	MENU_END
 
@@ -129,13 +128,12 @@ do_ccr_menu:
  IFDEF _external_sensor
 
 do_ccr_menu_cR:							; cR menu
-	MENU_BEGIN	tCCRSetup, .7
+	MENU_BEGIN	tCCRSetup, .6
 		MENU_OPTION		tCCRMode,					oCCRMode,				0
 		MENU_CALL		tCalibrateMenu,				do_calibrate_menu
 		MENU_CALL		tDiluentSetup,				do_diluent_setup
 		MENU_CALL		tFixedSetpoints,			do_fixed_setpoints
-		MENU_CALL		tPSCRMenu,					do_PSCR_menu
-		MENU_OPTION		tCCmaxFracO2,				oCCmaxFracO2,			0
+		MENU_CALL		tMore,						do_ccr_menu_more
 		MENU_CALL		tBack,						do_return_main_menu
 	MENU_END
 
@@ -211,8 +209,10 @@ do_edit_sp_menu:
 	MENU_END
 
 
-do_PSCR_menu:
-	MENU_BEGIN	tPSCRMenu, .3			; pSCR Menu
+do_ccr_menu_more:
+	MENU_BEGIN	tCCRSetup, .5			; CCR/pSCR more menu
+		MENU_OPTION		tCCmaxFracO2,				oCCmaxFracO2,			0
+		MENU_OPTION		tDilppO2Check,				oDilppO2Check,			0
 		MENU_OPTION		tPSCR_O2_drop,				oPSCR_drop,				0
 		MENU_OPTION		tPSCR_lungratio,			oPSCR_lungratio,		0
 		MENU_CALL		tBack,						do_return_ccr_menu
@@ -355,7 +355,8 @@ do_setup_depth_menu:
 ; Simulator Menus
 
 do_return_planner_menu:
-	call	menu_processor_pop			; drop exit line and ...
+	call	menu_processor_double_pop	; drop exit line and back to last line
+	bra		do_planner_common_1
 
 	global	do_return_demo_planner
 do_return_demo_planner:
@@ -366,7 +367,7 @@ do_planner_menu:
 	; ensure correct simulator results after mode changes without prior excursion to surface mode
 	call	option_save_all
 
-	; reset dive time/depth to default values
+	; reset planning parameters to default values
 	lfsr	FSR0,odiveInterval
 	call	option_reset
 	lfsr	FSR0,obottomTime
@@ -376,8 +377,15 @@ do_planner_menu:
 	lfsr	FSR0,oSimAGF
 	call	option_reset
 
+ IFDEF _gas_contingency
+	; switch off gas contingency mode by default
+	clrf	WREG
+	movff	WREG,char_I_gas_contingency
+ ENDIF
+
 do_planner_common:
 	call	restart_set_modes_and_flags	; initialize dive mode settings
+do_planner_common_1:
 	movff	opt_dive_mode,WREG			; get dive mode: 0=OC, 1=CCR, 2=Gauge, 3=Apnea, 4=pSCR
 	dcfsnz	WREG,W						; subtract one, became zero?
 	bra		do_planner_common_ccr		; YES - use CCR version
@@ -404,11 +412,20 @@ do_planner_common_ccr:
 	MENU_END
 
 do_planner_config:
+ IFDEF _gas_contingency
+	MENU_BEGIN	tPlan, .4
+		MENU_OPTION		tSelectSetpoint,			oSimSetpoint,			0
+		MENU_OPTION		tuseAGF,					oSimAGF,				0
+		MENU_OPTION		tGasContingency,			oGasContingency,		0
+		MENU_CALL		tBack,						do_return_planner_menu
+	MENU_END
+ ELSE
 	MENU_BEGIN	tPlan, .3
 		MENU_OPTION		tSelectSetpoint,			oSimSetpoint,			0
 		MENU_OPTION		tuseAGF,					oSimAGF,				0
 		MENU_CALL		tBack,						do_return_planner_menu
 	MENU_END
+ ENDIF
 
 
 ;=============================================================================
@@ -513,7 +530,9 @@ do_GF_menu:
 
 ;=============================================================================
 ; Setup Menu
-
+do_return_settings_deeper:                ; entry point for return from info menu 2
+	call    menu_processor_pop            ; drop one more stack entry
+	
 do_return_settings:
 	bcf		imprint_time_date			; stop imprinting of current time & date
 	call	menu_processor_double_pop	; drop exit line and back to last line
@@ -576,10 +595,10 @@ do_info_menu:
 	MENU_BEGIN	tInfoMenu, .6
 		MENU_DYNAMIC	info_menu_serial,			0
 		MENU_DYNAMIC	info_menu_firmware,			0
+		MENU_DYNAMIC	info_menu_config,			0
 		MENU_DYNAMIC	info_menu_battery_volts,	0
 		MENU_DYNAMIC	info_menu_uptime,			0
-		MENU_DYNAMIC	info_menu_total_dives,		0
-		MENU_CALL		tBack,						do_return_settings
+		MENU_CALL		tMore,						do_info_menu2
 	MENU_END
 
  IFDEF _rx_functions
@@ -588,13 +607,20 @@ do_info_menu_TR:
 		MENU_DYNAMIC	info_menu_serial,			0
 		MENU_DYNAMIC	info_menu_firmware,			0
 		MENU_DYNAMIC	info_menu_firmware_rx,		0
-		MENU_DYNAMIC	info_menu_total_dives,		0
+		MENU_DYNAMIC	info_menu_config,			0
 		MENU_DYNAMIC	info_menu_battery_volts,	0
 		MENU_DYNAMIC	info_menu_uptime,			0
-		MENU_CALL		tBack,						do_return_settings
+		MENU_CALL		tMore,						do_info_menu2
 	MENU_END
  ENDIF
 
+do_info_menu2: ;same for all hardware versions
+	MENU_BEGIN	tInfoMenu, .2
+		MENU_DYNAMIC	info_menu_total_dives,		0
+		MENU_CALL		tBack,						do_return_settings_deeper
+	MENU_END
+ 
+ 
 
  IFDEF _rx_functions
 

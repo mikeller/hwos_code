@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File math.asm                             combined next generation V3.03.2
+;   File math.asm                             combined next generation V3.04.3
 ;
 ;   Math subroutines
 ;
@@ -52,6 +52,18 @@ mult16:
 	decfsz	WREG						; decrement counter, done?
 	bra		mult16						; NO  - loop
 	return								; YES - done
+
+
+	global	addU16						; ; sub_c:2 = sub_a:2 + sub_b:2	with USIGNED values
+										; trashes WREG
+addU16:
+	movf	sub_a+0,W					; get 1st summand (low  byte) to WREG
+	addwf	sub_b+0,W					; add 2nd summand (low  byte) and store result in WREG
+	movwf	sub_c+0						; copy result     (low  byte) to sub_c
+	movf	sub_a+1,W					; get 1st summand (high byte) to WREG
+	addwfc	sub_b+1,W					; add 2nd summand (high byte) and store result in WREG
+	movwf	sub_c+1						; copy result     (high byte) to sub_c
+	return								; done
 
 
 	global	sub16						; sub_c:2 = sub_a:2 - sub_b:2   with SIGNED values

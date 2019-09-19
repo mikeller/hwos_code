@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File strings.asm                          combined next generation V3.03.2
+;   File strings.asm                          combined next generation V3.03.5
 ;
 ;   Implementation code various string functions
 ;
@@ -144,13 +144,11 @@ WIN_LARGE macro x, y
 	DB		x, y
 	endm
 
- IFDEF _huge_font
 	extern	start_huge_block
 WIN_HUGE macro x, y
 	call	start_huge_block
 	DB		x, y
 	endm
- ENDIF
 
 ;=============================================================================
 ; Shortcuts for compact display programmings

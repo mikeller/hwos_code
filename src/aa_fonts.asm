@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File aa_fonts.asm                         combined next generation V3.01.1
+;   File aa_fonts.asm                         combined next generation V3.03.5
 ;
 ;   Font-data for the anti-aliased word processor
 ;
@@ -173,8 +173,6 @@ aa_font90_end:
 	endif
 
 ;---- HUGE font description and data ----------------------------------------
- IFDEF _huge_font
-
 	global aa_font92_block
 aa_font92_block:
 			DB	' ', 0x2F
@@ -191,8 +189,6 @@ aa_font92_end:
 	if aa_font92_nbbits != 3
 		error SMALL font should be encoded with 3bits anti-aliasing...
 	endif
-
- ENDIF
 
 ;=============================================================================
 	END

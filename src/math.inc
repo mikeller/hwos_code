@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File math.inc                             combined next generation V3.03.2
+;   File math.inc                             combined next generation V3.04.3
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -18,6 +18,9 @@
 	extern	mult16					; divA:2 = divA:2 * 2^WREG
 									; trashes WREG
 
+	extern	addU16					; sub_c:2 = sub_a:2 + sub_b:2	with USIGNED values
+									; trashes WREG
+
 	extern	sub16					; sub_c:2 = sub_a:2 - sub_b:2	with SIGNED   values
 									; sets neg_flag if result is < 0
 									; trashes WREG
@@ -26,7 +29,7 @@
 									; sets neg_flag if result is < 0
 									; trashes WREG
 
-	extern	cmpU16					; sub_a:2 - sub_b:2	with UNSIGNED values
+	extern	cmpU16					; trashed = sub_a:2 - sub_b:2	with UNSIGNED values
 									; sets neg_flag if result is < 0, but does not store result itself
 									; trashes WREG
 

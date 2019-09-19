@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft_outputs.inc                      next combined generation V3.03.2
+;   File tft_outputs.inc                      next combined generation V3.03.8
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -53,6 +53,7 @@
 	extern	TFT_show_time_date_menu_fast
 	extern	TFT_show_serial_and_firmware
 	extern	TFT_show_firmware
+	extern	info_menu_total_dives
 
 ; Dive Mode
 	extern	TFT_show_cns
@@ -120,8 +121,8 @@
 	extern	TFT_ceiling_GF_tissue				; data for ceiling, current GF and tissues
 	extern	TFT_CNS_mask						; mask for CNS values
 	extern	TFT_CNS								; data for CNS values
-	extern	TFT_ppo2_ead_end_cns_mask			; mask for ppO2, END/EAD and CNS
-	extern	TFT_ppo2_ead_end_cns				; data for ppO2, END/EAD and CNS
+	extern	TFT_ppo2_ead_end_cns_mask			; mask for ppO2, END/EAD and CNS / gas density
+	extern	TFT_ppo2_ead_end_cns				; data for ppO2, END/EAD and CNS / gas density
 	extern	TFT_gf_factors_mask					; mask for GF factors
 ;	extern										; data for GF factors (none)
 	extern	TFT_clock_batt_surfpress_mask		; mask for clock, battery and surface pressure

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File ghostwriter.asm                      combined next generation V3.03.1
+;   File ghostwriter.asm                      combined next generation V3.03.7
 ;
 ;   Ghostwriter (Log profile recorder)
 ;
@@ -59,8 +59,12 @@ init_recording_params:
 	movlw	div_cns
 	movwf	divisor_cns
 
-	movlw	div_tank
-	movwf	divisor_tank
+ IFDEF _rx_functions
+	clrf	WREG						; default to no tank data logging
+	btfsc	tr_functions_activated		; TR functions activated?
+	movlw	div_tank					; YES - get divisor for tank data
+	movwf	divisor_tank				; initialize divisor
+ ENDIF
 
  IFDEF _external_sensor
 	movlw	div_ppo2_sensors
@@ -136,10 +140,12 @@ check_extended5:
 	movlw	infolength_cns				; YES - get length of extra data
 	addwf	ProfileFlagByte,F			;     - add to ProfileFlagByte
 check_extended6:
+ IFDEF _rx_functions
 	decfsz	divisor_tank,W				; check divisor if it will become 0, dump decremented value to WREG
 	bra		check_extended7				; NO  - skip
 	movlw	infolength_tank				; YES - get length of extra data
 	addwf	ProfileFlagByte,F			;     - add to ProfileFlagByte
+ ENDIF
 check_extended7:
 
 ; Second, check global event flag
@@ -201,7 +207,7 @@ store_dive_data3:
 	btfss	event_occured				; check global event flag (again)
 	bra		store_dive_data4			; no event
 
-; Store the EventByte(s) + additional bytes now
+	; Store the EventByte(s) + additional bytes now
 	movf	event_byte1,W
 	rcall	ghostwrite_byte_profile		; WREG -> profile in ext. flash
 	movf	event_byte2,W				; write second event byte...
@@ -219,18 +225,20 @@ store_dive_data3:
  ENDIF
 	rcall	ghostwrite_byte_profile		;     - store it
 	bcf		event_gas_change_gas6		;     - clear event flag
+
 store_dive_data3b:
 	btfss	event_gas_change			; did a gas change occur?
 	bra		store_dive_data3c			; NO
  IFDEF _ccr_pscr
-	movf	active_dil,W				; YES - store active diluent (default, may be overwritten soon)
+	movf	active_dil,W				; YES - get active diluent by default
 	btfsc	FLAG_oc_mode				;     - in OC mode?
-	movf	active_gas,W				;       YES - get active gas
+	movf	active_gas,W				;       YES - replace by active gas
 	btfsc	bailout_mode				;     - in bailout?
  ENDIF
-	movf	active_gas,W				;       YES - get active OC = bailout gas
+	movf	active_gas,W				;       YES - get active OC (bailout) gas
 	rcall	ghostwrite_byte_profile		;     - store it
 	bcf		event_gas_change			;     - clear event flag
+
 store_dive_data3c:
  IFDEF _ccr_pscr
 	btfss	event_SP_change				; did a setpoint change occur?
@@ -239,6 +247,7 @@ store_dive_data3c:
 	rcall	ghostwrite_byte_profile		;     - store it
 	bcf		event_SP_change				;     - clear event flag
  ENDIF
+
 store_dive_data3d:
  IFDEF _ccr_pscr
 	btfss	event_bailout				; did a gas change due to bailout occur?
@@ -249,72 +258,84 @@ store_dive_data3d:
 	movff	char_I_He_ratio,WREG		;     - get He ratio of bailout gas
  ELSE
 	clrf	WREG						;     - He ratio is zero
- ENDIF
+ ENDIF	; helium
 	rcall	ghostwrite_byte_profile		;     - store it
 	bcf		event_bailout				;     - clear event flag
  ENDIF	; _ccr_pscr
+
 store_dive_data4:
-; Store extended information
+	; Store extended information
+
 	decfsz	divisor_temperature,F		; time to store a temperature sample ?
-	bra		store_extended1				; NO  - skip
+	bra		store_dive_data4a			; NO  - skip
 	rcall	store_dive_temperature		; YES - store data
-store_extended1:
+store_dive_data4a:
+	btfsc	divisor_temperature,7		; did the timer under-run?
+	clrf	divisor_temperature			; YES - reset timer
+
 	decfsz	divisor_deco,F				; time to store the current deco data?
-	bra		store_extended2				; NO  - skip
+	bra		store_dive_data4b			; NO  - skip
 	rcall	store_dive_decodata			; YES - store data
-store_extended2:
+store_dive_data4b:
+	btfsc	divisor_deco,7				; did the timer under-run?
+	clrf	divisor_deco				; YES - reset timer
+
 	decfsz	divisor_supersat,F			; time to store the current supersaturation ?
-	bra		store_extended3				; NO  - skip
+	bra		store_dive_data4c			; NO  - skip
 	rcall	store_dive_supersat			; YES - store data
-store_extended3:
+store_dive_data4c:
+	btfsc	divisor_supersat,7			; did the timer under-run?
+	clrf	divisor_supersat			; YES - reset timer
+
  IFDEF _external_sensor
 	decfsz	divisor_ppo2_sensors,F		; decrement divisor, did it became 0 ?
-	bra		store_extended4				; NO  - skip
+	bra		store_dive_data4d			; NO  - skip
 	rcall	store_dive_ppO2_sensors		; YES - store data
+store_dive_data4d:
+	btfsc	divisor_ppo2_sensors,7		; did the timer under-run?
+	clrf	divisor_ppo2_sensors		; YES - reset timer
  ENDIF
-store_extended4:
+
 	decfsz	divisor_decoplan,F			; decrement divisor, did it became 0 ?
-	bra		store_extended5				; NO  - skip
+	bra		store_dive_data4e			; NO  - skip
 	rcall	store_dive_decoplan			; YES - store data
-store_extended5:
+store_dive_data4e:
+	btfsc	divisor_decoplan,7			; did the timer under-run?
+	clrf	divisor_decoplan			; YES - reset timer
+
 	decfsz	divisor_cns,F				; decrement divisor, did it became 0 ?
-	bra		store_extended6				; NO  - skip
+	bra		store_dive_data4f			; NO  - skip
 	rcall	store_dive_cns				; YES - store data
-store_extended6:
+store_dive_data4f:
+	btfsc	divisor_cns,7				; did the timer under-run?
+	clrf	divisor_cns					; YES - reset timer
+
+ IFDEF _rx_functions
 	decfsz	divisor_tank,F				; decrement divisor, did it became 0 ?
-	bra		store_extended7				; NO  - skip
+	bra		store_dive_data4g			; NO  - skip
 	rcall	store_dive_tank				; YES - store data
-store_extended7:
-
-; The next block is required to take care of "store never"
-	btfsc	divisor_temperature,7		; test highest bit (register must have been zero before the "decfsz" command!)
-	clrf	divisor_temperature			; and clear register again, so it will never reach zero...
-
-	btfsc	divisor_deco,7
-	clrf	divisor_deco
-
-	btfsc	divisor_supersat,7
-	clrf	divisor_supersat
-
- IFDEF _external_sensor
-	btfsc	divisor_ppo2_sensors,7
-	clrf	divisor_ppo2_sensors
+store_dive_data4g:
+	btfsc	divisor_tank,7				; did the timer under-run?
+	clrf	divisor_tank				; YES - reset timer
  ENDIF
-
-	btfsc	divisor_decoplan,7
-	clrf	divisor_decoplan
-
-	btfsc	divisor_cns,7
-	clrf	divisor_cns
-
-	btfsc	divisor_tank,7
-	clrf	divisor_tank
 
 store_dive_data5:
 	bcf		event_occured				; clear the global event flag
 	clrf	event_byte1					; reset event byte 1
 	clrf	event_byte2					; reset event byte 2
-	return								; done (sample with all informations written to external flash)
+	return								; done (sample with all information written to external flash)
+
+
+ IFDEF _rx_functions
+store_dive_tank:
+	movff	int_O_tank_pressure+0,WREG	; get tank pressure, low  byte
+	rcall	ghostwrite_byte_profile		; store it
+	movff	int_O_tank_pressure+1,WREG	; get tank pressure, high byte
+	rcall	ghostwrite_byte_profile		; store it
+	movlw	div_tank					; get sampling rate
+	movwf	divisor_tank				; reload timer
+	return
+ ENDIF
 
 store_dive_cns:
 	movff	int_O_CNS_current+0,WREG	; get current CNS, low  byte
@@ -323,14 +344,8 @@ store_dive_cns:
 	bcf		WREG,int_warning_flag		; clear warning   flag
 	bcf		WREG,int_attention_flag		; clear attention flag
 	rcall	ghostwrite_byte_profile		; store it
-	movlw	div_cns
-	movwf	divisor_cns					; reload divisor from CF
-	return
-
-store_dive_tank:
-	; OSTC TR tank pressure logging
-	movlw	div_tank
-	movwf	divisor_tank				; reload divisor from CF
+	movlw	div_cns						; get sampling rate
+	movwf	divisor_cns					; reload timer
 	return
 
 store_dive_decoplan:
@@ -343,14 +358,12 @@ store_dive_decoplan_loop:
 	rcall	ghostwrite_byte_profile			; store it
 	decfsz	lo,F							; decrement loop counter, became zero?
 	bra		store_dive_decoplan_loop		; NO  - loop
-	movlw	div_decoplan					; YES - get divisor for deco plan recording
+	movlw	div_decoplan					; YES - get sampling rate
 	movwf	divisor_decoplan				;     - reload timer
 	return									;     - done
 
-;=============================================================================
 
  IFDEF _external_sensor
-
 store_dive_ppO2_sensors:
 	movff	sensor1_ppO2,WREG				; get sensor 1 ppO2 (in 0.01 bar steps)
 	rcall	ghostwrite_byte_profile			; store it
@@ -376,18 +389,16 @@ store_dive_ppO2_sensors:
 	movf	hi,W							; in 0.1 mV steps, high byte
 	rcall	ghostwrite_byte_profile			; store it
 
-	movlw	div_ppo2_sensors
+	movlw	div_ppo2_sensors				; get sampling rate
 	movwf	divisor_ppo2_sensors			; reload timer
 	return
-
  ENDIF
 
-;=============================================================================
 
 store_dive_supersat:
 	movff	int_O_lead_supersat+0,WREG		; get leading tissue's supersaturation (value is limited to 255, only lower byte is used for the value)
 	rcall	ghostwrite_byte_profile			; store it
-	movlw	div_gf
+	movlw	div_gf							; get sampling rate
 	movwf	divisor_supersat				; reload timer
 	return
 
@@ -409,7 +420,7 @@ store_dive_decodata_deco:
 	movff	char_O_deco_time,WREG			; get time of the first stop in minutes
 	rcall	ghostwrite_byte_profile			; store it
 store_dive_decodata_common:
-	movlw	div_deco
+	movlw	div_deco						; get sampling rate
 	movwf	divisor_deco					; reload timer
 	return
 
@@ -419,7 +430,7 @@ store_dive_temperature:
 	rcall	ghostwrite_byte_profile			; store it
 	movf	hi,W							; get high byte
 	rcall	ghostwrite_byte_profile			; store it
-	movlw	div_temperature
+	movlw	div_temperature					; get sampling rate
 	movwf	divisor_temperature				; reload timer
 	return
 
@@ -830,7 +841,7 @@ end_dive_store_tissues_He_2:
 	rcall	ghostwrite_byte_header			; store data
 
 	; store deco distance
-	movff	char_I_deco_distance,WREG		; get assumed distance to shown stop
+	clrf	WREG							; assumed deco distance - disposed, hard-coded to zero
 	rcall	ghostwrite_byte_header			; store data
 
  IFDEF _external_sensor
@@ -990,10 +1001,10 @@ ghostwriter_short_header2:
 	movlw	0xFA
 	rcall	ghostwrite_byte_profile				; WREG -> profile in ext. flash
 
-	; Keep room for dive length ext_flash_dive_counter:3 (Stored at the end of the dive)
+	; Keep room for dive length ext_flash_dive_counter:3 (stored at the end of the dive)
 	; Writing 0xFF three times here is mandatory
 	; - 0xFF can be overwritten after the dive
-	; - ghostwrite_byte_profile takes care of 4kB Page switching
+	; - ghostwrite_byte_profile takes care of 4kB page switching
 	; - fixes an issue when we are at exactly 0xXXX000 here...
 
 	movlw	0xFF
@@ -1003,64 +1014,71 @@ ghostwriter_short_header2:
 	movlw	0xFF
 	call	write_byte_ext_flash_plus_nocnt		; WREG -> profile in ext. flash (No ext_flash_dive_counter:3 increase)
 
-	movf	sampling_rate,W					; get sampling rate
+	; store sizes and sampling rates of recording datasets
+
+	movf	sampling_rate,W					; get general sampling rate
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
 
-	movlw	.7								; number of divisors
+	movlw	.7								; get number of additional datasets
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
 
-	movlw	.0								; type
+	movlw	.0								; type: temperature
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	infolength_temperature
+	movlw	infolength_temperature			; get size of recording data
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	div_temperature					; divisor temperature
-	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-
-	movlw	.1								; Type
-	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	infolength_deco
-	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	div_deco						; divisor deco data
+	movlw	div_temperature					; get sampling rate
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
 
-	movlw	.2								; type
+	movlw	.1								; type: +++
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	infolength_gf
+	movlw	infolength_deco					; get size of recording data
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	div_gf							; divisor gf
-	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-
-	movlw	.3								; type
-	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	infolength_ppo2_sensors
-	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	div_ppo2_sensors				; divisor ppO2
-	btfss	FLAG_ccr_mode					; =1: CCR mode (Fixed ppO2 or Sensor) active
-	movlw	.0								; no ppO2 data in OC mode
+	movlw	div_deco						; get sampling rate
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
 
-	movlw	.4								; type
+	movlw	.2								; type: saturation
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	infolength_decoplan
+	movlw	infolength_gf					; get size of recording data
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	div_decoplan					; divisor debug
-	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-
-	movlw	.5								; Type
-	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	infolength_cns
-	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	div_cns							; divisor CNS
+	movlw	div_gf							; get sampling rate
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
 
-	movlw	.6								; Type
+	movlw	.3								; type: ppO2 sensor data
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	infolength_tank
+	movlw	infolength_ppo2_sensors			; get size of recording data
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
-	movlw	div_tank						; divisor tank
+	movlw	.0								; default to no ppO2 data
+	btfsc	FLAG_ccr_mode					; in CCR mode?
+	movlw	div_ppo2_sensors				; YES - get sampling rate
+	btfsc	FLAG_pscr_mode					; in pSCR mode?
+	movlw	div_ppo2_sensors				; YES - get sampling rate
+	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
+
+	movlw	.4								; type: deco plan (stop times)
+	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
+	movlw	infolength_decoplan				; get size of recording data
+	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
+	movlw	div_decoplan					; get sampling rate
+	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
+
+	movlw	.5								; type: CNS
+	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
+	movlw	infolength_cns					; get size of recording data
+	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
+	movlw	div_cns							; get sampling rate
+	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
+
+	movlw	.6								; type: tank pressure
+	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
+	movlw	infolength_tank					; get size of recording data
+	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
+	movlw	.0								; default to no tank pressure data
+	btfsc	tr_functions_activated			; TR functions activated?
+	movlw	div_tank						; YES - get sampling rate
 	rcall	ghostwrite_byte_profile			; WREG -> profile in ext. flash
 
 	return
+
 
 divemode_store_statistics:					; store/update statistics for this unit
 	call	vault_decodata_into_eeprom		; update deco data

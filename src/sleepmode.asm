@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File sleepmode.asm                        combined next generation V3.03.1
+;   File sleepmode.asm                        combined next generation V3.03.6
 ;
 ;   Sleep Mode
 ;
@@ -23,6 +23,7 @@
 #include "i2c.inc"
 #include "mcp.inc"
 #include "wait.inc"
+#include "tft_outputs.inc"	
 
 
 	extern	vault_decodata_into_eeprom
@@ -35,7 +36,8 @@
 		accel_reference					; acceleration reference value for detecting movement / terminating deep sleep
 		sm_timer_10sec					; timer for 10 seconds tasks (pressure check)
 		sm_timer_10min					; timer for 10 minutes tasks (tissue updating)
-		sm_timer_15min					; timer for 15 minutes tasks (entering deep sleep)
+		;sm_timer_15min					; timer for 15 minutes tasks (entering deep sleep)
+		sm_10min_counter				; count #of 10 minutes
 		loop_counter					; loop counter, used in init_avg_switches routine
 		sm_flags						; local flags
 	ENDC								; used: 6 byte, remaining: 10 byte
@@ -45,7 +47,7 @@
 
 #DEFINE deep_sleep			sm_flags,0	; =1: in deep sleep mode,                      =0: normal sleep
 #DEFINE desat_on_10_mins	sm_flags,1	; =1: calculate desaturation every 10 minutes, =0: every minute
-;							sm_flags,2	; unused
+#DEFINE	charge_in_sleep		sm_flags,2	; =1: show charging screen
 ;							sm_flags,3	; unused
 ;							sm_flags,4	; unused
 ;							sm_flags,5	; unused
@@ -78,10 +80,7 @@ sleeploop:
  ENDIF
 
 	clrf	ADCON0							; power-down ADC module
-	call	TFT_Display_FadeOut				; power-down backlight
-	call	TFT_DisplayOff					; power-down display
 	call	disable_rs232					; power-down USB
-	call	I2C_sleep_accelerometer			; power-down accelerometer
 	call	I2C_sleep_compass				; power-down compass
 
 	call	vault_decodata_into_eeprom		; store deco data
@@ -90,9 +89,12 @@ sleeploop:
 
 	clrf	sm_timer_10sec					; clear 10 seconds timer
 	clrf	sm_timer_10min					; clear 10 minutes timer
-	clrf	sm_timer_15min					; clear 15 minutes timer
+	clrf	sm_10min_counter				; clear 10mins counter
 	clrf	sm_flags						; clear all local  flags
 
+	call	TFT_Display_FadeOut				; power-down backlight
+	call	TFT_DisplayOff					; power-down display
+	
 sleeploop_loop:
 	btfsc	trigger_full_second				; one second in sleep?
 	rcall	one_sec_sleep					; YES - check switches, pressure sensor, etc.
@@ -118,6 +120,9 @@ deepsleep_pre:
 
 	rcall	deepsleep_get_accel				; read accelerometer into WREG
 	movwf	accel_reference					; store as reference value
+	tstfsz	accel_reference					; = 0 ?
+	bra		deepsleep_loop					; NO  - continue
+	bra		deepsleep_loop_exit				; YES - no deep sleep (fail-safe)
 
 deepsleep_loop:
 	btfsc	trigger_full_second				; one second in deep sleep?
@@ -134,6 +139,9 @@ deepsleep_loop:
 	btfsc	deep_sleep						; shall leave deep sleep mode?
 	bra		deepsleep_loop					; NO - loop in deep sleep loop
 
+deepsleep_loop_exit:
+	bcf		deep_sleep						; clear flag (again)
+	clrf	sm_10min_counter				; clear 10mins counter
 	call	power_up_switches				; turn on    the analog switches
 	rcall	init_avg_switches				; initialize the averaging system
 
@@ -175,6 +183,32 @@ one_sec_sleep:
 one_sec_sleep_1:
 	call	get_battery_voltage				; check for charger
 
+	; Test if charging
+	btfss	cc_active						; charging?
+	bra		one_sec_sleep_1a				; NO
+	btfsc	charge_in_sleep					; YES - already showing charge screen?
+	bra		one_sec_sleep_1b				;       YES - only update data
+
+	bsf	charge_in_sleep
+	bcf	deep_sleep						; wake-up from deepsleep
+	call	TFT_boot						; initialize TFT (includes clear screen)
+	movlw	.32
+	movff	WREG,max_CCPR1L					; bank safe
+	call	TFT_Display_FadeIn				; dim up the display
+one_sec_sleep_1b:
+	call	TFT_batt_surfmode				; show battery type, voltage and color-coded percentage
+	bra		one_sec_sleep_2					; continue
+
+one_sec_sleep_1a:
+	btfss	charge_in_sleep					; was showing charge screen?
+	bra		one_sec_sleep_2					; NO
+
+	; yes, power-down screen    
+	call	TFT_Display_FadeOut				; power-down backlight
+	call	TFT_DisplayOff					; power-down display
+	bcf		charge_in_sleep
+
+
 one_sec_sleep_2:
 	incf	sm_timer_10sec,F				; increment 10 seconds timer
 	movlw	.10								; load  a 10 into WREG
@@ -212,20 +246,6 @@ one_min_sleep:
 	cpfslt	sm_timer_10min					; timer < 10 yet?
 	rcall	ten_min_sleep					; NO - do the every 10 minutes tasks
 
-	; the 15 minutes timer only ticks on OSTC with analog switches
-	btfss	analog_switches					; OSTC with analog switches?
-	bra		one_min_sleep_1					; NO  - no analog switches, no deep sleep required
-
-	; the 15 minutes timer also ticks only when not in deep sleep
-	btfsc	deep_sleep						; in deep sleep mode?
-	bra		one_min_sleep_1					; YES - already in deep sleep
-
-	; tick the 15 minutes timer
-	incf	sm_timer_15min,F				; increment 15 minutes timer
-	movlw	.15								; load  a 15 into WREG
-	cpfslt	sm_timer_15min					; timer < 15 yet?
-	rcall	fifteen_min_sleep				; NO - do the every 15 minute tasks
-
 one_min_sleep_1:
 	; continue tasks every minute
 	btfsc	desat_on_10_mins				; shall do desaturation calculation on 10 minute intervals?
@@ -241,6 +261,21 @@ ten_min_sleep:
 
 	call	sample_surface_pressure			; sample surface pressure and update ISR and deco engine
 
+	btfss	analog_switches					; OSTC with analog switches?
+	bra		ten_min_sleep_0					; NO  - no analog switches, no deep sleep required
+
+	; check if we need to enter deep sleep
+	incf	sm_10min_counter,F				; count
+	movlw	deep_sleep_10mins				; threshold
+	cpfseq	sm_10min_counter				; threshold reached?
+	bra		ten_min_sleep_0					; NO - threshold not reached yet
+
+	decf	sm_10min_counter,F				; -1 to re-trigger every 10mins (in case of charging)
+
+	btfss	cc_active						; charging?
+	bsf		deep_sleep						; NO - activate deep-sleep mode
+
+ten_min_sleep_0:
 	btfss	desat_on_10_mins				; shall do desaturation calculation on 10 minute intervals?
 	bra		ten_min_sleep_1					; NO  - continue checking if schedule can be switched to 10 minutes
 	call	deco_calc_dive_interval_10min	; YES - calculate 10 minutes at surface conditions (C-code)
@@ -255,19 +290,12 @@ ten_min_sleep_1:
 	return									; done
 
 
-fifteen_min_sleep:
-	; tasks every 15 minutes in sleep mode
-	clrf	sm_timer_15min					; reset timer to 0
-	bsf		deep_sleep						; enable deep-sleep mode
-	return
-
-
 one_hour_sleep:
 	; tasks every hour in sleep mode mode
 	bcf		trigger_full_hour				; clear one hour flag
 	call	update_battery_registers		; update battery registers into EEPROM
 	call	vault_decodata_into_eeprom		; update tissue  pressures into EEPROM
-	return
+	return									; done
 
 
 init_avg_switches:
@@ -310,18 +338,18 @@ check_accelerometer:
 	btfsc	STATUS,N						; result negative?
 	negf	WREG							; YES - negate it
 	movwf	lo								; save as change of acceleration in Z-axis
-	movlw	.50								; load threshold (mg)
+	movlw	.100							; load threshold (mg)
 	cpfslt	lo								; change of acceleration > threshold ?
 	bcf		deep_sleep						; YES - terminate deep sleep mode
 	return									; done
 
 
 deepsleep_get_accel:
-	call	I2C_init_compass				; start compass,           required for compass1
-	call	I2C_init_accelerometer			; start accelerometer,     required for compass2
+	call	I2C_init_compass				; start compass
+	rcall	sleepmode_sleep					; wait a little bit
 	call	I2C_RX_accelerometer			; read accelerometer
-	call	I2C_sleep_compass				; shut down compass,       required for compass1
-	call	I2C_sleep_accelerometer			; shut down accelerometer, required for compass2
+	call	I2C_RX_accelerometer			; read accelerometer
+	call	I2C_sleep_compass				; shut down compass
 	movff	accel_DZ+0,WREG					; transfer result to WREG
 	return									; done
 
@@ -354,6 +382,11 @@ pressuretest_sleep_fast:					; get pressure without averaging (faster to save so
 
 sleepmode_sleep:
 	movff	BSR,BSR_backup					; backup BSR
+
+	banksel	common
+	btfsc	charge_in_sleep					; already showing charge screen?
+	bra		sleepmode_sleepwalk				; YES - skip the actual sleep (But wait)
+
 	banksel	T7GCON							; switch bank, T7* is outside access RAM
 	clrf	T7GCON							; reset timer7 gate control register
 	movlw	b'10001101'						; 1:1 prescaler -> 2 seconds @ 32768 Hz, not synced
@@ -363,7 +396,13 @@ sleepmode_sleep:
 	clrf	T7GCON							; reset timer7 gate control register
 	movlw	b'10001001'						; 1:1 prescaler ->  2 seconds @ 32768 Hz, synced
 	movwf	T7CON
+sleepmode_sleep_1:
 	movff	BSR_backup,BSR					; restore BSR
 	return
+
+
+sleepmode_sleepwalk:
+	WAITMS	d'65'
+	bra		sleepmode_sleep_1
 
  END

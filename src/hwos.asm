@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File hwos.asm                             combined next generation V3.03.4
+;   File hwos.asm                             combined next generation V3.03.7
 ;
 ;   Definition of the hwOS dive computer platform.
 ;
@@ -43,10 +43,10 @@ ac_ram		udata_acs	ac_ram				; access RAM data
 ;---- Flags - Hardware Descriptors
 HW_descriptor					res 1		; OSTC - model descriptor (cleared & rebuilt in restart)
 HW_variants						res 1		; OSTC - model variants   (NOT cleared in restart)
-HW_variants2						res 1		; OSTC - model variants   (NOT cleared in restart)
-						
+
 ;---- Flags - Hardware States
-HW_flags_state					res 1		; hardware - states
+HW_flags_state1					res 1		; hardware - states 1
+HW_flags_state2					res 1		; hardware - states 2
 
 ;--- Flags - Operating System
 OS_flags_persist				res 1		; system - persistent settings (NOT cleared in restart)
@@ -100,12 +100,12 @@ hud_battery_mv					res 2		; hud/ppo2 monitor battery voltage in mV     | between
 ; 32 byte tmp  data placed by C compiler
 ; 20 byte variables placed by math library
 ; ==
-; 81 byte used, 15 byte free (96 byte total available)
+; 80 byte used, 16 byte free (96 byte total available)
 
 	global	HW_descriptor
 	global	HW_variants
-	global	HW_variants2
-	global	HW_flags_state
+	global	HW_flags_state1
+	global	HW_flags_state2
 	global	OS_flags_persist
 	global	OS_flags_ISR1
 	global	OS_flags_ISR2
@@ -198,7 +198,7 @@ init_ostc:
 ;	movlw	b'00000000'			; init port
 	clrf	PORTD
 
-	movlw	b'00100000'			; 1= input, RE0 -> NPOWER_BLE, RE1 -> Power_IR, RE2 -> CS_MCP, RE3 -> LED_blue, RE4 -> power_sw1, RE5 -> leave as input
+	movlw	b'00100000'			; 1= input, RE0 -> not_Power_BLE, RE1 -> Power_IR, RE2 -> CS_MCP, RE3 -> LED_blue, RE4 -> power_sw1, RE5 -> leave as input
 	movwf	TRISE
 	movlw	b'00010001'			; init port
 	movwf	PORTE
@@ -208,7 +208,7 @@ init_ostc:
 ;	movlw	b'00000000'			; init port
 	clrf	PORTF
 
-	movlw	b'00001110'			; 1= input, <7:6> not implemented, RG0 -> TX3_PIEZO_CFG, RG2 -> RX2, RG3 -> AN17_RSSI, RG4 -> SOSC_OUT, RG5 -> /RESET
+	movlw	b'00001110'			; 1= input, <7:6> not implemented, RG0 -> TX3_PIEZO_CFG, , RG1 -> TX2, RG2 -> RX2, RG3 -> AN17_RSSI, RG4 -> SOSC_OUT, RG5 -> /RESET
 	movwf	TRISG
 	movlw	b'00000001'			; init port
 	movwf	PORTG
@@ -315,8 +315,8 @@ init_ostc:
 	movwf	SSP1CON1
 ;	movlw	b'00000000'
 	clrf	SSP1CON2
-	movlw	0x27
-	movwf	SSP1ADD				; 100kHz @ 16MHz Fosc
+	movlw	0x9C
+	movwf	SSP1ADD				; 100kHz @ 64MHz Fosc
 
 
 ; PWM Module(s)
@@ -325,7 +325,7 @@ init_ostc:
 	movwf	CCP1CON
 	movlw	b'00000001'
 	movwf	PSTR1CON			; pulse steering disabled
-	movlw	d'255'
+	movlw	d'254'
 	movwf	PR2					; period
 	; 255 is max brightness (300 mW)
 	clrf	CCPR1L				; duty cycle

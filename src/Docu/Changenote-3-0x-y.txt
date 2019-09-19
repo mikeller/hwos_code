@@ -1,0 +1,278 @@
+
+Change Note 3.04.3
+==================
+
+- Fixed bug in bottom segment gas needs calculation.
+
+- In the Tech version, max. ppO2 limits can now be adjusted up to 2.0 bar.
+  Caution: know what you are doing! Recommended max settings are 1.4 bar for
+  work gases and 1.6 bar for deco gases.
+
+- CCR mode diluent ppO2 versus setpoint check can be disabled now.
+
+- Fine tuning of the better gas cue behavior.
+
+- Improved smoothing of compass display.
+
+- Attention and warning thresholds for gas density put into the options
+  table (adjustment via external software only, no mapping in OSTC menu
+  as of now).
+
+- Fixed bug in surface mode firmware version output (relevant to Sport only).
+
+
+Change Note 3.04.2
+==================
+
+- Fine tuning of the deco calculations for extended stops and normal mode.
+
+
+Change Note 3.03.6 - .8
+=======================
+
+- Various internal code improvements.
+
+
+Change Note 3.03.5
+==================
+
+- Renamed OC gas type 'normal' to 'work' (gas for the working phase of the
+  dive). Along with this, it received a down-arrow symbol to depict it as
+  a gas for use at depth, similar to the '=' symbol that was introduced some
+  time ago to visually depict deco gases (imagine the horizontal lines as
+  deco stops).
+
+  Set up gases as follows:
+
+  Single gas dive:
+  set gas to use as 'first' and all other gases to 'disabled'.
+
+  Gas-change, extended no-stop dive:
+  set gas to start with to 'first', all other gases to be used later in the dive
+  to 'work' and the unused gases to 'disabled'.
+
+  Deco-dive with one gas for descent & bottom phase, and deco gases:
+  set bottom gas to 'first', deco gases to 'deco' and the unused to 'disabled'.
+
+  Deco-dive with a deco gas used as travel gas on ascent, bottom, and deco gases:
+  configure the deco gas twice: once as travel gas and once as deco dive. Set the
+  same change depths for both instances and put the travel gas before the deco
+  gas in the gas list (i.e: gas 1: travel, gas 2: work (bottom) gas, gases 3-5:
+  deco gases). Set the travel gas to 'first', the bottom gas to 'work', and the
+  deco gases to 'deco'. Take care to adjust the pressure available on the deco gas
+  which is used for travel gas, too, to the amount of gas that is planned to remain
+  after having drawn the travel portion from it!
+
+- When ppO2 is above normal threshold, but still inside the deco max threshold, and
+  the dive has not yet progressed to doing the deco stops, the ppO2 warning has been
+  degraded to an attention, i.e. associated messages appear in yellow now instead of
+  red as before.
+
+- In the simulator, the +5 minutes function can now be triggered in succession without
+  needing to reopen the options menu each time.
+
+- The French language package has been upgraded.
+
+- Setting the change depth of the first gas to zero caused some unintended behavior.
+  This is captured now. Anyhow, since firmware 3.2 it is required to set proper change
+  depths for gases and diluents, including the ones set as 'first'!
+
+- The deco calculator now automatically picks the best gas suitable for the set bottom
+  depth. If no suitable gas is found (i.e. configured), calculation will be aborted with
+  an error message. By this change it is possible to calculate dives that use a travel
+  gas (set as 'first') and a bottom gas (set as 'work'), as the deco calculator will now
+  pick the proper bottom gas for calculating the bottom segment.
+  Note: the deco calculator does not calculate the descent phase but actually spends all
+  of the set bottom time at bottom depth. While this puts the deco calculation results
+  on the safe side, beware that the needs on the travel gas will not show up in the gas
+  needs calculation results.
+
+- OSTC TR: The timeouts for attentions and warnings in connection with discontinued
+  reception of transmitter data have been relaxed a bit:
+  - For up to 2 minutes without updating the last value received will be retained.
+  - After 2 minutes without reception of any updates the pressure value will be marked
+    as outdated.
+  - After 4 minutes without reception of any updates a transmitter will be declared lost.
+
+- OSTC TR: pressure logging has been implemented. Logged pressure data can be retrieved
+  by downloading the logbook data using external logbook software.
+
+- Descent speed in the simulator has been increased from 19 to 24 meters per minute.
+  This speed is not configurable, nor the simulator's ascent speed of 9 meters/min!
+
+- In dive mode, the battery voltage will be shown when reaching 30%, and a warning will
+  be issued when the percentage reaches 25% with 1.5 Volt batteries or 15% with LiIon
+  batteries.
+
+
+Change Note 3.03.4
+==================
+
+- More compact code for TR firmware and compass.
+
+- Slightly more compact code for deco engine.
+
+- Improvement of code for CNS calculation.
+
+- Added a hysteresis to the dive start / dive end depth threshold.
+
+- Bugfix in non-helium compile variant.
+
+
+Change Note 3.03.3
+==================
+
+- Added an option "extended stops" (named "Gas Change/...before 1.Stop" in Deco Setup
+  -> Deco Parameters -> more). If set to YES, a gas switch will be planned immediately
+  on the change depth of the gas, even if a stop on that depth is not required by deco
+  constraints. When set to NO, the gas switch will be planned to be done on the next
+  regular deco stop.
+  With extended stops enabled and a setting of "Gas Change (time):+0'" the switch will
+  be planned with no actual halt at the change depth (i.e. "switch on the fly"). With
+  change time set to > 0', a dedicated stop will be placed at the change depth for the
+  given number of minutes. This gas change stop may not be needed by deco constraints,
+  but it will influence the following deco stop depths and times as it introduces some
+  added time at depth.
+
+
+Change Note 3.03.2
+==================
+
+- Complete rework of the alternative dive mode screen layout.
+
+- Various code improvements.
+
+
+
+Change Note 3.03.1
+==================
+
+- Various code improvements.
+
+- Included RX firmware update into tech version.
+
+- Modularization of the code to allow to compile in or not various features.
+
+
+Change Note 3.02.1
+==================
+
+- Reworked code for ascent and deco stops calculation. Does produce different results
+  compared to the code used in 3.00.3! With this implementation of an GF-controlled
+  deco schedule it becomes visible when deco stops disappear due to a high GF slope
+  (difference between GF low and GF high) combined with a moderate depth of the first
+  deco stop.
+
+- When switching between GF and aGF, the depth of the first stop (determined by GF low)
+  will be recalculated now.
+
+- Improved calculation of the supersaturation.
+
+- New tissue graphics option (compile option as of now): shows absolute tissue pressures
+  (N2 + He added) and saturation per tissue. In the saturation bargraphs, the green line
+  marks GF low position, the yellow line GF high and the red one 100%.
+
+- Numerous improvements around dive loop and deco engine start-up.
+
+- speed_fastest now available again on new OSTC Sport, will adjust to 32 MHz.
+
+Memory status: 2.252 bytes free with single language (English), RX-functions & screendump
+
+
+Change Note 3.00.3c
+===================
+
+- GF low can not be set higher than GF high any more as such a setting would produce
+  an illogical deco schedule.
+
+- In case the compass is not calibrated, the heading is now displayed as "---°"
+  instead of ".00°".
+
+
+Change Note 3.00.3b
+===================
+
+- In the surface tissue graphics, tissues whose supersaturation exceed 100% are shown
+  in red color now.
+
+- If any tissue is beyond 100%, no desaturation and no-fly times will be shown anymore.
+
+- After use of the dive simulator and the deco calculator the interim tissue desaturation
+  is catched up now.
+
+- Internal: prohibit selection of fastest speed on OSTC Sport hardware (uses flag for
+            screen type 2 while there is no dedicated flag for Sport hardware itself).
+
+Memory status: 2.627 bytes free with single language (English), RX-functions, screendump
+                                     and deco engine performance measurement compiled in
+
+Change Note 3.00.3
+==================
+
+- Added support for display type 2.
+
+- Added Deco Engine scheduling performance measurement (accessible via debug output).
+
+Memory status: 2.952 bytes free with single language (English), RX-functions and screendump.
+
+
+Change Note 3.00.2
+==================
+
+- The Deco Engine has been reworked to now run for up to 700 ms each second (configurable,
+  800 ms may be feasible also), split into two compute chunks per second. This increases
+  reactivity to buttons presses and compass display, while boosting deco calculation turn-
+  around times significantly.
+
+Memory status: 3.760 bytes free with single language (English), RX-functions and screendump.
+
+
+Change Note 3.00.1
+==================
+
+- The simulator now uses the current ambient pressure as surface pressure instead of a fixed
+  1.000 hPa as done before. So in mountain diving, when being at the dive site the simulator
+  will show the same NDL times and deco schedules as will be shown in a real dive.
+
+- When exiting the surface menu, the return to the normal surface screen has been sped up
+  and the display of the power-up logo screen is skipped now also.
+
+- When submerged, the unit will now proceed from surface mode display to dive mode display
+  without intermediate display of the power-up logos.
+
+- A cue is given when it is time to go up to th next deco stop by highlighting the next stop
+  data until ascent is done.
+
+- When being shallower than the indicated stop depth, i.e. because the deco needs to be
+  accelerated, the reduced ambient pressure is figured in into the deco calculations such
+  that the displayed stop time, TTS and gas needs do immediately reflect the reduced depth. 
+
+- When set to imperial units, all depth will be shown in feet now not only in dive mode but
+  also throughout the whole surface menus.
+
+- When in a leap year, the 29th of February is now correctly handled when adjusting time and
+  date on exactly that day.
+
+- Bugfix: with the option 'always show ppO2' set, in CCR and pSCR mode a "Dil:x.xx" ppO2
+  message was sometimes shown twice, once as an info and additionally as an attention or
+  warning. This has been fixed now: in case of an active attention or warning the secondary
+  info message gets suppressed.
+
+- Bugfix: the Simulator +5 min function had a punch-through effect on the real world last
+  dive time (displayed surface interval).
+
+- Tissue desaturation is now also computed while in surface and menu modes.
+
+
+Some more internal improvements:
+
+- Handling of data transfer into and out of the interrupt service routine has been reworked.
+
+- Memory placement of key variables has been reworked to reduce the number of bank switches.
+
+- In case option check reveals no errors, an unnecessary write-back to the EEPROM is suppressed
+  to speed-up restart and reduce wear.
+
+- Large portion of the code have been inspected / reviewed.
+
+- Further improvements in code quality, formatting and commenting (done while code review).

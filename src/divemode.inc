@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File divemode.inc                         combined next generation V3.03.2
+;   File divemode.inc                         combined next generation V3.03.5
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -11,6 +11,14 @@
 	extern	set_dive_modes
 	extern	diveloop
 	extern	apnoe_calc_maxdepth
+	extern	check_gas_best
+	extern	setup_gas_registers
+	extern	deco_setup_oc_gases
+
+ IFDEF _ccr_pscr
+	extern	setup_dil_registers
+	extern	deco_setup_cc_diluents
+ ENDIF
 
  IFDEF _external_sensor
 	extern	calc_deko_divemode_sensor

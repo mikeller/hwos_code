@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File divemode.asm                         combined next generation V3.03.4
+;   File divemode.asm                         combined next generation V3.04.3
 ;
 ;   Dive Mode
 ;
@@ -179,6 +179,12 @@ diveloop:
 	bcf		alt_layout_active			; default to normal layout
 	TSTOSC	opt_layout					; alternative layout enabled?
 	bsf		alt_layout_active			; YES - start with alternative layout
+
+ IFDEF _gas_contingency
+	; disable gas contingency mode (may be left over activated by deco calculator)
+	clrf	WREG
+	movff	WREG,char_I_gas_contingency
+ ENDIF
 
 	; boot tasks for all modes
 	call	diveloop_boot
@@ -365,7 +371,7 @@ diveloop_loop_5:
 diveloop_loop_6:
 	; deco mode tasks every 1/1 second
 	INCI	divesecs_avg_trip			; increment the resettable dive time
-	INCI	divesecs_avg_total			; increment the total dive dive time
+	INCI	divesecs_avg_total			; increment the total      dive time
 
 	btfsc	FLAG_gauge_mode				; in gauge mode?
 	bra		diveloop_loop_7				; YES - skip deco calculations
@@ -396,6 +402,7 @@ diveloop_loop_8:
 
 diveloop_loop_9:
 	; deco mode tasks every 1/1 second
+	rcall	check_deco_states			; check and lock if in deco and in the deco stops region
 	rcall	TFT_output_3				; do display updates
 
 diveloop_loop_10:
@@ -529,25 +536,25 @@ TFT_output_4:								; every second - after deco calculations, all modes
 
 ;--------------------------------------------------------------------------------------------------------
 
-divemode_apnoe_tasks:					; 1 sec. apnoe tasks
-	bsf		FLAG_TFT_apnoe_divetime		; show apnoe dive times (current/last dive and total)
-	btfsc	apnoe_at_surface			; at the surface?
-	bra		divemode_apnoe_tasks_surf	; YES  - at the surface
-	;bra	divemode_apnoe_tasks_dive	; NO   - in dive phase
+divemode_apnoe_tasks:						; 1 sec. apnoe tasks
+	bsf		FLAG_TFT_apnoe_divetime			; show apnoe dive times (current/last dive and total)
+	btfsc	apnoe_at_surface				; at the surface?
+	bra		divemode_apnoe_tasks_surf		; YES  - at the surface
+	;bra	divemode_apnoe_tasks_dive		; NO   - in dive phase
 
-divemode_apnoe_tasks_dive:				; apnoe mode, submerged
-	btfss	apnoe_new_dive				; new dive begun?
-	return								; NO  - done
-	bcf		apnoe_new_dive				; YES - clear flag
-	bsf		FLAG_TFT_clear_apnoe_surface;     - clear apnoe mode surface data from screen
-	return								;     - done
+divemode_apnoe_tasks_dive:					; apnoe mode, submerged
+	btfss	apnoe_new_dive					; new dive begun?
+	return									; NO  - done
+	bcf		apnoe_new_dive					; YES - clear flag
+	bsf		FLAG_TFT_clear_apnoe_surface	;     - clear apnoe mode surface data from screen
+	return									;     - done
 
-divemode_apnoe_tasks_surf:				; apnoe mode, at the surface
-	bsf		FLAG_TFT_apnoe_surface_time	; show apnoe mode surface time
+divemode_apnoe_tasks_surf:					; apnoe mode, at the surface
+	bsf		FLAG_TFT_apnoe_surface_time		; show apnoe mode surface time
 	; TODO: these outputs would need to be done only once after surfacing...
-	bsf		FLAG_TFT_depth_maximum_apnoe; show max. depth of last dive
-	bsf		FLAG_TFT_depth_maximum		; show max. depth of all  dives
-	;bra	apnoe_calc_maxdepth			; calculate overall max. depth and return
+	bsf		FLAG_TFT_depth_maximum_apnoe	; show max. depth of last dive
+	bsf		FLAG_TFT_depth_maximum			; show max. depth of all  dives
+	;bra	apnoe_calc_maxdepth				; calculate overall max. depth and return
 
 
 	global	apnoe_calc_maxdepth
@@ -1092,8 +1099,9 @@ calc_velocity_1:
 	; calculate velocity in m/min
 	MOVII	sub_c,xA					; copy pressure differential to xA
 	MOVLI	.39,xB						; put scale coefficient into xB (use 77 when called every second)
-	call	mult16x16					; compute differential pressure in mbar*39
+	call	mult16x16					; compute differential pressure in mbar * scale coefficient
 	MOVII	xC,divA						; copy result to divA
+	ADDLI	.64,divA					; add some round-up				TODO: too sensitive with this?
 	movlw	.7							; divide by 2^7
 	call	div16						; divA = divA / 2^WREG, yields velocity in m/min
 
@@ -1110,6 +1118,22 @@ calc_velocity_1:
 	bsf		FLAG_TFT_velocity_show		; YES - request to show
 	return								; done
 
+
+;=============================================================================
+
+check_deco_states:
+	btfsc	deco_region					; been within the deco stops region before?
+	return								; YES - been in deco then before too, done
+	movff	char_O_deco_info,WREG		; NO  - get deco info vector
+	btfss	WREG,deco_stops				;       do we have a deco obligation right now?
+	return								;       NO  - done
+	bsf		deco_locked					;       YES - memorize dive was in deco
+	movff	char_O_deco_depth+0,WREG	;           - get depth of first stop in meters into WREG
+	addlw	deco_region_distance+.1		;           - add deco region start distance + 1 meter for the negative test to work
+	subwf	depth_meter,W				;           - compute current depth - (first stop depth + deco distance)
+	btfss	STATUS,C					;           - result negative?
+	bsf		deco_region					;             YES - memorize to have entered the deco stops region
+	return								;           - done
 
 ;=============================================================================
 
@@ -1286,17 +1310,17 @@ update_divemode60:						; tasks every full minute
 update_backtrack:
 	btfsc	dive_turned					; dive turned?
 	return								; YES - done
-	movwf	lo							; NO  - store minutes to add in lo
-	lfsr	FSR1,char_I_backtrack_depth ;     - load FSR1 with base address of backtrack storage
-	movff	char_I_backtrack_time,FSR1L	;     - adjust FSR1 to last index
-update_backtrack_loop:
-	btfsc	FLAG_backtrack_full			;     - backtracking storage full?
+	btfsc	FLAG_backtrack_full			; NO  - backtracking storage full?
 	return								;       YES - done
-	movff	depth_meter,PREINC1			;       NO  - increment index and write current depth to backtrack storage
-	incfsz	FSR1L,W						;           - increment index once more into WREG, did a wrap-around occur (backtrack storage full)?
-	bra		update_backtrack_loop_1		;             NO  - continue loop
-	bsf		FLAG_backtrack_full			;             YES - flag backtracking storage is full
-	return								;                 - done
+	movwf	lo							;       NO  - store minutes to add in lo
+	lfsr	FSR1,char_I_backtrack_depth ;           - load FSR1 with base address of backtrack storage
+	movff	char_I_backtrack_time,FSR1L	;           - adjust FSR1 to last index
+update_backtrack_loop:
+	movff	depth_meter,PREINC1			; increment index and write current depth to backtrack storage
+	incfsz	FSR1L,W						; increment index once more and dump to WREG, did a wrap-around occur (backtrack storage full)?
+	bra		update_backtrack_loop_1		; NO  - continue loop
+	bsf		FLAG_backtrack_full			; YES - flag backtracking storage is full
+	return								;     - done
 update_backtrack_loop_1:
 	decfsz	lo,F						; decrement loop counter, did it became zero?
 	bra		update_backtrack_loop		; NO  - loop
@@ -1365,8 +1389,10 @@ set_dive_modes_shallow:
 
 
 set_powersafe:
-	movlw	color_code_battery_low+.1	; get battery low level threshold [%]
-	cpfslt	batt_percent				; current battery level > low level threshold ?
+	movlw	battery_warn_level_36+1		; get threshold for 3.6 Volt battery warning, incremented by 1
+	btfss	battery_is_36v				; actually a 3.6 Volt battery detected?
+	movlw	battery_warn_level_15+1		; NO - replace with 1.5 Volt battery warning, incremented by 1
+	cpfslt	batt_percent				; current battery level > warning threshold ?
 	return								; YES - ok, done
 	movlw	d'7'						; NO  - set type of alarm = battery low
 	movwf	alarm_type					;     - copy to alarm register
@@ -1614,8 +1640,8 @@ get_first_gas_to_WREG2:
 	movlw	NUM_GAS+1					;     - get highest index+1
 	cpfseq	lo							;     - all gases checked?
 	bra		get_first_gas_to_WREG2		;       NO  - not yet
-	movlw	.1							;       YES - return gas 1
-	movff	WREG,opt_gas_type+0			;           - set to type First
+	movlw	.1							;       YES - default to gas 1
+	movff	WREG,opt_gas_type+0			;           - force it to be of type First
 	return								;           - done
 get_first_gas_to_WREG3:
 	movf	lo,W						; copy index of gas found to be the First to WREG
@@ -1639,8 +1665,8 @@ get_first_dil_to_WREG2:
 	movlw	NUM_GAS+1					;     - get highest index+1
 	cpfseq	lo							;     - dils checked?
 	bra		get_first_dil_to_WREG2		;       NO  - not yet
-	movlw	.1							;       YES - return dil 1
-	movff	WREG,opt_dil_type+0			;           - set to type First
+	movlw	.1							;       YES - default to dil 1
+	movff	WREG,opt_dil_type+0			;           - force it to be of type First
 	return								;           - done
 get_first_dil_to_WREG3:
 	movf	lo,W						; copy index of dil found to be the First to WREG
@@ -1651,6 +1677,7 @@ get_first_dil_to_WREG3:
 
 ;=============================================================================
 
+	global	deco_setup_oc_gases
 deco_setup_oc_gases:					; with currently breathed gas in WREG (1-5 or 6)
 	movff	char_O_deco_status,lo		; working copy of char_O_deco_status in bank common
 deco_setup_oc_gases_pre:				; entry point with lo preloaded
@@ -1667,8 +1694,8 @@ deco_setup_oc_gases_pre:				; entry point with lo preloaded
 	; opt_gas_change		res NUM_GAS		|	char_I_deco_gas_change		res NUM_GAS
 	; opt_dil_change		res NUM_GAS		|
 	;
-	lfsr	FSR2,char_I_deco_O2_ratio	; load FSR2 with base address of char_I_deco_O2_ratio.
-										; FSR2 will step through all char_I_deco_... vars.
+	lfsr	FSR2,char_I_deco_O2_ratio	; load FSR2 with base address of char_I_deco_O2_ratio
+										; FSR2 will step through all char_I_deco_... vars
 	lfsr	FSR1,opt_gas_O2_ratio		; load FSR1 with base address of opt_gas_O2_ratio
 	rcall	deco_setup_copy				; copy all OC O2 ratios
 	lfsr	FSR1,opt_gas_He_ratio		; load FSR1 with base address of opt_gas_He_ratio
@@ -1687,6 +1714,7 @@ deco_setup_oc_gases_pre:				; entry point with lo preloaded
 
  IFDEF _ccr_pscr
 
+	global	deco_setup_cc_diluents
 deco_setup_cc_diluents:					; with currently breathed diluent in WREG (1-5 or 6)
 	movff	char_O_deco_status,lo		; working copy of char_O_deco_status in bank common
 deco_setup_cc_diluents_pre:				; entry point with lo preloaded
@@ -1736,6 +1764,7 @@ deco_setup_copy_loop:
 	return								; YES - done
 
 
+	global	setup_gas_registers
 setup_gas_registers:					; with currently breathed gas in WREG (1-5 or 6)
 	movwf	active_gas					; set as current gas
 	movlw	.6
@@ -1752,13 +1781,13 @@ setup_gas_registers:					; with currently breathed gas in WREG (1-5 or 6)
 setup_gas_registers_15:
 	lfsr	FSR1,opt_gas_O2_ratio		; load base address of gas data
 	decf	active_gas,W				; set index to O2 ratio of current gas (1-5 -> 0-4)
-	movff	PLUSW1,char_I_O2_ratio		; copy gas 1-5 O2 ratio to deco engine
+	movff	PLUSW1,char_I_O2_ratio		; copy         O2 ratio to deco engine
 	addlw	.10							; advance index from O2 ratio to He ratio
  IFDEF _helium
-	movff	PLUSW1,char_I_He_ratio		; copy gas 1-5 He ratio to deco engine
+	movff	PLUSW1,char_I_He_ratio		; copy         He ratio to deco engine
  ENDIF
 	addlw	.10							; advance index from He ratio to gas type
-	movff	PLUSW1,char_I_current_gas_type ; copy gas 1-5 type (0=Disabled, 1=First, 2=Travel, 3=Deco)
+	movff	PLUSW1,char_I_current_gas_type ; copy gas type (0=Disabled, 1=First, 2=Travel, 3=Deco)
 setup_gas_registers_com:
 	movff	char_O_main_status,lo		; working copy of char_O_main_status in bank common
 	bcf		lo,DECO_MODE_PSCR_FLAG		; clear the pSCR-mode flag (may not be set, but never mind)
@@ -1771,6 +1800,7 @@ setup_gas_registers_com:
 
  IFDEF _ccr_pscr
 
+	global	setup_dil_registers
 setup_dil_registers:					; with currently breathed gas in WREG (1-5 or 6)
 	btfsc	bailout_mode				; check if in bailout condition                      | --------------- FOR SAFETY ONLY --------------
 	bra		setup_gas_registers			; revert to setting up OC gases in bailout condition | This branch should never happen to be taken...
@@ -1789,10 +1819,10 @@ setup_dil_registers:					; with currently breathed gas in WREG (1-5 or 6)
 setup_dil_registers_15:
 	lfsr	FSR1,opt_dil_O2_ratio		; load base address of diluent data
 	decf	active_dil,W				; set index to O2 ratio of current diluent (1-5 -> 0-4)
-	movff	PLUSW1,char_I_O2_ratio		; copy diluent 1-5 O2 ratio to deco engine
+	movff	PLUSW1,char_I_O2_ratio		; copy         O2 ratio to deco engine
 	addlw	.10							; advance index from O2 ratio to He ratio
  IFDEF _helium
-	movff	PLUSW1,char_I_He_ratio		; copy diluent 1-5 He ratio to deco engine
+	movff	PLUSW1,char_I_He_ratio		; copy         He ratio to deco engine
  ENDIF
 	addlw	.10							; advance index from He ratio to diluent type
 	movff	PLUSW1,char_I_current_gas_type ; copy diluent type (0=Disabled, 1=First, 2=Normal)
@@ -1874,6 +1904,11 @@ divemode_option5:
 	goto	menuview_toggle_reset		; terminate pre-menu and return
 
 divemode_option6:
+	; check for pending +5 request
+	movff	char_I_sim_advance_time,WREG; get mailbox content
+	tstfsz	WREG						; mailbox clear (=0) ?
+	return								; NO - still having a pending +5' request, refuse new request
+
 	; advance tissues pressures and deco obligation by 5 minutes
 	movlw	.5							; + 5 minutes
 	movff	WREG,char_I_sim_advance_time; copy to mailbox
@@ -1928,7 +1963,8 @@ divemode_option6:
 	call	update_backtrack			; add backtrack data for 5 minutes
  ENDIF
 
-	goto	menuview_toggle_reset		; terminate the pre-menu and return
+;	goto	menuview_toggle_reset		; terminate the pre-menu and return
+	return								; just return, leaving option avail for repeated selection
 
  IFDEF _compass
 divemode_option7:
@@ -1979,6 +2015,7 @@ divemode_option8:
 ; in OC mode          : - checks only gases for best gas
 ;                       - sets better_gas_available on OC gases
 ;
+	global	check_gas_best
 check_gas_best:
 	btfsc	FLAG_gauge_mode					; in gauge mode?
 	return									; YES - done
@@ -1993,7 +2030,7 @@ check_gas_best:
 
 	; compute max. allowed default ppO2
 	movff	char_O_deco_info,lo				; bank-safe copy of deco info vector
-	btfss	lo,deco_flag					; is the ppO2 deco limit enabled?
+	btfss	lo,deco_mode					; is the ppO2 deco limit enabled?
 	bra		check_gas_best_1				; NO  - compute default ppO2 max
 	MOVII	ppO2_max_deco,ppO2_max_default	; YES - copy default ppO2 max from deco max.
 	bra		check_gas_best_2				;     - continue with common part
@@ -2079,7 +2116,7 @@ check_gas_best_dil3:
 
 check_gas_best_gas:
 	; set minimum ppO2 required
-	movff	char_I_ppO2_min,WREG			; min ppO2 for OC and Bailout
+	movff	char_I_ppO2_min,WREG			; min ppO2 for OC and bailout
 	mullw	.100							; min ppO2 * 100, result in 0.1 mbar
 	MOVII	PROD,ppO2_min					; store in ppO2_min
 	; preset results to nothing found
@@ -2161,13 +2198,16 @@ check_gas_best_common:						; with gas to be checked in check_gas_num (1-5)
 	addlw	.10								; add offset of 10 bytes to index change depth in opt_gas_change/opt_dil_change
 	movff	PLUSW1,check_gas_depth			; copy change depth of current gas/dil to check_gas_depth
 	MOVII	ppO2_max_default,sub_b			; select default ppO2 max for first / travel / normal gas
+	; check if the gas is the current gas
+	movf	check_gas_num,W					; get the number of the gas to be checked (1-5)
+	cpfseq	lo								; is this the currently used gas?
+	bra		check_gas_best_common0			; NO  - do the disabled & deco gas checks
+	bra		check_gas_best_common3			; YES - a gas in use overrides disabled and deco status
+check_gas_best_common0:
 	; check if gas is available (i.e. not disabled)
 	tstfsz	check_gas_type					; type = disabled (0) ?
 	bra		check_gas_best_common1			; NO  - continue checks
-	movf	check_gas_num,W					; YES - get the number of the gas to be checked (1-5)
-	cpfseq	lo								;     - is this the currently used gas?
-	return									;       NO  - skip disabled gases which are not the current gas
-	bra		check_gas_best_common3			;       YES - a gas in use overrides it's disabled status, therefore treat it as available
+	return									; YES - skip disabled gases
 check_gas_best_common1:
 	; skip deco gases (type=3) if there are no stops, but include them when in bailout mode
 	movlw	.3								; coding for deco gas
@@ -2175,22 +2215,18 @@ check_gas_best_common1:
 	bra		check_gas_best_common3			; NO  - first or travel/normal then, ok to use
 	btfsc	bailout_mode					; YES - in bailout?
 	bra		check_gas_best_common2			;       YES - ok to use (using deco gases is always allowed when in bailout)
-
-	TSTOSC	opt_extended_stops				;       NO  - extended stops activated?
-	bra		check_gas_best_common1a			;             YES - (1)
-	movff	char_O_deco_info,WREG			;  	          NO  - get deco info vector
-	btfss	WREG,deco_flag					;                 - in deco mode (deco_flag set), i.e. use of deco gases allowed?
-	return									;                   NO  - skip deco gas while not in deco mode
-	bra		check_gas_best_common2			;                   YES - ok to use
+	TSTOSS	opt_extended_stops				;       NO  - extended stops enables?
+	bra		check_gas_best_common1b			;             NO
+	;bra	check_gas_best_common1a			;             YES
 check_gas_best_common1a:
-	movff	char_O_deco_depth+0,WREG		;             (1) - get depth of the first stop
-	tstfsz	WREG							;                 - is there any stop?
-	bra		check_gas_best_common2			;                   YES - ok to use a deco gas
-	movf	check_gas_num,W					;                   NO  - get the number of the gas to be checked (1-5)
-	cpfseq	lo								;                       - is this the currently used gas?
-	return									;                         NO  - skip this deco gas 
-	;bra	check_gas_best_common2			;                         YES - keep this deco gas as continued allowed
-
+	movff	char_O_deco_info,WREG			; get deco info vector
+	btfss	WREG,deco_mode					; are we in deco mode?
+	return									; NO  - skip deco gas while not in deco mode
+	bra		check_gas_best_common2			; YES - deco gases allowed
+check_gas_best_common1b:
+	btfss	deco_region						; are we in the deco region?
+	return									; NO  - skip deco gas while not in the deco region
+	;bra	check_gas_best_common2			; YES - deco gases allowed
 check_gas_best_common2:
 	MOVII	ppO2_max_deco,sub_b				; replace by ppO2 max for a deco gas
 check_gas_best_common3:
@@ -2206,10 +2242,11 @@ check_gas_best_common4:
 	bra		check_gas_best_common5			; YES - check if the new one is better than the one we have so far
 	bra		check_gas_best_common6			; NO  - no need to do the above mentioned check
 check_gas_best_common5:
-	; check if the change depth of the checked gas is < (shallower) than the change depth of the best gas found so far
+	; check if the change depth of the checked gas is <= (shallower or equal) the change depth of the best gas found so far
 	movf	best_gas_depth,W				; load change depth of best gas so far into WREG
-	cpfslt	check_gas_depth					; change depth of checked gas < (shallower than) change depth of best gas so far?
-	return									; NO - this gas is not better than the best already found
+	cpfsgt	check_gas_depth					; change depth of checked gas > (deeper than) change depth of best gas so far?
+	bra		check_gas_best_common6			; NO  - this gas is better or equal, continue
+	return									; YES - this gas is not better than the best already found
 check_gas_best_common6:
 	; check if the gas fits into the ppO2 limits
 	movff	check_gas_O2_ratio,xB+0			; xB = O2 ratio, xA is still loaded with (absolute pressure / 10)
@@ -2350,7 +2387,7 @@ dive_boot_oc:
 	; set-up registers
 	rcall	get_first_gas_to_WREG					; get first gas (1-5) into WREG
 	rcall	setup_gas_registers						; set-up of gas parameters of currently breathed gas (with WREG = gas 1-5)
-	rcall	deco_setup_oc_gases						; set-up of gas list for deco calculations (with WREG = gas 1-5)
+	rcall	deco_setup_oc_gases						; set-up of gas list for deco calculations           (with WREG = gas 1-5)
 	return
 
 ;=============================================================================
@@ -2368,7 +2405,7 @@ dive_boot_cc:
 	; set-up registers
 	rcall	get_first_dil_to_WREG					; get first diluent (1-5) into WREG
 	rcall	setup_dil_registers						; set-up of diluent parameters for currently breathed diluent (with WREG = current diluent 1-5)
-	rcall	deco_setup_cc_diluents					; set-up of diluent list for deco calculations (with WREG = current diluent 1-5)
+	rcall	deco_setup_cc_diluents					; set-up of diluent list for deco calculations                (with WREG = current diluent 1-5)
 	; done
 	return
 
@@ -2432,7 +2469,6 @@ diveloop_boot:
 	call	restart_set_modes_and_flags
 
 	; stop accelerometer and compass
-	call	I2C_sleep_accelerometer
 	call	I2C_sleep_compass
 
 	; do an early initialization of all deco engine output variables to
@@ -2479,11 +2515,8 @@ diveloop_boot:
 	bcf		lo,DECO_START_ALT			; clear flag for doing an alternative plan,
 	bsf		lo,DECO_INITIALIZE			; set   flag for initializing the deco engine
 	bcf		lo,DECO_ASCENT_FLAG			; disable delayed ascent calculation
+	bcf		lo,DECO_CALCULATOR_MODE		; deco engine not run from the deco calculator
 	movff	lo,char_O_deco_status		; bank-safe copy back to deco engine
-
-	; configure distance between actual depth and depth used for deco calculation
-	movlw	deco_distance
-	movff	WREG,char_I_deco_distance
 
 	; disable "fast forward" function
 	movlw	.0
@@ -2750,22 +2783,22 @@ divemode_check_warnings4:
 
 	global	check_warn_battery
 check_warn_battery:
-	movff	batt_percent,lo				; get battery %
 	movlw	battery_show_level+1		; get threshold for showing battery level, incremented by 1
-	cpfslt	lo							; battery percentage ok?
+	cpfslt	batt_percent				; battery percentage ok?
 	return								; YES - no display, no warning
 	; Display Battery, but warn?
-	movff	batt_percent,lo				; get battery %
-	movlw	color_code_battery_low+1	; get threshold for battery warning, incremented by 1
-	cpfsgt	lo							; battery percent below warning threshold?
+	movlw	battery_warn_level_36+1		; get threshold for 3.6 Volt battery warning, incremented by 1
+	btfss	battery_is_36v				; actually a 3.6 Volt battery detected?
+	movlw	battery_warn_level_15+1		; NO - replace with 1.5 Volt battery warning, incremented by 1
+	cpfsgt	batt_percent				; battery percent below warning threshold?
 	bsf		message_warning				; YES - set warning flag
 	movlw	index_clock_batt_surfpress	; index of custom view clock, battery and surface pressure
 	cpfseq	active_customview			; battery shown in custom view?
 	bra		check_warn_battery2			; NO  - show warning
 	return								; YES - do not show twice (in custom view and in message area)
 check_warn_battery2:
-	incf	message_counter,F			;       increase counter
-	goto	TFT_msg_batt_percent_divemode ;  show percent (and return)
+	incf	message_counter,F			  ; increase counter
+	goto	TFT_msg_batt_percent_divemode ; show percent (and return)
 
 
 check_divetimeout:
@@ -2818,7 +2851,7 @@ check_ppO2_common_2:
 check_ppo2_display_a:
 	bsf		message_attention			; show attention sign
 check_ppo2_display:
-	movlw	index_ppo2_ead_end_cns		; index of custom view ppO2, EAD/END and CNS)
+	movlw	index_ppo2_ead_end_cns		; index of custom view ppO2, EAD/END and CNS (without He) or gas density (with He)
 	cpfseq	active_customview			; ppO2 shown?
 	bra		check_ppO2_b				; NO
 	return								; YES - do not show twice (in custom view and in warning area)
@@ -2863,10 +2896,12 @@ check_cns_violation_1:
 	bsf		message_warning				; show warning sign
 check_cns_violation_2:
 	bsf		message_attention			; show attention sign
-	movlw	index_ppo2_ead_end_cns		; index of custom view ppO2, EAD/END and CNS
+ IFNDEF _helium
+	movlw	index_ppo2_ead_end_cns		; index of custom view ppO2, EAD/END and CNS (without He) or gas density (with He)
 	cpfseq	active_customview			; CNS shown?
 	bra		check_cns_violation_3		; NO
 	return								; YES - do not show twice (in custom view and in warning area)
+ ENDIF
 check_cns_violation_3:
 	movlw	index_CNS					; index of custom view with CNS values
 	cpfseq	active_customview			; CNS shown?
@@ -2935,8 +2970,12 @@ check_and_store_sat_violation4:				; check for deco info
 	movff	char_O_deco_info,WREG			;       NO  - get the deco info vector
 	btfss	WREG,deco_zone					;             check if the deco zone flag is set
 	return									;             NO  - done, return
-	incf	message_counter,F				;             YES - increase counter
-	goto	TFT_info_deco					;                 - show deco info
+	btfsc	use_aGF							;             YES - using alternative GF factors?
+	return									;                   YES - suppress deco zone info
+	btfsc	alt_layout_active				;                   NO  - in alternative layout?
+	return									;                         YES - suppress deco zone info
+	incf	message_counter,F				;                         NO  - increase counter
+	goto	TFT_info_deco					;                             - show deco info
 
 
 check_depth_limit:
@@ -3046,7 +3085,7 @@ check_tr_functions_tr2:
 	rcall	check_tr_functions_helper7		; check for transmitter 2 pressure warning
 	rcall	check_tr_functions_helper8		; check for transmitter 2 pressure attention
 check_tr_functions_show_xmtr:
-	btfss	show_transmitter_attention		; shall show transmitter message?
+	btfss	show_transmitter_attention		; shall show transmitter attention message?
 	bra		check_tr_functions_show_warn	; NO  - continue with pressure warning
 	bsf		message_attention				; YES - set flag for attention
 	incf	message_counter,F				;     - increase counter
@@ -3070,7 +3109,7 @@ check_tr_functions_helper1:
 	bcf		transmitter1_lost				; NO  - clear flag for old lost attention
 	return									;     - done
 check_tr_functions_helper1a:
-	bsf		show_transmitter_attention		; show transmitter attention
+;	bsf		show_transmitter_attention		; show transmitter attention
 	btfsc	transmitter1_lost				; is it a new message?
 	return									; NO  - do not show the pressure readings custom view again
 	bsf		transmitter1_lost				; YES - memorize it's an old message now
@@ -3118,7 +3157,7 @@ check_tr_functions_helper5:
 	bcf		transmitter2_lost				; NO  - clear flag for old lost attention
 	return									;     - done
 check_tr_functions_helper5a:
-	bsf		show_transmitter_attention		; show transmitter attention
+;	bsf		show_transmitter_attention		; show transmitter attention
 	btfsc	transmitter2_lost				; is it a new message?
 	return									; NO  - do not show the pressure readings custom view again
 	bsf		transmitter2_lost				; YES - memorize it's an old message now
