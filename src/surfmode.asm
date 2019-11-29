@@ -491,8 +491,9 @@ housekeeping_3:
 	btfsc	screen_dump_avail			; YES - screen dump enabled?
 	return								;       YES - no COMM mode to be able to make screen shots of the menu and simulator mode
  ENDIF
+	btfss	ble_available				; Skip "USB" check in all Bluetooth models (Required for very old OSTC sport)
 	goto	comm_mode_usb				; YES / NO  - proceed to COMM mode, will also set CPU to speed normal
-
+	return
 
 	global	reset_timeout_surfmode
 reset_timeout_surfmode:

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File ghostwriter.asm                      combined next generation V3.03.7
+;   File ghostwriter.asm                      combined next generation V3.06.2
 ;
 ;   Ghostwriter (Log profile recorder)
 ;
@@ -1095,13 +1095,6 @@ change_logbook_offset1:
 	call	do_logoffset_common_write		; write incremented offset as the new offset
 
 change_logbook_offset2:
-	clrf	mpr+0							; prepare a 4 byte null value to clear the last dive time
-	clrf	mpr+1							; ...
-	clrf	mpr+2							; ...
-	clrf	mpr+3							; ...
-	SMOVFF	mpr,lastdive_time				; ISR-safe 4 byte copy of null value to last dive time counter
-
-
 	; ISR-safe 3 byte copy of minutes:2 and seconds to last dive duration
 	SMOVTT	counted_divetime_mins,lastdive_duration
 

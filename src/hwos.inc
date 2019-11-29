@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File hwos.inc                             combined next generation V3.04.3
+;   File hwos.inc                             combined next generation V3.06.2
 ;
 ;   OSTC Platform Definitions
 ;
@@ -906,8 +906,8 @@ timebase_secs					res 1		; RTC-independent timer for generating the every minute
 
 ;---- other Timers
 uptime							res 4		; [sec] uptime of the OSTC since last cold start
-lastdive_time					res 4		; [sec] time since last dive
-surface_interval				res 2		; [min] surface interval
+surface_interval_secs			res 4		; [sec] surface interval counted in seconds
+surface_interval_mins			res 2		; [min] surface interval counted in minutes
 simulator_time					res 1		; [min] real runtime of the simulator
 
 ;---- Data for Pressure and Temperature Calculation (MS5541)

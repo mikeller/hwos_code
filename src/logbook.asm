@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File logbook.asm                          combined next generation V3.03.5
+;   File logbook.asm                          combined next generation V3.06.1
 ;
 ;   Logbook
 ;
@@ -51,8 +51,8 @@
 		profile_temp1:2					; temp for profile display
 		profile_temp2:2					; temp for profile display
 		logbook_sample_counter:2		; amount of read samples
-		y_scale:2						; y-scale (The horizontal lines)
-		x_scale:2						; x-scale (The vertical lines)
+		y_scale:2						; y-scale (the horizontal lines)
+		x_scale:2						; x-scale (the vertical lines)
 		logbook_pixel_x_pos				; x2 position of current pixel in X-direction
 		logbook_min_temp_pos			; lowest row in the temp graph
 		logbook_max_temp_pos			; lowest row in the temp graph
@@ -66,7 +66,7 @@
 		vertical_interval:2				; holds interval of samples for vertical 10min line
 		backup_color1					; used for restoring drawing color
 		backup_color2					; used for restoring drawing color
-		backup_divedata					; used to backup depth and salinity
+		salinity						; salinity during the dive
 		fill_between_rows				; used for fill between rows
 		logbook_temp					; used as temp
 		logbook_temp_backup				; used as backup for temp
@@ -761,7 +761,7 @@ display_profile2f:
 	setf	logbook_cur_tp+0						; initialize Tp°, before the first recorded point
 	setf	logbook_cur_tp+1
 	clrf	logbook_last_tp							; also reset previous Y for Tp°
-	clrf	logbook_ceiling							; Ceiling = 0, correct value for no ceiling
+	clrf	logbook_ceiling							; ceiling = 0, correct value for no ceiling
 	movlw	profile_top+.1
 	movwf	logbook_min_temp_pos					; initialize for displaying the lowest  temperature
 	movlw	profile_top+profile_height_pixels
@@ -836,7 +836,7 @@ profile_display_skip_deco:
 	movf	logbook_cur_tp+0,W						; did we had already a valid Tp°C record?
 	andwf	logbook_cur_tp+1,W
 	incf	WREG
-	bz		profile_display_skip_temp				; NO - just skip drawing.
+	bz		profile_display_skip_temp				; NO - just skip drawing
 
 	movlw	LOW  (((profile_height_pixels-.10)*.256)/.370)	; fixed tp° scale: (-2 .. +35°C * scale256 )/153pix
 	movwf	xB+0
@@ -857,14 +857,14 @@ profile_display_skip_deco:
 	sublw	profile_top+profile_height_pixels-.10	; upside-down: Y = .75 + (.153 - result)
 	movwf	xC+0
 
-	; Check limits
+	; check limits
 	movlw	profile_top+.1
 	movwf	xC+1
 	cpfsgt	xC+0
 	movff	xC+1,xC+0
 
-	movlw	color_orange
-	call	TFT_set_color
+	movlw	color_orange							; select color for temperature curve
+	call	TFT_set_color							; set color
 
 	movf	logbook_last_tp,W						; do we have a valid previous value?
 	bz		profile_display_temp_1					; NO - skip the vertical line
@@ -1026,7 +1026,7 @@ profile_display_loop_done_nogas6:
 	cpfslt	win_leftx2								; limit left border to 130
 	movwf	win_leftx2
 	WIN_FONT FT_TINY
-	movlw	color_orange							; use same color as tp° curve
+	movlw	color_yellow							; changed from color_orange to color_yellow for better readability
 	call	TFT_set_color
 
 	MOVII	logbook_min_tp,mpr
@@ -1537,27 +1537,30 @@ logbook_decomodel_common:
 logbook_page2_1:
 
 	; Salinity
-	WIN_SMALL	.5,.140
+	WIN_SMALL .5,.165								; ex WIN_SMALL .5,.140
 	LOG_POINT_TO log_salinity
 	STRCPY_TEXT tDvSalinity
 	bsf		leftbind
 	call	ext_flash_byte_read_plus				; read salinity
 	movff	ext_flash_rw,lo
-	movff	ext_flash_rw,backup_divedata			; backup for average depth display
+	movff	ext_flash_rw,salinity					; store salinity for later use
 	output_8
 	STRCAT_PRINT "%"
 
 	; Average depth
-	WIN_SMALL .5,.165
+	WIN_SMALL .5,.140								; ex WIN_SMALL .5,.165
 	STRCPY_TEXT tAVG
 	LOG_POINT_TO log_avr_depth
 	call	ext_flash_byte_read_plus				; read average low
 	movff	ext_flash_rw,lo
 	call	ext_flash_byte_read_plus				; read average high
 	movff	ext_flash_rw,hi
-	movf	backup_divedata,W						; salinity for this dive
-	call	adjust_depth_with_salinity_log			; compute salinity setting (FROM WREG!) into lo:hi [mbar]
-	output_16dp .3
+	movf	salinity,W								; salinity for this dive
+	call	adjust_depth_with_salinity_log			; compute salinity into lo:hi [mbar]
+	bsf		ignore_digit5							; no cm (flag will be cleared by output_16)
+	movlw	.1										; no 1000 meters
+	movwf	ignore_digits							; ...
+	output_16dp .3									; xxx.y
 	STRCAT_PRINT "m"
 
 	btfss	aux_flag								; dive done in a deco mode?
@@ -1814,14 +1817,22 @@ log_details_header:
 	output_99x										; minute
 	STRCAT_PRINT ""									; display 1st row of details
 
+	; Get salinity for this dive
+	LOG_POINT_TO log_salinity
+	call	ext_flash_byte_read_plus				; read  salinity
+	movff	ext_flash_rw,salinity					; store salinity
+
 	; Show max depth and dive time
 	WIN_SMALL .5,.35
 	STRCAT	"Max:"
 	LOG_POINT_TO log_max_depth
-	call	ext_flash_byte_read_plus				; read max depth
+	call	ext_flash_byte_read_plus				; read max depth, low  byte
 	movff	ext_flash_rw,lo
-	call	ext_flash_byte_read_plus				; read max depth
+	call	ext_flash_byte_read_plus				; read max depth, high byte
 	movff	ext_flash_rw,hi
+
+	movf	salinity,W								; salinity for this dive
+	call	adjust_depth_with_salinity_log			; compute salinity setting into lo:hi [mbar]
 
 	TSTOSS	opt_units								; 0=Meters, 1=Feets
 	bra		logbook_page2_depth_metric				; 1 - do metric

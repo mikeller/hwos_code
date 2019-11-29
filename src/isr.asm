@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File isr.asm                              combined next generation V3.03.7
+;   File isr.asm                              combined next generation V3.06.2
 ;
 ;   INTERUPT subroutines
 ;
@@ -39,7 +39,8 @@ isr_low		CODE	0x00018				; low priority interrupts
 HighInt:
 	; initialize interrupt code
 	banksel	isr_backup					; default bank for all ISR code is bank ISR data
-	rcall	isr_registers_backup		; back-up registers
+	movff	PRODL,PROD_backup+0			; back-up PRODL
+	movff	PRODH,PROD_backup+1			; back-up PRODH
 	; serve buttons
 	btfsc	PIR1,TMR1IF					; timer 1 interrupt (button hold-down timer)?
 	rcall	timer1int					; YES - reset timer
@@ -54,9 +55,12 @@ HighInt:
 	rcall	isr_uart2					; YES - get a byte from the IR/S8 link
 	btfsc	PIR2,TMR3IF					; timer 3 interrupt?
 	rcall	isr_timer3					; YES - check bytes received from IR/S8 link for being a valid telegram
- ELSE	
-    	bcf	PIR3,RC2IF					; Clear UART 2 interrupt?
-	bcf	PIR2,TMR3IF					; Clear timer 3 interrupt?
+ ELSE
+	bcf		PIR3,RC2IF					; clear UART 2  interrupt
+	bcf		PIR2,TMR3IF					; clear timer 3 interrupt
+	; fill-up to keep code size identical to _external_sensor variant, see "Attention" below
+	nop
+	nop
  ENDIF
 
 	; serve pressure and temperature sensor
@@ -68,7 +72,8 @@ HighInt:
 	rcall	isr_rtcc					; YES - do every 1/2 s tasks: read RTC, trigger timed tasks, adjust CPU speed, gauge battery, etc.
 
 	; clean up and exit
-	rcall	isr_registers_restore		; restore registers
+	movff	PROD_backup+0,PRODL			; restore PRODL
+	movff	PROD_backup+1,PRODH			; restore PRODH
 	bsf		trigger_isr_updates			; signal that the ISR had kicked in
 	retfie	FAST						; return from interrupt restoring BSR, STATUS and WREG
 
@@ -86,21 +91,17 @@ isr_adjust_speed:
 	;bra	isr_set_speed_to_normal		;       NO  - default to normal speed
 
 isr_set_speed_to_normal:
-	movlw	b'00000000'					; coding for x4 PLL disabled
-	movwf	OSCTUNE						; switch off x4 PLL
+	clrf	OSCTUNE						; switch off x4 PLL
 	movlw	b'01110010'					; select 16 MHz
 	movwf	OSCCON						; set prescaler
 	movlw	T2CON_NORMAL				; PWM1 dimming factor for speed 'normal'
-	movwf	T2CON						; adjust PWM1 for LED dimming
 	bra		isr_adjust_speed_exit
 
 isr_set_speed_to_eco:
-	movlw	b'00000000'					; coding for x4 PLL disabled
-	movwf	OSCTUNE						; switch off x4 PLL
+	clrf	OSCTUNE						; switch off x4 PLL
 	movlw	b'00110010'					; select 1 MHz
 	movwf	OSCCON						; set prescaler
 	movlw	T2CON_ECO					; PWM1 dimming factor for speed 'eco'
-	movwf	T2CON						; adjust PWM1 for LED dimming
 	bra		isr_adjust_speed_exit
 
 isr_set_speed_to_fastest:
@@ -108,20 +109,19 @@ isr_set_speed_to_fastest:
 	btfsc	lv_core						; on OSTC with low voltage core?
 	movlw	b'01100010'					; YES - reduce to 8 MHz
 	movwf	OSCCON						; set prescaler
-	movlw	b'01000000'					; coding for x4 PLL enable
-	movwf	OSCTUNE						; switch on  x4 PLL -> 64 MHz on high voltage core, 32 MHz on low voltage core
+	bsf		OSCTUNE,6					; switch on  x4 PLL -> 64 MHz on high voltage core, 32 MHz on low voltage core
 	movlw	T2CON_FASTEST				; PWM1 dimming factor for speed 'fastest'
-	movwf	T2CON						; adjust PWM1 for LED dimming
 	;bra	isr_adjust_speed_exit
 
 isr_adjust_speed_exit:
+	movwf	T2CON						; adjust PWM1 for LED dimming
 	btfss	OSCCON,HFIOFS				; PLL stabilized?
 	bra		isr_adjust_speed_exit		; NO  - loop to give it some more time
 	return								; YES - done
 
 	; Attention: fill-up the gap between the end of this section
 	;            and the next section which starts at 0x00080 !!
-	nop
+	;nop
 
 block_0_code_end:						; marker to find end of code in block 0 in linker report file
 
@@ -131,19 +131,6 @@ block_0_code_end:						; marker to find end of code in block 0 in linker report 
 isr_restore	CODE	0x00080				; restore first flash page from EEPROM
 restore_flash_0x00080:
 	goto	restore_flash
-
-
-;=============================================================================
-; back-up and restore registers
-;
-isr_registers_backup:
-	MOVII	PRODL,PROD_backup			; back-up PRODH:PRODL
-	return
-
-isr_registers_restore:
-	MOVII	PROD_backup,PRODL			; restore PRODH:PRODL
-	return
-
 
 ;=============================================================================
 ; routines for handling digital-attached external sensors
@@ -404,8 +391,9 @@ isr_sensor_state2_1:
 	rrcf	pressure_abs_avg+1					; divide by 2, again
 	rrcf	pressure_abs_avg+0
 
-	; copy into result register
+	; copy into result register and set update flag
 	MOVII	pressure_abs_avg,pressure_abs
+;	bsf		trigger_pres_update					; signal a pressure update
 
 ; build average for temperature
 	bcf		STATUS,C							; clear carry bit by default
@@ -434,9 +422,8 @@ isr_sensor_state2_2:
 	bsf		trigger_temp_changed				; set flag for temperature change
 
 isr_sensor_state2_3:
-	; reset state counter and set update flag
+	; reset state counter
 	clrf	sensor_state_counter				; reset state counter
-;	bsf		trigger_pres_update					; signal a pressure update
 	btfss	reset_max_pressure					; shall clear the max pressure?
 	bra		isr_sensor_state2_3a				; NO  - continue with checking for pressure change
 	bcf		reset_max_pressure					; YES - clear request flag
@@ -605,7 +592,7 @@ isr_rtcc_1:
 	movwf	rtc_year
 
 isr_rtcc_2:
-	; get ambient light level and set max_CCPR1L
+	; every full second - get ambient light level and set max_CCPR1L
 	call	get_ambient_level			; get ambient light level and set max_CCPR1L
 	banksel	isr_backup					; back to ISR default bank (for safety only)
 
@@ -616,9 +603,14 @@ isr_rtcc_2:
 	btfsc	divemode					; in dive mode?
 	rcall	isr_divemode_1sec			; YES - do the every second dive mode tasks
 
+	; increment surface interval counted in seconds
 	btfsc	divemode					; in dive mode?
 	btfsc	simulatormode				; YES - in simulator mode?
-	rcall	isr_update_lastdive_time	; NO  - YES - increment the last dive time
+	rcall	inc_surface_interval_secs	; NO  - YES - increment the surface interval (seconds timer)
+
+	; reset the surface interval timers if requested
+	btfsc	reset_surface_interval		; shall reset both surface interval timers?
+	call	clr_surface_interval		; YES
 
 	; reset the timebase if requested
 	btfss	reset_timebase				; shall reset the timebase?
@@ -646,28 +638,29 @@ isr_rtcc_3:
 	return								; NO  - done
 
 	; new full minute
-	clrf	timebase_secs				; YES - reset timer
-	bsf		trigger_full_minute			;     - set flag for a new minute has begun
+	clrf	timebase_secs				; reset timer
+	bsf		trigger_full_minute			; set flag for a new minute has begun
 
-	btfsc	divemode					;     - in dive mode?
-	btfsc	simulatormode				;       YES - in simulator mode?
-	rcall	inc_surface_interval		;       NO  - YES - increment surface interval
+	; increment surface interval counted in minutes
+	btfsc	divemode					; in dive mode?
+	btfsc	simulatormode				; YES - in simulator mode?
+	rcall	inc_surface_interval_mins	; NO  - YES - increment surface interval (minutes timer)
 
-	btfss	simulatormode				;     - in simulator mode?
-	bra		isr_rtcc_4					;       NO
-	infsnz	simulator_time,F			;       YES - increment real runtime of the simulator, did wrap around (became zero)?
-	setf	simulator_time				;             YES - disallow wrap-around, keep at 255 instead
+	btfss	simulatormode				; in simulator mode?
+	bra		isr_rtcc_4					; NO
+	infsnz	simulator_time,F			; YES - increment real runtime of the simulator, did wrap around (became zero)?
+	setf	simulator_time				;       YES - disallow wrap-around, keep at 255 instead
 
 isr_rtcc_4:
-	incf	timebase_mins,F				;     - increment minutes timer
-	movlw	.59							;     - max. for minutes timer
-	cpfsgt	timebase_mins				;     - minutes timer > max.?
-	return								;       NO  - done
+	incf	timebase_mins,F				; increment minutes timer
+	movlw	.59							; max. for minutes timer
+	cpfsgt	timebase_mins				; minutes timer > max.?
+	return								; NO  - done
 
 	; new full hour
-	clrf	timebase_mins				;       YES - reset timer
-	bsf		trigger_full_hour			;           - set flag for a new hour has begun
-	return								;           - done
+	clrf	timebase_mins				; YES - reset timer
+	bsf		trigger_full_hour			;     - set flag for a new hour has begun
+	return								;     - done
 
 
 	; increment overall OSTC uptime
@@ -679,14 +672,6 @@ isr_update_uptime:
 	addwfc	uptime+3,F
 	return
 
-	; increment time since last dive, called every second when not in dive mode (or when in simulator mode)
-isr_update_lastdive_time:
-	incf	lastdive_time+0,F
-	clrf	WREG
-	addwfc	lastdive_time+1,F
-	addwfc	lastdive_time+2,F
-	addwfc	lastdive_time+3,F
-	return
 
 	; process the timeout timer
 isr_update_timeout:
@@ -786,15 +771,15 @@ isr_divemode_1sec_1:
 isr_divemode_1sec_2:
 	INCI	total_divetime_secs			; increase total dive time       (regardless of start_dive_threshold)
 	btfss	count_divetime				; shall the dive time be counted (regarding     start_dive_threshold)?
-	bra		isr_divemode_1sec_4			; NO (too shallow / apnoe at surface)
+	bra		isr_divemode_1sec_4			; NO  - too shallow / apnoe at surface
 	incf	counted_divetime_secs,F		; YES - increase dive time (displayed dive time)
 	movlw	d'59'						;     - 60 seconds make a minute
 	cpfsgt	counted_divetime_secs		;     - next full minute reached?
-	bra		isr_divemode_1sec_3			;       NO  - done
+	bra		isr_divemode_1sec_3			;       NO  - continue
 	clrf	counted_divetime_secs		;       YES - reset seconds to 0
 	INCI	counted_divetime_mins		;           - increase dive minutes
 	bsf		divetime_longer_1min		;           - set flag for dive time exceeding 1 minute
-	;bra	isr_divemode_1sec_3			;           - done
+	;bra	isr_divemode_1sec_3			;           - continue
 
 isr_divemode_1sec_3:					; submerged
 	btfss	FLAG_apnoe_mode				; in apnoe mode?
@@ -829,13 +814,6 @@ isr_divemode_1sec_4:					; at surface
 	clrf	apnoe_surface_secs			;       YES - reset seconds to 0
 	incf	apnoe_surface_mins,F		;           - increment surface time, minutes
 	return								;           - done
-
-
-
-
-
-
-isr_divemode_1sec_3_dive:
 
 
 ;=============================================================================
@@ -932,28 +910,45 @@ timer1int_common:						; load timer1 for next pressure
 
 
 ;=============================================================================
-; Increment surface interval (counted in minutes) while still in desaturation
+; Increment surface interval (counted in minutes and in seconds)
 ;
 ; int_O_desaturation_time is only computed while in start, surface mode,
-; menue_tree or ghostwriter. So the ISR may clock surface_interval past
-; the actual surface interval time. But TFT_surface_lastdive will check
-; int_O_desaturation_time and in case int_O_desaturation_time is zero it
-; will not show surface_interval but lastdive_time instead. Thus the glitch
-; will remain invisible.
+; menue_tree or ghostwriter. So the ISR may clock surface_interval_mins
+; past the actual surface interval time. But TFT_surface_lastdive will
+; check int_O_desaturation_time and in case int_O_desaturation_time is
+; zero it will not show surface_interval_mins but surface_interval_secs instead.
+; Thus the glitch will remain invisible.
 ;
-inc_surface_interval:							; called every minute when not in dive mode (in banksel common context)
-	btfsc	reset_surface_interval				; shall reset the surface interval timer?
-	bra		inc_surface_interval_1				; YES
-	movff	int_O_desaturation_time+0,isr_lo	; NO - check desaturation time
-	movff	int_O_desaturation_time+1,WREG
-	iorwf	isr_lo,W							;    - inclusive-or low & high byte, desaturation time = 0 ?
-	bz		inc_surface_interval_1				;      YES - reset surface interval timer
-	INCI	surface_interval					;      NO  - increment surface interval
-	return										;          - done
-inc_surface_interval_1:
-	bcf		reset_surface_interval				; reset request flag
-	CLRI	surface_interval					; reset surface interval timer
+
+inc_surface_interval_secs:						; called every second when not in dive mode
+	incf	surface_interval_secs+0,F			; increment the lowest byte
+	clrf	WREG								; clear WREG
+	addwfc	surface_interval_secs+1,F			; add carry from byte before, if it did wrap-around
+	addwfc	surface_interval_secs+2,F			; add carry from byte before, if it did wrap-around
+	addwfc	surface_interval_secs+3,F			; add carry from byte before, if it did wrap-around
 	return										; done
+
+inc_surface_interval_mins:						; called every minute when not in dive mode
+	movff	int_O_desaturation_time+0,isr_lo	; get desaturation time, low  byte
+	movff	int_O_desaturation_time+1,WREG		; get desaturation time, high byte
+	iorwf	isr_lo,W							; inclusive-or low & high byte, desaturation time = 0 ?
+	bz		clr_surface_interval_mins			; YES - reset surface interval minutes counter
+	INCI	surface_interval_mins				; NO  - increment surface interval
+	return										;     - done
+
+clr_surface_interval:
+	bcf		reset_surface_interval					; reset request flag
+	; clear the surface interval counted in seconds
+	clrf	surface_interval_secs+0					; reset surface interval (seconds), lowest  byte
+	clrf	surface_interval_secs+1					; ...
+	clrf	surface_interval_secs+2					; ...
+	clrf	surface_interval_secs+3					; reset surface interval (seconds), highest byte
+clr_surface_interval_mins:
+	; clear the surface interval counted in minutes
+	movff	opt_diveTimeout,surface_interval_mins+0	; set   surface interval (minutes), low  byte, to dive timeout offset
+	clrf	surface_interval_mins+1					; reset surface interval (minutes), high byte
+
+	return											; done
 
 ;=============================================================================
 

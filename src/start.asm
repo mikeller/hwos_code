@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File start.asm                            combined next generation V3.04.3
+;   File start.asm                            combined next generation V3.06.1
 ;
 ;   Startup subroutines
 ;
@@ -160,6 +160,8 @@ start_clear_rambank:
 	; 15 minutes sampling buffer into the reference buffer from where it is loaded by the ISR
 	rcall	sample_surface_pressure			; 1st pass
 	rcall	sample_surface_pressure			; 2nd pass
+
+	; wait until initial surface pressure value has been loaded into the ISR
 	btfsc	update_surface_pressure			; has the ISR confirmed loading of the surface pressure?
 	bra		$-2								; NO - not yet, loop until ISR has confirmed loading
 
@@ -170,9 +172,9 @@ start_clear_rambank:
 	; restore tissue pressures from EEPROM (if available)
 	movlw	HIGH .512						; =2
 	movwf	EEADRH							; set EEPROM address, high byte
-	read_int_eeprom	.0
-	clrf	EEADRH
-	movlw	0xAA							; coding for tissue pressures available
+	read_int_eeprom	.0						; read tissue storage information flag
+	clrf	EEADRH							; revert EEPROM high address pointer to default
+	movlw	0xAA							; load coding for tissue pressures available
 	cpfseq	EEDATA							; tissue pressures available?
 	bra		start_1							; NO  - no tissue pressures available
 	call	restore_decodata_from_eeprom	; YES - reload tissue pressures from EEPROM
@@ -504,11 +506,12 @@ restart6:
 	global	restart_set_modes_and_flags
 restart_set_modes_and_flags:
 	call	option_restore_all				; restore all options settings from EEPROM
+	call	disable_ir_s8					; switch off IR/S8 digital interface by default (for all compile versions!)
 
  IFDEF _external_sensor
-	call	disable_ir_s8					; switch off IR/S8 digital interface by default
-	WAITMS	d'100'						; Some delay to power down S8-HUD properly
+	WAITMS	d'100'							; some delay to power down S8-HUD properly
  ENDIF
+
 	; setup sampling rate
 	movlw	.2								; default to 2 seconds
 	movwf	sampling_rate					; write setting

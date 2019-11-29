@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft_outputs.asm                      next combined generation V3.04.3
+;   File tft_outputs.asm                      next combined generation V3.06.2
 ;
 ;   high-level Display Outputs
 ;
@@ -4619,7 +4619,7 @@ TFT_surface_lastdive:
 	iorwf	mpr+1,W							; inclusive-or with high byte, check if desaturation time is zero
 	bz		TFT_surface_lastdive_1			; YES - show last dive time
 											; NO  - show surface interval
-	SMOVII	surface_interval,mpr			;     - ISR-safe copy of surface interval
+	SMOVII	surface_interval_mins,mpr		;     - ISR-safe copy of surface interval in minutes
 	call	convert_time					;     - convert hi:lo in minutes to hours (up:hi) and minutes (lo)
 	movf	hi,W							;     - swap hi and lo
 	movff	lo,hi							;       ...
@@ -4632,7 +4632,7 @@ TFT_surface_lastdive:
 	STRCAT_PRINT "m "						;
 	bra		TFT_surface_lastdive_2			;
 TFT_surface_lastdive_1:
-	SMOVFF	lastdive_time,xC				; ISR-safe copy of lastdive_time:4 to xC:4
+	SMOVFF	surface_interval_secs,xC		; ISR-safe copy of surface_interval_secs:4 to xC:4
 	call	info_menu_uptime_com			; use part of info_menu_uptime to convert and display in days and hours
 TFT_surface_lastdive_2:
 	WIN_SMALL surf_gaslist_column+.48,surf_gaslist_row+(surf_gaslist_spacing*.1)
@@ -4646,6 +4646,7 @@ TFT_surface_lastdive_2:
 TFT_surface_lastdive_3:
 	WIN_SMALL	surf_gaslist_column+.48,surf_gaslist_row+(surf_gaslist_spacing*.2)
 	MOVII	lastdive_maxdepth,mpr
+	call	adjust_depth_with_salinity		; compute (current) salinity setting into hi:lo [mbar]
 	bsf		leftbind						; print without leading spaces
 	TSTOSS	opt_units						; 0=Meter, 1=Feet
 	bra		TFT_surface_lastdive_metric		; 0 - metric
@@ -4656,6 +4657,7 @@ TFT_surface_lastdive_metric:
 TFT_surface_lastdive_4:
 	WIN_SMALL	surf_gaslist_column+.48,surf_gaslist_row+(surf_gaslist_spacing*.3)
 	MOVII	lastdive_avgdepth,mpr
+	call	adjust_depth_with_salinity		; compute (current) salinity setting into hi:lo [mbar]
 	bsf		leftbind						; print without leading spaces
 	TSTOSS	opt_units						; 0=Meter, 1=Feet
 	bra		TFT_surface_metric				; 0 - metric   and return

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File eeprom_rs232.asm                     combined next generation V3.04.3
+;   File eeprom_rs232.asm                     combined next generation V3.06.2
 ;
 ;   Internal EEPROM, RS232
 ;
@@ -100,18 +100,17 @@ write_eep2:
 
 ;=============================================================================
 
- IFDEF _external_sensor
-
 	global	disable_ir_s8
 disable_ir_s8:
 	banksel	TXSTA2						; select bank for IO register access
 	clrf	TXSTA2
 	clrf	RCSTA2
 	banksel	common						; back to bank common
-	bcf	ir_power					; IR off
-	bcf	mcp_power					; power-down instrumentation amp
-	bsf	s8_npower					; power-down S8 digital interface
-	bcf	s8_digital_avail				; digital S8 interface not available
+	bcf		PIE3,RC2IE					; disable RC2 INT
+	bcf		ir_power					; IR off
+	bcf		mcp_power					; power-down instrumentation amp
+	bsf		s8_npower					; power-down S8 digital interface
+	bcf		s8_digital_avail			; digital S8 interface not available
 	return
 
 
@@ -133,12 +132,13 @@ enable_ir_s8:
 	movwf	RCSTA2
 	banksel	common						;     - back to bank common
 	bsf		ir_power					;     - power-up IR
-	btfss	ir_power
-	bra		$-6
-	return
+	btfss	ir_power					;     - power-up confirmed?
+	bra		$-6							;       NO - loop and wait
+	bsf		PIE3,RC2IE					;     - enable RC2 INT
+	return								;     - done
 
 enable_s8:
-    	banksel	TXSTA2						; select bank for IO register access
+	banksel	TXSTA2						; select bank for IO register access
 	clrf	TXSTA2
 	clrf	RCSTA2
 	banksel	common						; back to bank common
@@ -178,8 +178,6 @@ enable_s8_2:							; configure S8 digital interface
 	banksel	common						; back to bank common
 	bsf		s8_digital_avail			; digital S8 interface available
 	return
-
- ENDIF	; _external_sensor
 
 ;=============================================================================
 
@@ -332,7 +330,7 @@ vault_decodata_into_eeprom:
 	; Store last time/date
 	; Store 0x700 to 0x780 (pres_tissue_N2 and pres_tissue_He)
 	movlw	HIGH .512						; =2
-	movwf	EEADRH
+	movwf	EEADRH							; set EEPROM address, high byte
 
 	; indicate valid data in vault
 	movlw	0xAA
@@ -364,7 +362,7 @@ vault_decodata_into_eeprom:
 	movff	int_O_desaturation_time+1,EEDATA; get desaturation time, high byte
 	write_int_eeprom .10					; store value
 
-	SMOVII	surface_interval,mpr			; ISR-safe copy of surface interval
+	SMOVII	surface_interval_mins,mpr		; ISR-safe copy of surface interval
 	movff	mpr+0,EEDATA					; get surface interval, low  byte
 	write_int_eeprom .11					; store value
 	movff	mpr+1,EEDATA					; get surface interval, high byte
@@ -397,9 +395,9 @@ vault_decodata_into_eeprom2:
 	global	restore_decodata_from_eeprom
 restore_decodata_from_eeprom:
 	movlw	LOW  .512						; =0
-	movwf	EEADR
+	movwf	EEADR							; set EEPROM address, low  byte
 	movlw	HIGH .512						; =2
-	movwf	EEADRH
+	movwf	EEADRH							; set EEPROM address, high byte
 
 	; restore date and time
 	read_int_eeprom .1
@@ -430,7 +428,7 @@ restore_decodata_from_eeprom:
 	movff	EEDATA,mpr+0					; cache value in mpr
 	read_int_eeprom .12						; read surface interval, high byte
 	movff	EEDATA,mpr+1					; cache value in mpr
-	SMOVII	mpr,surface_interval			; ISR-safe copy-back of surface interval
+	SMOVII	mpr,surface_interval_mins		; ISR-safe copy-back of surface interval
 
 	read_int_eeprom .13						; read leading tissue's supersaturation
 	movff	EEDATA,int_O_lead_supersat+0	; restore value
@@ -452,8 +450,8 @@ restore_decodata_from_eeprom2:
 	incf	EEADR,F
 	decfsz	lo,F							; all done?
 	bra		restore_decodata_from_eeprom2	; NO  - loop
-	clrf	EEADRH							; YES
-	return
+	clrf	EEADRH							; YES - revert EEPROM high address pointer to default
+	return									;     - done
 
 ;=============================================================================
 

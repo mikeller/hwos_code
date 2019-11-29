@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File compass_ops.asm                      combined next generation V3.03.5
+;   File compass_ops.asm                      combined next generation V3.06.1
 ;
 ;   Compass Operations
 ;
@@ -379,7 +379,6 @@ compass_calibration_exit:
 
 ;-----------------------------------------------------------------------------
 
-	global	TFT_compass_fast
 TFT_compass_fast:
 	WIN_TINY .0,.50
 	STRCPY	"Cx:"

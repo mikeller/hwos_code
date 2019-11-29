@@ -1,5 +1,5 @@
 // ***************************************************************************
-// p2_deco.c                                  combined next generation V3.04.3
+// p2_deco.c                                  combined next generation V3.06.1
 //
 //  Created on: 12.05.2009
 //  Author: heinrichs weikamp, contributions by Ralph Lembcke and others
@@ -1973,7 +1973,7 @@ static void clear_tissue(void)
 		real_pres_tissue_He[ci]    = 0.0;				// He
 		real_pres_tissue_N2[ci]    = N2_equilibrium;	// N2
 
-		// reset tissue pressures for scaled for tissue graphics
+		// reset tissue pressures for scaled tissue graphics
 		char_O_tissue_pres_He[ci]  = 0;					// He
 		char_O_tissue_pres_N2[ci]  = 10;				// N2
 		char_O_tissue_pressure[ci] = 10;				// combined

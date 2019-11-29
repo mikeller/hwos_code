@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File sleepmode.asm                        combined next generation V3.03.6
+;   File sleepmode.asm                        combined next generation V3.06.1
 ;
 ;   Sleep Mode
 ;
@@ -23,7 +23,7 @@
 #include "i2c.inc"
 #include "mcp.inc"
 #include "wait.inc"
-#include "tft_outputs.inc"	
+#include "tft_outputs.inc"
 
 
 	extern	vault_decodata_into_eeprom
@@ -74,10 +74,8 @@ sleeploop:
 	bsf		sleepmode						; flag being in sleep mode
 	bsf		block_sensor_interrupt			; suspend ISR from executing sensor interrupts
 
- IFDEF _external_sensor
 	call	disable_ir_s8					; power-down IR/S8 interrupts
 	call	mcp_sleep						; power-down RX power supply
- ENDIF
 
 	clrf	ADCON0							; power-down ADC module
 	call	disable_rs232					; power-down USB
@@ -176,6 +174,8 @@ one_sec_sleep:
 
 	btfsc	battery_gauge_available			; is a battery gauge IC available?
 	bra		one_sec_sleep_1					; YES - check for charger
+	btfsc	ble_available				; Skip "USB" check in all Bluetooth models (Required for very old OSTC sport)
+	bra		one_sec_sleep_2					;     - continue
 	btfsc	vusb_in							; NO  - USB plugged in?
 	bcf		sleepmode						;       YES - terminate sleep mode
 	bra		one_sec_sleep_2					;     - continue
@@ -387,15 +387,15 @@ sleepmode_sleep:
 	btfsc	charge_in_sleep					; already showing charge screen?
 	bra		sleepmode_sleepwalk				; YES - skip the actual sleep (But wait)
 
-	banksel	T7GCON							; switch bank, T7* is outside access RAM
-	clrf	T7GCON							; reset timer7 gate control register
-	movlw	b'10001101'						; 1:1 prescaler -> 2 seconds @ 32768 Hz, not synced
-	movwf	T7CON
+;	banksel	T7GCON							; switch bank, T7* is outside access RAM
+;	clrf	T7GCON							; reset timer7 gate control register
+;	movlw	b'10001101'						; 1:1 prescaler -> 2 seconds @ 32768 Hz, not synced
+;	movwf	T7CON
 	sleep
 	sleep
-	clrf	T7GCON							; reset timer7 gate control register
-	movlw	b'10001001'						; 1:1 prescaler ->  2 seconds @ 32768 Hz, synced
-	movwf	T7CON
+;	clrf	T7GCON							; reset timer7 gate control register
+;	movlw	b'10001001'						; 1:1 prescaler ->  2 seconds @ 32768 Hz, synced
+;	movwf	T7CON
 sleepmode_sleep_1:
 	movff	BSR_backup,BSR					; restore BSR
 	return

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File mcp.asm                              combined next generation V3.03.1
+;   File mcp.asm                              combined next generation V3.06.1
 ;
 ;   Basic routines for RX circuity
 ;
@@ -17,8 +17,6 @@ mcp	code
 
 ;=============================================================================
 
- IFDEF _external_sensor
-
 	global	mcp_sleep
 mcp_sleep:
 	bcf		INTCON3,INT3IE			; disable INT3
@@ -26,8 +24,6 @@ mcp_sleep:
 	btfsc	mcp_power				; off confirmed?
 	bra		$-6						; NO  - loop waiting
 	return							; YES - done
-
- ENDIF
 
 ;=============================================================================
 

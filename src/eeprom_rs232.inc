@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File eeprom_rs232.inc                     combined next generation V3.03.1
+;   File eeprom_rs232.inc                     combined next generation V3.06.1
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -26,19 +26,20 @@ read_int_eeprom		macro	eeprom_address
 	extern	rs232_wait_tx
 	extern	rs232_wait_tx2
 
- IFDEF _external_sensor
 	extern	enable_ir_s8
 	extern	disable_ir_s8
- ENDIF
 
 	extern	write_int_eeprom_1
 	extern	read_int_eeprom_1
 	extern	read_eeprom
 	extern	write_eeprom
+
 	extern	update_battery_registers
 	extern	retrieve_battery_registers
+
 	extern	vault_decodata_into_eeprom
 	extern	restore_decodata_from_eeprom
+
 	extern	do_logoffset_common_write
 	extern	do_logoffset_common_read
 	extern	eeprom_reset_logbook_pointers

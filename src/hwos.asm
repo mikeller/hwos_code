@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File hwos.asm                             combined next generation V3.03.7
+;   File hwos.asm                             combined next generation V3.06.1
 ;
 ;   Definition of the hwOS dive computer platform.
 ;
@@ -293,7 +293,7 @@ init_ostc:
 ; Timer 3 for IR-RX Timeout
  IFDEF _external_sensor
 	clrf	T3GCON				; reset Timer3 gate control register
-	movlw	b'10001001'			; synced, 1:1 prescaler -> 2 seconds till overrun @ 32768 Hz,
+	movlw	b'10001101'			; not synced, 1:1 prescaler -> 2 seconds till overrun @ 32768 Hz,
 								;                          incrementing by 1 bit each 30.51757813 µs
 	movwf	T3CON
  ENDIF
@@ -336,7 +336,7 @@ init_ostc:
 
 ; Timer 5 for ISR-independent wait routines
 	clrf	T5GCON				; reset Timer5 gate control register
-	movlw	b'10001011'			; synced, 16 bit mode, 1:1 prescaler -> 2 seconds till overrun @ 32768 Hz,
+	movlw	b'10001111'			; not synced, 16 bit mode, 1:1 prescaler -> 2 seconds till overrun @ 32768 Hz,
 	movwf	T5CON				;                                       incrementing by 1 bit each 30.51757813 µs
 
 
@@ -344,7 +344,7 @@ init_ostc:
 
 ; Timer 7 for 62.5 ms Interrupt (sensor states)
 	clrf	T7GCON				; reset Timer7 gate control register
-	movlw	b'10001001'			; 1:1 prescaler -> 2 seconds @ 32768 Hz, synced
+	movlw	b'10001101'			; 1:1 prescaler -> 2 seconds @ 32768 Hz, not synced
 	movwf	T7CON
 	clrf	TMR7L
 	movlw	.248
@@ -387,7 +387,7 @@ init_ostc:
 	movwf	PIE2
 	movlw	b'00000000'			; Bit1: TMR5
 	movwf	PIE5
-	movlw	b'00100001'			; Bit0: RTCC, Bit5: UART2
+	movlw	b'00000001'			; Bit0: RTCC, Bit5: UART2 (Default OFF)
 	movwf	PIE3
 	movlw	b'00001000'			; Bit3: TMR7
 	movwf	PIE5

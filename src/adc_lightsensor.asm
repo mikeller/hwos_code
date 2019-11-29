@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File adc_lightsensor.asm                  combined next generation V3.03.5
+;   File adc_lightsensor.asm                  combined next generation V3.06.1
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -241,8 +241,7 @@ get_ambient_level:
 
 get_ambient_level1:							; using ambient sensor
 	banksel	isr_backup						; back to ISR default bank
-	movlw	b'00000000'						; Vref+ = Vdd
-	movwf	ADCON1
+	clrf	ADCON1							; Vref+ = Vdd
 	movlw	b'00011101'						; power on ADC, select AN7
 	rcall	wait_adc
 	MOVII	ADRESL,ambient_light
@@ -486,7 +485,7 @@ get_analog_switches:						; start ADC and wait until finished
 	banksel	HW_variants						; switch to bank where OSTC model variant is stored
 	btfsc	analog_switches					; does the OSTC have analog switches?
 	bra		get_analog_switches_1			; YES
-get_analog_switches0:	
+get_analog_switches0:
 	banksel	common							; NO  - back to bank common
 	bcf		analog_sw1_pressed				;     - clear flag for analog switch 1
 	bcf		analog_sw2_pressed				;     - clear flag for analog switch 2
@@ -502,9 +501,7 @@ get_analog_switches_1:
 
 get_analog_switches_2:
 	bsf	adc_is_running
-	movlw	b'00001010'						; left justified
-	movwf	ADCON2
-;	movlw	b'00000000'						; Vref+ = Vdd
+	bcf	ADCON2,ADFM						; left justified
 	clrf	ADCON1
 	movlw	b'00100101'						; power on ADC, select AN9
 	rcall	wait_adc
@@ -614,8 +611,7 @@ get_analog_switches_sw1_pressed:
 	bsf		analog_sw1_pressed				; set right button as pressed
 
 get_analog_switches_4:
-	movlw	b'10001010'						; restore to right justified
-	movwf	ADCON2
+	bsf	ADCON2,ADFM						; restore to right justified
 	bcf	adc_is_running
 	banksel	common							; back to bank common
 	btfsc	analog_sw1_pressed				; right button pressed?

@@ -546,10 +546,14 @@ do_return_settings:
  ENDIF
 
 do_settings_menu:
+ IFDEF	_hwos_sport
+	bsf	ble_available				; For very old OSTC sport
+ ENDIF	
+
 	btfsc	ble_available				; BLE available?
 	bra		do_settings_menu_ble		; YES
-
-	MENU_BEGIN	tSystSets, .5
+	
+ 	MENU_BEGIN	tSystSets, .5
 		MENU_CALL		tInfoMenu,					do_info_menu
 		MENU_CALL		tSetTimeDate,				do_date_time_menu
 		MENU_CALL		tDispSets,					do_dispsets_menu
