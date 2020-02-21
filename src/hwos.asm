@@ -269,7 +269,7 @@ init_ostc:
 	movwf	ADCON0
 	movlw	b'00100000'			; 2.048V Vref+
 	movwf	ADCON1
-	movlw	b'10001101'			; right aligned
+	movlw	b'10111010'			; right aligned, 20 x T_AD acquisition time, FOSC/32 -> Max. 40MHz device clock speed
 	movwf	ADCON2
 
 

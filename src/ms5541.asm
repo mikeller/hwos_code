@@ -116,7 +116,8 @@ calc_loop_1:
 	movf	isr_xC+2,W
 	addwfc	SENS+1,F
 
-	; calculate absolute pressure = (sens * (d1-off))/2^12 + 1000
+	; calculate absolute pressure = (sens * (d1-off))/2^12 + 1000 (For MS5541C)
+	; calculate absolute pressure = (sens * (d1-off))/2^11 + 1000 (For MS5541C-30)
 	movf	OFF+0,W						; d1-off --> a
 	subwf	D1+0,W
 	movwf	isr_xA+0
@@ -126,9 +127,18 @@ calc_loop_1:
 
 	MOVII	SENS,isr_xB					; sens --> b
 	call	isr_signed_mult16x16
+	movlw	.13
+	cpfslt	C1+1		; C1 > 3328 (Must be MS5541-30)
+	bra	isr_shift_ms5541_30
+	; MS5541
 	movlw	.12-.8						; a 12 bit shift = 1 byte + 4 bits
 	call	isr_shift_C31
-
+	bra	isr_shift_ms5541_all
+isr_shift_ms5541_30:
+	; MS5541-30
+    	movlw	.11-.8						; a 11 bit shift = 1 byte + 3 bits
+	call	isr_shift_C31
+isr_shift_ms5541_all:
 	movlw	LOW  .1000					; add 1000
 	addwf	isr_xC+1,F
 	movlw	HIGH .1000

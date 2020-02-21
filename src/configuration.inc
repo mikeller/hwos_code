@@ -24,7 +24,7 @@
 #endif
 
 #define softwareversion_x		0x03
-#define softwareversion_y		0x07
+#define softwareversion_y		0x08
 #define softwareversion_beta	0x00
 
 
@@ -76,8 +76,8 @@
 ; 
 #endif
 
-#define _language_1		fr
-#define _language_2		it
+#define _language_1		en
+#define _language_2		de
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
