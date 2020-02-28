@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File isr.asm                              combined next generation V3.06.2
+;   File isr.asm                              combined next generation V3.08.8
 ;
 ;   INTERUPT subroutines
 ;
@@ -610,7 +610,7 @@ isr_rtcc_2:
 
 	; reset the surface interval timers if requested
 	btfsc	reset_surface_interval		; shall reset both surface interval timers?
-	call	clr_surface_interval		; YES
+	call	rst_surface_interval		; YES
 
 	; reset the timebase if requested
 	btfss	reset_timebase				; shall reset the timebase?
@@ -716,9 +716,11 @@ isr_battery_gauge2:
 	; Remark: although all the constants are named current_xxxx, in reality they mean charge!
 
 	; Calculate current consumption for LED backlight: 47*CCPR1L+272  (according to values in hwos.inc: 115*CCPR1L+216)
-	movf	CCPR1L,W						; get CCPR1L into WREG
-	mullw	current_backlight_multi			; PRODH:PRODL  = k * WREG = current_backlight_multi * CCPR1L
-	ADDLI	current_backlight_offset,PRODL	; PRODH:PRODL += current_backlight_offset
+	movlw	.70								; screen type 3 has a fix backlight current slope
+	btfss	screen_type3					; does the OSTC have a screen type 3 ?
+	movf	CCPR1L,W						; NO - for screen types 0, 1 and 2 get the slope from CCPR1L
+	mullw	current_backlight_multi			; multiply with backlight factor current_backlight_multi
+	ADDLI	current_backlight_offset,PRODL	; add           backlight offset current_backlight_offset
 	MOVII	PRODL,isr_mpr					; copy result to isr_mpr
 
 	; Add current for CPU and GPU
@@ -936,19 +938,23 @@ inc_surface_interval_mins:						; called every minute when not in dive mode
 	INCI	surface_interval_mins				; NO  - increment surface interval
 	return										;     - done
 
-clr_surface_interval:
+rst_surface_interval:
 	bcf		reset_surface_interval					; reset request flag
-	; clear the surface interval counted in seconds
+	; reset the surface interval counted in seconds
 	clrf	surface_interval_secs+0					; reset surface interval (seconds), lowest  byte
 	clrf	surface_interval_secs+1					; ...
 	clrf	surface_interval_secs+2					; ...
 	clrf	surface_interval_secs+3					; reset surface interval (seconds), highest byte
-clr_surface_interval_mins:
-	; clear the surface interval counted in minutes
+	; reset the surface interval counted in minutes
 	movff	opt_diveTimeout,surface_interval_mins+0	; set   surface interval (minutes), low  byte, to dive timeout offset
 	clrf	surface_interval_mins+1					; reset surface interval (minutes), high byte
-
 	return											; done
+
+clr_surface_interval_mins:
+	clrf	surface_interval_mins+0					; reset surface interval (minutes), low byte
+	clrf	surface_interval_mins+1					; reset surface interval (minutes), high byte
+	return											; done
+
 
 ;=============================================================================
 

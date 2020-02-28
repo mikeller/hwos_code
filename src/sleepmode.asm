@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File sleepmode.asm                        combined next generation V3.06.1
+;   File sleepmode.asm                        combined next generation V3.08.8
 ;
 ;   Sleep Mode
 ;
@@ -26,7 +26,8 @@
 #include "tft_outputs.inc"
 
 
-	extern	vault_decodata_into_eeprom
+	extern	eeprom_deco_data_write
+	extern	option_check_and_store_all
 	extern	power_up_switches			; from hwos.asm
 
 
@@ -81,9 +82,14 @@ sleeploop:
 	call	disable_rs232					; power-down USB
 	call	I2C_sleep_compass				; power-down compass
 
-	call	vault_decodata_into_eeprom		; store deco data
+	call	eeprom_deco_data_write			; update deco data     in EEPROM
+	call	eeprom_battery_gauge_write		; update battery gauge in EEPROM
+
+	btfsc	options_changed					; do the options need to be stored to EEPROM ?
+	call	option_check_and_store_all		; YES - check and store all option values in EEPROM
+	bcf		options_changed					; clear flag
+
 	call	ext_flash_enable_protection		; enable write protection on external flash
-	call	update_battery_registers		; update battery registers into EEPROM
 
 	clrf	sm_timer_10sec					; clear 10 seconds timer
 	clrf	sm_timer_10min					; clear 10 minutes timer
@@ -92,7 +98,7 @@ sleeploop:
 
 	call	TFT_Display_FadeOut				; power-down backlight
 	call	TFT_DisplayOff					; power-down display
-	
+
 sleeploop_loop:
 	btfsc	trigger_full_second				; one second in sleep?
 	rcall	one_sec_sleep					; YES - check switches, pressure sensor, etc.
@@ -293,8 +299,8 @@ ten_min_sleep_1:
 one_hour_sleep:
 	; tasks every hour in sleep mode mode
 	bcf		trigger_full_hour				; clear one hour flag
-	call	update_battery_registers		; update battery registers into EEPROM
-	call	vault_decodata_into_eeprom		; update tissue  pressures into EEPROM
+	call	eeprom_deco_data_write			; update deco data     into EEPROM
+	call	eeprom_battery_gauge_write		; update battery gauge into EEPROM
 	return									; done
 
 

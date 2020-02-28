@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File eeprom_rs232.asm                     combined next generation V3.06.2
+;   File eeprom_rs232.asm                     combined next generation V3.08.8
 ;
 ;   Internal EEPROM, RS232
 ;
@@ -13,51 +13,27 @@
 #include "wait.inc"
 #include "shared_definitions.h"
 #include "rtc.inc"
+#include "external_flash.inc"
+
+#DEFINE INSIDE_EEPROM_RS232
+#include "eeprom_rs232.inc"
+
 
 	extern	lt2942_charge_done
 
 ;-----------------------------------------------------------------------------
-; Macros
-
-write_int_eeprom	macro	eeprom_address
-	movlw	eeprom_address
-	call	write_int_eeprom_1
-	endm
-
-read_int_eeprom		macro	eeprom_address
-	movlw	eeprom_address
-	call	read_int_eeprom_1
-	endm
-
-;-----------------------------------------------------------------------------
-; Reserved memory locations in EEPROM
-
-eeprom		code	0xF00000+0x10		; skip SERIAL number - it should not be overwritten
-
-	global	eeprom_serial_save
-	global	eeprom_opt_backup
-
-eeprom_serial_save	res 2
-eeprom_opt_backup	res 0x3E
-
+;
+;			for EEPROM Macros and Memory Map, see eeprom_rs232.inc
+;
 ;-----------------------------------------------------------------------------
 
-ee_rs232		CODE
+ee_rs232	CODE
 
 ;=============================================================================
-
-	global	write_int_eeprom_1
-write_int_eeprom_1:
-	movwf	EEADR
-	bra		write_eeprom				; writes and "returns" after write
-
-
-	global	read_int_eeprom_1
-read_int_eeprom_1:
-	movwf	EEADR
-	bra		read_eeprom					; reads and "returns" after write
-
+;   EEPROM Functions
 ;=============================================================================
+
+;-----------------------------------------------------------------------------
 ; read from internal EEPROM
 ;
 ; Input:   EEADRH:EEADR = EEPROM address
@@ -66,12 +42,12 @@ read_int_eeprom_1:
 ;
 	global	read_eeprom
 read_eeprom:
-	bcf		EECON1,EEPGD
-	bcf		EECON1,CFGS
-	bsf		EECON1,RD
+	bcf		EECON1,EEPGD					;
+	bcf		EECON1,CFGS						;
+	bsf		EECON1,RD						;
 	return
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 ; write into internal EEPROM
 ;
 ; Input:   EEADRH:EEADR = EEPROM address
@@ -80,24 +56,173 @@ read_eeprom:
 ;
 	global	write_eeprom
 write_eeprom:
-	bcf		EECON1,EEPGD
-	bcf		EECON1,CFGS
-	bsf		EECON1,WREN
-
-	bcf		INTCON,GIE					; disable interrupts for the next 5 instructions
-	movlw	0x55
-	movwf	EECON2
-	movlw	0xAA
-	movwf	EECON2
-	bsf		EECON1,WR
-
-write_eep2:
-	btfsc	EECON1,WR
-	bra		write_eep2					; wait about 4ms...
-	bcf		EECON1,WREN
-	bsf		INTCON,GIE					; ...but the flag for the ISR routines were still set, so they will interrupt now!
+	bcf		EECON1,EEPGD					;
+	bcf		EECON1,CFGS						;
+	bsf		EECON1,WREN						;
+	bcf		INTCON,GIE						; disable interrupts for the next 5 instructions
+	movlw	0x55							; unlock sequence
+	movwf	EECON2							; ...
+	movlw	0xAA							; ...
+	movwf	EECON2							; ...
+	bsf		EECON1,WR						; start write operation
+write_eeprom_loop:
+	btfsc	EECON1,WR						; write completed?
+	bra		write_eeprom_loop				; NO - loop waiting
+	bcf		EECON1,WREN						;
+	bsf		INTCON,GIE						; ...but the flag for the ISR routines were still set, so they will interrupt now!
 	return
 
+;-----------------------------------------------------------------------------
+; these 2 functions are meant to be used through the macros, see eeprom_rs232!
+;
+	global	eeprom_read_common
+eeprom_read_common:
+	movwf	eeprom_loop						; initialize loop counter
+eeprom_read_common_loop:
+	rcall	read_eeprom						; execute read
+	movff	EEDATA,POSTINC1					; copy byte  from EEPROM data register to memory
+	incf	EEADR,F							; advance to next EEPROM cell
+	decfsz	eeprom_loop,F					; decrement loop counter, all done?
+	bra		eeprom_read_common_loop			; NO  - loop
+	return									; YES - done
+
+	global	eeprom_write_common
+eeprom_write_common:
+	movwf	eeprom_loop						; initialize loop counter
+eeprom_write_common_loop:
+	movff	POSTINC1,EEDATA					; copy byte from memory to EEPROM data register
+	rcall	write_eeprom					; execute write
+	incf	EEADR,F							; advance to next EEPROM cell
+	decfsz	eeprom_loop,F					; decrement loop counter, all done?
+	bra		eeprom_write_common_loop		; NO  - loop
+	return									; YES - done
+
+;-----------------------------------------------------------------------------
+; REad OSTC serial number
+;
+	global	eeprom_serial_number_read
+eeprom_serial_number_read:
+	EEPROM_II_READ eeprom_ostc_serial,mpr
+	return
+
+;-----------------------------------------------------------------------------
+; Read and write dive number offset
+;
+	global	eeprom_log_offset_read
+eeprom_log_offset_read:
+	EEPROM_II_READ	eeprom_log_offset,mpr
+	return
+
+	global	eeprom_log_offset_write
+eeprom_log_offset_write:
+	EEPROM_II_WRITE mpr,eeprom_log_offset
+	return
+
+
+;-----------------------------------------------------------------------------
+; Read and write total number of dives
+;
+	global	eeprom_total_dives_read
+eeprom_total_dives_read:
+	EEPROM_II_READ	eeprom_num_dives,mpr
+	return
+
+	global	eeprom_total_dives_write
+eeprom_total_dives_write:
+	EEPROM_II_WRITE mpr,eeprom_num_dives
+	return
+
+
+;-----------------------------------------------------------------------------
+; Read and write the battery gauge and type
+;
+	global	eeprom_battery_gauge_read
+eeprom_battery_gauge_read:
+	; retrieve battery gauge from EEPROM 0x07-0x0C
+	bsf		block_battery_gauge								; suspend ISR from accessing the battery gauge
+	EEPROM_CC_READ eeprom_battery_type, battery_type		; 1 byte read from EEPROM
+	EEPROM_RR_READ eeprom_battery_gauge,battery_gauge,.6	; 6 byte read from EEPROM
+	bcf		block_battery_gauge								; allow ISR to access the battery gauge again
+	return
+
+	global	eeprom_battery_gauge_write
+eeprom_battery_gauge_write:
+	bsf		block_battery_gauge								; suspend ISR from accessing the battery gauge
+	EEPROM_CC_WRITE battery_type, eeprom_battery_type		; 1 byte write to EEPROM
+update_battery_gauge:
+	EEPROM_RR_WRITE battery_gauge,eeprom_battery_gauge,.6	; 6 byte write to EEPROM
+	bcf		block_battery_gauge								; allow ISR to access the battery gauge again
+	return
+
+
+;-----------------------------------------------------------------------------
+; Read and write the deco status
+;
+	global	eeprom_deco_data_read
+eeprom_deco_data_read:
+
+	btfsc	RCON,POR												; was there a power outage ?
+	bra		eeprom_deco_data_read_1									; NO  - RTC is up-to-date
+
+	EEPROM_RR_READ eeprom_deco_data_timestamp,rtc_latched_year,.6	;   6 byte read from EEPROM
+	call	rtc_set_rtc												;     recover RTC to last known time & date
+
+eeprom_deco_data_read_1:
+
+	; restore surface interval
+	EEPROM_II_READ eeprom_deco_data_surfinterval,mpr				;   2 byte read from EEPROM
+	SMOVII	mpr,surface_interval_mins								;     ISR-safe copy of surface interval
+
+	; bank 3: restore desaturation status
+	EEPROM_RR_READ eeprom_deco_data_bank3,0x300,.9					;   9 byte read from EEPROM
+
+	; bank 5: restore CNS
+	EEPROM_RR_READ eeprom_deco_data_bank5,0x500,.4					;   4 byte read from EEPROM
+
+	; bank 7: restore tissue pressures
+	EEPROM_RR_READ eeprom_deco_data_bank7,0x700,.128				; 128 byte read from EEPROM
+
+	return															;   done
+
+
+	global	eeprom_deco_data_write
+eeprom_deco_data_write:
+
+	; invalidate current data in vault
+	movlw	DECO_DATA_INVALID_TOKEN									;     deco data invalid token
+	EEPROM_CC_WRITE WREG,eeprom_deco_data_validity					;   1 byte write to EEPROM
+
+	; store vault version
+	movlw	eeprom_vault_version									;     deco data format version
+	EEPROM_CC_WRITE WREG,eeprom_deco_data_version					;   1 byte write to EEPROM
+
+	; store date/time
+	SMOVSS	rtc_year,rtc_latched_year								;     ISR-safe 6 byte copy of date and time
+	EEPROM_RR_WRITE rtc_latched_year,eeprom_deco_data_timestamp,.6	;   6 byte write to EEPROM
+
+	; store surface interval
+	SMOVII	surface_interval_mins,mpr								;     ISR-safe copy of surface interval
+	EEPROM_II_WRITE mpr,eeprom_deco_data_surfinterval				;   2 byte write to EEPROM
+
+	; bank 3: store desaturation status
+	EEPROM_RR_WRITE 0x300,eeprom_deco_data_bank3,.9					;   9 byte write to EEPROM
+
+	; bank 5: store CNS
+	EEPROM_RR_WRITE 0x500,eeprom_deco_data_bank5,.4					;   4 byte write to EEPROM
+
+	; bank 7: store tissue pressures
+	EEPROM_RR_WRITE 0x700,eeprom_deco_data_bank7,.128				; 128 byte write to EEPROM
+
+	; indicate new valid data in vault
+	movlw	DECO_DATA_VALID_TOKEN									;     deco data valid token
+	EEPROM_CC_WRITE WREG,eeprom_deco_data_validity					;   1 byte write to EEPROM
+
+	return															;   done
+
+
+
+;=============================================================================
+;   RS232 Functions
 ;=============================================================================
 
 	global	disable_ir_s8
@@ -139,34 +264,22 @@ enable_ir_s8:
 
 enable_s8:
 	banksel	TXSTA2						; select bank for IO register access
-	clrf	TXSTA2
-	clrf	RCSTA2
+	clrf	TXSTA2						; reset UART 2 TX function
+	clrf	RCSTA2						; reset UART 2 RX function
 	banksel	common						; back to bank common
-	; Check for Digital/Analog
-	bsf		s8_npower					; power-down S8 HUD
-	WAITMS	d'2'						; very short delay
-	bsf		mcp_power					; power-up instrumentation amp
-	btfss	mcp_power
-	bra		$-4
 
-	; It may be digital, check for voltage when isolator is powered
-	bcf		s8_npower					; power S8 HUD
-	WAITMS	d'1'						; wait 1 ms
-	btfsc	PORTG,2						; RX2=1?
-	bra		enable_s8_2					; YES - digital
+	bsf		mcp_power					; power-up instrumentation amp (for analog AND digital)
+	btfss	mcp_power					; power-up completed?
+	bra		$-4							; NO - loop
+
+	; toggle for digital/analog
+	TSTOSS	opt_s8_mode					; =0: analog, =1: digital RS232
+	bra		enable_s8_analog			; -> analog
+
+	; configure S8 digital interface
+	bcf		s8_npower					; power S8 HUD (inverted via P-MOS transistor)
 	WAITMS	d'30'						; NO  - wait 30 ms
-	btfsc	PORTG,2						;     - RX2=1?
-	bra		enable_s8_2					;       YES - digital
-	;bra	enable_s8_analog			;       NO  - not found, set to analog (fail-safe)
-
-enable_s8_analog:
-	; S8 analog interface
-	bsf		s8_npower					; power-down S8 HUD
-	bcf		s8_digital_avail			; digital S8 interface not available
-	return
-
-enable_s8_2:							; configure S8 digital interface
-	banksel BAUDCON2					; select bank for IO register access
+	banksel	BAUDCON2					; select bank for IO register access
 	movlw	b'00000000'					; BRG16=0, normal for S8
 	movwf	BAUDCON2
 	movlw	b'00100000'					; BRGH=0, SYNC=0
@@ -176,330 +289,137 @@ enable_s8_2:							; configure S8 digital interface
 	movlw	b'10010000'
 	movwf	RCSTA2
 	banksel	common						; back to bank common
+	bsf		PIE3,RC2IE					; enable RC2 INT
 	bsf		s8_digital_avail			; digital S8 interface available
 	return
 
-;=============================================================================
+enable_s8_analog:
+	; S8 analog interface
+	bcf		PIE3,RC2IE					; disable RC2 INT
+	bsf		s8_npower					; power-down S8 HUD
+	bcf		s8_digital_avail			; digital S8 interface not available
+	return
+
+
+	global	ir_s8_wait_tx
+ir_s8_wait_tx:
+	banksel	TXSTA2						; select bank for IO register access
+rs232_wait_tx2_loop:
+	btfss	TXSTA2,TRMT					; RS232 busy?
+	bra		rs232_wait_tx2_loop			; YES - wait...
+	banksel	common						; NO  - back to bank common
+	return								;     - done
+
+;-----------------------------------------------------------------------------
 
 	global	enable_rs232
 enable_rs232:
 	call	request_speed_normal		; request CPU speed change to normal speed
 enable_rs232_1:
 	btfss	speed_is_normal				; speed = normal?
-	bra		enable_rs232_1				; NO - wait for ISR to adjust speed
-	bcf		PORTE,0						; start comm
-	bsf		PORTJ,2						; /Reset (for very old OSTC sport)
-	;initialize serial port1 (TRISC6/7)
-	movlw	b'00100100'					; BRGH=1, SYNC=0
-	movwf	TXSTA1
-	movlw	b'10010000'
-	movwf	RCSTA1
-	return
+	bra		enable_rs232_1				; NO  - loop waiting for ISR to have adjusted the speed
+	bcf		PORTE,0						; YES - switch port to comm
+	bsf		PORTJ,2						;     - /Reset (required for very old OSTC sport)
+	movlw	b'00100100'					;     - TX configuration: TX enabled, async, high speed
+	movwf	TXSTA1						;     - ...
+	movlw	b'10010000'					;     - RX configuration: port enabled, RX enabled
+	movwf	RCSTA1						;     - ...
+	movlw	HIGH(.65536-rx_timeout*.32)	;     - define TMR5H initialization value for RX timeout
+	movwf	rx_timoeut_tmr5h_load		;     - store for later use
+	return								;     - done
 
 
 	global	disable_rs232
 disable_rs232:
-	clrf	RCSTA1
-	clrf	TXSTA1						; UART disable
-	bcf		PORTC,6						; TX hard to GND
+	clrf	RCSTA1						; disable RX
+	clrf	TXSTA1						; disable TX
+	bcf		PORTC,6						; switch TX pin hard to GND
 	bsf		PORTE,0						; stop comm
-	bcf		PORTJ,2						; /Reset (for very old OSTC sport)
+	bcf		PORTJ,2						; /Reset (required for very old OSTC sport)
 	return
 
 
-	global	rs232_wait_tx
+	global	rs232_wait_tx				; ++++ do not touch WREG here! ++++
 rs232_wait_tx:
-	btfss	TXSTA1,TRMT					; RS232 busy?
-	bra		rs232_wait_tx				; YES - wait...
-
-	btfss	ble_available				; ble available?
-	return								; NO - done
-
-	btfsc	NRTS						; wait for Bluetooth module
-	bra		rs232_wait_tx				; YES - wait...
-	return								; done
+	btfss	TXSTA1,TRMT					; last byte completely shifted out on TX pin?
+	bra		rs232_wait_tx				; NO  - wait...
+	btfss	ble_available				; YES - OSTC running with Bluetooth?
+	return								;       NO  - done
+	btfsc	NRTS						;       YES - Bluetooth module also completed TX?
+	bra		rs232_wait_tx				;             NO  - wait...
+	return								;             YES - done
 
 
-	global	rs232_wait_tx2
-rs232_wait_tx2:
-	banksel	TXSTA2						; select bank for IO register access
-rs232_wait_tx2_loop:
-	btfss	TXSTA2,TRMT					; RS232 busy?
-	bra		rs232_wait_tx2_loop			; YES - wait...
-	banksel	common						; back to bank common
-	return								; done
-
-
-	global	rs232_get_byte
+										; ++++ make this code as fast as possible! ++++
+	global	rs232_get_byte				; ++++       do not touch WREG here!       ++++
 rs232_get_byte:
 	bcf		rs232_rx_timeout			; clear timeout flag
-										; set timeout timer to approx. 400 ms:
-	clrf	uart_timeout_timer+0		; set low   byte of timeout timer to 0
-	clrf	uart_timeout_timer+1		; set high  byte of timeout timer to 0
-										; set upper byte of timeout timer to 10 without using WREG:
-	clrf	uart_timeout_timer+2		; first clear to 0, then...
-	bsf		uart_timeout_timer+2,1		; set bit 1 (value 2),
-	bsf		uart_timeout_timer+2,3		; and bit 3 (value 8).
-
+	btfsc	PIR1,RCIF					; received a data byte? (bit is set on RX complete and reset on reading RCREG1)
+	return								; YES - done, received a byte (fast path)
+	movff	rx_timoeut_tmr5h_load,TMR5H	;     - load TMR5 high with timeout value
+	clrf	TMR5L						;     - load TMR5 low  with a zero, writing low starts the timer
+	bcf		PIR5,TMR5IF					;     - clear timer overflow flag
 rs232_get_byte_loop:
 	btfsc	PIR1,RCIF					; received a data byte?
+	return								; YES - done, received a byte
+	btfss	PIR5,TMR5IF					; NO  - timer overflow (timeout)?
+	bra		rs232_get_byte_loop			;       NO  - continue looping
+	;bra	rs232_rx_get_timeout		;       YES - give up
+
+rs232_rx_get_timeout:
+	bsf		rs232_rx_timeout			; set timeout flag
+	bcf		RCSTA1,CREN					; clear receiver status by toggling CREN
+	bsf		RCSTA1,CREN					; ...
+	return								; done, given up
+
+
+;-----------------------------------------------------------------------------
+; Send and Receive functions to be used through the macros
+
+; send a range of 1-256 bytes from memory to the RS232 interface
+;
+	global	serial_tx_ram
+serial_tx_ram:
+	movwf	eeprom_loop					; initialize loop counter (eeprom variable used here)
+serial_tx_ram_loop:
+	rcall	rs232_wait_tx				; wait for completion of last transmit
+	movff	POSTINC2,TXREG1				; send a byte from memory to serial
+	decfsz	eeprom_loop,F				; decrement loop counter, became zero?
+	bra		serial_tx_ram_loop			; NO  - loop
 	return								; YES - done
-	decfsz	uart_timeout_timer+0,F		; NO  - decrement low byte of timer, became zero?
-	bra		rs232_get_byte_loop			;       NO  - loop
-	decfsz	uart_timeout_timer+1,F		;       YES - decrement high byte of timer, became zero?
-	bra		rs232_get_byte_loop			;             NO  - loop
-	decfsz	uart_timeout_timer+2,F		;             YES - decrement upper byte of timer, became zero?
-	bra		rs232_get_byte_loop			;                   NO  - loop
-	bsf		rs232_rx_timeout			;                   YES - set timeout flag
-	bcf		RCSTA1,CREN					;                       - clear receiver status
-	bsf		RCSTA1,CREN					;                       - ...
-	return								;                       - and return anyway
-
-;=============================================================================
-
-	global	do_logoffset_common_write
-do_logoffset_common_write:
-	movff	lo,EEDATA
-	write_int_eeprom 0x0D
-	movff	hi,EEDATA
-	write_int_eeprom 0x0E
-	return
-
-	global	do_logoffset_common_read
-do_logoffset_common_read:
-	clrf	EEADRH
-	read_int_eeprom 0x0D
-	movff	EEDATA,lo
-	read_int_eeprom 0x0E
-	movff	EEDATA,hi
-	return
-
-;=============================================================================
-
-	global	update_battery_registers
-update_battery_registers:
-	; save battery gauge to EEPROM 0x07-0x0C
-	bsf		block_battery_gauge			; suspend ISR from accessing the battery gauge
-	clrf	EEADRH
-	movff	battery_gauge+0,EEDATA
-	write_int_eeprom 0x07
-	movff	battery_gauge+1,EEDATA
-	write_int_eeprom 0x08
-	movff	battery_gauge+2,EEDATA
-	write_int_eeprom 0x09
-	movff	battery_gauge+3,EEDATA
-	write_int_eeprom 0x0A
-	movff	battery_gauge+4,EEDATA
-	write_int_eeprom 0x0B
-	movff	battery_gauge+5,EEDATA
-	write_int_eeprom 0x0C
-	movff	battery_type,EEDATA			; =0:1.5V, =1:3.6V Saft, =2:LiIon 3.7V/0.8Ah, =3:LiIon 3.7V/3.1Ah, =4: LiIon 3.7V/2.3Ah
-	write_int_eeprom 0x0F
-	bcf		block_battery_gauge			; allow ISR to access the battery gauge again
-	return
 
 
-	global	retrieve_battery_registers
-retrieve_battery_registers:
-	; retrieve battery gauge from EEPROM 0x07-0x0C
-	bsf		block_battery_gauge			; suspend ISR from accessing the battery gauge
-	clrf	EEADRH
-	read_int_eeprom 0x07
-	movff	EEDATA,battery_gauge+0
-	read_int_eeprom 0x08
-	movff	EEDATA,battery_gauge+1
-	read_int_eeprom 0x09
-	movff	EEDATA,battery_gauge+2
-	read_int_eeprom 0x0A
-	movff	EEDATA,battery_gauge+3
-	read_int_eeprom 0x0B
-	movff	EEDATA,battery_gauge+4
-	read_int_eeprom 0x0C
-	movff	EEDATA,battery_gauge+5
-	read_int_eeprom 0x0F
-	movff	EEDATA,battery_type			; =0:1.5V, =1:3,6V Saft, =2:LiIon 3,7V/0.8Ah, =3:LiIon 3,7V/3.1Ah, =4: LiIon 3,7V/2.3Ah
-	bcf		block_battery_gauge			; allow ISR to access the battery gauge again
-	return
+; receive a range of 1-256 byte from the RS232 interface and write them to memory
+;
+	global	serial_rx_stream_ram		; ++++ make this code as fast as possible! ++++
+serial_rx_stream_ram:
+	movwf	eeprom_loop					; initialize loop counter (eeprom variable used here)
+serial_rx_stream_ram_loop_1:
+	btfss	PIR1,RCIF					; received a data byte? (bit is set on RX complete and reset on reading RCREG1)
+	bra		serial_rx_stream_ram_tmr	; NO  - enter loop with timeout
+	movff	RCREG1,POSTINC2				; YES - copy received byte to memory
+	decfsz	eeprom_loop,F				;     - decrement loop counter, became zero?
+	bra		serial_rx_stream_ram_loop_1	;       NO  - loop
+	bcf		rs232_rx_timeout			;       YES - clear timeout flag
+	return								;           - all bytes received, done
+serial_rx_stream_ram_tmr:
+	movff	rx_timoeut_tmr5h_load,TMR5H	; load TMR5 high with timeout value
+	clrf	TMR5L						; load TMR5 low  with a zero, writing low starts the timer
+	bcf		PIR5,TMR5IF					; clear timer overflow flag
+serial_rx_stream_ram_loop_2a:
+	clrf	TMR5L						; restart timer (see above)
+serial_rx_stream_ram_loop_2b:
+	btfss	PIR1,RCIF					; received a data byte? (bit is set on RX complete and reset on reading RCREG1)
+	bra		serial_rx_stream_ram_chk	; NO  - check timeout
+	movff	RCREG1,POSTINC2				; YES - copy received byte to memory
+	decfsz	eeprom_loop,F				;     - decrement loop counter, became zero?
+	bra		serial_rx_stream_ram_loop_2a;       NO  - loop
+	bcf		rs232_rx_timeout			;       YES - clear timeout flag
+	return								;           - all bytes received, done
+serial_rx_stream_ram_chk:
+	btfss	PIR5,TMR5IF					; timer overflow (timeout)?
+	bra		serial_rx_stream_ram_loop_2b; NO  - continue looping
+	bra		rs232_rx_get_timeout		; YES - give up
 
-;=============================================================================
-
-	global	vault_decodata_into_eeprom
-vault_decodata_into_eeprom:
-	; Vault in EEPROM 512...1023
-	; Write 0xAA at 512 to indicate valid data in vault
-	; Store last time/date
-	; Store 0x700 to 0x780 (pres_tissue_N2 and pres_tissue_He)
-	movlw	HIGH .512						; =2
-	movwf	EEADRH							; set EEPROM address, high byte
-
-	; indicate valid data in vault
-	movlw	0xAA
-	movwf	EEDATA
-	write_int_eeprom .0
-
-	; store date/time
-	SMOVSS	rtc_year,rtc_latched_year		; ISR-safe 6 byte copy of date and time
-	movff	rtc_latched_year+0,EEDATA
-	write_int_eeprom .1
-	movff	rtc_latched_year+1,EEDATA
-	write_int_eeprom .2
-	movff	rtc_latched_year+2,EEDATA
-	write_int_eeprom .3
-	movff	rtc_latched_year+3,EEDATA
-	write_int_eeprom .4
-	movff	rtc_latched_year+4,EEDATA
-	write_int_eeprom .5
-	movff	rtc_latched_year+5,EEDATA
-	write_int_eeprom .6
-
-	movff	int_O_CNS_current+0,EEDATA		; get current CNS, low  byte
-	write_int_eeprom .7						; store value
-	movff	int_O_CNS_current+1,EEDATA		; get current CNS, high byte
-	write_int_eeprom .8						; store value
-
-	movff	int_O_desaturation_time+0,EEDATA; get desaturation time, low  byte
-	write_int_eeprom .9						; store value
-	movff	int_O_desaturation_time+1,EEDATA; get desaturation time, high byte
-	write_int_eeprom .10					; store value
-
-	SMOVII	surface_interval_mins,mpr		; ISR-safe copy of surface interval
-	movff	mpr+0,EEDATA					; get surface interval, low  byte
-	write_int_eeprom .11					; store value
-	movff	mpr+1,EEDATA					; get surface interval, high byte
-	write_int_eeprom .12					; store value
-
-	movff	int_O_lead_supersat+0,EEDATA	; get leading tissue's supersaturation, value is limited to 255 so only the lower byte is used for the value
-	write_int_eeprom .13
-
-	movff	int_O_nofly_time+0,EEDATA		; get time, low  byte
-	write_int_eeprom .14					; store value
-	movff	int_O_nofly_time+1,EEDATA		; get time, high byte
-	write_int_eeprom .15					; store value
-
-	; tissue data from 16 to 144
-	movlw	.16
-	movwf	EEADR
-	movlw	.128							; 2 * 16 floats = 2*16*4 byte = 128 byte
-	movwf	lo
-	lfsr	FSR1,0x700						; pres_tissue_N2+0
-vault_decodata_into_eeprom2:
-	movff	POSTINC1,EEDATA
-	call	write_eeprom					; EEDATA into EEPROM@EEADR
-	incf	EEADR,F
-	decfsz	lo,F							; all done?
-	bra		vault_decodata_into_eeprom2		; NO  - loop
-	clrf	EEADRH							; YES - reset EEPROM pointer
-	return									;     - done
-
-
-	global	restore_decodata_from_eeprom
-restore_decodata_from_eeprom:
-	movlw	LOW  .512						; =0
-	movwf	EEADR							; set EEPROM address, low  byte
-	movlw	HIGH .512						; =2
-	movwf	EEADRH							; set EEPROM address, high byte
-
-	; restore date and time
-	read_int_eeprom .1
-	movff	EEDATA,rtc_latched_year
-	read_int_eeprom .2
-	movff	EEDATA,rtc_latched_month
-	read_int_eeprom .3
-	movff	EEDATA,rtc_latched_day
-	read_int_eeprom .4
-	movff	EEDATA,rtc_latched_hour
-	read_int_eeprom .5
-	movff	EEDATA,rtc_latched_mins
-	read_int_eeprom .6
-	movff	EEDATA,rtc_latched_secs
-	call	rtc_set_rtc						; write time and date to RTC module
-
-	read_int_eeprom .7						; read CNS%, low  byte
-	movff	EEDATA,int_O_CNS_current+0		; restore value
-	read_int_eeprom .8						; read CNS%, high byte
-	movff	EEDATA,int_O_CNS_current+1		; restore value
-
-	read_int_eeprom .9						; read desaturation time, low  byte
-	movff	EEDATA,int_O_desaturation_time+0; restore value
-	read_int_eeprom .10						; read desaturation time, high byte
-	movff	EEDATA,int_O_desaturation_time+1; restore value
-
-	read_int_eeprom .11						; read surface interval, low  byte
-	movff	EEDATA,mpr+0					; cache value in mpr
-	read_int_eeprom .12						; read surface interval, high byte
-	movff	EEDATA,mpr+1					; cache value in mpr
-	SMOVII	mpr,surface_interval_mins		; ISR-safe copy-back of surface interval
-
-	read_int_eeprom .13						; read leading tissue's supersaturation
-	movff	EEDATA,int_O_lead_supersat+0	; restore value
-
-	read_int_eeprom .14						; read no-fly/no-altitude time, low  byte
-	movff	EEDATA,int_O_nofly_time+0		; restore value
-	read_int_eeprom .15						; read no-fly/no-altitude time, high byte
-	movff	EEDATA,int_O_nofly_time+1		; restore value
-
-	; tissue data from 16 to 144
-	movlw	.16
-	movwf	EEADR
-	movlw	.128							; 2 * 16 floats = 2*16*4 byte = 128 byte
-	movwf	lo
-	lfsr	FSR1,0x700						; pres_tissue_N2+0
-restore_decodata_from_eeprom2:
-	call	read_eeprom						; EEPROM@EEADR into EEDATA
-	movff	EEDATA,POSTINC1
-	incf	EEADR,F
-	decfsz	lo,F							; all done?
-	bra		restore_decodata_from_eeprom2	; NO  - loop
-	clrf	EEADRH							; YES - revert EEPROM high address pointer to default
-	return									;     - done
-
-;=============================================================================
-
-	global	reset_battery_pointer			; called from comm and menu tree
-	global	reset_battery_internal_only
-reset_battery_pointer:						; reset battery pointer 0x07-0x0C and battery gauge
-	btfsc	battery_gauge_available			; something to reset?
-	call	lt2942_charge_done				; YES - reset accumulating registers to 0xFFFF
-reset_battery_internal_only:
-	clrf	EEADRH
-	clrf	EEDATA							; delete to zero
-	write_int_eeprom 0x07
-	write_int_eeprom 0x08
-	write_int_eeprom 0x09
-	write_int_eeprom 0x0A
-	write_int_eeprom 0x0B
-	write_int_eeprom 0x0C
-
-	bsf		block_battery_gauge				; suspend ISR from accessing the battery gauge
-	banksel	battery_gauge					; select bank ISR data
-	clrf	battery_gauge+0					; null the battery gauge
-	clrf	battery_gauge+1
-	clrf	battery_gauge+2
-	clrf	battery_gauge+3
-	clrf	battery_gauge+4
-	clrf	battery_gauge+5
-	banksel	common							; back to bank common
-	bcf		block_battery_gauge				; allow ISR to access the battery gauge again
-
-	movlw	.100
-	movwf	batt_percent					; set battery level to 100%
-	return
-
-;=============================================================================
-
-	global	eeprom_reset_logbook_pointers
-eeprom_reset_logbook_pointers:
-	clrf	EEADRH							; make sure to select EEPROM bank 0
-	clrf	EEDATA
-	write_int_eeprom .4
-	write_int_eeprom .5
-	write_int_eeprom .6
-	write_int_eeprom .2						; also delete total dive counter
-	write_int_eeprom .3
-	write_int_eeprom .16
-	write_int_eeprom .17					; ...and the backup counter, too
-	return
-
-;=============================================================================
-
+;-----------------------------------------------------------------------------
 	END

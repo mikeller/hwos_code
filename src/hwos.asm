@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File hwos.asm                             combined next generation V3.06.1
+;   File hwos.asm                             combined next generation V3.08.8
 ;
 ;   Definition of the hwOS dive computer platform.
 ;
@@ -83,7 +83,6 @@ apnoe_surface_secs				res 1		; surface time seconds        | these 2 Variables r
 apnoe_dive_mins					res 1		; dive    time minutes        | Attention: do not change the position of
 apnoe_dive_secs					res 1		; dive    time seconds        | these 2 Variables relative to each other!
 
-
 ;---- Profile Recording
 sampling_rate					res 1		; configured sampling rate
 sampling_timer					res 1		; sampling timer
@@ -101,6 +100,7 @@ hud_battery_mv					res 2		; hud/ppo2 monitor battery voltage in mV     | between
 ; 20 byte variables placed by math library
 ; ==
 ; 80 byte used, 16 byte free (96 byte total available)
+
 
 	global	HW_descriptor
 	global	HW_variants
@@ -269,20 +269,22 @@ init_ostc:
 	movwf	ADCON0
 	movlw	b'00100000'			; 2.048V Vref+
 	movwf	ADCON1
-	movlw	b'10111010'			; right aligned, 20 x T_AD acquisition time, FOSC/32 -> Max. 40MHz device clock speed
+	movlw	b'10111010'			; right aligned, 20 x T_AD acquisition time, FOSC/32 -> max. 40 MHz device clock speed
 	movwf	ADCON2
 
 
 ; serial Port 1 (TRISC6/7)
-	movlw	b'00001000'			; BRG16=1
-	movwf	BAUDCON1
-	movlw	.34					; SPBRGH:SPBRG =  .34 : 114285 BAUD @ 16MHz (+0.79% Error at 115200 BAUD)
-	movwf	SPBRG1				; SPBRGH:SPBRG = .207 :  19230 BAUD @ 16MHz (-0.16% Error at  19200 BAUD)
-	clrf	SPBRGH1				;
+	movlw	b'00001000'			; switch baud generator to 16 bit mode (BRG16=1)
+	movwf	BAUDCON1			; ...
+								; SPBRGH:SPBRG =  .34 : 114285 BAUD @ 16MHz (+0.79% error at 115200 baud)
+								; SPBRGH:SPBRG = .207 :  19230 BAUD @ 16MHz (-0.16% error at  19200 baud)
+	movlw	.34					; select 114285 baud (low byte)
+	movwf	SPBRG1				; ...
+	clrf	SPBRGH1				; ...                (high byte)
 
-	clrf	RCSTA1
-	clrf	TXSTA1				; UART disable
-	bcf		PORTC,6				; TX hard to GND
+	clrf	RCSTA1				; disable UART RX
+	clrf	TXSTA1				; disable UART TX
+	bcf		PORTC,6				; tie TX output hard to GND
 
 
 ; serial Port 2 (TRISG2) for IR/S8 digital interface
@@ -434,28 +436,27 @@ request_speed_fastest:
 	global	backup_flash_page
 backup_flash_page:
 	banksel	common
-	movlw	0x00					; start address in internal program memory
-	movwf	TBLPTRL
-	movwf	TBLPTRH
-	movwf	TBLPTRU
+
+	; set start address in internal program memory
+	movlw	0x00					; set 0x000000
+	movwf	TBLPTRL					; ...
+	movwf	TBLPTRH					; ...
+	movwf	TBLPTRU					; ...
+	TBLRD*-							; dummy read to be in 128 byte block
+
+	; set start address in EEPROM
+	EEPROM_SET_ADDRESS eeprom_prog_page0_backup
 
 	movlw	.128					; copy 1 block = 128 byte
-	movwf	lo						; byte counter
-
-	clrf	EEADR					; start address in EEPROM, low
-	movlw	.3						; start address in EEPROM, high
-	movwf	EEADRH
-
-	TBLRD*-							; dummy read to be in 128 byte block
+	movwf	eeprom_loop				; initialize loop counter
 backup_flash_loop:
 	tblrd+*							; read one byte from program memory (with pre-increment)
 	movff	TABLAT,EEDATA			; transfer byte from program memory read to EEPROM write
-	call	write_eeprom			; execute EEPROM write
+	call	write_eeprom			; execute   EEPROM write
 	incf	EEADR,F					; increment EEPROM address
-	decfsz	lo,F					; 128 byte done?
+	decfsz	eeprom_loop,F			; all 128 byte done?
 	bra		backup_flash_loop		; NO  - loop
-	clrf	EEADRH					; YES - reset EEPROM high address
-	return							;     - done
+	return							; YES - done
 
 ;=============================================================================
 ; Restore the first 128 bytes from EEPROM to program memory
@@ -463,42 +464,59 @@ backup_flash_loop:
 	global	restore_flash
 restore_flash:
 	banksel	common
-	movlw	0x00					; start address in internal program memory
-	movwf	TBLPTRL
-	movwf	TBLPTRH
-	movwf	TBLPTRU
+
+	;set start address in internal program memory
+	movlw	0x00					; set 0x000000
+	movwf	TBLPTRL					; ...
+	movwf	TBLPTRH					; ...
+	movwf	TBLPTRU					; ...
+	TBLRD*-							; dummy read to be in 128 byte block
 
 	movlw	b'10010100'				; setup   block erase
 	rcall	restore_write			; execute block erase
 
+	; set start address in EEPROM
+	EEPROM_SET_ADDRESS eeprom_prog_page0_backup
+
 	movlw	.128					; copy 1 block = 128 byte
-	movwf	lo						; byte counter
-
-	clrf	EEADR					; start address in EEPROM, low
-	movlw	.3						; start address in EEPROM, high
-	movwf	EEADRH
-
-	TBLRD*-							; dummy read to be in 128 byte block
+	movwf	eeprom_loop				; initialize loop counter
 restore_flash_loop:
-	call	read_eeprom				; read one byte from EEPROM
+	call	read_eeprom				; execute   EEPROM read
 	incf	EEADR,F					; increment EEPROM address
 	movff	EEDATA,TABLAT			; transfer byte from EEPROM read to program memory write
 	tblwt+*							; execute program memory write (with pre-increment)
-	decfsz	lo,F					; 128 bytes done?
-	bra		restore_flash_loop		; NO - loop
+	decfsz	eeprom_loop,F			; all 128 bytes done?
+	bra		restore_flash_loop		; NO  - loop
 	movlw	b'10000100'				; YES - setup   block write
 	rcall	restore_write			;     - execute block write
 	reset							;     - done, reset CPU
 
 restore_write:
-	movwf	EECON1					; type of memory to write in
-	movlw	0x55
-	movwf	EECON2
-	movlw	0xAA
-	movwf	EECON2
-	bsf		EECON1,WR				; execute write
-	nop
-	nop
-	return
+	movwf	EECON1					; configure operation
+	movlw	0x55					; unlock sequence
+	movwf	EECON2					; ...
+	movlw	0xAA					; ...
+	movwf	EECON2					; ...
+	bsf		EECON1,WR				; execute operation
+	nop								; wait for operation to complete
+	nop								; ...
+	return							; done
+
+;=============================================================================
+; Memory clear and move functions, to be used through macros
+;
+	global	memory_clear
+memory_clear:
+	clrf	POSTINC1				; clear address
+	decfsz	WREG					; decrement loop counter, became zero?
+	bra		memory_clear			; NO  - loop
+	return							; YES - done
+
+	global	memory_move
+memory_move:
+	movff	POSTINC1,POSTINC2		; copy from-to
+	decfsz	WREG					; decrement loop counter, became zero?
+	bra		memory_move				; NO  - loop
+	return							; YES - done
 
 	END

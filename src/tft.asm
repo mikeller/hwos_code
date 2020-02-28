@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft.asm                              combined next generation V3.03.7
+;   File tft.asm                              combined next generation V3.08.8
 ;
 ;   low-level Display Outputs
 ;
@@ -190,7 +190,7 @@ TFT_ClearScreen_display2_loop2:
 TFT_ClearScreen_display3:
 	movlw	0x35				; vertical start address HIGH:LOW
 	rcall	TFT_CmdWrite
-	mullw   0
+	mullw	0
 	rcall	TFT_DataWrite_PROD
 
 	movlw	0x36				; vertical end address HIGH:LOW
@@ -227,10 +227,10 @@ TFT_ClearScreen_display3:
 	global	TFT_DisplayOff
 TFT_DisplayOff:
 	bcf		lightsen_power  		; power-down light sensor
-	btfsc	screen_type3
-	bra		TFT_DisplayOff_display3	; screen needs special power-down sequence
-	clrf	CCP1CON					; stop PWM
-	bcf		PORTC,2					; pull PWM out to GND
+	btfsc	screen_type3			; screen type 3 ?
+	bra		TFT_DisplayOff_display3	; YES - screen needs special power-down sequence
+	clrf	CCP1CON					; NO  - stop PWM
+	bcf		PORTC,2					;     - pull PWM out to GND
 	clrf	PORTA
 	clrf	PORTH
 	RD_L							; LOW
@@ -1051,6 +1051,7 @@ TFT_box_noflip_V:
 
 
 TFT_box_write_display2:
+	; setup left border
 	movlw	0x06
 	rcall	TFT_CmdWrite
 	movf	PRODH,W
@@ -1064,10 +1065,11 @@ TFT_box_write_display2:
 	addwf	PRODL,F
 	movf	win_width+1,W
 	addwfc	PRODH,F
-	decf	PRODL,F,A				; decrement result
+	decf	PRODL,F					; decrement result
 	btfss	STATUS,C
-	decf	PRODH,F,A
+	decf	PRODH,F
 
+	; setup right border
 	movlw	0x08
 	rcall	TFT_CmdWrite
 	movf	PRODH,W
@@ -1106,22 +1108,22 @@ TFT_box_write_display2:
 TFT_box_write_display3:
 	;---- Normal horizontal window ---------------------------------------
 	; Output 0x35 left,
-	;        0x36 right ==  left + width - 1.
+	;        0x36 right == left + width - 1.
 
 	Index_out 0x35					; window vertical start address
 	rcall	TFT_DataWrite_PROD		; output left
 	Index_out 0x21					; also the horizontal first pix coordinate
 	rcall	TFT_DataWrite_PROD		; output left
 
-	movf	win_width+0,W,ACCESS	; right = left + width - 1
+	movf	win_width+0,W			; right = left + width - 1
 	addwf	PRODL,F
-	movf	win_width+1,W,ACCESS
+	movf	win_width+1,W
 	addwfc	PRODH,F
-	decf	PRODL,F,A				; decrement result
+	decf	PRODL,F					; decrement result
 	btfss   STATUS,C
-	decf	PRODH,F,A
+	decf	PRODH,F
 
-	Index_out	0x36				; Write and the right border
+	Index_out	0x36				; write and the right border
 	rcall	TFT_DataWrite_PROD
 
 	;---- Normal vertical window -----------------------------------------
@@ -1152,7 +1154,7 @@ TFT_frame:
 	movff	win_top,tft_save_top		; backup everything
 	movff	win_height,tft_save_height
 	movff	win_leftx2,tft_save_left
-	movff	win_width,tft_save_width
+	movff	win_width+0,tft_save_width
 
 	;---- TOP line -----------------------------------------------------------
 	movlw	.1							; row ~ height = 1
@@ -1184,7 +1186,7 @@ TFT_frame:
 
 	;---- Restore everything -------------------------------------------------
 	movff	tft_save_left,win_leftx2
-	movff	tft_save_width,win_width
+	movff	tft_save_width,win_width+0
 	return
 
 ;=============================================================================
@@ -1253,6 +1255,7 @@ TFT_box_display2:
 	movff	win_color1,PRODH
 	movff	win_color2,PRODL
 	rcall	convert_for_display2
+	clrf	PRODH					; column counter
 TFT_box2_display2:					; loop height times
 	movff	win_height,PRODL
 TFT_box3_display2:					; loop width times
@@ -1328,8 +1331,8 @@ TFT_box4_display3:
 
 	global	TFT_set_color
 TFT_set_color:
-	movwf	tft_temp1				; get 8 Bit RGB b'RRRGGGBB'
-	movwf	tft_temp2				; copy
+	movwf	tft_temp1				; get 8 bit RGB b'RRRGGGBB' into tft_temp1...
+	movwf	tft_temp2				; ... and tft_temp2
 
 	; mask bit 7,6,5,4,3,2
 	movlw	b'00000011'
@@ -1472,25 +1475,26 @@ convert_for_display2:				; convert 16 bit RGB b'RRRRRGGG GGGBBBBB' into 24 bit R
 ; Dump screen contents to the UART
 ;
 	global	TFT_dump_screen_check
-	global	TFT_dump_screen
 TFT_dump_screen_check:
-    return
+	return
 	btfss	vusb_in					; USB (still) plugged in?
 	bcf		screen_dump_avail		; NO - disable screen dump function
-	call	rs232_get_byte			; try to read data from RS232
-	btfsc	rs232_rx_timeout		; anything received?
-	return							; NO  - return
-	movlw	"l"						; YES - load coding for screen dump command
-	cpfseq	RCREG1					;       screen dump command received?
-	return							;       NO  - return
 
+	SERIAL_CC_RECEIVE WREG			; try to read a byte from RS232
+	btfsc	rs232_rx_timeout		; anything received?
+	return							; NO  - done
+	xorlw	"l"						; YES - exclusive-or with coding of screen dump command
+	tstfsz	WREG					;     - screen dump command received?
+	return							;       NO  - return
+	;bra	TFT_dump_screen			;       YES - serve screen dump request
+
+	global	TFT_dump_screen
 TFT_dump_screen:
 	btfsc	screen_type2			; is this an OSTC with a screen of type 2?
-	return							; YES - not supported
+	return							; YES - not supported, abort
 	bsf		block_sensor_interrupt	; NO  - disable sensor interrupts
-	movlw	'l'						;     - prepare response
-	movwf	TXREG					;     - send    response
-	call	rs232_wait_tx			;     - wait for UART
+	SERIAL_LC_SEND 'l'				;     - send command acknowledge
+
 
 	;---- Send DISPLAY box command for the full screen window -------------------
 	Index_out 0x50					; window horizontal start address
@@ -1506,7 +1510,7 @@ TFT_dump_screen:
 	rcall	dump_screen_pixel_reset
 dump_screen_1:
 	btg		LEDr					; LED activity toggle
-	; Dump even column
+	; dump even column
 	movlw	.240					; 240 lines, once
 	movwf	ds_line
 dump_screen_2:
@@ -1526,7 +1530,7 @@ dump_screen_2:
 	bra		dump_screen_2
 	rcall	dump_screen_pixel_flush
 
-	; Dump odd column
+	; dump odd column
 	movlw	.240					; 240 lines, twice
 	movwf	ds_line
 dump_screen_3:
@@ -1541,7 +1545,7 @@ dump_screen_3:
 	rcall	pixel_write_col320		; start address vertical (.0 - .319)
 
 	rcall	TFT_DataRead_PROD		; read pixel
-	rcall	dump_screen_pixel
+	rcall	dump_screen_pixel		; compress and send pixel
 
 	decfsz	ds_line,F
 	bra		dump_screen_3
@@ -1555,7 +1559,7 @@ dump_screen_3:
 	bcf		block_sensor_interrupt	; re-enable sensor interrupts
 	clrf	RCREG1					; clear receive buffer
 	bcf		RCSTA1,CREN				; clear receiver status
-	bsf		RCSTA1,CREN
+	bsf		RCSTA1,CREN				; ...
 	bsf		screen_dump_avail		; enable screen dump function
 	return
 
@@ -1602,12 +1606,10 @@ dump_screen_pixel_1:				; send (pixel,count) tuple
 	decf	WREG					; save as 0..63
 	iorlw	b'10000000'				; mark as a color pixel
 
-	movwf	TXREG
-	call	rs232_wait_tx			; wait for UART
-	movff	ds_pixel+1,TXREG
-	call	rs232_wait_tx			; wait for UART
-	movff	ds_pixel+0,TXREG
-	call	rs232_wait_tx			; wait for UART
+	SERIAL_CC_SEND WREG				; send byte in WREG
+	SERIAL_CC_SEND ds_pixel+1		; send bytes in ds_pixel, high byte first
+	SERIAL_CC_SEND ds_pixel+0		;                         low  byte last
+
 	bra		dump_screen_pixel_1
 
 dump_screen_pixel_2:
@@ -1625,8 +1627,7 @@ dump_screen_pix_black:
 	decf	WREG					; save as 0..127
 
 dump_screen_pix_3:
-	movwf	TXREG
-	call	rs232_wait_tx
+	SERIAL_CC_SEND WREG				; send byte in WREG
 	bra		dump_screen_pixel_1		; more to dump ?
 
 dump_screen_pix_white:
@@ -1634,9 +1635,9 @@ dump_screen_pix_white:
 	cpfsgt	ds_count				; skip if count > 64
 	movf	ds_count,W				; W <- min(64,count)
 	subwf	ds_count,F				; ds_count <- ds_count-W
-	decf	WREG					; Save as 0..63
+	decf	WREG					; save as 0..63
 	iorlw	b'11000000'				; mark as a compressed white
-	bra		dump_screen_pix_3
+	bra		dump_screen_pix_3		; send pixel
 
 dump_screen_pixel_flush:
 	clrf	PRODH

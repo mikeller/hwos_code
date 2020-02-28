@@ -1,0 +1,290 @@
+OSTC hwos Tech Firmware COMM Mode Documentation
+===============================================
+
+Remarks: - timeouts restart on each received byte
+         - 3 byte start address and 3 byte length are expected in network byte format (big endian)
+
+
+comm_mode_selection_loop:							## entry point when COMM Mode is started ##
+
+	try to receive 1 byte, timeout after 4 minutes
+	received 0xBB   ->  goto comm_download_mode
+	received 0xAA   ->  goto comm_service_mode_check
+	timeout         ->  send 0xFF
+	                    quit comm mode
+
+
+comm_service_mode_check:							## received start byte for service mode, await service key ##
+
+	send 0x4B
+	|
+	| Attention: do not send the next 3 bytes in one batch, wait for
+	|            the echo of each byte before sending the next one
+	|
+	try to receive 1 byte (upper byte of comm service key), timeout after 400 ms
+	echo received byte
+	try to receive 1 byte (high  byte of comm service key), timeout after 400 ms
+	echo received byte
+	try to receive 1 byte (low   byte of comm service key), timeout after 400 ms
+	echo received byte
+	service key     correct  ->  enable comm_service_mode, goto comm_command_loop
+	service key not correct  ->                            goto comm_mode_selection_loop
+	timeout                  ->                            goto comm_mode_selection_loop
+
+
+comm_download_mode:									## received start byte for download mode ##
+
+	send 0xBB
+	goto comm_command_loop
+
+
+comm_command_loop:									## wait for a command ##
+
+	if comm_service_mode is enabled  ->  send 0x4C
+	else                             ->  send 0x4D
+
+	try to receive 1 byte, timeout after 2 minutes
+
+	timeout        ->  send 0xFF and quit comm mode
+	received 0x6E  ->  goto comm_show_text				 n  show a text on the screen
+	received 0x69  ->  goto comm_identify				 i  send ID: serial, firmware, and custom text
+	received 0x6A  ->  goto comm_hardware_descriptor	 j  send ID: hardware descriptor byte
+	received 0x60  ->  goto comm_feature_and_hardware	 '  send ID: more detailed information
+	received 0x6D  ->  goto comm_send_headers_short 	 m  send all headers in compact format
+	received 0x61  ->  goto comm_send_headers_full		 a  send all headers is full format
+	received 0x66  ->  goto comm_send_dive				 f  send header and profile for one dive
+	received 0x62  ->  goto comm_set_time				 b  set the real time clock
+	received 0x63  ->  goto comm_set_custom_text		 c  write a new custom text
+	received 0x72  ->  goto comm_read_option			 r  read  an option value
+	received 0x77  ->  goto comm_write_option			 w  write an option value (into RAM)
+	received 0x78  ->  goto comm_option_reset_all		 x  reset all option values to their factory default
+	received 0xFF  ->  send 0xFF and quit comm mode
+
+	the following commands are only evaluated if comm_service_mode is enabled:
+
+	received 0x23  ->  goto comm_reset_battery_gauge	 #  reset the battery gauge registers
+	received 0x22  ->  goto comm_erase_complete_logbook	 "  reset all logbook pointers and the logbook
+	received 0x20  ->  goto comm_read_range				' '  read a memory range from the external FLASH
+	received 0x40  ->  goto comm_erase_4kb				 @  erase one        4 kB block  - Warning: no confirmation or built-in safety here...
+	received 0x42  ->  goto comm_erase_range4kb			 B  erase a range of 4 kB blocks - Warning: no confirmation or built-in safety here...
+	received 0x30  ->  goto comm_write_range_stream		 0  write a stream of     bytes starting at ext_flash_address:3 until timeout
+	received 0x31  ->  goto comm_write_range_block		 1  write a block  of 256 bytes starting at ext_flash_address:3 (only available with FW >= 3.08)
+	received 0x50  ->  goto comm_firmware_update		 P  initiate firmware update
+	received 0xC1  ->  goto comm_cold_start				    start low-level bootloader
+
+
+
+comm_set_time:											## set the real time clock ##
+
+	send 0x62
+	try to receive 6 bytes in sequence: hour, minute, second, month, day, year, timeout 400 ms
+	timeout  ->           goto comm_command_loop
+	else     ->  set RTC, goto comm_command_loop
+
+
+comm_show_text:											## write a 15 char text to the OSTC display ##
+
+	send 0x6E
+	try to receive 16 characters, timeout 400 ms
+	print whatever has been received to the display
+	goto comm_command_loop
+
+
+comm_identify:											## reply serial, firmware and custom text ##
+
+	send 0x69
+	send  1 byte serial number, low  byte
+	send  1 byte serial number, high byte
+	send  1 byte firmware version, major
+	send  1 byte firmware version, minor
+	send 60 byte custom text
+	goto comm_command_loop
+
+
+comm_hardware_descriptor:								## reply short hardware descriptor ##
+
+	send 0x6A
+	send 1 byte hardware descriptor
+	goto comm_command_loop
+
+
+comm_feature_and_hardware:								## reply detailed hardware descriptor ##
+
+	send 0x60
+	send 0x00
+	send 1 byte hardware descriptor
+	send 0x00
+	send 0x00
+	send 0x00
+	goto comm_command_loop
+
+
+comm_send_headers_short:								## send short version of dive headers ##
+
+	send 0x6D
+	send 256 x 16 bytes (extract from the headers)
+	goto comm_command_loop
+
+
+comm_send_headers_full:									## send complete dive headers ##
+
+	send 0x61
+	send 256 x 256 bytes
+	goto comm_command_loop
+
+
+comm_send_dive:											## send one full dive ##
+
+	send 0x66
+	try to receive 1 byte (dive index), timeout 400 ms
+	timeout                    ->  goto comm_command_loop
+	no profile data available  ->  goto comm_command_loop
+	else                       ->  send 256 byte dive header  (begins with 0xFAFA)
+	                               send ??? byte dive profile (ends   with 0xFDFD)
+	                               goto comm_command_loop
+
+
+comm_option_reset_all:									## reset all options to factory default ##
+
+	send 0x78
+	reset all option values to default
+	goto comm_command_loop
+
+
+comm_set_custom_text:									## set custom text ##
+
+	send 0x63
+	try to receive 60 byte, timeout 400 ms
+	clear complete old custom text
+	store the 0...60 bytes that have been received as new custom text
+	goto comm_command_loop
+
+
+comm_reset_battery_gauge:								## reset battery gauge ##
+
+	(no acknowledge send)
+	reset battery registers and battery gauge chip
+	goto comm_command_loop
+
+
+
+comm_erase_complete_logbook:							## erase complete Logbook ##
+
+	(no acknowledge send)
+	erase complete logbook
+	goto comm_command_loop
+
+
+comm_cold_start:										## start bootloader (cold start) ##
+
+	(no acknowledge send)
+	backup crucial data from RAM to EEPROM
+	jump into the bootloader/cold start
+
+
+comm_firmware_update:									## initiate firmware update ##
+
+	send 0x50
+	try to receive 5 byte checksum, timeout 400 ms
+	timeout         ->  send 0xFF, goto comm_command_loop
+	checksum faulty ->  send 0xFF, goto comm_command_loop
+	else            ->  send 0x4C
+	                    backup crucial data from RAM to EEPROM
+	                    jump into bootloader/FW update
+
+
+comm_erase_range4kb:									## erase a memory range ##
+
+	send 0x42
+	try to receive 3 byte start address, timeout 400 ms
+	try to receive 1 byte block count,   timeout 400 ms
+	any timeout  ->  goto comm_command_loop
+	else         ->  erase FLASH from start address, range block_count x 4 kByte
+	                 goto comm_command_loop
+
+
+comm_erase_4kb:											## erase one 4 kB block ##
+
+	(no acknowledge send)
+	try to receive 3 byte start address, timeout 400 ms
+	timeout      ->  goto comm_command_loop
+	else         ->  erase FLASH from start address, range 4 kByte
+	                 goto comm_command_loop
+
+
+comm_write_range_stream:								## write a stream of bytes to the FLASH ##
+
+	send 0x30
+	try to receive 3 byte start address, timeout 400 ms
+	timeout      -> goto comm_command_loop
+	else         -> loop {try to receive 1 byte, write byte to FLASH } until timeout
+	                |
+	                | Attention: Do not send the bytes too fast as the OSTC needs
+	                |            some time for each byte to write it to the FLASH.
+	                |
+	                | Bytes will be received and written to FLASH until a timeout occurs,
+	                | i.e. to end the writing stop sending and await the timeout to trigger.
+	                |
+	                timeout  ->  goto comm_command_loop
+
+
+comm_write_range_block:									## write a block of 256 bytes to the FLASH ##
+														      (only available with FW >= 3.08)
+	send 0x31
+	try to receive 3 byte start address, timeout 400 ms
+	timeout                        ->  goto comm_command_loop
+	low byte of start address <> 0 ->  goto comm_command_loop
+	else                           ->  try to receive 256 byte, timeout 400 ms
+	                                   timeout  ->  goto comm_command_loop
+	                                   else     ->  write the 256 byte to FLASH
+	                                                goto comm_command_loop
+
+
+comm_read_range:										## read a range from FLASH ##
+
+	send 0x20
+	try to receive 3 byte start address, timeout 400 ms
+	try to receive 3 byte length,        timeout 400 ms
+	any timeout  ->  goto comm_command_loop
+	else         ->  loop {read 1 byte from FLASH, send 1 byte } until #length bytes done
+	                 goto comm_command_loop
+
+
+comm_read_option:										## read an option value ##
+
+	send 0x72
+	try to receive 1 byte option index, timeout 400 ms
+	timeout              ->  goto comm_command_loop
+	index = 0x10 - 0x19  ->  send 4 bytes in sequence O2%, He%, type, change depth
+	                         goto comm_command_loop
+	index = 0x1A - 0x1E  ->  send 2 bytes in sequence setpoint cbar, change depth
+	                         goto comm_command_loop
+	index = 0x1F - 0xXX  ->  send 1 byte option value (0xXX last index in use, depends on FW version)
+	                         goto comm_command_loop
+	else                 ->  goto comm_command_loop
+
+
+comm_write_option:										## write an option value ##
+
+	send 0x77
+	try to receive 1 byte option value, timeout 400 ms
+	timeout              ->  goto comm_command_loop
+	|
+	| Attention: do not send the option values too fast after the option index,
+	|            as the OSTC does not know how many bytes will follow after the
+	|            index before it has actually evaluated the index!
+	|            This is a flaw in the protocol design...
+	|
+	index = 0x10 - 0x19  ->  try to receive 4 byte in sequence O2%, He%, type, change depth
+	                         timeout  ->  goto comm_command_loop
+	                         else     ->  update option
+	                                      goto comm_command_loop
+	index = 0x1A - 0x1E  ->  try to receive 2 bytes in sequence setpoint cbar, change depth
+	                         timeout  ->  goto comm_command_loop
+	                         else     ->  update option
+	                                      goto comm_command_loop
+	index = 0x1F - 0xXX  ->  try to receive 1 byte option value (0xXX last index in use, depends on FW version)
+	                         timeout  ->  goto comm_command_loop
+	                         else     ->  update option
+	                                      goto comm_command_loop
+	else                 ->  goto comm_command_loop

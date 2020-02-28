@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File rtc.inc                               combined next generation V3.0.1
+;   File rtc.inc                              combined next generation V3.08.8
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -10,3 +10,4 @@
 
 	extern	rtc_init
 	extern	rtc_set_rtc
+	extern	rtc_add_minutes

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File menu_tree.asm                        next combined generation V3.04.3
+;   File menu_tree.asm                        next combined generation V3.08.8
 ;
 ;   OSTC Surface Menus
 ;
@@ -30,16 +30,15 @@
 
 	extern	do_demo_divemode
 	extern	restart
-	extern	option_save_all
+	extern	option_check_and_store_all
 	extern	option_reset
 	extern	do_demo_planner
 	extern	comm_mode_ble				; will also set CPU speed to normal
 	extern	piezo_config
 	extern	option_reset_all
-	extern	rtc_set_rtc
 	extern	surfloop
 	extern	oColorSetDive
-	extern	vault_decodata_into_eeprom
+	extern	eeprom_deco_data_write
 
  IFDEF _ccr_pscr
 	extern	option_cleanup_oCCRMode
@@ -68,9 +67,9 @@ do_main_menu:
 	clrf	MS_flags_imprint						; clear all flags for data imprinting
 
 	global	do_main_menu2
-do_main_menu2:							; entry point used by logbook.asm
-	call	TFT_boot					; initialize display
-	call	menu_processor_reset		; reset menu stack
+do_main_menu2:										; entry point used by logbook.asm
+	call	TFT_boot								; initialize display
+	call	menu_processor_reset					; reset menu stack
 
 do_main_menu_common:
  IFDEF _ccr_pscr
@@ -78,8 +77,8 @@ do_main_menu_common:
 		MENU_CALL		tLogbook,					logbook
 		MENU_CALL		tGasSetup,					do_gas_menu
 		MENU_CALL		tCCRSetup,					do_ccr_menu
-		MENU_CALL		tPlan,						do_planner_menu
 		MENU_CALL		tDiveModeMenu,				do_divemode_menu
+		MENU_CALL		tSimulator,					do_simulator_menu
 		MENU_CALL		tSystSets,					do_settings_menu
 		MENU_CALL		tExit,						do_restart
 	MENU_END
@@ -87,8 +86,8 @@ do_main_menu_common:
 	MENU_BEGIN	tMainMenu, .6
 		MENU_CALL		tLogbook,					logbook
 		MENU_CALL		tGasSetup,					do_gas_menu
-		MENU_CALL		tPlan,						do_planner_menu
 		MENU_CALL		tDiveModeMenu,				do_divemode_menu
+		MENU_CALL		tSimulator,					do_simulator_menu
 		MENU_CALL		tSystSets,					do_settings_menu
 		MENU_CALL		tExit,						do_restart
 	MENU_END
@@ -210,6 +209,16 @@ do_edit_sp_menu:
 
 
 do_ccr_menu_more:
+ IFDEF _external_sensor
+	MENU_BEGIN	tCCRSetup, .6			; CCR/pSCR more menu
+		MENU_OPTION		tS8Mode,					oS8Mode,				0
+		MENU_OPTION		tCCmaxFracO2,				oCCmaxFracO2,			0
+		MENU_OPTION		tDilppO2Check,				oDilppO2Check,			0
+		MENU_OPTION		tPSCR_O2_drop,				oPSCR_drop,				0
+		MENU_OPTION		tPSCR_lungratio,			oPSCR_lungratio,		0
+		MENU_CALL		tBack,						do_return_ccr_menu
+	MENU_END
+ ELSE
 	MENU_BEGIN	tCCRSetup, .5			; CCR/pSCR more menu
 		MENU_OPTION		tCCmaxFracO2,				oCCmaxFracO2,			0
 		MENU_OPTION		tDilppO2Check,				oDilppO2Check,			0
@@ -217,6 +226,7 @@ do_ccr_menu_more:
 		MENU_OPTION		tPSCR_lungratio,			oPSCR_lungratio,		0
 		MENU_CALL		tBack,						do_return_ccr_menu
 	MENU_END
+ ENDIF	; _external_sensor
 
  ENDIF	; _ccr_pscr
 
@@ -363,10 +373,7 @@ do_return_demo_planner:
 	call	menu_processor_pop			; back to last line
 	bra		do_planner_common
 
-do_planner_menu:
-	; ensure correct simulator results after mode changes without prior excursion to surface mode
-	call	option_save_all
-
+do_simulator_menu:
 	; reset planning parameters to default values
 	lfsr	FSR0,odiveInterval
 	call	option_reset
@@ -378,9 +385,9 @@ do_planner_menu:
 	call	option_reset
 
  IFDEF _gas_contingency
-	; switch off gas contingency mode by default
+	; switch off gas contingency mode by default when entering the simulator menu
 	clrf	WREG
-	movff	WREG,char_I_gas_contingency
+	movff	WREG,opt_gas_contingency_sim
  ENDIF
 
 do_planner_common:
@@ -390,7 +397,7 @@ do_planner_common_1:
 	dcfsnz	WREG,W						; subtract one, became zero?
 	bra		do_planner_common_ccr		; YES - use CCR version
 
-	MENU_BEGIN	tPlan, .7
+	MENU_BEGIN	tSimulator, .7
 		MENU_OPTION		tIntvl,						odiveInterval,			0
 		MENU_OPTION		tBtDep,						obottomDepth,			0
 		MENU_CALL		tInter,						do_demo_divemode
@@ -401,26 +408,26 @@ do_planner_common_1:
 	MENU_END
 
 do_planner_common_ccr:
-	MENU_BEGIN	tPlan, .7
+	MENU_BEGIN	tSimulator, .7
 		MENU_OPTION		tIntvl,						odiveInterval,			0
 		MENU_OPTION		tBtDep,						obottomDepth,			0
 		MENU_CALL		tInter,						do_demo_divemode
 		MENU_OPTION		tBtTm,						obottomTime,			0
-		MENU_CALL		tDecoSetup,					do_planner_config
+		MENU_CALL		tCalculatorSetup,			do_planner_config
 		MENU_CALL		tDeco,						do_demo_planner
 		MENU_CALL		tBack,						do_return_main_menu
 	MENU_END
 
 do_planner_config:
  IFDEF _gas_contingency
-	MENU_BEGIN	tPlan, .4
+	MENU_BEGIN	tSimulator, .4
 		MENU_OPTION		tSelectSetpoint,			oSimSetpoint,			0
 		MENU_OPTION		tuseAGF,					oSimAGF,				0
-		MENU_OPTION		tGasContingency,			oGasContingency,		0
+		MENU_OPTION		tGasContingencySim,			oGasContingencySim,		0
 		MENU_CALL		tBack,						do_return_planner_menu
 	MENU_END
  ELSE
-	MENU_BEGIN	tPlan, .3
+	MENU_BEGIN	tSimulator, .3
 		MENU_OPTION		tSelectSetpoint,			oSimSetpoint,			0
 		MENU_OPTION		tuseAGF,					oSimAGF,				0
 		MENU_CALL		tBack,						do_return_planner_menu
@@ -435,196 +442,229 @@ do_return_divemode_menu:
 	call	menu_processor_double_pop	; drop exit line and back to last line
 
 do_divemode_menu:
-	MENU_BEGIN	tDiveModeMenu, .7
-		MENU_OPTION		tDvMode,					oDiveMode,				0
-		MENU_OPTION		tDkMode,					oDecoMode,				0
-		MENU_CALL		tppO2settings,				do_ppo2_menu
-		MENU_OPTION		tsafetystopmenu,			oSafetyStop,			0
-		MENU_CALL		tDecoparameters,			do_decoparameters_menu
-		MENU_CALL		t2ndDecoPlanMenu,			do_2nd_deco_plan_menu
+	MENU_BEGIN	tDiveModeMenu, .6
+		MENU_CALL		tDiveSetup,					do_dive_menu				; dive setup
+		MENU_CALL		tDecoSetup,					do_deco_menu				; deco setup
+		MENU_CALL		tSACSetup,					do_SAC_menu					; SAC  setup
+		MENU_CALL		tppO2Setup,					do_ppo2_menu				; ppO2 limits
+		MENU_CALL		tStopsSetup,				do_stops_menu				; stops setup
 		MENU_CALL		tBack,						do_return_main_menu
 	MENU_END
 
 
-do_ppo2_menu:
- IFDEF _ccr_pscr
-	MENU_BEGIN	tppO2settings, .6
-		MENU_DYNAMIC	divesets_ppo2_max,			do_toggle_ppo2_max_work
-		MENU_DYNAMIC	divesets_ppo2_max_deco,		do_toggle_ppo2_max_deco
-		MENU_DYNAMIC	divesets_ppo2_min,			do_toggle_ppo2_min
-		MENU_DYNAMIC	divesets_ppo2_min_cc,		do_toggle_ppo2_min_cc
-		MENU_OPTION		tShowppO2,					oShowppO2,				0
+do_dive_menu:
+ IFDEF _cave_mode
+	MENU_BEGIN	tDiveModeMenu, .6
+		MENU_OPTION		tDvMode,					oDiveMode,				0	; dive mode
+		MENU_OPTION		tCvMode,					oCaveMode,				0	; cave mode
+		MENU_OPTION		tFTTSMenu,					oExtraTime,				0	; fTTS/delay
+		MENU_OPTION		tTimeoutDive,				oDiveTimeout,			0	; dive timeout
+		MENU_OPTION		tStoreApnoeDive,			oStoreApnoe,			0	; store apnoe
 		MENU_CALL		tBack,						do_return_divemode_menu
 	MENU_END
  ELSE
-	MENU_BEGIN	tppO2settings, .5
-		MENU_DYNAMIC	divesets_ppo2_max,			do_toggle_ppo2_max_work
-		MENU_DYNAMIC	divesets_ppo2_max_deco,		do_toggle_ppo2_max_deco
-		MENU_DYNAMIC	divesets_ppo2_min,			do_toggle_ppo2_min
-		MENU_OPTION		tShowppO2,					oShowppO2,				0
+	MENU_BEGIN	tDiveModeMenu, .5
+		MENU_OPTION		tDvMode,					oDiveMode,				0	; dive mode
+		MENU_OPTION		tFTTSMenu,					oExtraTime,				0	; fTTS/delay
+		MENU_OPTION		tTimeoutDive,				oDiveTimeout,			0	; dive timeout
+		MENU_OPTION		tStoreApnoeDive,			oStoreApnoe,			0	; store apnoe
 		MENU_CALL		tBack,						do_return_divemode_menu
 	MENU_END
  ENDIF
 
 
-do_return_decoparameters_menu:
+do_return_deco_menu:
 	call	menu_processor_double_pop	; drop exit line and back to last line
 
-do_decoparameters_menu:
-	movff	char_I_deco_model,lo		; 0 = ZH-L16, 1 = ZH-L16-GF
-	tstfsz	lo
-	bra		do_decoparameters_menu_gf	; <> 0 -> GF menu!
-	; NON-GF menu
-	MENU_BEGIN	tDecoparameters, .6
-		MENU_OPTION		tSetBotUse,					obottom_usage,			0
-		MENU_OPTION		tSetDecoUse,				odeco_usage,			0
-		MENU_OPTION		tSaturationMult,			osatmult,				0
-		MENU_OPTION		tDesaturationMult,			odesatmult,				0
-		MENU_CALL		tMore,						do_decoparameters_menu_more
-		MENU_CALL		tBack,						do_return_divemode_menu
-	MENU_END
-
-do_decoparameters_menu_gf:
-	; GF menu
-	MENU_BEGIN	tDecoparameters, .7
-		MENU_OPTION		tSetBotUse,					obottom_usage,			0
-		MENU_OPTION		tSetDecoUse,				odeco_usage,			0
-		MENU_CALL		tGFMenu,					do_GF_menu
-		MENU_OPTION		tSaturationMult,			osatmultgf,				0
-		MENU_OPTION		tDesaturationMult,			odesatmultgf,			0
-		MENU_CALL		tMore,						do_decoparameters_menu_more
+do_deco_menu:
+	MENU_BEGIN	tDecoSetup, .6
+		MENU_OPTION		tDkMode,					oDecoMode,				0	; ZH-L16 /GF
+		MENU_OPTION		tSaturationMult,			osatmultgf,				0	; saturation
+		MENU_OPTION		tDesaturationMult,			odesatmultgf,			0	; desaturation
+		MENU_OPTION		tAltMode,					oAltMode,				0	; altitude mode
+		MENU_CALL		tGFMenu,					do_GF_menu					; GF settings
 		MENU_CALL		tBack,						do_return_divemode_menu
 	MENU_END
 
 
-do_decoparameters_menu_more:
-	MENU_BEGIN	tDecoparameters, .7
-		MENU_OPTION		tLastDecostop,				oLastDeco,				0
-		MENU_OPTION		tAscentSpeed,				oAscentSpeed,			0
-		MENU_OPTION		tGasChangeTime,				oGasChangeTime,			0
-		MENU_OPTION		tExtendedStops,				oExtendedStops,			0
-		MENU_OPTION		tTimeoutDive,				oDiveTimeout,			0
-		MENU_OPTION		tStoreApnoeDive,			oStoreApnoeDive,		0
-		MENU_CALL		tBack,						do_return_decoparameters_menu
+do_SAC_menu:
+ IFDEF _gas_contingency
+	MENU_BEGIN	tSACSetup, .6
+		MENU_OPTION		tCalcGasNeeds,				oCalcAscGas,			0	; calc.gas
+		MENU_OPTION		tGasContingencyDive,		oGasContingencyDive,	0	; switch tank if used up
+		MENU_OPTION		tGasChangeTime,				oGasChangeTime,			0	; gas change time
+		MENU_OPTION		tSetWorkSAC,				oWork_SAC,				0	; work SAC
+		MENU_OPTION		tSetDecoSAC,				oDeco_SAC,				0	; deco SAC
+		MENU_CALL		tBack,						do_return_divemode_menu
 	MENU_END
+ ELSE
+	MENU_BEGIN	tSACSetup, .5
+		MENU_OPTION		tCalcGasNeeds,				oCalcAscGas,			0	; calc.gas
+		MENU_OPTION		tGasChangeTime,				oGasChangeTime,			0	; gas change time
+		MENU_OPTION		tSetWorkSAC,				oWork_SAC,				0	; work SAC
+		MENU_OPTION		tSetDecoSAC,				oDeco_SAC,				0	; deco SAC
+		MENU_CALL		tBack,						do_return_divemode_menu
+	MENU_END
+ ENDIF
 
 
-do_2nd_deco_plan_menu:
-	MENU_BEGIN	t2ndDecoPlanMenu, .3
-		MENU_OPTION		tFTTSMenu,					oExtraTime,				0
-		MENU_OPTION		tCalcAscGas,				oCalcAscGas,			0
+do_ppo2_menu:
+ IFDEF _ccr_pscr
+ IFDEF _helium
+	MENU_BEGIN	tppO2Setup, .6
+		MENU_DYNAMIC	divesets_ppo2_max,			do_toggle_ppo2_max_work		; max work
+		MENU_DYNAMIC	divesets_ppo2_max_deco,		do_toggle_ppo2_max_deco		; max deco
+		MENU_DYNAMIC	divesets_ppo2_min,			do_toggle_ppo2_min			; min OC
+		MENU_DYNAMIC	divesets_ppo2_min_cc,		do_toggle_ppo2_min_cc		; min loop
+		MENU_OPTION		tIBCDwarning,				oEnable_IBCD,			0	; IBCD warning
+		MENU_CALL		tBack,						do_return_divemode_menu
+	MENU_END
+ ELSE
+	MENU_BEGIN	tppO2Setup, .5
+		MENU_DYNAMIC	divesets_ppo2_max,			do_toggle_ppo2_max_work		; max work
+		MENU_DYNAMIC	divesets_ppo2_max_deco,		do_toggle_ppo2_max_deco		; max deco
+		MENU_DYNAMIC	divesets_ppo2_min,			do_toggle_ppo2_min			; min OC
+		MENU_DYNAMIC	divesets_ppo2_min_cc,		do_toggle_ppo2_min_cc		; min loop
+		MENU_CALL		tBack,						do_return_divemode_menu
+	MENU_END
+ ENDIF	; _helium
+ ELSE
+ IFDEF _helium
+	MENU_BEGIN	tppO2Setup, .5
+		MENU_DYNAMIC	divesets_ppo2_max,			do_toggle_ppo2_max_work		; max work
+		MENU_DYNAMIC	divesets_ppo2_max_deco,		do_toggle_ppo2_max_deco		; max deco
+		MENU_DYNAMIC	divesets_ppo2_min,			do_toggle_ppo2_min			; min OC
+		MENU_OPTION		tIBCDwarning,				oEnable_IBCD,			0	; IBCD warning
+		MENU_CALL		tBack,						do_return_divemode_menu
+ ELSE
+	MENU_BEGIN	tppO2Setup, .4
+		MENU_DYNAMIC	divesets_ppo2_max,			do_toggle_ppo2_max_work		; max work
+		MENU_DYNAMIC	divesets_ppo2_max_deco,		do_toggle_ppo2_max_deco		; max deco
+		MENU_DYNAMIC	divesets_ppo2_min,			do_toggle_ppo2_min			; min OC
+		MENU_CALL		tBack,						do_return_divemode_menu
+	MENU_END
+ ENDIF	; _helium
+ ENDIF	; _ccr_pscr
+
+
+do_stops_menu:
+	MENU_BEGIN	tStopsSetup, .6
+		MENU_OPTION		tSafetyStop,				oSafetyStop,			0	; safety stop
+		MENU_OPTION		tExtendedStops,				oExtendedStops,			0	; extended stops
+		MENU_OPTION		tLastDecostop,				oLastDeco,				0	; last deco stop
+		MENU_OPTION		tDvSalinity,				oDiveSalinity,			0	; salinity
+		MENU_OPTION		tDepthWarn,					oMaxDepth,				0	; depth limit
 		MENU_CALL		tBack,						do_return_divemode_menu
 	MENU_END
 
 
 do_GF_menu:
 	MENU_BEGIN	tGFMenu, .6
-		MENU_OPTION		tGF_low,					oGF_low,				0
-		MENU_OPTION		tGF_high,					oGF_high,				0
-		MENU_OPTION		taGF_enable,				oEnable_aGF,			0
-		MENU_OPTION		taGF_low,					oaGF_low,				0
-		MENU_OPTION		taGF_high,					oaGF_high,				0
-		MENU_CALL		tBack,						do_return_decoparameters_menu
+		MENU_OPTION		tGF_low,					oGF_low,				0	; GF  low
+		MENU_OPTION		tGF_high,					oGF_high,				0	; GF  high
+		MENU_OPTION		taGFenable,					oEnable_aGF,			0	; aGF selectable
+		MENU_OPTION		taGF_low,					oaGF_low,				0	; aGF low
+		MENU_OPTION		taGF_high,					oaGF_high,				0	; aGF high
+		MENU_CALL		tBack,						do_return_deco_menu
 	MENU_END
 
 
 ;=============================================================================
 ; Setup Menu
-do_return_settings_deeper:                ; entry point for return from info menu 2
-	call    menu_processor_pop            ; drop one more stack entry
-	
+do_return_settings_deeper:				; entry point for return from info menu 2
+	call	menu_processor_pop			; drop one more stack entry
+
 do_return_settings:
 	bcf		imprint_time_date			; stop imprinting of current time & date
 	call	menu_processor_double_pop	; drop exit line and back to last line
+
  IFDEF _rx_mode
 	bcf		tr_functions_activated		; set TR functions as deactivated by default
 	btfss	ostc_rx_present				; TR model / TR module up & running?
-	bra		do_settings_menu			; NO
+	bra		do_settings_menu			; NO  - use version w/o TR
 	movff	opt_TR_mode,WREG			; YES - get TR mode
 	tstfsz	WREG						;     - TR mode <> off ?
 	bsf		tr_functions_activated		;       YES - set TR functions as activated
  ENDIF
 
 do_settings_menu:
- IFDEF	_hwos_sport
-	bsf	ble_available				; For very old OSTC sport
- ENDIF	
-
+ IFDEF _hwos_sport
+	bsf		ble_available				; for very old OSTC sport
+ ENDIF
 	btfsc	ble_available				; BLE available?
 	bra		do_settings_menu_ble		; YES
-	
- 	MENU_BEGIN	tSystSets, .5
+
+	MENU_BEGIN	tSystSets, .5
 		MENU_CALL		tInfoMenu,					do_info_menu
 		MENU_CALL		tSetTimeDate,				do_date_time_menu
 		MENU_CALL		tDispSets,					do_dispsets_menu
-		MENU_CALL		tMore,						do_settings_menu_more
+		MENU_CALL		tSysSets,					do_syssets_menu
 		MENU_CALL		tBack,						do_return_main_menu
 	MENU_END
+
 
 do_settings_menu_ble:
  IFDEF _rx_functions
-	btfsc	ostc_rx_present				; TR model?
-	bra		do_settings_menu_rx			; YES
- ENDIF
+	btfss	ostc_rx_present				; TR model and TR activated?
+	bra		do_settings_menu_noRX		; NO
 
-	MENU_BEGIN	tSystSets, .6
-		MENU_CALL		tInfoMenu,					do_info_menu
-		MENU_CALL		tBleTitle,					comm_mode_ble
-		MENU_CALL		tSetTimeDate,				do_date_time_menu
-		MENU_CALL		tDispSets,					do_dispsets_menu
-		MENU_CALL		tMore,						do_settings_menu_more
-		MENU_CALL		tBack,						do_return_main_menu
-	MENU_END
-
- IFDEF _rx_functions
-do_settings_menu_rx:
 	MENU_BEGIN	tSystSets, .7
 		MENU_CALL		tInfoMenu,					do_info_menu
 		MENU_CALL		tBleTitle,					comm_mode_ble
 		MENU_CALL		tTrSettings,				do_settings_menu_TR
 		MENU_CALL		tSetTimeDate,				do_date_time_menu
 		MENU_CALL		tDispSets,					do_dispsets_menu
-		MENU_CALL		tMore,						do_settings_menu_more
+		MENU_CALL		tSysSets,					do_syssets_menu
 		MENU_CALL		tBack,						do_return_main_menu
 	MENU_END
  ENDIF
 
+do_settings_menu_noRX:
+	MENU_BEGIN	tSystSets, .6
+		MENU_CALL		tInfoMenu,					do_info_menu
+		MENU_CALL		tBleTitle,					comm_mode_ble
+		MENU_CALL		tSetTimeDate,				do_date_time_menu
+		MENU_CALL		tDispSets,					do_dispsets_menu
+		MENU_CALL		tSysSets,					do_syssets_menu
+		MENU_CALL		tBack,						do_return_main_menu
+	MENU_END
+
 
 do_info_menu:
  IFDEF _rx_functions
-	btfsc	ostc_rx_present				; TR model?
-	bra		do_info_menu_TR				; YES
- ENDIF
+	btfss	ostc_rx_present				; TR model?
+	bra		do_info_menu_noRX			; NO
 
-	MENU_BEGIN	tInfoMenu, .6
-		MENU_DYNAMIC	info_menu_serial,			0
-		MENU_DYNAMIC	info_menu_firmware,			0
-		MENU_DYNAMIC	info_menu_config,			0
-		MENU_DYNAMIC	info_menu_battery_volts,	0
-		MENU_DYNAMIC	info_menu_uptime,			0
-		MENU_CALL		tMore,						do_info_menu2
-	MENU_END
-
- IFDEF _rx_functions
-do_info_menu_TR:
 	MENU_BEGIN	tInfoMenu, .7
+		MENU_DYNAMIC	info_menu_uptime,			0
 		MENU_DYNAMIC	info_menu_serial,			0
 		MENU_DYNAMIC	info_menu_firmware,			0
+		MENU_DYNAMIC	info_menu_fw_cration_date,	0
 		MENU_DYNAMIC	info_menu_firmware_rx,		0
-		MENU_DYNAMIC	info_menu_config,			0
-		MENU_DYNAMIC	info_menu_battery_volts,	0
-		MENU_DYNAMIC	info_menu_uptime,			0
+		MENU_DYNAMIC	info_menu_total_dives,		0
 		MENU_CALL		tMore,						do_info_menu2
 	MENU_END
  ENDIF
 
-do_info_menu2: ;same for all hardware versions
-	MENU_BEGIN	tInfoMenu, .2
+do_info_menu_noRX:
+	MENU_BEGIN	tInfoMenu, .6
+		MENU_DYNAMIC	info_menu_uptime,			0
+		MENU_DYNAMIC	info_menu_serial,			0
+		MENU_DYNAMIC	info_menu_firmware,			0
+		MENU_DYNAMIC	info_menu_fw_cration_date,	0
 		MENU_DYNAMIC	info_menu_total_dives,		0
+		MENU_CALL		tMore,						do_info_menu2
+	MENU_END
+
+do_info_menu2:
+	MENU_BEGIN	tInfoMenu, .5
+		MENU_DYNAMIC	info_menu_battery_volts,	0
+		MENU_DYNAMIC	info_menu_config,			0
+		MENU_DYNAMIC	info_menu_sensor_calib,		0
+		MENU_DYNAMIC	info_menu_sensor_offset,	0
 		MENU_CALL		tBack,						do_return_settings_deeper
 	MENU_END
- 
- 
+
 
  IFDEF _rx_functions
 
@@ -696,53 +736,47 @@ do_return_settings_more_deeper:			; entry point for returns from reset sub-menu
 do_return_settings_more:
 	call	menu_processor_double_pop	; drop exit line and back to last line
 
-do_settings_menu_more:
+do_syssets_menu:
 	btfsc	battery_gauge_available		; piezo buttons available?
-	bra		do_settings_menu_more_piezo	; YES
+	bra		do_syssets_menu_piezo		; YES
 
  IFDEF _compass
-	MENU_BEGIN	tSystSets, .6													; All MENU_CALLs
-		MENU_CALL		tCompassMenu,				do_compass_menu				; in this menu need to
-		MENU_CALL		tLogOffset,					do_log_offset_menu			; stay together on this
-		MENU_OPTION		tAltMode,					oAltMode,				0	; menu level in order to
-		MENU_OPTION		tDvSalinity,				oDiveSalinity,			0	; not mess up the menu
-		MENU_CALL		tResetMenu,					do_reset_menu				; stack on doing the
-		MENU_CALL		tBack,						do_return_settings			; do_return_settings !
+	MENU_BEGIN	tSystSets, .4													; All MENU_CALLs in this menu
+		MENU_CALL		tCompassMenu,				do_compass_menu				; need to stay together on this
+		MENU_CALL		tLogOffset,					do_log_offset_menu			; menu level in order to not
+		MENU_CALL		tResetMenu,					do_reset_menu				; mess up the menu stack on doing
+		MENU_CALL		tBack,						do_return_settings			; the do_return_settings !
 	MENU_END
  ELSE
-	MENU_BEGIN	tSystSets, .5													; see above
+	MENU_BEGIN	tSystSets, .3													; see above
 		MENU_CALL		tLogOffset,					do_log_offset_menu			;
-		MENU_OPTION		tAltMode,					oAltMode,				0	;
-		MENU_OPTION		tDvSalinity,				oDiveSalinity,			0	;
 		MENU_CALL		tResetMenu,					do_reset_menu				;
 		MENU_CALL		tBack,						do_return_settings			;
 	MENU_END
  ENDIF	; _compass
 
 
-do_return_settings_menu_more_pz:
+do_return_syssets_menu_piezo:
 	call	TFT_ClearScreen
 	call	piezo_config				; configure buttons
 	call	menu_processor_double_pop	; drop exit line and back to last line
 
-do_settings_menu_more_piezo:
+do_syssets_menu_piezo:
  IFDEF _compass
-	MENU_BEGIN	tSystSets, .7
+	MENU_BEGIN	tSystSets, .6
 		MENU_CALL		tCompassMenu,				do_compass_menu				; see above
 		MENU_CALL		tLogOffset,					do_log_offset_menu			;
-		MENU_OPTION		tAltMode,					oAltMode,				0	;
-		MENU_OPTION		tDvSalinity,				oDiveSalinity,			0	;
+		MENU_DYNAMIC	info_menu_total_dives,		0
 		MENU_CALL		tResetMenu,					do_reset_menu				;
-		MENU_CALL		tMore,						do_settings_piezo_menu		;
+		MENU_CALL		tPiezo,						do_settings_piezo_menu		;
 		MENU_CALL		tBack,						do_return_settings			;
 	MENU_END
  ELSE
-	MENU_BEGIN	tSystSets, .6
+	MENU_BEGIN	tSystSets, .5
 		MENU_CALL		tLogOffset,					do_log_offset_menu			; see above
-		MENU_OPTION		tAltMode,					oAltMode,				0	;
-		MENU_OPTION		tDvSalinity,				oDiveSalinity,			0	;
+		MENU_DYNAMIC	info_menu_total_dives,		0
 		MENU_CALL		tResetMenu,					do_reset_menu				;
-		MENU_CALL		tMore,						do_settings_piezo_menu		;
+		MENU_CALL		tPiezo,						do_settings_piezo_menu		;
 		MENU_CALL		tBack,						do_return_settings			;
 	MENU_END
  ENDIF
@@ -750,17 +784,17 @@ do_settings_menu_more_piezo:
 
 do_settings_piezo_menu:
 	; Menu with features only available in piezo button hardware
-	MENU_BEGIN	tSystSets, .3
+	MENU_BEGIN	tPiezo, .3
 		MENU_OPTION		tButtonleft,				ocR_button_left,		0		; left  button sensitivity
 		MENU_OPTION		tButtonright,				ocR_button_right,		0		; right button sensitivity
-		MENU_CALL		tBack,						do_return_settings_menu_more_pz
+		MENU_CALL		tBack,						do_return_syssets_menu_piezo
 	MENU_END
 
 
  IFDEF _compass
 
 do_compass_menu:
-	MENU_BEGIN	tSystSets, .5
+	MENU_BEGIN	tCompassMenu, .5
 		MENU_CALL		tCompassMenu,				compass_calibration_loop	; exits to surface loop
 ;		MENU_OPTION		tCompassGain,				oCompassGain,	0
 		MENU_DYNAMIC	menu_cal_x,					0
@@ -811,41 +845,31 @@ do_reset_menu_logbook:
 
 
 do_reset_logbook:
-	clrf	EEADRH						; make sure to select EEPROM bank 0
-	clrf	EEDATA
-	read_int_eeprom  .2
-	write_int_eeprom .16
-	read_int_eeprom  .3
-	write_int_eeprom .17				; copy number of dives
-	clrf	EEDATA
-	write_int_eeprom .2
-	write_int_eeprom .3					; clear total dives
-	write_int_eeprom .4
-	write_int_eeprom .5
-	write_int_eeprom .6					; reset logbook pointers
-	call	ext_flash_erase_logbook		; and complete logbook
+	call	erase_complete_logbook			; erase complete logbook
 	bra		do_return_settings_more_deeper
-
 
 do_reset_deco:
 	call	deco_clear_tissue				; set all tissues to absolute pressure * N2_ratio           (C-code)
 	call	deco_calc_dive_interval_1min	; update tissues by 1 minute to calculate current GF factor (C-code)
 	call	deco_calc_desaturation_time		; calculate desaturation and no-fly/no-altitude time        (C-code)
 	banksel	common
-	call	vault_decodata_into_eeprom		; store updated deco data to EEPROM
+	call	eeprom_deco_data_write		; store updated deco data into EEPROM
 	bra		do_return_settings_more_deeper
 
 
 do_reset_settings:
-	call	TFT_ClearScreen				; clear screen
+	call	TFT_ClearScreen				; clear screen to show start of activity
 	call	option_reset_all			; reset all options to factory default
 	call	do_logoffset_reset			; reset log offset
 	goto	restart						; restart into surface mode
 
 do_reboot:
-	call	ext_flash_enable_protection	; set write protection on external EEPROM
-	call	rtc_init					; reset the real time clock (will reset to firmware creation date)
-	reset
+	call	ext_flash_enable_protection	; set write protection on external flash
+	call	eeprom_deco_data_write		; update deco data     in EEPROM
+	call	eeprom_battery_gauge_write	; update battery gauge in EEPROM
+	btfsc	options_changed				; do the options need to be stored to EEPROM ?
+	call	option_check_and_store_all	; YES - check and store all option values in EEPROM
+	reset								; cold-start the processor
 
 do_return_date_time_menu:
 	call	menu_processor_double_pop	; drop exit line and back to last line
@@ -884,7 +908,7 @@ do_time_menu:
 	MENU_END
 
 
-do_toggle_ppo2_max_work:				; add 0.1 bar, with hard-coded max.
+do_toggle_ppo2_max_work:				; add 0.1 bar
 	movff	char_I_ppO2_max_work,lo		; bank-safe copy
 	movlw	.10
 	addwf	lo,F
@@ -897,7 +921,7 @@ do_toggle_ppo2_max2:
 	movff	lo,char_I_ppO2_max_work
 	return
 
-do_toggle_ppo2_max_deco:				; add 0.1 bar, with hard-coded max.
+do_toggle_ppo2_max_deco:				; add 0.1 bar
 	movff	char_I_ppO2_max_deco,lo		; bank-safe copy
 	movlw	.10
 	addwf	lo,F
@@ -910,7 +934,7 @@ do_toggle_ppo2_max_deco2:
 	movff	lo,char_I_ppO2_max_deco
 	return
 
-do_toggle_ppo2_min:						; sub 0.1 bar, with hard-coded min.
+do_toggle_ppo2_min:						; sub 0.1 bar
 	movff	char_I_ppO2_min,lo			; bank-safe copy
 	incf	lo,F
 	movlw	ppo2_warning_low_highest
@@ -922,7 +946,7 @@ do_toggle_ppo2_min2:
 	movff	lo,char_I_ppO2_min
 	return
 
-do_toggle_ppo2_min_cc:					; sub 0.1 bar, with hard-coded min.
+do_toggle_ppo2_min_cc:					; sub 0.1 bar
 	movff	char_I_ppO2_min_loop,lo		; bank-safe copy
 	incf	lo,F
 	movlw	ppo2_warning_loop_highest
@@ -951,7 +975,7 @@ do_log_offset_menu:
 
 
 do_logoffset_common:
-	call	do_logoffset_common_read	; read current offset into mpr+1:mpr+0
+	call	eeprom_log_offset_read		; read current offset into mpr+1:mpr+0
 	movff	opt_logoffset_step,ul		; get step size: 0=1, 1=10, 2=100, 3=1000
 	incf	ul,F						; 0...3 -> 1...4
 	clrf	mpr+3						; clear   step size, high byte
@@ -1000,12 +1024,11 @@ do_logoffset_minus:
 	btfsc	STATUS,C					; borrow to propagate (B == /CARRY) ?
 	bra		do_logoffset_exit			; NO  - result >= 0, store and return
 do_logoffset_reset:
-	clrf	mpr+0						; YES - revert offset to 0, low  byte
-	clrf	mpr+1						;     - ...                 high byte
+	CLRI	mpr							; YES - revert offset to 0
 	;bra	do_logoffset_exit			;     - store offset and return
 
 do_logoffset_exit:
-	goto	do_logoffset_common_write	; store offset and return
+	goto	eeprom_log_offset_write		; store offset and return
 
 
 do_return_dispsets_menu:
@@ -1016,21 +1039,21 @@ do_dispsets_menu:
  IF _language_2!=none
 	MENU_BEGIN	tDispSets, .7
 		MENU_OPTION		tBright,					oBrightness,			0
-		MENU_OPTION		tLanguage,					oLanguage,				0
+		MENU_OPTION		tLayout,					oLayout,				0
 		MENU_OPTION		tUnits,						oUnits,					0
-		MENU_CALL		tColorScheme,				do_color_scheme
+		MENU_OPTION		tLanguage,					oLanguage,				0
 		MENU_OPTION		tFlip,						oFlipScreen,			0
+		MENU_CALL		tColorScheme,				do_color_scheme
 		MENU_CALL		tMore,						do_dispsets_menu_more
-		MENU_CALL		tBack,						do_return_settings
 	MENU_END
  ELSE
 	MENU_BEGIN	tDispSets, .6
 		MENU_OPTION		tBright,					oBrightness,			0
+		MENU_OPTION		tLayout,					oLayout,				0
 		MENU_OPTION		tUnits,						oUnits,					0
-		MENU_CALL		tColorScheme,				do_color_scheme
 		MENU_OPTION		tFlip,						oFlipScreen,			0
+		MENU_CALL		tColorScheme,				do_color_scheme
 		MENU_CALL		tMore,						do_dispsets_menu_more
-		MENU_CALL		tBack,						do_return_settings
 	MENU_END
  ENDIF
 
@@ -1038,24 +1061,22 @@ do_dispsets_menu:
 do_dispsets_menu_more:
  IFDEF _helium
 	MENU_BEGIN	tDispSets, .7
-		MENU_OPTION		tMODwarning,				oMODwarning,			0
-;		MENU_OPTION		tIBCDwarning,				oEnable_IBCD,			0		; taken out in favor of option oLayout
-		MENU_OPTION		tVSItext2,					oVSItextv2,				0
 		MENU_OPTION		tVSIgraph,					oVSIgraph,				0
-		MENU_OPTION		tLayout,					oLayout,				0
+		MENU_OPTION		tVSItext2,					oVSItext,				0
+		MENU_OPTION		tShowppO2,					oShowppO2,				0
+		MENU_OPTION		tDepthWarning,				oDepthWarn,				0
 		MENU_OPTION		t2ndDepth,					o2ndDepthDisp,			0
 		MENU_OPTION		tTissueGraphics,			oTissueGraphics,		0
-		MENU_CALL		tBack,						do_return_dispsets_menu
+		MENU_CALL		tBack,						do_return_settings_deeper
 	MENU_END
  ELSE
 	MENU_BEGIN	tDispSets, .6
-		MENU_OPTION		tMODwarning,				oMODwarning,			0
-;		MENU_OPTION		tIBCDwarning,				oEnable_IBCD,			0		; taken out in favor of option oLayout
-		MENU_OPTION		tVSItext2,					oVSItextv2,				0
 		MENU_OPTION		tVSIgraph,					oVSIgraph,				0
-		MENU_OPTION		tLayout,					oLayout,				0
+		MENU_OPTION		tVSItext2,					oVSItext,				0
+		MENU_OPTION		tShowppO2,					oShowppO2,				0
+		MENU_OPTION		tDepthWarning,				oDepthWarn,				0
 		MENU_OPTION		t2ndDepth,					o2ndDepthDisp,			0
-		MENU_CALL		tBack,						do_return_dispsets_menu
+		MENU_CALL		tBack,						do_return_settings_deeper
 	MENU_END
  ENDIF
 
@@ -1090,7 +1111,7 @@ do_new_battery_select_1:
 	movwf	batt_percent				; set battery level to full
 
 	; default (in cases of timeout or USB): use old battery
-	call	retrieve_battery_registers	; retrieve stored battery gauge value from EEPROM
+	call	eeprom_battery_gauge_read	; retrieve stored battery gauge value from EEPROM
 
  IFDEF _screendump
 	bsf		screen_dump_avail			; enable screen dump function to prevent exiting into COMM mode immediately
@@ -1193,18 +1214,15 @@ menu_new_battery_AA_no_charger:
 
 	global	use_old_prior_209
 use_old_prior_209:
-	clrf	EEADRH
-	read_int_eeprom 0x0F				; =0:1.5V, =1:3,6V Saft, =2:LiIon 3,7V/0.8Ah, =3:LiIon 3,7V/3.1Ah, =4: LiIon 3,7V/2.3Ah
-	incfsz	EEDATA,F					; was 0xFF?
-	return								; NO - done
-
-	call	lt2942_get_status			; check for gauge IC
-	movlw	.3							; Assume a 18650
-	btfss	battery_gauge_available		; cR/2 hardware?
-	movlw	.1							; assume a Saft
-	movwf	EEDATA
-	write_int_eeprom 0x0F				; store the new battery type into EEPROM
-	return
+	EEPROM_CC_READ eeprom_battery_type,WREG	; read battery type from EEPROM
+	incfsz	WREG,W							; battery type = 0xFF (undefined) ?
+	return									; NO  - done
+	call	lt2942_get_status				; YES - check for gauge IC
+	movlw	.3								;     - default to a 18650 (LiIon 3.7V/3.1Ah)
+	btfss	battery_gauge_available			;     - OSTC 2 or cR hardware?
+	movlw	.1								;     - NO - assume a Saft (disposable 3.6 V)
+	EEPROM_CC_WRITE WREG,eeprom_battery_type;     - write battery type to EEPROM
+	return									;     - done
 
 
 use_old_batteries:
@@ -1214,7 +1232,7 @@ use_old_batteries:
 
 	global	get_battery_data
 get_battery_data:
-	call	retrieve_battery_registers	; retrieve stored battery gauge value from EEPROM
+	call	eeprom_battery_gauge_read	; retrieve stored battery gauge value from EEPROM
 	movff	battery_type,lo				; copy retrieved battery type to lo
 	rcall	setup_new_saft				; default battery configuration
 	incf	lo,F						; (0-4) -> (1-5)
@@ -1300,7 +1318,7 @@ use_36V_disposable:
 
 use_37V_rechargeable:
 	rcall	setup_new_panasonic
-	call	reset_battery_internal_only
+	call	reset_battery_gauge
 	bra		use_batt_exit_1
 
 use_16650_battery:
@@ -1312,7 +1330,7 @@ use_18650_battery:
 	;bra	use_batt_exit
 
 use_batt_exit:
-	call	reset_battery_pointer		; reset battery pointer 0x07-0x0C and battery gauge
+	call	reset_battery_gauge_and_lt2942		; reset battery pointer 0x07-0x0C and battery gauge
 use_batt_exit_1:
  IFNDEF _screendump
 	bcf		comm_mode_disabled			; re-enable COMM mode again

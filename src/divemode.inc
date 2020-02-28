@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File divemode.inc                         combined next generation V3.03.5
+;   File divemode.inc                         combined next generation V3.08.5
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -365,12 +365,26 @@
 #DEFINE dm_custom_ppDil_column					.2								;   2
 
 
-;******* Custom View: PSCR Info *******
+;******* Custom View: pSCR Info *******
 
 #DEFINE dm_custom_pscr_title_row				dm_customview_row+.1			; 102
 #DEFINE dm_custom_pscr_row						dm_customview_row+.18			; 119
 #DEFINE dm_custom_pscr_drop_column				.55								;  55
 #DEFINE dm_custom_pscr_ratio_column				.105							; 105
+
+
+;******* Custom View: cave TTS *******
+
+#DEFINE dm_custom_cave_title_row				dm_customview_row+.1			; 102
+#DEFINE dm_custom_cave_title_column1			.2								;   2
+#DEFINE dm_custom_cave_title_column2			.64								;  64
+#DEFINE dm_custom_cave_title_column3			.118							; 118
+
+#DEFINE dm_custom_cave_data_row					dm_customview_row+.16			; 117
+#DEFINE dm_custom_cave_data_column1				.8								;   8
+#DEFINE dm_custom_cave_data_column2				.60								;  60
+#DEFINE dm_custom_cave_data_column3				.114							; 114
+
 
 
 ; II. end of the custom content row (101-163)

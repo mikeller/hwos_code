@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File menu_processor.asm                   combined next generation V3.03.2
+;   File menu_processor.asm                   combined next generation V3.08.6
 ;
 ;   Routines to handle all hwOS graphic/text menus.
 ;
@@ -43,7 +43,7 @@
 	extern	TFT_clear_divemode_menu
 	extern	TFT_divemask_color
 	extern	rtc_set_rtc
-	extern	divemode_option0_return
+	extern	divemode_option_divemenu_return
 	extern	TFT_fillup_with_spaces
 
 
@@ -256,8 +256,8 @@ menu_line_loop_pre2:
 
 menu_line_loop_pre3:
 	btfsc	divemode						; in dive mode?
-	goto	divemode_option0_return			; YES - return to it
-	;bra	menu_line_loop_surface			;     - proceed to surface mode dispatcher
+	goto	divemode_option_divemenu_return	; YES - return to it
+	;bra	menu_line_loop_surface			; NO  - proceed to surface mode dispatcher
 
 ; dispatcher for surface mode menus
 menu_line_loop_surface:
@@ -328,10 +328,10 @@ menu_draw_lines_divemode:
 menu_draw_lines:
 	btfsc	divemode						; in dive mode?
 	bra		menu_draw_lines_divemode		; YES
-	btfsc	menu_flags,0					; Dynamic title?
+	btfsc	menu_flags,0					; dynamic title?
 	rcall	menu_processor_title			; YES - redraw it then
 	MENU_LINE_FONT MENU_LEFT, 0				; initialize start position/font
-	movff	menu_center,win_top				; computed in menu block.
+	movff	menu_center,win_top				; computed in menu block
 
 	; Does the menu have more than 6 lines ?
 	movf	item_max,W

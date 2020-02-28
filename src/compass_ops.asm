@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File compass_ops.asm                      combined next generation V3.06.1
+;   File compass_ops.asm                      combined next generation V3.08.8
 ;
 ;   Compass Operations
 ;
@@ -17,6 +17,7 @@
 #include	"divemode.inc"
 #include	"math.inc"
 #include	"convert.inc"
+#include	"start.inc"
 
 
  IFDEF _compass
@@ -63,7 +64,7 @@
 	extern	compass_add_calibration
 	extern	compass_solve_calibration
 
-	extern	option_save_all
+	extern	option_check_and_store_all
 
 
 compass_ops	code
@@ -359,7 +360,7 @@ compass_calibration_loop3:
 	btfsc	trigger_timeout				; timeout (calibration done)?
 	bra		compass_calibration_exit	; YES - done
 	btfss	trigger_full_second			; NO  - new second begun?
-	bra		compass_calibration_loop2	;       NO - loop
+	bra		compass_calibration_loop2	;       NO  - loop
 	bcf		trigger_full_second			;       YES - clear flag
 	rcall	TFT_show_timeout_testmode	;           - show remaining time
 	bra		compass_calibration_loop2	;           - loop
@@ -372,10 +373,13 @@ compass_calibration_exit:
 
 	call	request_speed_normal		; request CPU speed change to normal speed
 
-	call	option_save_all				; save all settings into EEPROM
-	movlw	.6
-	movff	WREG,customview_surfmode	; set to compass view...
-	goto	surfloop					; ...and exit
+	bsf		options_changed				; flag that option values have changed
+	bsf		restart_fast				; request to skip logos and waits on restart
+
+	movlw	.6							; coding for surface compass view
+	movff	WREG,customview_surfmode	; set to compass view to show
+
+	goto	restart						; done
 
 ;-----------------------------------------------------------------------------
 

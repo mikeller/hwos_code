@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File simulator.asm                        combined next generation V3.04.3
+;   File simulator.asm                        combined next generation V3.08.8
 ;
 ;   Deco Calculator
 ;
@@ -31,11 +31,13 @@
 	extern deco_pull_tissues_from_vault
 	extern TFT_decotype_logbook
 	extern do_return_demo_planner
-	extern dive_boot_oc_bail
+	extern convert_meter_to_feet
 	extern dive_boot_oc
+	extern get_first_gas_to_WREG
 
  IFDEF _ccr_pscr
 	extern dive_boot_cc
+	extern get_first_dil_to_WREG
  ENDIF
 
 
@@ -131,16 +133,28 @@ deco_calculate:
 	btfsc	update_surface_pressure			; is there a pending surface pressure update?
 	bra		$-2								; YES - loop waiting for the ISR to kick in
 
-	; set absolute pressure at selected depth
+	; calculate absolute pressure at selected depth
 	movff	char_I_bottom_depth,WREG		; get selected depth in meters
-	movwf	depth_meter						; set depth for check_gas_best code
-	mullw	.100							; multiply depth with 100 to get relative pressure in mbar
-	movff	int_I_pres_surface+0,WREG		; low  byte - get surface pressure to WREG
-	addwf	PRODL,W							;           - add relative pressure
-	movff	WREG,int_I_pres_respiration+0	;           - store as absolute pressure at depth
-	movff	int_I_pres_surface+1,WREG		; high byte - get surface pressure to WREG
-	addwfc	PRODH,W							;           - add relative pressure
-	movff	WREG,int_I_pres_respiration+1	;           - store as absolute pressure at depth
+	movwf	depth_meter						; store depth for check_gas_best code
+
+	movwf	xA+0							; copy depth in [m] to xA, low  byte
+	clrf	xA+1							; clear                xA, high byte
+
+	movff	opt_salinity,WREG				; get salinity setting (0 - 4 %)
+	addlw	d'100'							; add density of fresh water (1.00 kg/l)
+	mullw	.100							; multiply by 100 to counteract the x 100 with the freshwater conversion factor
+	MOVII	PRODL,xB						; copy result to xB
+	call	mult16x16						; xC:4 = xA:2 * xB:2
+
+	MOVLI	.102,xB							; load conversion factor x 100 for fresh water (1.02 cm per each 1 mbar)
+	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder = relative pressure [mbar] at depth
+
+	movff	int_I_pres_surface+0,WREG		; get surface  pressure,      low  byte
+	addwf	xC+0,W							; add relative pressure,      low  byte
+	movff	WREG,int_I_pres_respiration+0	; store as absolute pressure, low  byte
+	movff	int_I_pres_surface+1,WREG		; get surface pressure,       high byte
+	addwfc	xC+1,W							; add relative pressure,      high byte
+	movff	WREG,int_I_pres_respiration+1	; store as absolute pressure, high byte
 
 	; compute absolute pressure / 10, will be used by check_gas_best
 	MOVII	int_I_pres_respiration,xA		; get absolute pressure at depth
@@ -151,11 +165,14 @@ deco_calculate:
 	; set up gas / diluent to be used on bottom segment
 	clrf	WREG							; reset the deco info vector / deco flag so that ...
 	movff	WREG,char_O_deco_info			; ... check_gas_best will not pick any deco gases
+
+	call	get_first_gas_to_WREG			; find first gas
+	movwf	active_gas						; set  first gas
  IFDEF _ccr_pscr
-	clrf	active_dil						; invalidate active diluent
+	call	get_first_dil_to_WREG			; find first diluent
+	movwf	active_dil						; set  first diluent
  ENDIF
-	clrf	active_gas						; invalidate active gas
-	call	check_gas_best					; determine best diluent and/or gas
+	call	check_gas_best					; check if first gas & dil are usable, if not replace by usable gas / dil
 
  IFDEF _ccr_pscr
 	btfsc	FLAG_oc_mode					; in OC mode?
@@ -191,7 +208,7 @@ deco_calculate_0_error:
 
 deco_calculate_0_com:
 	; set deco stop settings
-	movff	opt_last_stop,char_I_depth_last_deco	; write last stop depth to deco engine
+	movff	opt_last_stop,char_I_last_stop_depth	; write last stop depth to deco engine
 
 	; set GF factors
 	movff	opt_GF_low, char_I_GF_Low_percentage	; load normal GF factors by default
@@ -212,7 +229,7 @@ deco_calculate_1:
 	bra		deco_calculate_2				; NO  - skip next
 	movff	opt_sim_setpoint_number,WREG	; YES - get selected setpoint
 	decf	WREG,W							;     - 1-5 -> 0-4
-	lfsr	FSR1,opt_setpoint_cbar			;     - load base address of setpoint list
+	lfsr	FSR1,opt_setpoint_cbar			;     - set base address of setpoint list
 	movff	PLUSW1,char_I_const_ppO2		;     - configure setpoint value
  ENDIF
 
@@ -222,12 +239,19 @@ deco_calculate_2:
 	movff	char_O_main_status,hi			; get the configuration set by dive_boot_oc / dive_boot_cc
 	bsf		hi,DECO_VOLUME_FLAG				; enable gas volume calculation
 	bsf		hi,DECO_BOTTOM_FLAG				; include bottom segment into gas needs
+
+ IFDEF _cave_mode
 	bcf		hi,DECO_CAVE_MODE				; cave mode not supported in deco calculator
-	bcf		hi,DECO_Z_FACTOR_FLAG			; disable Z factors by default
-	TSTOSC	opt_ZfactorUse					; shall use Z factors?
-	bsf		hi,DECO_Z_FACTOR_FLAG			; YES - enable Z factors
+ ENDIF
+
+ IFDEF _gas_contingency
+	bcf		hi,DECO_GAS_CONTINGENCY			; disable gas contingency mode by default
+	TSTOSC	opt_gas_contingency_sim			; gas contingency switched on?
+	bsf		hi,DECO_GAS_CONTINGENCY			; YES - activate gas contingency mode
+ ENDIF
+
 	bcf		hi,DECO_EXTENDED_STOPS			; disable extended stops by default
-	TSTOSC	opt_extended_stops				; shall make extended stops?
+	TSTOSC	opt_ext_stops					; shall make extended stops?
 	bsf		hi,DECO_EXTENDED_STOPS			; YES - activate extended stops
 	bcf		hi,DECO_TR_FUNCTIONS			; execution of TR functions is not needed in deco calculator mode
 	movff	hi,char_O_main_status			; bank-safe copy to deco engine control
@@ -239,7 +263,7 @@ deco_calculate_2:
 	bsf		lo,DECO_INITIALIZE				; set   flag for once-per-dive initialization
 	bsf		lo,DECO_CALCULATOR_MODE			; signal that the deco engine is run from the deco calculator
 	bcf		lo,DECO_BAILOUT_FLAG			; no gas switches before first deco stop
-	bcf		lo,DECO_ASCENT_FLAG				; no delayed ascent
+	bcf		lo,DECO_DELAY_FLAG				; no delayed ascent
 	movff	lo,char_O_deco_status			; bank-safe copy to deco engine control
 
 deco_calculate_redo:
@@ -285,7 +309,7 @@ deco_calculate_bottom:
 	movff	hi,char_O_main_status			;     - bank-safe copy back to deco engine control
 	movff	char_O_deco_status,lo			;     - bank-safe copy from deco engine control (deco status)
 	bsf		lo,DECO_BAILOUT_FLAG			;     - allow gas switches before first deco stop
-	bsf		lo,DECO_ASCENT_FLAG				;     - allow delayed ascent
+	bsf		lo,DECO_DELAY_FLAG				;     - allow delayed ascent
 	movff	lo,char_O_deco_status			;     - bank-safe copy back to deco engine control
 
 	TEXT_SMALL	.20,.125, tCalcBailout		;     - print what we are doing
@@ -304,8 +328,23 @@ deco_calculate_loop:
 	banksel	common							;     - back to bank common
 	movff	char_O_depth_sim,lo				;     - get the depth reached (in meters)
 	WIN_SMALL .75,.150						;     - set output position
-	output_8								;     - print depth reached (in meters)
-	STRCAT	" m"							;     - print unit (meters)
+
+	TSTOSS	opt_units						; check depth units
+	bra		deco_calculate_loop_metric		; 0 - use Meters
+	;bra	deco_calculate_loop_imperial	; 1 - use Feet
+
+deco_calculate_loop_imperial:
+	call	convert_meter_to_feet			; convert value in lo from [m] to [feet]
+	output_16_3								; print depth reached
+	STRCAT_TEXT tFeets						; print unit (feet)
+	bra		deco_calculate_loop_0
+
+deco_calculate_loop_metric:
+	output_8								; print depth reached (in meters)
+	STRCAT_TEXT tMeters						; print unit (meters)
+	;bra	deco_calculate_loop_0			; continue
+
+deco_calculate_loop_0:
 	btg		decoplan_toggleflag				;     - toggle the toggle flag
 	btfsc	decoplan_toggleflag				;     - toggle flag set?
 	bra		deco_calculate_loop_1			;       YES - print ". "
@@ -405,7 +444,7 @@ deco_results_page_1:
 	TEXT_SMALL .80,.1, tDivePlan
 deco_results_page_2:
 	movff	char_O_deco_info,WREG			; get the deco info vector
-	btfsc	WREG,deco_stops					; are there deco stops?
+	btfsc	WREG,deco_stops_norm			; are there deco stops?
 	bra		deco_plan_show_1				; YES
 
 	;---- no deco --------------------------------------------------------
@@ -415,7 +454,7 @@ deco_results_page_2:
 	; output of remaining NDL time
 	WIN_SMALL .80, .50						; same line as bottom time
 	PUTC	"+"
-	movff	char_O_NDL_norm,lo				; get NDL time in normal plan
+	movff	int_O_NDL_norm+0,lo				; get NDL time in normal plan
 	bsf		leftbind
 	output_8
 	bcf		leftbind
@@ -429,7 +468,7 @@ deco_results_page_2:
 	;---- deco stops ---------------------------------------------------------
 deco_plan_show_1:
 	lfsr	FSR0,char_O_deco_depth			; initialize indexed addressing
-	lfsr	FSR1,char_O_deco_time
+	lfsr	FSR1,char_O_deco_time			; ...
 
 	clrf	decoplan_index					; start with index = 0
 	movlw	.24
@@ -510,8 +549,24 @@ deco_results:
 	STRCPY_TEXT tDepth
 	PUTC	":"
 	movff	char_I_bottom_depth,lo
-	output_8
-	STRCAT_PRINT "m"
+
+	TSTOSS	opt_units								; check depth units
+	bra		deco_results_metric						; 0 - use Meters
+	;bra	deco_results_imperial					; 1 - use Feet
+
+deco_results_imperial:
+	call	convert_meter_to_feet					; convert value in lo from [m] to [feet]
+	output_16_3										; print depth reached
+	STRCAT_TEXT tFeets								; print unit (feet)
+	bra		deco_results_0							; continue
+
+deco_results_metric:
+	output_8										; print depth reached (in meters)
+	STRCAT_TEXT tMeters								; print unit (meters)
+	;bra	deco_results_0							; continue
+
+deco_results_0:
+	STRCAT_PRINT ""									; finalize bottom depth output
 
 	; print warnings or sat/dsat factors
 	WIN_SMALL .0,.105
@@ -555,7 +610,7 @@ deco_results_m1:
 	call	TFT_standard_color				; clean-up from warnings
 
 	; get model
-	movff	char_I_deco_model,WREG			; 0: straight Buhlmann, 1: with GF
+	movff	char_I_model,WREG				; 0: straight Buhlmann, 1: with GF
 	iorwf	WREG							; GF factors in use?
 	bz		deco_results_m2					; NO
 
@@ -594,7 +649,7 @@ deco_results_2c:
 
 	btfss	FLAG_oc_mode					; current dive mode = OC ?
 	bra		deco_results_2d					; NO  - skip
-	TSTOSS	opt_extended_stops				; YES - extended stops activated?
+	TSTOSS	opt_ext_stops					; YES - extended stops activated?
 	bra		deco_results_2d					;       NO  - skip
 	WIN_SMALL .18,.155						;       YES - set position
 	STRCAT_PRINT "ext.Stop"					;           - print notice
@@ -690,7 +745,7 @@ deco_results_gas_loop:
 	movf	gas_index,W						; copy gas index to WREG for color-coding
 	call	TFT_color_code_gas				; set output color according to gas (1-5)
 
-	lfsr	FSR2,buffer						; load base address of output buffer
+	lfsr	FSR2,buffer						; set base address of output buffer
 	bsf		short_gas_descriptions			; configure gaslist_strcat_gas output format
 	bsf		divemode						; configure gaslist_strcat_gas output format
 	call	gaslist_strcat_gas				; write "Nxlo", "Txlo/hi", "Air" or "O2" into output buffer
@@ -776,7 +831,7 @@ deco_results_gas_volumes_7:
 	btfsc	decoplan_pressures_shown		; results shown in bar?
 	bra		deco_results_1					; YES - show deco stops again
 	bsf		decoplan_pressures_shown		; NO  - but now
-	lfsr	FSR0,int_O_gas_need_pres		;     - load base address of gas needs in bar
+	lfsr	FSR0,int_O_gas_need_pres		;     - set base address of gas needs in bar
 	bra		deco_results_gas_common			;     - re-run gas needs output in pressure mode
 
 

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File customview.asm                       combined next generation V3.03.5
+;   File customview.asm                       combined next generation V3.08.8
 ;
 ;   Custom Views in Surface and Dive Mode
 ;
@@ -24,13 +24,14 @@
 
 
 	extern	gaslist_strcat_gas_cd
-	extern	char_I_deco_model
+	extern	char_I_model
 
  IFDEF _compass
 	extern	TFT_surface_compass_mask
 	extern	TFT_dive_compass_mask
  ENDIF
 
+#DEFINE num_premenu_items	.11		; overall number of pre-menu items
 
 custview	CODE
 
@@ -46,49 +47,65 @@ custview	CODE
 	global	dive_customview_second
 dive_customview_second:
 	movf	active_customview,W			; get current view
-	dcfsnz	WREG,F						; 1:
-	goto	TFT_avr_stopwatch			; average depth and stopwatch
-	dcfsnz	WREG,F						; 2:
-	return								; compass - will be updated separately (faster) in dive mode
-	dcfsnz	WREG,F						; 3:
+	dcfsnz	WREG,F						;
+	goto	TFT_avr_stopwatch			;  1: average depth and stopwatch
+	dcfsnz	WREG,F						;
+ IFDEF _compass
+	return								;  2: compass - will be updated separately (faster) in dive mode
+ ELSE
+	return								;  2: not available without compass
+ ENDIF
+	dcfsnz	WREG,F						;
  IFDEF _external_sensor
-	goto	TFT_ppo2_sensors			; ppO2 sensors
+	goto	TFT_ppo2_sensors			;  3: ppO2 sensors
  ELSE
-	return								; not available without external sensors
+	return								;  3: not available without external sensors
  ENDIF
-	dcfsnz	WREG,F						; 4:
+	dcfsnz	WREG,F						;
  IFDEF _ccr_pscr
-	goto	TFT_sensor_check			; sensor check
+	goto	TFT_sensor_check			;  4: sensor check
  ELSE
-	return								; not available without CCR / pSCR mode
+	return								;  4: not available without CCR / pSCR mode
  ENDIF
-	dcfsnz	WREG,F						; 5;
+	dcfsnz	WREG,F						;
  IFDEF _ccr_pscr
-	goto	TFT_pscr_info				; pSCR data
+	goto	TFT_pscr_info				;  5: pSCR data
  ELSE
-	return								; not available without CCR / pSCR mode
+	return								;  5: not available without CCR / pSCR mode
  ENDIF
-	dcfsnz	WREG,F						; 6:
+	dcfsnz	WREG,F						;
  IFDEF _rx_functions
-	goto	TFT_pressures_SAC			; tank pressure and SAC rate
+	goto	TFT_pressures_SAC			;  6: tank pressure and SAC rate
  ELSE
-	return								; not available without RX functions
+	return								;  6: not available without RX functions
  ENDIF
-	dcfsnz	WREG,F						; 7:
-	goto	TFT_gas_needs_ascent		; gas needs for ascent / cave return
-	dcfsnz	WREG,F						; 8:
-	goto	TFT_decoplan				; deco plan
-	dcfsnz	WREG,F						; 9:
-	goto	TFT_ceiling_GF_tissue		; ceiling, current GF and tissues
-	dcfsnz	WREG,F						; 10:
-	goto	TFT_CNS						; CNS values
-	dcfsnz	WREG,F						; 11:
-	goto	TFT_ppo2_ead_end_cns		; ppO2, END/EAD and CNS
-	dcfsnz	WREG,F						; 12:
-	return								; GF factors - static only
-	dcfsnz	WREG,F						; 13:
-	goto	TFT_clock_batt_surfpress	; clock, battery and surface pressure
-	return								; active_customview = 0 -> do nothing
+	dcfsnz	WREG,F						;
+	goto	TFT_gas_needs				;  7: gas needs for ascent / cave return
+	dcfsnz	WREG,F						;
+ IFDEF _cave_mode
+	goto	TFT_cave_tts				;  8: cave mode TTS
+ ELSE
+	return								;  8: not available without cave mode functions
+ ENDIF
+	dcfsnz	WREG,F						;
+	goto	TFT_decoplan				;  9: deco plan
+	dcfsnz	WREG,F						;
+	goto	TFT_ceiling_GF_tissue		; 10: ceiling, current GF and tissues
+	dcfsnz	WREG,F						;
+	goto	TFT_CNS						; 11: CNS values
+	dcfsnz	WREG,F						;
+	goto	TFT_ppo2_ead_end_cns		; 12: ppO2, END/EAD and CNS / gas density
+	dcfsnz	WREG,F						;
+	goto	TFT_clock_batt_surfpress	; 13: clock, battery and surface pressure
+	dcfsnz	WREG,F						;
+	return								; 14: GF factors - static only
+	dcfsnz	WREG,F						;
+ IFDEF _cave_mode
+	goto	TFT_cave_waypoints			; 15: cave waypoints
+ ELSE
+	return								; 15: not available without cave mode functions
+ ENDIF
+	return								;  0: do nothing
 
 ;-----------------------------------------------------------------------------
 
@@ -268,18 +285,17 @@ surf_customview_init_view10:			; view 10: transmitter data / debug
 ;-----------------------------------------------------------------------------
 
 	global	menuview_toggle
+	global	menuview_toggle_reset
 menuview_toggle:						; show main menu or the pre-menu
 	bcf		switch_left					; clear button event
 	movlw	divemode_timeout_premenu	; get timeout for dive mode pre-menu
 	call	reset_timeout_time			; reset timeout
 	bsf		dive_options_menu			; flag that the dive options menu is shown
-	incf	active_premenu,F			; current number of pre-menu item
-	movlw	d'10'						; max     number of pre-menu items
+	incf	active_premenu,F			; increment pre-menu item number
+	movlw	num_premenu_items			; get count of pre-menu items
 	cpfsgt	active_premenu				; max reached?
 	bra		menuview_mask				; NO  - show item
 	;bra	menuview_toggle_reset		; YES - reset selector
-
-	global	menuview_toggle_reset
 menuview_toggle_reset:					; timeout occurred, beyond max number of options, or item executed
 	clrf	active_premenu				; reset pre-menu selector
 	bcf		dive_options_menu			; the dive options menu is not shown anymore
@@ -291,31 +307,40 @@ menuview_mask:
 	btfss	FLAG_apnoe_mode				;     - in apnoe mode?
 	goto	TFT_show_temp_divemode		;       YES - restore temperature and done
 	goto	TFT_standard_color			;       NO  - done
+
 menuview_items:
 	call	TFT_attention_color			; set color
 	bsf		win_invert					; set inverse printing
 	WIN_SMALL dm_premenu_col,dm_premenu_row
 	movf	active_premenu,W			; get active pre-menu item
 	dcfsnz	WREG,F
-	bra		menuview_view_gaschange		; check if a better gas/diluent is advised and prompt for switching if yes
+	bra		menuview_view_gaschange		;  1: gas change	(skipped if no better gas/dil cued)
 	dcfsnz	WREG,F
-	bra		menuview_view1				; "Menu?"		(skipped in gauge and apnoe modes)
+	bra		menuview_view_divemenu		;  2: "Menu?"		(skipped in gauge and apnoe modes)
 	dcfsnz	WREG,F
-	bra		menuview_view2				; "Quit?"		(in simulation mode only)
+ IFDEF _cave_mode
+	bra		menuview_view_cavemenu		;  3: "Cave?"		(skipped if not in cave mode)
+ ELSE
+	bra		menuview_toggle				;  3: cave mode not implemented, go to next menu item
+ ENDIF
 	dcfsnz	WREG,F
-	bra		menuview_view3				; "Sim-1m"		(in simulation mode only)
+	bra		menuview_view_sim_quit		;  4: "Quit?"		(in simulation mode only)
 	dcfsnz	WREG,F
-	bra		menuview_view4				; "Sim+1m"		(in simulation mode only)
+	bra		menuview_view_sim_down		;  5: "Sim down"	(in simulation mode only)
 	dcfsnz	WREG,F
-	bra		menuview_view5				; "Quit?"		(in apnoe mode only)
+	bra		menuview_view_sim_up		;  6: "Sim up"		(in simulation mode only)
 	dcfsnz	WREG,F
-	bra		menuview_view6				; "Reset Avr"	(in gauge mode only)
+	bra		menuview_view_sim_time		;  7: "Sim+5'"		(in simulation mode only)
 	dcfsnz	WREG,F
-	bra		menuview_view7				; "Sim+5'"		(in simulation mode only)
+	bra		menuview_view_apnoe_quit	;  8: "Quit?"		(in apnoe mode only)
 	dcfsnz	WREG,F
-	bra		menuview_view8				; "Course"		(only when compass is shown)
+	bra		menuview_view_gauge_reset	;  9: "Reset Avr"	(in gauge mode only)
 	dcfsnz	WREG,F
-	bra		menuview_view9				; "Layout"		(offer alternative layout, aka blind mode)
+	bra		menuview_view_course		; 10: "Course"		(only when compass is shown)
+	dcfsnz	WREG,F
+	bra		menuview_view_layout		; 11: "Layout"		(offer alternative layout, aka blind mode)
+
+	; when adding or removing pre-menu items, adjust the value num_premenu_items in the #DEFINE !
 
 menuview_exit:
 	call	TFT_standard_color
@@ -324,8 +349,8 @@ menuview_exit:
 
 
 menuview_view_gaschange:
-	btfsc	request_gaschange			; last gas change request executed yet?
-	bra		menuview_toggle				; NO - call next option
+	btfsc	request_gas_change			; last gas change request executed yet?
+	bra		menuview_toggle				; YES - call next option
  IFDEF _ccr_pscr
 	btfsc	FLAG_oc_mode				; in OC mode?
 	bra		menuview_view_gaschange_OC	; YES
@@ -348,12 +373,12 @@ menuview_view_gaschange_com:
 	bsf		short_gas_descriptions		; use short version of gaslist_strcat_gas_cd and gaslist_strcat_setpoint
 	bsf		better_gas_hint				; color-code as best gas/diluent
 	call	gaslist_strcat_gas_cd		; append gas description of gas #PRODL (0-4) to current string
-	movlw	.5
-	movwf	FSR2L						; point to 6th character (5 chars are used for the gas/dil description)
-	STRCAT_PRINT "?"
+	movlw	.5							; point to 6th character (5 chars are used for the gas/dil description)
+	movwf	FSR2L						; ...
+	STRCAT_PRINT "?"					; print question mark
 	bra		menuview_exit				; done
 
-menuview_view1:
+menuview_view_divemenu:
 	btfsc	FLAG_apnoe_mode				; in apnoe mode?
 	bra		menuview_toggle				; YES - goto next option
 	btfsc	FLAG_gauge_mode				; NO  - in gauge mode?
@@ -362,39 +387,34 @@ menuview_view1:
 	STRCAT_TEXT_PRINT tDivePreMenu		;           - print "Menu?"
 	bra		menuview_exit				;           - done
 
-menuview_view2:
+ IFDEF _cave_mode
+menuview_view_cavemenu:
+	TSTOSS	opt_cave_mode				; cave mode switched on?
+	bra		menuview_toggle				; NO  - goto next option
+	PUTC	"\xb7"						; YES - print '->' symbol
+	STRCAT_TEXT_PRINT tDivePreCave		;     - print "Cave?"
+	bra		menuview_exit				;     - done
+ ENDIF
+
+menuview_view_sim_quit:
 	btfss	simulatormode				; in simulator mode?
 	bra		menuview_toggle				; NO  - goto next option
 	STRCPY_TEXT_PRINT tQuitSim			; YES - print "Quit Simulation?"
 	bra		menuview_exit				;     - done
 
-menuview_view3:
+menuview_view_sim_down:
 	btfss	simulatormode				; in simulator mode?
 	bra		menuview_toggle				; NO - goto next option
 	STRCPY_PRINT "Sim\xb8"				; print down arrow for going down
 	bra		menuview_exit				; done
 
-menuview_view4:
+menuview_view_sim_up:
 	btfss	simulatormode				; in simulator mode?
 	bra		menuview_toggle				; NO  - goto next option
 	STRCPY_PRINT "Sim\xb9"				; YES - print up arrow for going up
 	bra		menuview_exit				;     - done
 
-menuview_view5:
-	btfss	FLAG_apnoe_mode				; in apnoe mode?
-	bra		menuview_toggle				; NO  - goto next option
-	btfss	apnoe_at_surface			; YES - at the surface?
-	bra		menuview_toggle				;       NO  - goto next option
-	STRCPY_TEXT_PRINT tQuitSim			;       YES - print "Quit Apnea mode?"
-	bra		menuview_exit				;           - done
-
-menuview_view6:
-	btfss	FLAG_gauge_mode				; in gauge mode?
-	bra		menuview_toggle				; NO  - goto next option
-	STRCPY_TEXT_PRINT tResetAvg			; YES - print "Reset Avg."
-	bra		menuview_exit				;     - done
-
-menuview_view7:
+menuview_view_sim_time:
 	btfss	simulatormode				; in simulator mode?
 	bra		menuview_toggle				; NO  - goto next option
 	btfsc	FLAG_gauge_mode				; YES - in gauge mode?
@@ -404,7 +424,21 @@ menuview_view7:
 	STRCPY_PRINT "Sim+5'"				;             NO  - print "Sim+5'"
 	bra		menuview_exit				;                 - done
 
-menuview_view8:
+menuview_view_apnoe_quit:
+	btfss	FLAG_apnoe_mode				; in apnoe mode?
+	bra		menuview_toggle				; NO  - goto next option
+	btfss	apnoe_at_surface			; YES - at the surface?
+	bra		menuview_toggle				;       NO  - goto next option
+	STRCPY_TEXT_PRINT tQuitSim			;       YES - print "Quit Apnea mode?"
+	bra		menuview_exit				;           - done
+
+menuview_view_gauge_reset:
+	btfss	FLAG_gauge_mode				; in gauge mode?
+	bra		menuview_toggle				; NO  - goto next option
+	STRCPY_TEXT_PRINT tResetAvg			; YES - print "Reset Avg."
+	bra		menuview_exit				;     - done
+
+menuview_view_course:
  IFDEF _compass
 	movlw	index_compass_dm			; index of compass view
 	cpfseq	active_customview			; in compass view?
@@ -415,7 +449,7 @@ menuview_view8:
 	bra		menuview_toggle				; not available without compass compiled in, goto next option
  ENDIF
 
-menuview_view9:
+menuview_view_layout:
 	btfsc	FLAG_apnoe_mode				; in apnoe mode?
 	bra		menuview_toggle				; YES - goto next option
 	STRCPY_TEXT_PRINT tDiveLayout		; NO  - print "Layout"
@@ -423,20 +457,38 @@ menuview_view9:
 
 ;-----------------------------------------------------------------------------
 
-; Show next dive mode custom view (and delete this flag)
+; Initialize dive mode custom view
+
+	global	dive_customview_show
+dive_customview_show:
+	btfss	custom_view_locked			; custom view locked?
+	bra		dive_customview_show_1		; NO  - call-up the view
+	movwf	backup_customview			; YES - store requested custom view for later recall
+	return								;     - done
+dive_customview_show_1:
+	movwf	active_customview			; set the requested custom view
+	bra		dive_customview_callup		; call-up the custom view
+
+	global	dive_customview_recall
+dive_customview_recall:
+	movff	backup_customview,active_customview	; recall the saved custom view
+	bra		dive_customview_callup				; call-up the custom view
+
 	global	dive_customview_toggle
 dive_customview_toggle:
 	incf	active_customview,F			; increment number of custom view to show
-
-	movlw	index_compass_dm			; index of custom view compass
-	cpfseq	active_customview			; will compass be shown in custom view?
-	call	I2C_sleep_compass			; NO - stop compass
-
 	movlw	index_cv_dm_max				; highest index in use in dive mode custom view
 	cpfsgt	active_customview			; max reached?
-	bra		dive_customview_mask		; NO  - show
-	clrf	active_customview			; YES - reset to zero (zero = no custom view)
-	;bra	dive_customview_mask		;     - show
+	bra		dive_customview_callup		; NO  - call-up the custom view
+	clrf	active_customview			; YES - reset to zero (zero = blank custom view)
+	;bra	dive_customview_callup		; call-up the custom view
+
+	global	dive_customview_callup
+dive_customview_callup:
+	movlw	index_compass_dm			; get index of compass custom view
+	cpfseq	active_customview			; will compass be shown?
+	call	I2C_sleep_compass			; NO - stop compass
+	;bra	dive_customview_init		; continue with initializing selected custom view
 
 ;----------------------------------------------------------------------------------
 ; Jump table for initialization of the every-second tasks in custom view area (dive mode)
@@ -444,38 +496,41 @@ dive_customview_toggle:
 ; Attention: the ordering must be in line with the every-second update jump table
 ;            and the index numbers defined in hwos.inc!
 ;
-	global	dive_customview_mask
-dive_customview_mask:
+dive_customview_init:
 	; clear custom view area in dive mode
 	WIN_BOX_BLACK dm_customview_row, dm_customview_bot-.2, dm_customview_column, dm_customview_rgt ; top, bottom, left, right
 	movf	active_customview,W			; get custom view to show
-	dcfsnz	WREG,F						; 1:
-	bra		init_avr_stopwatch			; average depth and stopwatch
-	dcfsnz	WREG,F						; 2:
-	bra		init_TFT_dive_compass		; compass
-	dcfsnz	WREG,F						; 3:
-	bra		init_ppo2_sensors			; ppO2 sensors
-	dcfsnz	WREG,F						; 4:
-	bra		init_sensor_check			; sensor check
-	dcfsnz	WREG,F						; 5:
-	bra		init_pscr_info				; pSCR data
-	dcfsnz	WREG,F						; 6:
-	bra		init_pressures_SAC			; tank pressure and SAC rate
-	dcfsnz	WREG,F						; 7:
-	bra		init_gas_needs_ascent		; gas needs for ascent / cave return
-	dcfsnz	WREG,F						; 8:
-	bra		init_decoplan				; deco plan
-	dcfsnz	WREG,F						; 9:
-	bra		init_ceiling_GF_tissue		; ceiling, current GF and tissues
-	dcfsnz	WREG,F						; 10:
-	bra		init_CNS					; CNS values
-	dcfsnz	WREG,F						; 11:
-	bra		init_ppo2_ead_end_cns		; ppO2, END/EAD and CNS
-	dcfsnz	WREG,F						; 12:
-	bra		init_gf_factors				; GF factors
-	dcfsnz	WREG,F						; 13:
-	bra		init_clock_batt_surfpress	; clock, battery and surface pressure
-	bra		customview_toggle_exit		; no view (blank screen in custom view area)
+	dcfsnz	WREG,F						;
+	bra		init_avr_stopwatch			;  1: average depth and stopwatch
+	dcfsnz	WREG,F						;
+	bra		init_TFT_dive_compass		;  2: compass
+	dcfsnz	WREG,F						;
+	bra		init_ppo2_sensors			;  3: ppO2 sensors
+	dcfsnz	WREG,F						;
+	bra		init_sensor_check			;  4: sensor check
+	dcfsnz	WREG,F						;
+	bra		init_pscr_info				;  5: pSCR data
+	dcfsnz	WREG,F						;
+	bra		init_pressures_SAC			;  6: tank pressure and SAC rate
+	dcfsnz	WREG,F						;
+	bra		init_gas_needs_ascent		;  7: gas needs for ascent / cave return
+	dcfsnz	WREG,F						;
+	bra		init_cave_tts				;  8: cave mode TTS
+	dcfsnz	WREG,F						;
+	bra		init_decoplan				;  9: deco plan (next stops)
+	dcfsnz	WREG,F						;
+	bra		init_ceiling_GF_tissue		; 10: ceiling, current GF and tissues
+	dcfsnz	WREG,F						;
+	bra		init_CNS					; 11: CNS values
+	dcfsnz	WREG,F						;
+	bra		init_ppo2_ead_end_cns		; 12: ppO2, END/EAD and CNS
+	dcfsnz	WREG,F						;
+	bra		init_clock_batt_surfpress	; 13: clock, battery and surface pressure
+	dcfsnz	WREG,F						;
+	bra		init_gf_factors				; 14: GF factors
+	dcfsnz	WREG,F						;
+	bra		init_cave_waypoints			; 15: cave waypoints
+	bra		customview_toggle_exit		;  0: no view (blank screen in custom view area)
 
 
 init_ppo2_sensors:
@@ -522,16 +577,6 @@ init_clock_batt_surfpress:
 	call	TFT_clock_batt_surfpress_mask	; mask for clock, battery and surface pressure
 	call	TFT_clock_batt_surfpress		; data for clock, battery and surface pressure
 	bra		customview_toggle_exit			; done
-
-init_gf_factors:
-	btfsc	FLAG_apnoe_mode				; in apnoe mode?
-	bra		dive_customview_toggle		; YES - goto next view
-	btfsc	FLAG_gauge_mode				; NO  - in gauge mode?
-	bra		dive_customview_toggle		;       YES - call next view
-	TSTOSS	char_I_deco_model			;       NO  - in GF mode (0 = ZH-L16, 1 = ZH-L16-GF)?
-	bra		dive_customview_toggle		;             NO  - no GF info for non-GF modes
-	call	TFT_gf_factors_mask			;             YES - mask for GF factors (static only)
-	bra		customview_toggle_exit		;                 - done
 
 init_TFT_dive_compass:					; compass
  IFDEF _compass
@@ -607,11 +652,35 @@ init_gas_needs_ascent:					; gas needs for ascent
 	bra		dive_customview_toggle		; YES - goto next view
 	btfsc	FLAG_gauge_mode				; NO  - in gauge mode?
 	bra		dive_customview_toggle		;       YES - goto next view
-	TSTOSS	opt_calc_asc_gasvolume		;       NO  - check if gas volume calculation is switched on
+	TSTOSS	opt_calc_gasvolume			;       NO  - check if gas volume calculation is switched on
 	bra		dive_customview_toggle		;             NO  - goto next view
-	call	TFT_gas_needs_ascent_mask	;             YES - mask for gas needs ascent
-	call	TFT_gas_needs_ascent		;                 - data for gas needs ascent
+	call	TFT_gas_needs_mask			;             YES - mask for gas needs ascent
+	call	TFT_gas_needs				;                 - data for gas needs ascent
 	bra		customview_toggle_exit		;                 - done
+
+init_cave_tts:							; cave mode data
+ IFDEF _cave_mode
+	btfss	cave_mode					; in cave mode?
+	bra		dive_customview_toggle		; NO  - goto next view
+	call	TFT_cave_tts_mask			; YES - show mask
+	call	TFT_cave_tts				;     - show data
+	bra		customview_toggle_exit		;     - done
+ ELSE
+	bra		dive_customview_toggle		; not available without cave mode, goto next view
+ ENDIF
+
+init_gf_factors:
+	call	TFT_gf_factors_mask			; mask for GF factors (static only)
+	bra		customview_toggle_exit		; done
+
+init_cave_waypoints:
+ IFDEF _cave_mode
+	call	TFT_cave_waypoints			; show waypoint graphics
+	bra		customview_toggle_exit		; done
+ ELSE
+	bra		dive_customview_toggle		; not available without cave mode, goto next view
+ ENDIF
+
 
 customview_toggle_exit:
 	bcf		request_next_custview		; clear request flag

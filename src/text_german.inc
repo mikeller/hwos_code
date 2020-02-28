@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;	File text_german.asm                      next combined generation V3.04.3
+;	File text_german.asm                      next combined generation V3.08.8
 ;
 ;	German texts translation file.
 ;
@@ -8,10 +8,14 @@
 ;=============================================================================
 
 ; Basic texts
-	TCODE	tNo,				"Nein"					; 0 No
-	TCODE	tYes,				"Ja"					; 1 Yes
+	TCODE	tNo,				"Nein"					; 0 No		| Enum group
+	TCODE	tYes,				"Ja"					; 1 Yes		|
+
  IFDEF _cave_mode
-	TCODE	tCave,				"Höhle"					; 2 Cave
+	TCODE	tOff,				"Aus"					; OFF		| Enum group
+	TCODE	tOn,				"Ein"					; ON		|
+ ELSE
+	TCODE	tOff,				" "						; needed for option table
  ENDIF
 
 	TCODE	tblank,				" "						; (a single space character)
@@ -21,6 +25,10 @@
 	TCODE	tView,				"View>"					; View>
 	TCODE	tHeading,			"Kurs:"					; Heading:
 	TCODE	tLastDive,			"Letzter TG"			; Last Dive (Max 10 chars)
+
+	TCODE	tFTTSSurf,			"fTTS/Verz.:"			; Future TTS
+	TCODE	tLastDecostopSurf,	"Letzt.Stop:"			; last deco stop surface custom view
+	TCODE	tDvSalinitySurf,	"Salinität :"			; Salinity
 
  IFDEF _external_sensor
 	TCODE	tSensorMilliVolt,	"Sensoren mV"			; Sensors mV
@@ -33,7 +41,12 @@
 	TCODE	tDivemenu_Avg_Mkr,	"Uhr/Marker"			; Reset Avg, Set Marker (and Turn Dive)
 	TCODE	tDivemenu_ToggleGF,	"Toggle GF"				; Toggle GF
 	TCODE	tDivemenu_Marker,	"Markierung"			; Set Marker
+
+ IFDEF _cave_mode
+	TCODE	tDivemenu_LostGas,	"verfügbar"				; Gas Availability
+ ELSE
 	TCODE	tDivemenu_LostGas,	"Gasverlust"			; Lost Gas
+ ENDIF
 
  IFDEF _ccr_pscr
 	TCODE	tDivemenu_Diluent,	"Diluents"				; Diluent (CCR)
@@ -46,7 +59,13 @@
  ENDIF
 
  IFDEF _cave_mode
-	TCODE	tDivemenu_TurnDive,	"Rückweg"				; Turn Dive
+	TCODE	tDivePreCave,		"Höhle"					; Enter Cave Menu          ( 5 chars max)
+	TCODE	tDivemenu_wp_set,	"Wegepunkt"				; Set Waypoint             (10 chars max)
+	TCODE	tDivemenu_wp_out,	"gehe <-()"				; go one Waypoint outwards (10 chars max)
+	TCODE	tDivemenu_wp_in,	"gehe ->()"				; go one Waypoint inwards  (10 chars max)
+	TCODE	tDivemenu_TurnDive,	"Rückweg"				; Turn Dive                (10 chars max)
+	TCODE	tDivemenu_ContDive,	"Fortsetzen"			; Continue Dive            (10 chars max)
+	TCODE	tDivemenu_off_on, 	"Aus / Ein"				; Cave Mode Off/On         (10 chars max)
  ENDIF
 
 
@@ -58,18 +77,27 @@
 	TCODE	tGasSetup,			"OC Gas Setup"			; OC Gas Setup
 	TCODE	tSetTime,			"Zeit  stellen"			; Set Time
 	TCODE	tSetDate,			"Datum stellen"			; Set Date
-	TCODE	tSetTimeDate,		"Datum & Uhrzeit"		; Set Time & Date
+	TCODE	tSetTimeDate,		"Datum & Uhrzeit"		; Time & Date
 	TCODE	tDispSets,			"Anzeige"				; Display Settings
+	TCODE	tSysSets,			"System"				; System  Settings
 	TCODE	tExit,				"Ende"					; Exit
 	TCODE	tResetMenu,			"Reset Menü"			; Reset Menu
-	TCODE	tDiveModeMenu,		"Deko Einstellung"		; Deco Mode
+	TCODE	tDiveModeMenu,			"TG-Einstellungen"	; Dive Setup
+
+	TCODE	tDiveSetup,			"Tauchgang"				; Dive Setup
+	TCODE	tDecoSetup,			"Dekompression"			; Deco Setup
+	TCODE	tSACSetup,			"SAC Einstellung"		; SAC Setup
+	TCODE	tppO2Setup,			"O2 Partialdruck"		; ppO2 Setup
+	TCODE	tStopsSetup,		"Stopps & Tiefen"		; Stops & Depths
+
 	TCODE	tInfoMenu,			"Informationen"			; Information
  IFDEF _ccr_pscr
 	TCODE	tCCRSetup,			"CCR/pSCR Menü"			; CCR/pSCR Setup
 	TCODE	tDiluentSetup,		"Diluent Menü"			; Diluent Setup
  ENDIF
 	TCODE	tFixedSetpoints,	"CCR Setpoints"			; Fixed Setpoints
-	TCODE	tBack,				"zurück"
+	TCODE	tBack,				"zurück"				; back
+	TCODE	tGas6,				"Extra-Gas"				; edit & select Gas 6
 
  IFDEF _rx_functions
 	TCODE	tTrSettings,		"Druckanzeige"			; Pressure Display
@@ -80,13 +108,16 @@
 	TCODE	tTrMaxDeltaP,		"max Diff.: "			; independent double max difference
  ENDIF
 
- IFDEF _ccr_pscr
  IFDEF _external_sensor
 	TCODE	tCCRSensor,			"Sensor"				; CCR/pSCR Sensor
 	TCODE	tCalibrateMenu,		"Kalibrierung"			; Calibration
 	TCODE	tCalibrationGas,	"Kal. Gas O2:"			; Cal. Gas O2:
 	TCODE	tCalibrate,			"Kalibrieren"			; Calibrate
- ENDIF
+	TCODE	tS8Mode,			"S8 Eingang:"			; Sensor Input
+	TCODE	tCCRS8Mode,			"Analog"				; Analog
+	TCODE	tCCRS8Mode2,		"Digital"				; Digital
+ ELSE
+	TCODE	tCCRS8Mode,			" "						; needed for option table
  ENDIF
 
 
@@ -124,7 +155,7 @@
 	TCODE	tppO2O2,			"ppO2(O2)"				; ppO2(O2)
 	TCODE	tppO2Dil,			"ppO2(Dil)"				; ppO2(Dil)
 	TCODE	tppO2Mix,			"ppO2(Mix)"				; ppO2(Mix)
-	TCODE	tCCRMode,			"Modus:"				; Mode:
+	TCODE	tCCRMode,			"Modus: "				; CCR/pSCR Mode
 	TCODE	tCCRModeFixedSP,	"fixe SP"				; 0 fixed for CCR / calculated for pSCR  | ENUM group
 	TCODE	tCCRModeSensor,		"Sensor"				; 1 Sensor                               |
 	TCODE	tCCRModeAutoSP,		"Auto SP"				; 2 Auto SP                              |
@@ -153,7 +184,8 @@
 ; Gaslist management
 	TCODE	tGas,				"Gas"					; Gas
 	TCODE	tDil,				"Dil"					; Diluent
-	TCODE	tGasErr,			"Err"					; Err (3 chars)
+	TCODE	tGasErr,			"Err"					; Err      (max 3 chars)
+	TCODE	tTakeGas,			"nimm"					; take gas (max 4 chars)
 
 
 ; Communication Menu
@@ -169,12 +201,18 @@
 
 
 ; Dive Settings
-	TCODE	tDvMode,			"Betrieb : "
-	TCODE	tDvOC,				"OC"
-	TCODE	tDvCCR,				"CCR"
-	TCODE	tDvGauge,			"Gauge"
-	TCODE	tDvApnea,			"Apnoe"
-	TCODE	tDvPSCR,			"pSCR"
+	TCODE	tDvMode,			"Betriebsart : "		; Dive Mode
+ IFDEF _cave_mode
+	TCODE	tCvMode,			"Höhlenmodus : "		; Cave Mode
+ ENDIF
+	TCODE	tFTTSMenu,			"fTTS/Verz.  : "		; Future TTS
+	TCODE	tTimeoutDive,		"TG-Ende nach: "		; Dive Timeout
+	TCODE	tStoreApnoeDive,	"Log Apnoe   : "		; Store Apnoe Dives
+	TCODE	tDvOC,				"OC"					; 0 | keep order, enum!
+	TCODE	tDvCCR,				"CCR"					; 1 |
+	TCODE	tDvGauge,			"Gauge"					; 2 |
+	TCODE	tDvApnea,			"Apnoe"					; 3 |
+	TCODE	tDvPSCR,			"pSCR"					; 4 |
 	TCODE	tDvCC,				"CC"
 	TCODE	tDkMode,			"Decotype: ZH-L16"
 	TCODE	tZHL16,				" "						; keep order, enum from here...
@@ -187,30 +225,29 @@
  ELSE
 	TCODE	tPPO2MIN,			"Min.       :"
  ENDIF
-	TCODE	tLastDecostop,		"Letzt.Stop  : "
-	TCODE	tAscentSpeed,		"Auf.Geschw. : "		; Ascent Speed
-	TCODE	tGasChangeTime,		"Gaswechsel  :+"		; additional Gas Change Time
-	TCODE	tExtendedStops,		"erw. Stopps : "		; extended stops
-	TCODE	tTimeoutDive,		"TG-Ende nach: "		; Dive Timeout
-	TCODE	tStoreApnoeDive,	"Log Apnoe   : "		; Store Apnoe Dives
 	TCODE	tDecoparameters,	"Deko Parameter"
 	TCODE	tGF_low,			"GF  low :"
 	TCODE	tGF_high,			"GF  high:"
 	TCODE	tSaturationMult,	"Sättigung   : "
 	TCODE	tDesaturationMult,	"Entsättigung: "
-	TCODE	tFTTSMenu,			"fTTS/Verz.:"			; Future TTS
-	TCODE	tLastDecostopSurf,	"Letzt.Stop:"			; last deco stop surface custom view
 	TCODE	tGFMenu,			"GF Parameter"			; GF Settings
 	TCODE	taGF_low,			"aGF low :"				; aGF low
 	TCODE	taGF_high,			"aGF high:"				; aGF high
-	TCODE	taGF_enable,		"aGF wählbar:"			; aGF Selectable
+	TCODE	taGFenable,			"aGF wählbar:"			; aGF Selectable
 	TCODE	tDiveaGF_active,	"aGF aktiv"				; using aGF
-	TCODE	tppO2settings,		"ppO2 Parameter"		; ppO2 Settings
-	TCODE	tsafetystopmenu,	"Sicherheitsstop:"		; Safety Stop:
+	TCODE	tSafetyStop,		"Sicherheitsstop:"		; Safety Stop:  (max. 16 chars)
+	TCODE	tExtendedStops,		"erweit. Stopps :"		; Extended Stops
+	TCODE	tLastDecostop,		"Letzt.Stop : "			; last Deco Stop Depth
+	TCODE	tDvSalinity,		"Salinität  : "			; Salinity
+	TCODE	tDepthWarn,			"Tiefenlimit: "			; Depth Warning
 	TCODE	tGasUsage,			"Gasbedarf"				; Gas Usage
-	TCODE	tSetBotUse,			"Arbeits-Gas:"			; Bottom Gas:
-	TCODE	tSetDecoUse,		"Deko    Gas:"			; Deco   Gas:
-	TCODE	tCalcAscGas,		"Gasmenge(B/O):"		; Calculate Gas (Bail Out) needs?
+	TCODE	tSetWorkSAC,		"Arbeits-SAC:"			; SAC Work:
+	TCODE	tSetDecoSAC,		"Deko    SAC:"			; SAC Deco:
+	TCODE	tCalcGasNeeds,		"Gasmenge(B/O): "		; Calculate  Gas (Bail Out) Needs
+ IFDEF _gas_contingency
+	TCODE	tGasContingencyDive,"Swap on empty: "		; swap tank on becoming empty
+ ENDIF
+	TCODE	tGasChangeTime,		"Gaswechsel   :+"		; additional Gas Change Time
 	TCODE	tSetup_Tank,		"Tank Einstellen"		; Setup Tank
 	TCODE	tTankSize,			"Tank Größe"
 	TCODE	tTankUsablePress,	"Umkehrdruck (Aufst)"	; Tank Pressure Budget for Ascent (turn pressure) (max 19 chars)
@@ -221,8 +258,8 @@
  IFDEF _ccr_pscr
 	TCODE	tCCmaxFracO2,		"Loop %O2 max. : "		; max O2 percent (absolute) in the loop
 	TCODE	tDilppO2Check,		"Check Dil ppO2: "		; check ppO2 of the diluent against the setpoint
-	TCODE	tPSCR_O2_drop,		"pSCR O2 Abfall: "		; pSCR O2 drop
-	TCODE	tPSCR_lungratio,	"    L.Verhält.: "		; pSCR lung ratio
+	TCODE	tPSCR_O2_drop,		"pSCR O2 Abfall: "		; pSCR O2 Drop
+	TCODE	tPSCR_lungratio,	".. Lungenverh.: "		; pSCR Lung Ratio
 	TCODE	tCopyDilToOC,		"Kopiere Dil.-> OC"		; copy diluent settings to OC gas
 	TCODE	tBackToLoop,		"auf Loop"				; back to loop (10 chars max)
  ENDIF
@@ -257,30 +294,37 @@
 
 
 ; Display Settings
-	TCODE	tBright,			"Helligkeit:"
-	TCODE	tEco,				"Eco"
-	TCODE	tMedium,			"Mittel"
-	TCODE	tHigh,				"Hoch"
-	TCODE	tDvSalinity,		"Salinität: "			; Salinity
-	TCODE	tShowppO2,			"ständig zeigen:"		; Always show ppO2:
-	TCODE	tFlip,				"Anzeige drehen:"		; Rotate Screen
-	TCODE	tMODwarning,		"Tiefe Warnung:"		; depth Warnings
-;	TCODE	tIBCDwarning,		"IBCD  Warnung:"		; IBCD warning
-	TCODE	tLayout,			"Layout :"				; Layout
-	TCODE	t2ndDepth,			"2.Tiefe:"				; 2nd depth display content (11 chars max)
-	TCODE	tTissueGraphics,	"Grafik :"				; tissue graphics
+	TCODE	tBright,			"Helligkeit: "			; Brightness
+	TCODE	tLayout,			"Layout    : "			; Layout
+	TCODE	tUnits,				"Einheiten : "			; Units
+ IF _language_2!=none
+	TCODE	tLanguage,			"Sprache   : "			; Language
+ ENDIF
+	TCODE	tFlip,				"Anzeige drehen: "		; Rotate Screen
+	TCODE	tColorScheme,		"Farbschema"			; Colour Scheme
+	TCODE	tVSIgraph,			"Geschw.Grafik: "		; Speed Graph
+	TCODE	tVSItext2,			"Var.   Geschw: "		; variable Speed
+	TCODE	tShowppO2,			"ppO2 immer   : "		; always show ppO2
+	TCODE	tDepthWarning,		"Tiefe blinken: "		; Depth blinking
+	TCODE	t2ndDepth,			"2.Tiefe: "				; 2nd Depth Display Content (11 chars max)
+	TCODE	tTissueGraphics,	"Grafik : "				; Tissue Graphics
 
-	TCODE	tLayoutNormal,		"normal"				; normal
-	TCODE	tLayoutBig,			"groß"					; big
-
-
-; VSI display Settings
-	TCODE	tVSItext2,			"Variable Geschw:"		; Variable speed:
-	TCODE	tVSIgraph,			"Geschw.  Grafik:"		; Speed graph:
+	TCODE	tIBCDwarning,		"IBCD  Warnung: "		; IBCD warning
+	TCODE	tEco,				"Eco"					; eco     | ENUM group
+	TCODE	tMedium,			"Mittel"				; medium  |
+	TCODE	tHigh,				"Hoch"					; high    |
+	TCODE	tLayoutNormal,		"normal"				; normal  | ENUM group
+	TCODE	tLayoutBig,			"groß"					; big     |
+	TCODE	tMax,				"max."					; max     | ENUM group
+	TCODE	tAvg,				"mittel"				; average |
+	TCODE	tTissuePresSat,		"Druck+Sat."			; pressure and saturation | ENUM group
+ IFDEF _helium
+	TCODE	tTissueN2He,		"N2+He"					; N2 + He pressure        |
+ ENDIF
 
 
 ; Setup Menu
-	TCODE	tSystSets,			"Konfiguration"
+	TCODE	tSystSets,			"Konfiguration"			; System Settings
  IFDEF _compass
 	TCODE	tCompassMenu,		"Kompass-Kalibrierung"	; Compass calibration
 	TCODE	tCompassGain,		"Empfindlichkeit:"		; Compass gain:
@@ -288,12 +332,12 @@
 	TCODE	tCalY,				"Kal. Y:"				; Cal Y
 	TCODE	tCalZ,				"Kal. Z:"				; Cal Z
  ENDIF
-	TCODE	tUnits,				"Einheiten: "
 	TCODE	tMetric,			" m/°C"					; Enum menu
 	TCODE	tImperial,			"ft/°F"
 								;         111         111         111         111         111
 	; 5 rows by 12 chars each:	 123456789012123456789012123456789012123456789012123456789012
-	TCODE	tDefName,		"HW OSTC"	;"  Lese die   Anleitung,  kenne  und verstehe die  Grenzen!"
+	TCODE	tDefName,			"HW OSTC"	;"  Lese die   Anleitung,  kenne  und verstehe die  Grenzen!"
+	TCODE	tPiezo,				"Taster"				; Buttons
 	TCODE	tButtonleft,		"Taster links :"		; Left button
 	TCODE	tButtonright,		"Taster rechts:"		; Right button
 	TCODE	tAltMode,			"Wartezeit:"
@@ -324,7 +368,7 @@
 
 ; Simulator menu
 	TCODE	tInter,				"Start Simulator"		; Start Simulator
-	TCODE	tPlan,				"Simulator"				; Simulator
+	TCODE	tSimulator,			"Simulator"				; Simulator
 
 
 ; Decoplanner submenu
@@ -332,7 +376,7 @@
 	TCODE	tBtTm_short,		"Zeit :"				; Bot. Time: (max. 6 chars)
 	TCODE	tBtDep,				"Tiefe    :"			; Max Depth: (10 chars)
 	TCODE	tIntvl,				"Intervall:"			; Interval : (10 chars)
-	TCODE	tDecoSetup,			"Deko Parameter"
+	TCODE	tCalculatorSetup,	"Deko Parameter"		; Calculator Setup
 	TCODE	tDeco,				"Deko Berechnung"		; Calculate Deco
 	TCODE	tDivePlan,			"Tauchplan"				; Dive Plan (max. 10 chars)
 	TCODE	tNoDeco,			"Keine Deko"			; No Deco
@@ -340,7 +384,7 @@
 	TCODE	tSelectSetpoint,	"Setpoint   : "
 	TCODE	tuseAGF,			"Benutze aGF: "
  IFDEF _gas_contingency
-	TCODE	tGasContingency,	"Gas Cont. : "			; Gas Contingency			## translation pending
+	TCODE	tGasContingencySim,	"Gas Cont. : "			; Gas Contingency			## translation pending
  ENDIF
 
 ; Decoplanner progress indication
@@ -356,10 +400,12 @@
 
 ; Information menu
 	TCODE	tFirmware,			"Firmware: "			; Firmware: (space)
+	TCODE	tFirmwareDate,		"erstellt: "			; created : (space)  firmware creation date
 	TCODE	tHardware,			"Hardware: "			; Hardware: (space)
 	TCODE	tSerial,			"Seriennr: "			; Serial  : (space)
-	TCODE	tTotalDives,		"Anzahl TG:"			; Total Dives:
-	TCODE	tBatteryV,			"Batterie: "			; Battery:
+	TCODE	tBatteryV,			"Batterie: "			; Battery : (space)
+	TCODE	tSensorC,			"Sensor  : "			; Sensor  : (space)
+	TCODE	tSensorD,			"Offset  : "			; Offset  : (space)
 	TCODE	tUptime,			"Laufzeit: "			; Uptime:
 
  IFDEF _rx_functions
@@ -368,8 +414,8 @@
 
 
 ; Divemode screen
-	TCODE	tNDL,				" NZ"					; 3 chars max
-	TCODE	tTTS,				"TTS"					; 3 chars max
+	TCODE	tNDL,				" NZ"					; 3 chars
+	TCODE	tTTS,				"TTS"					; 3 chars
 	TCODE	tSlow,				"langsam"				; slow - max 7 chars
 	TCODE	tVelMetric,			"m/min"
 	TCODE	tVelImperial,		"ft/m "
@@ -381,10 +427,6 @@
 	TCODE	tDepth,				"Tiefe"					; Depth (max 5 chars)
 	TCODE	tMaxDepth,			"Max.Tiefe"				; Max.Depth     - max 9 chars!
 	TCODE	tAvgDepth,			"Durchschn."			; average Depth - max 9 chars! (extra dot is ok)
-	TCODE	tTissuePresSat,		"Druck+Sat."			; 0 pressure and saturation  | ENUM group
- IFDEF _helium
-	TCODE	tTissueN2He,		"N2+He"					; 1 N2 + He pressure         |
- ENDIF
 	TCODE	tDivetime,			"Dauer"					; Divetime (max 8 chars)
 	TCODE	tDiveTotalAvg,		"Durchschn.1"
 	TCODE	tDiveStopwatch,		"Stoppuhr"
@@ -410,16 +452,18 @@
 	TCODE	tSensorCheck,		"Sensor Test"			; Sensor Check
 	TCODE	tdil,				"Dil:"					; Diluent ppO2 Warning
 	TCODE	tmix,				"Mix:"					; Pre-Mix ppO2 Warning
-	TCODE	tGasNeedsWarn,		"Gasbedarf"
-	TCODE	tGasNeedsAscent,	"Gas Bedarf Aufstieg"
-	TCODE	tCNSsurf,			"ZNS Oberfl."
-	TCODE	tCNSfTTS,			"ZNS fTTS"
-	TCODE	tCNSBO,				"ZNS B/O"
-	TCODE	tCNSnow,			"ZNS jetzt"
-	TCODE	tCNSeod,			"ZNS Ende"
-	TCODE	tnoBOgas,			"-B/O-Gas-"
-	TCODE	tMicroBubbles,		"M.Blasen"
-	TCODE	tCNS,				"CNS: "
+	TCODE	tGasNeedsWarn,		"Gasbedarf"				;
+	TCODE	tCNSsurf,			"ZNS Oberfl."			;
+	TCODE	tCNSfTTS,			"ZNS fTTS"				;
+	TCODE	tCNSBO,				"ZNS B/O"				;
+	TCODE	tCNSnow,			"ZNS jetzt"				;
+	TCODE	tCNSeod,			"ZNS Ende"				;
+ IFDEF _cave_mode
+	TCODE	tCNScave,			"ZNS Höhle"				;
+ ENDIF
+	TCODE	tnoBOgas,			"-B/O-Gas-"				;
+	TCODE	tMicroBubbles,		"M.Blasen"				;
+	TCODE	tCNS,				"ZNS: "					;
 	TCODE	tgaschange,			"wechseln?"				; better gas found
 	TCODE	tNeed,				"Bedf."					; gas need (5 chars)
 	TCODE	tBattery,			"Batterie"				; Battery
@@ -447,10 +491,15 @@
  ENDIF
 
  IFDEF _cave_mode
-	TCODE	tGasNeedsCaveMode,	"Gas Bedarf Höhlen-Modus"; title for gas needs custom view
-	TCODE	tDiveTurned,		"Rückweg"				; dive is turned      (max. 9 char)
+	TCODE	tGasNeedsCaveMode,	"Gas Bedarf -HÖHLE- "	; title for gas needs custom view (cave mode)		| need to be
+	TCODE	tGasNeedsAscent,	"Gas Bedarf Aufstieg"	; title for gas needs custom view (open water mode)	| same length
 	TCODE	tCaveMode,			"Höhle"					; cave mode activated (max. 9 char)
 	TCODE	tCaveModeShutdown,	"X-Höhle-X"				; cave mode shut down (max. 9 char)
+	TCODE	tCaveTTS,			"Cave TTS"				; cave mode total time to surface
+	TCODE	tCaveStops,			"total Stops"			; cave mode total time for stops
+	TCODE	tCaveRuntime,		"total RT"				; cave mode total runtime
+ ELSE
+	TCODE	tGasNeedsAscent,	"Gas Bedarf Aufstieg"	; title for gas needs custom view
  ENDIF
 
 
@@ -470,9 +519,17 @@
 ; Logbook
 	TCODE	tCNS2,				"ZNS:"
 	TCODE	tAVG,				"Mit:"
-	TCODE	tGF,				"GF:"
-	TCODE	tSAT,				"Sät:"					; 4 chars max
+	TCODE	tGF2,				"GF :"
+	TCODE	tSAT,				"Sät:"					; max  4 chars
+	TCODE	tDvSalinity2,		"Salinität :"			; max 11 chars
+	TCODE	tLastDeco,			"Letzt.Stop:"			; max 11 chars
+	TCODE	tNoProfileData,		"keine Daten mehr..."	; max 21 chars
+	TCODE	tBeginOfDive,		"Beginn:"				; max  8 chars
+	TCODE	tEndOfDive,			"Ende:"					; max  8 chars
+	TCODE	tDesatTime,			"Desat:"				; amx  8 chars
 
+; other useser
+	TCODE	tGF,				"GF:"
 
 ; Logbook units
 	TCODE	tLogTunitC,			"°C"
@@ -505,6 +562,7 @@
 
 
 ; Logbook Offset Menu
+	TCODE	tTotalDives,		"Anzahl TG: "			; Total Dives
 	TCODE	tLogOffset,			"Logbuch-Offset"		; Logbook offset
 	TCODE	tLogOffsetValue,	"Offset      : "		; Offset
 	TCODE	tLogOffStepSize,	"Schrittweite: "		; Step Size
@@ -528,7 +586,6 @@
 
 
 ; Color Scheme menu
-	TCODE	tColorScheme,		"Farbschema"			; Colour Scheme
 	TCODE	tColorSetDive,		"Tauchmodus:"			; Divemode:
 	TCODE	tColorSetName0,		"Standard"				; Standard
 	TCODE	tColorSetName1,		"Rot"					; Red
@@ -537,21 +594,17 @@
 
 
 ; Language selection
- IF _language_2!=none
-	TCODE	tLanguage,			"Sprache: "				; used in menu_tree
- ENDIF
-
  IF _language_1==en
-	TCODE	tLang1,				"Englisch"				; tLang1 is 1st language, enum context
+	TCODE	tLang1,				"EN"					; tLang1 is 1st language, enum context
  ELSE
  IF _language_1==de
-	TCODE	tLang1,				"Deutsch"
+	TCODE	tLang1,				"DE"
  ELSE
  IF _language_1==fr
-	TCODE	tLang1,				"Französisch"
+	TCODE	tLang1,				"FR"
  ELSE
  IF _language_1==it
-	TCODE	tLang1,				"Italienisch"
+	TCODE	tLang1,				"IT"
  ELSE
 	TCODE	tLang1,				""						; dummy target for options table
  ENDIF
@@ -560,16 +613,16 @@
  ENDIF
 
  IF _language_2==en
-	TCODE	tLang2,				"Englisch"				; tLang2 is 2nd language, enum context
+	TCODE	tLang2,				"EN"					; tLang2 is 2nd language, enum context
  ELSE
  IF _language_2==de
-	TCODE	tLang2,				"Deutsch"
+	TCODE	tLang2,				"DE"
  ELSE
  IF _language_2==fr
-	TCODE	tLang2,				"Französisch"
+	TCODE	tLang2,				"FR"
  ELSE
  IF _language_2==it
-	TCODE	tLang2,				"Italienisch"
+	TCODE	tLang2,				"IT"
  ENDIF
  ENDIF
  ENDIF

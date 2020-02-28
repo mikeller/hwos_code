@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft_outputs.inc                      next combined generation V3.03.8
+;   File tft_outputs.inc                      next combined generation V3.08.8
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -84,15 +84,15 @@
 	extern	TFT_clear_divemode_menu				; clear the divemode menu
 	extern	TFT_clear_message_window
 	extern	TFT_clear_message_window_row2
-	extern	TFT_warning_sat
+	extern	TFT_warning_saturation
 	extern	TFT_warning_agf						; show a warning if aGF is selected
 	extern	TFT_divetimeout						; show timeout counter
 	extern	TFT_safety_stop_show				; show the safety stop
 	extern	TFT_safety_stop_clear				; clear safety stop
 	extern	TFT_clear_deco_data					; clear deco data (NDL or stop & TTS)
 	extern	TFT_warning_fallback				; show fallback warning
-	extern	TFT_warning_gas_needs_warn
-	extern	TFT_warning_gas_needs_att
+	extern	TFT_warning_gas_needs
+	extern	TFT_attention_gas_needs
 	extern	TFT_advice_gas_change
 	extern	TFT_warning_no_BO_gas
 	extern	TFT_warning_eod_cns
@@ -109,12 +109,15 @@
 	extern	TFT_warning_sensor_disagree
  ENDIF
 
+; Date
+	extern	TFT_convert_date					; print day, month and year
+	extern	TFT_convert_date_short				; print day and month
 
 ; Divemode Custom Views
 	extern	TFT_avr_stopwatch_mask				; mask for average depth and stopwatch
 	extern	TFT_avr_stopwatch					; data for average depth and stopwatch
-	extern	TFT_gas_needs_ascent_mask			; mask for gas needs ascent
-	extern	TFT_gas_needs_ascent				; data for gas needs ascent
+	extern	TFT_gas_needs_mask					; mask for gas needs ascent
+	extern	TFT_gas_needs						; data for gas needs ascent
 	extern	TFT_decoplan_mask					; mask for deco plan
 	extern	TFT_decoplan						; data for deco plan
 	extern	TFT_ceiling_GF_tissue_mask			; mask for ceiling, current GF and tissues
@@ -140,6 +143,12 @@
 	extern	TFT_ppo2_sensors					; data for ppO2 sensors
  ENDIF
 
+ IFDEF _cave_mode
+	extern	TFT_cave_tts_mask					; mask for cave mode TTS, total stops and runtime
+	extern	TFT_cave_tts						; data for cave mode TTS, total stops and runtime
+	extern	TFT_cave_waypoints					; data for cave mode waypoints
+ ENDIF
+
 
 ; Surface Custom Views
 
@@ -148,7 +157,7 @@
  ENDIF
 
 
-; Misc
+; Color-coding
 	extern	TFT_standard_color
 	extern	TFT_disabled_color
 	extern	TFT_memo_color
@@ -162,15 +171,14 @@
 	extern	TFT_color_code_cns
 	extern	TFT_color_code_tank_pres_sac
 
-	extern	adjust_depth_with_salinity			; computes salinity setting into lo:hi [mbar]
-	extern	adjust_depth_with_salinity_log		; computes salinity setting (FROM WREG!) into lo:hi [mbar]
-	extern	TFT_convert_date_short
+; Misc
+	extern	convert_pres_to_depth				; converts pressure in [mbar] to depth in [cm]
+	extern	convert_cm_to_feet					; converts depth in [cm] to depth in [feet]
+	extern	convert_meter_to_feet				; converts depth in [m]  to depth in [feet]
+	extern	convert_celsius_to_fahrenheit		; converts temperature from celsius to fahrenheit
 	extern	TFT_convert_signed_16bit
-	extern	TFT_convert_date
-	extern	convert_mbar_to_feet				; convert value in hi:lo from mbar to feet
-	extern	convert_meter_to_feet				; convert value in    lo from meters to feet
-	extern	convert_celsius_to_fahrenheit		; convert value in hi:lo from celsius to fahrenheit
 
+; Debug output
 	extern	TFT_debug_output
 
 
@@ -189,7 +197,7 @@
  ENDIF
 
  IFDEF _cave_mode
-	extern	TFT_info_cave_mode					; show info    that in cave mode
-	extern	TFT_info_dive_turned				; show info    that dive is turned
-	extern	TFT_warn_cave_shutdown				; show warning that cave mode has shut down
+	extern	TFT_info_cave_mode					; show info      that cave mode is active
+	extern	TFT_cave_shutdown_attention			; show attention that cave mode will shut down soon
+	extern	TFT_cave_shutdown_warning			; show warning   that cave mode has  shut down
  ENDIF

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File surfmode.asm                         next combined generation V3.04.3
+;   File surfmode.asm                         next combined generation V3.08.8
 ;
 ;   Surface Mode
 ;
@@ -111,9 +111,8 @@ surfloop_1:
 
 	call	I2C_sleep_compass		; shut down compass
 
-	clrf	ext_flash_address+0
-	clrf	ext_flash_address+1
-	clrf	ext_flash_address+2
+	CLRT	ext_flash_address
+
 
  IFDEF _ccr_pscr
 	movlw	surface_sp				; load default surface setpoint (in cbar)
@@ -126,7 +125,6 @@ surfloop_1:
 
 	bcf		surfmode_menu			; not in surface menu (any more)
 	bcf		compass_menu			; not in "set bearing" selection (any more)
-	bcf		bailout_mode			; not in bailout menu (any more)
 
 	bcf		switch_left				; clear intermediate button event since start/restart
 	bcf		switch_right			; clear intermediate button event since start/restart
@@ -191,6 +189,18 @@ surfloop_2:
 
 	TSTOSS	opt_dive_mode					; in OC? (0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=pSCR)
 	call	TFT_show_OC_startgas_surface	; YES - show first gas and "OSTC2-like" active gases
+
+	; configure tissue graphics
+	bcf		tissue_graphic_mode				; select surface mode
+	bsf		tissue_graphic_cns				; show CNS value
+
+	bsf		tissue_graphic_layout			; default to N2+He
+	TSTOSS	opt_tissue_graphics				; shall show press+sat?
+	bcf		tissue_graphic_layout			; YES - show press+sat
+
+	bcf		tissue_graphic_gf				; default to none-GF
+	TSTOSC	char_I_model					; GF factors enabled?
+	bsf		tissue_graphic_gf				; YES - show GF lines
 
 	movff	customview_surfmode,active_customview	; reload last custom view
 	call	surf_customview_mask					; redraw last custom view
@@ -305,7 +315,7 @@ test_switches_surfmode:					; check buttons in surface mode
 
 test_switches_surfmode2:				; right button pressed
 	bcf		switch_right				; clear button event
-	rcall	reset_timeout_surfmode		; reset timeout
+	rcall	reset_timeout_surfmode		; set up timeout
  IFDEF _compass
 	movlw	.6							; coding for surface custom compass view
 	cpfseq	active_customview			; in compass view?
@@ -323,7 +333,7 @@ test_switches_surfmode2a:
 
 test_switches_surfmode3:				; left button pressed
 	bcf		switch_left					; clear button event
-	rcall	reset_timeout_surfmode		; reset timeout
+	rcall	reset_timeout_surfmode		; set up timeout
  IFDEF _compass
 	movlw	.6							; coding for surface custom view compass
 	cpfseq	active_customview			; in compass view?
@@ -486,41 +496,46 @@ housekeeping_3:
 	return								; YES - suppress COMM mode to not jeopardize backup/restore of tissue data
 
 	btfss	vusb_in						; USB plugged in?
-	return								; NO - done
+	return								; NO  - done
  IFDEF _screendump
 	btfsc	screen_dump_avail			; YES - screen dump enabled?
 	return								;       YES - no COMM mode to be able to make screen shots of the menu and simulator mode
  ENDIF
-	btfss	ble_available				; Skip "USB" check in all Bluetooth models (Required for very old OSTC sport)
+	btfss	ble_available				; skip "USB" check in all Bluetooth models (required for very old OSTC sport)
 	goto	comm_mode_usb				; YES / NO  - proceed to COMM mode, will also set CPU to speed normal
 	return
+
 
 	global	reset_timeout_surfmode
 reset_timeout_surfmode:
 	movlw	surfmode_timeout_default	; load default timeout value
-	btfsc	imprint_sensor_mv			; currently imprinting O2 sensor mV data?
-	movlw	surfmode_timeout_calibrate	; YES - replace with CCR Calibrate Menu timeout
+	btfss	battery_is_36v				; running on a 3.6 V battery?
+	movlw	surfmode_timeout_aa_15v		; NO  - replace by timeout for 1.5V battery
 	btfsc	simulatormode				; currently in simulator (deco calculator) mode?
 	movlw	surfmode_timeout_simulator	; YES - replace with simulator timeout
- IFDEF _rx_functions
-	btfsc	imprint_xmitter_ID			; currently selecting pressure transmitter?
-	movlw	surfmode_timeout_xmitter	; YES - replace with transmitter selection timeout
- ENDIF	; _rx_functions
- IFDEF _external_sensor
-	btfsc	surfmode_menu				; in surface menu?
-	bra		reset_timeout_time			; YES - keep timeout value
-	btfsc	FLAG_ccr_mode				; NO  - in CCR mode?
-	bra		reset_timeout_surfmode_loop	;       YES - continue checking if in sensor mode
-	btfsc	FLAG_ccr_mode				;       NO  - in pSCR mode?
-	bra		reset_timeout_surfmode_loop	;             YES - continue checking if in sensor mode
-	bra		reset_timeout_time			;             NO  - keep timeout value
-reset_timeout_surfmode_loop:
-	movff	opt_ccr_mode,lo				; get loop mode (=0: fixed/calculated SP, =1: sensor, =2: auto SP)
-	decfsz	lo,f						; in sensor mode?
-	bra		reset_timeout_time			; NO  - keep timeout value
-	movlw	surfmode_timeout_sensor		; YES - replace with sensor mode timeout
- ENDIF	; _external_sensor
-	;bra	reset_timeout_time			;     - set  timeout value
+	;bra	reset_timeout_time			; set timeout value
+
+;	btfsc	imprint_sensor_mv			; currently imprinting O2 sensor mV data?
+;	movlw	surfmode_timeout_calibrate	; YES - replace with CCR Calibrate Menu timeout
+; IFDEF _rx_functions
+;	btfsc	imprint_xmitter_ID			; currently selecting pressure transmitter?
+;	movlw	surfmode_timeout_xmitter	; YES - replace with transmitter selection timeout
+; ENDIF	; _rx_functions
+; IFDEF _external_sensor
+;	btfsc	surfmode_menu				; in surface menu?
+;	bra		reset_timeout_time			; YES - keep timeout value
+;	btfsc	FLAG_ccr_mode				; NO  - in CCR mode?
+;	bra		reset_timeout_surfmode_loop	;       YES - continue checking if in sensor mode
+;	btfsc	FLAG_ccr_mode				;       NO  - in pSCR mode?
+;	bra		reset_timeout_surfmode_loop	;             YES - continue checking if in sensor mode
+;	bra		reset_timeout_time			;             NO  - keep timeout value
+;reset_timeout_surfmode_loop:
+;	movff	opt_ccr_mode,lo				; get loop mode (=0: fixed/calculated SP, =1: sensor, =2: auto SP)
+;	decfsz	lo,f						; in sensor mode?
+;	bra		reset_timeout_time			; NO  - keep timeout value
+;	movlw	surfmode_timeout_sensor		; YES - replace with sensor mode timeout
+; ENDIF	; _external_sensor
+;	;bra	reset_timeout_time			; set  timeout value
 
 
 	global	reset_timeout_time

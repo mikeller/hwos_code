@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File calibration.asm                      combined next generation V3.03.1
+;   File calibration.asm                      combined next generation V3.08.8
 ;
 ;   o2 sensor calibration subroutines
 ;
@@ -42,7 +42,7 @@ tx_to_HUD:									; entry point to transmit a byte to the HUD
 	addwf	lo,F							; add byte to checksum
 tx_to_HUD_cs:								; entry point to transmit the checksum
 	movff	WREG,TXREG2						; transmit byte
-	call	rs232_wait_tx2					; wait for UART
+	call	ir_s8_wait_tx					; wait for UART
 	return
 
 
@@ -221,7 +221,6 @@ compute_mvolts_for_all_sensors:				; compute mV or all sensors (S8 mode)
 	MOVII	xC,sensor3_mv					; in 100 µV steps
 
 	return									; done
-
 
  ENDIF	; _external_sensor
 

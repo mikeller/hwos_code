@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File hwos.inc                             combined next generation V3.06.2
+;   File hwos.inc                             combined next generation V3.08.8
 ;
 ;   OSTC Platform Definitions
 ;
@@ -30,7 +30,7 @@
 
 
 ; Magic Cookie Definition
-#DEFINE comm_service_key		0xABCDEF	; simsalabim to establish data connection
+#DEFINE comm_service_key		0xABCDEF	; simsalabim to establish comm service mode
 
 
 ; Logo Address Vectors
@@ -41,7 +41,8 @@
 
 ;-----------------------------EEPROM DATA ------------------------------------
 ; Automatic reset of all options when this is changed:
-#DEFINE eeprom_opt_serial		0x0008		; Version 0.8
+#DEFINE eeprom_opt_version				.8		; range: 16 bit
+#DEFINE eeprom_vault_version			.1		; range:  8 bit
 ;-----------------------------------------------------------------------------
 
 
@@ -62,6 +63,7 @@
 
 
 ; Divemode Custom View Indexes - Attention: these numbers need to be in line with the jump tables in customview.asm!
+#DEFINE index_blank						 .0			; blank view
 #DEFINE index_avr_stopwatch				 .1			; average depth and stopwatch
 #DEFINE index_compass_dm				 .2			; compass
 #DEFINE index_ppo2_sensors				 .3			; ppO2 sensors
@@ -69,19 +71,21 @@
 #DEFINE index_pscr_info					 .5			; pSCR data
 #DEFINE index_pressures_SAC				 .6			; tank pressure and SAC rate
 #DEFINE index_gas_needs_ascent			 .7			; gas needs for ascent / cave return
-#DEFINE index_decoplan					 .8			; deco plan
-#DEFINE index_ceiling_GF_tissue			 .9			; ceiling, current GF and tissues
-#DEFINE index_CNS						.10			; CNS values
-#DEFINE index_ppo2_ead_end_cns			.11			; ppO2, END/EAD and CNS or gas density
-#DEFINE index_gf_factors				.12			; GF factors
+#DEFINE index_cave_tts					 .8			; cave mode TTS
+#DEFINE index_decoplan					 .9			; deco plan
+#DEFINE index_ceiling_GF_tissue			.10			; ceiling, current GF and tissues
+#DEFINE index_CNS						.11			; CNS values
+#DEFINE index_ppo2_ead_end_cns			.12			; ppO2, END/EAD and CNS or gas density
 #DEFINE index_clock_batt_surfpress		.13			; clock, battery and surface pressure
-#DEFINE index_cv_dm_max					.13			; highest index in use in dive mode custom view
+#DEFINE index_gf_factors				.14			; GF factors
+#DEFINE index_cave_waypoints			.15			; cave waypoints
+#DEFINE index_cv_dm_max					.13			; highest index used in normal custom view rotation
 
 
 ; Timing for button hold-down flags
-#DEFINE TMR1H_VALUE_FIRST				.255-.128	; in steps of 7.8125 ms -> 1    s
+#DEFINE TMR1H_VALUE_FIRST				.255-.128	; in steps of 7.8125 ms -> 1.00 s
 #DEFINE TMR1H_VALUE_CONT				.255-.32	; in steps of 7.8125 ms -> 0.25 s
-#DEFINE TMR1H_VALUE_CONT_DIVE			.255-.64	; in steps of 7.8125 ms -> 0.5  s
+#DEFINE TMR1H_VALUE_CONT_DIVE			.255-.64	; in steps of 7.8125 ms -> 0.50 s
 
 
 ; Color Definitions: 8 bit RGB b'RRRGGGBB'
@@ -119,7 +123,7 @@
 
 
 ; Profile Recording Parameters
-#DEFINE logbook_profile_version			0x24
+#DEFINE logbook_profile_version			0x24		; logbook recording format
 #DEFINE samplingrate_apnoe				.1			; [seconds]
 
 
@@ -155,11 +159,12 @@
 #DEFINE tr_pres_options					.6			; number of options for pressure measurement source / OC gases only
  ENDIF
 
+
 ; Cave Mode 
  IFDEF _cave_mode
-#DEFINE calc_gas_options				.3			; 3 options: off, on, cave
- ELSE
-#DEFINE calc_gas_options				.2			; 2 options: off, on
+#DEFINE backtrack_waypoint_max			.30			; highest user-available waypoint number (max allowed: 30)
+#DEFINE backtrack_almost_full_threshold	.240		; backtrack index position at which the almost   full flag will be set
+#DEFINE backtrack_entire_full_threshold	.250		; backtrack index position at which the entirely full flag will be set
  ENDIF
 
 
@@ -171,20 +176,31 @@
 
 
 ; Timeouts for Menus
-#DEFINE surfmode_timeout_default		.90			; [s] default timeout for surface mode and surface menus
-#DEFINE surfmode_timeout_simulator		.240		; [s] special timeout for simulator (deco calculator) mode
-#DEFINE surfmode_timeout_sensor			.240		; [s] special timeout for surface mode when in CCR/pSCR sensor mode
-#DEFINE surfmode_timeout_calibrate		.240		; [s] special timeout when in surface CCR calibrate sensors menu
-#DEFINE surfmode_timeout_xmitter		.240		; [s] special timeout when in surface transmitter pairing menu
+#DEFINE surfmode_timeout_default		.240		; [s] default timeout for surface mode and surface menus
+#DEFINE surfmode_timeout_aa_15v			.90			; [s] timeout for surface mode and surface menus when on 1.5V battery
+#DEFINE surfmode_timeout_simulator		.240		; [s] special timeout for simulator mode
+;#DEFINE surfmode_timeout_sensor		.240		; [s] special timeout for surface mode when in CCR/pSCR sensor mode
+;#DEFINE surfmode_timeout_calibrate		.240		; [s] special timeout when in surface CCR calibrate sensors menu
+;#DEFINE surfmode_timeout_xmitter		.240		; [s] special timeout when in surface transmitter pairing menu
 
 #DEFINE divemode_timeout_premenu		.10			; [s] timeout for dive mode pre-menu
 #DEFINE divemode_timeout_mainmenu		.30			; [s] timeout for dive mode main menu
 
 
+; RS232 Timeout
+#DEFINE rx_timeout						.400		; [ms] timeout for RS232 RX
+
+
+; Dive-End Timeouts
+#DEFINE simulator_timeout_normal		.90			; [min] timeout simulator mode
+#DEFINE simulator_timeout_cave			.240		; [min] timeout simulator mode (cave mode)
+#DEFINE apnoe_timeout					.15			; [min] timeout at surface in apnoe mode
+#DEFINE simulator_timeout				.15			; [s]   timeout at surface in simulator mode
+
+
 ; other Timeouts
-#DEFINE simulator_timeout				.15			; [s]
-#DEFINE apnoe_timeout					.15			; [min]
-#DEFINE	deep_sleep_10mins				.144		; [x 10mins] (24h in this example)
+#DEFINE deep_sleep_10mins				.144		; [x 10mins] (24h in this example)
+
 
 ; Surface Mode Thresholds and Limits
 #DEFINE high_altitude_threshold			.880		; [mbar] ambient pressure at which to switch into high altitude mode
@@ -204,6 +220,11 @@
 ; Dive Mode Margins
 #DEFINE ppO2_margin_on_max				.300		; [0.1 mbar] extra margin on ppO2 max values to compensate for surface pressures > 1000 hPa
 #DEFINE sensor_voting_logic_threshold	.10			; threshold in 0.01 bar
+
+
+; Gas and Dil types
+#DEFINE num_gas_types					.4			; Disabled, First, Normal, Deco
+#DEFINE num_dil_types					.3			; Disabled, First, Normal
 
 
 ; ppO2 Limits
@@ -229,6 +250,9 @@
 #DEFINE ppo2_warning_deco_highest		.160		; [cbar] maximum value for maximum ppO2 in deco phase
  ENDIF
 
+; Salinity Limits
+#DEFINE salinity_min					.0			; [%] minimum value for salinity percentage
+#DEFINE salinity_max					.4			; [%] maximum value for salinity percentage
 
 ; Color-Code Parameters for the Dive Mode
 #DEFINE color_code_velocity_warn_high	.11			; [m/min]
@@ -252,7 +276,7 @@
 #DEFINE aa_15v_low						.1100		; [mV] Energizer 1.5 V E2 AA - lowest  possible voltage, according to Energizer data sheet EBC-4201R, page 2
 #DEFINE battery_show_level				.30			; [%]  threshold when to show battery level
 #DEFINE battery_warn_level_36			.15			; [%]  threshold for 3.6 V battery warning, also acts as threshold for setting display brightness level to ECO when in dive mode
-#DEFINE battery_warn_level_15			.25			; [%]  threshold for 1.5 V battery warning, also acts as threshold for setting display brightness level to ECO when in dive modebattery warning level, also acts as threshold for setting display brightness level to ECO when in dive mode
+#DEFINE battery_warn_level_15			.25			; [%]  threshold for 1.5 V battery warning, also acts as threshold for setting display brightness level to ECO when in dive mode
 
 
 ; 3.6 Volt Battery Sensing Data Points at 70 mA Load
@@ -311,21 +335,34 @@
 
 
 ; IR Link Timeout
-#DEFINE ir_timeout_value				.128			; in multiples of 62.5 ms
+#DEFINE ir_timeout_value				.128		; in multiples of 62.5 ms
 
 
 ; Setpoint Control
 #DEFINE surface_sp						.50			; in cbar
 
 
+; Gas / Diluent Type & State
+;										.0			; | 0: disabled, 1: first, 2: normal/work, 3: deco
+;										.1			; |
+#DEFINE gas_lost						.2			; =1: gas/diluent is lost   (permanently unavailable)
+#DEFINE gas_staged						.3			; =1: gas/diluent is staged (temporary   unavailable)
+;										.4			; --- unused
+;										.5			; --- unused
+;										.6			; --- unused
+;										.7			; --- unused
+
+
 ; Gaslist hard-coded Limits
  IFDEF _helium
 #DEFINE gaslist_min_o2					.7			; minimum O2 [%] ( 7% is minimum value to keep MOD < 255 meters / 1 Byte)
+#DEFINE gaslist_max_o2					.100		; maximum O2 [%]
 #DEFINE gaslist_max_He			.100-gaslist_min_o2 ; maximum He [%]
 #DEFINE gaslist_max_change_depth		.220		; max. change depth [m] (219 is maximum value that can be produced by gaslist_calc_mod with 7% O2)
 #DEFINE tissue_graphics_options			.2			; tissue graphics "Pres+Sat" and "N2+He" available
  ELSE
 #DEFINE gaslist_min_o2					.21			; minimum O2 [%]
+#DEFINE gaslist_max_o2					.100		; maximum O2 [%]
 #DEFINE gaslist_max_He					.0			; maximum He [%]
 #DEFINE gaslist_max_change_depth		.70			; max. change depth [m] (67 is maximum value that can be produced by gaslist_calc_mod with 21% O2)
 #DEFINE tissue_graphics_options			.1			; tissue graphics "Pres+Sat" only available
@@ -336,6 +373,7 @@
 #DEFINE gaslist_sp_stepsize				.10			; steps for setpoint setup [cbar]
 #DEFINE gaslist_sp_max					.160		; max. setpoint [cbar]
 #DEFINE gaslist_sp_min					.50			; min. setpoint [cbar]
+#DEFINE sp_max_change_depth				.100		; max change depth [m]
 
 
 ; Compass Display
@@ -347,7 +385,7 @@
 #DEFINE DECO_VOLUME_FLAG				.0			; =1: calculate gas needs
 #DEFINE DECO_BOTTOM_FLAG				.1			; =1: calculate gas needs for full bottom segment, =0: ...for extra time only
 #DEFINE DECO_CAVE_MODE					.2			; =1: calculate ascent and gas needs using backtracking data
-#DEFINE DECO_Z_FACTOR_FLAG				.3			; =1: calculate with Z factor when converting gas volumes <-> pressures
+#DEFINE DECO_GAS_CONTINGENCY			.3			; =1: use a second best gas if best gas is all used up
 #DEFINE DECO_TR_FUNCTIONS				.4			; =1: calculate TR functions (pressure readings)
 #DEFINE DECO_EXTENDED_STOPS				.5			; =1: place gas changes also below 1st stop depth
 #DEFINE DECO_MODE_LOOP_FLAG				.6			; =1: calculate real tissues in loop mode (CCR or pSCR)
@@ -362,7 +400,7 @@
 #DEFINE DECO_INITIALIZE					.2			; =1: write: initialize deco engine (to be done only once at the begin of every dive)
 #DEFINE DECO_CALCULATOR_MODE			.3			; =1: deco engone is run from the deco calculator
 #DEFINE DECO_BAILOUT_FLAG				.4			; =1: allow gas switches before first deco stop (used in bailout plans)
-#DEFINE DECO_ASCENT_FLAG				.5			; =1: figure in a delayed ascent (fTTS)
+#DEFINE DECO_DELAY_FLAG					.5			; =1: figure in a delayed ascent (fTTS)
 ;       DECO_MODE_LOOP_FLAG				.6			; =1: calculate simulated tissues in loop mode (CCR or pSCR)
 ;       DECO_MODE_PSCR_FLAG				.7			; =1: calculate simulated tissues in pSCR mode (loop flag needs to be set, too)
 
@@ -381,12 +419,12 @@
 ; Bit Flags for Communication with p2_deco.c - char_O_deco_info
 #DEFINE deco_mode						.0			; =1: in deco mode, deco ppO2 levels permitted
 #DEFINE ind_double_switch				.1			; =1: switch to other tank advice active
-;										.2			; --- unused
+#DEFINE gas_needs_fTTS					.2			; =1: indicated gas needs are calculated in fTTS mode
 #DEFINE deco_zone						.3			; =1: fTTS is <= TTS (not updated when in bailout mode)
 #DEFINE deco_ceiling					.4			; =1: ceiling depth > 0
-#DEFINE deco_stops						.5			; =1: deco stops found
-#DEFINE gas_needs_cave					.6			; =1: indicated gas needs are calculated in cave mode
-;										.7			; --- unused
+#DEFINE deco_stops_norm					.5			; =1: deco stops found in normal      plan
+#DEFINE deco_stops_alt					.6			; =1: deco stops found in alternative plan
+#DEFINE gas_needs_cave					.7			; =1: indicated gas needs are calculated in cave mode
 
 
 ; Bit Flags for Status on Variables of Type char
@@ -395,7 +433,7 @@
 #DEFINE char_transmitter_low_bat		.7
 
 
-; Bit Flags for Status on Variables of Type int (Flags are placed in the upper byte)
+; Bit Flags for Status on Variables of Type int (Flags are placed in the UPPER byte!)
 #DEFINE int_invalid_flag				.2
 #DEFINE int_not_yet_computed			.3
 #DEFINE int_is_zero						.3
@@ -466,10 +504,10 @@
 ;---- Hardware - States 2 (stored in access RAM, NOT cleared on restart)
 #DEFINE cc_active				HW_flags_state2,0	; =1: constant current charging active (cR hardware only)
 #DEFINE cv_active				HW_flags_state2,1	; =1: constant voltage charging active (cR hardware only)
-;								HW_flags_state2,2	; --- unused
-;								HW_flags_state2,3	; --- unused
-;								HW_flags_state2,4	; --- unused
-;								HW_flags_state2,5	; --- unused
+#DEFINE i2c_error_flag			HW_flags_state2,2	; =1: an I2C error occurred
+#DEFINE rs232_rx_timeout		HW_flags_state2,3	; =1: RS232 receive timeout occurred
+#DEFINE address_wrap_around		HW_flags_state2,4	; =1: the ext_flash_address wrapped around on increment
+#DEFINE battery_low_condition	HW_flags_state2,5	; =1: low battery condition detected
 ;								HW_flags_state2,6	; --- unused
 ;								HW_flags_state2,7	; --- unused
 
@@ -480,8 +518,8 @@
 #DEFINE sensor3_calibrated_ok	OS_flags_persist,2	; =1: sensor 3 calibration ok
 #DEFINE compass_bearing_set		OS_flags_persist,3	; =1: compass bearing is set
 #DEFINE use_old_batt_flag		OS_flags_persist,4	; =1: load old battery data after power-on reset
-#DEFINE option_repaired			OS_flags_persist,5	; =1: options have been repaired
-#DEFINE restart_fast			OS_flags_persist,6	; =1: skip logos and waits on restart
+#DEFINE options_changed			OS_flags_persist,5	; =1: option values have been changed, EEPROM needs to be updated
+#DEFINE restart_fast			OS_flags_persist,6	; =1: request to skip logos and waits on restart
 #DEFINE battery_overtemp		OS_flags_persist,7	; =1: battery charging temperature limit exceeded
 
 
@@ -537,13 +575,13 @@
 
 ;---- Dive Mode - Dive States
 #DEFINE use_aGF					DM_flags_state,0	; =1: use aGF, =0: use GF
-#DEFINE sp_fallback				DM_flags_state,1	; =1: fall-back to SP1 due to external O2 sensor failure
-#DEFINE dive_turned				DM_flags_state,2	; =1: dive is turned
-#DEFINE cave_mode				DM_flags_state,3	; =1: in cave mode (gas needs by backtracking)
-#DEFINE depth_limit_exceeded	DM_flags_state,4	; =1: depth limit exceeded
-#DEFINE deco_locked				DM_flags_state,5	; =1: in or has been in deco obligation       during the dive
-#DEFINE deco_region				DM_flags_state,6	; =1: in or has been in the deco stops region during the dive
-;								DM_flags_state,7	; --- unused
+#DEFINE deco_locked				DM_flags_state,1	; =1: in or has been in deco obligation       during the dive
+#DEFINE deco_region				DM_flags_state,2	; =1: in or has been in the deco stops region during the dive
+#DEFINE cave_mode				DM_flags_state,3	; =1: cave mode is active                                 (cave mode)
+#DEFINE dive_turned				DM_flags_state,4	; =1: dive is turned                                      (cave mode)
+#DEFINE backtrack_almost_full	DM_flags_state,5	; =1: the backtracking storage is almost   full           (cave mode)
+#DEFINE backtrack_entire_full	DM_flags_state,6	; =1: the backtracking storage is entirely full           (cave mode)
+#DEFINE backtrack_shutdown		DM_flags_state,7	; =1: the backtracking has shut down due to entirely full (cave mode)
 
 ;---- Dive Mode - O2 Sensors
 #DEFINE use_O2_sensor1			DM_flags_sensor,0	; =1: sensor 1 shall be used
@@ -552,18 +590,28 @@
 #DEFINE voting_logic_sensor1	DM_flags_sensor,3	; =1: sensor 1 is within the voting logic threshold
 #DEFINE voting_logic_sensor2	DM_flags_sensor,4	; =1: sensor 2 is within the voting logic threshold
 #DEFINE voting_logic_sensor3	DM_flags_sensor,5	; =1: sensor 3 is within the voting logic threshold
-;								DM_flags_sensor,6	; --- unused
+#DEFINE sp_fallback				DM_flags_sensor,6	; =1: fall-back to SP1 due to external O2 sensor failure
 ;								DM_flags_sensor,7	; --- unused
 
-;---- Dive Mode - User Requests
-#DEFINE request_gaschange		DM_flags_request,0	; =1: request to change the gas
-#DEFINE request_reset_avg		DM_flags_request,1	; =1: request to reset the average depth
-#DEFINE request_next_custview	DM_flags_request,2	; =1: request to show the next custom view
-#DEFINE request_back_to_loop	DM_flags_request,3	; =1: request to switch back from bailout to loop
-#DEFINE request_toggle_GF		DM_flags_request,4	; =1: request to toggle between GF and aGF
-#DEFINE request_set_marker		DM_flags_request,5	; =1: request to set a marker in the logbook
-#DEFINE request_turn_dive		DM_flags_request,6	; =1: request to toggle the dive turned status
-;								DM_flags_request,7	; --- unused
+;---- Dive Mode - User Requests / General
+#DEFINE request_gas_change		DM_flags_request,0	; =1: request to change the gas
+#DEFINE request_gas_update		DM_flags_request,1	; =1: request to update the gas
+#DEFINE request_reset_avg		DM_flags_request,2	; =1: request to reset the average depth
+#DEFINE request_next_custview	DM_flags_request,3	; =1: request to show the next custom view
+#DEFINE request_back_to_loop	DM_flags_request,4	; =1: request to switch back from bailout to loop
+#DEFINE request_toggle_GF		DM_flags_request,5	; =1: request to toggle between GF and aGF
+#DEFINE request_set_marker		DM_flags_request,6	; =1: request to set a marker in the logbook
+#DEFINE request_restart_engine	DM_flags_request,7	; =1: request to restart the deco engine
+
+;---- Dive Mode - User Requests / Cave Mode
+#DEFINE request_cave_toggle		DM_flags_cavereq,0	; =1: request to toggle cave mode off/on            (cave mode)
+#DEFINE request_cave_off_turned	DM_flags_cavereq,1	; =1: request to switch cave mode off               (cave mode)
+#DEFINE request_turn_toggle		DM_flags_cavereq,2	; =1: request to toggle dive turned state           (cave mode)
+#DEFINE request_turn_turn		DM_flags_cavereq,3	; =1: request to switch dive turned state to turned (cave mode)
+#DEFINE request_waypoint_set	DM_flags_cavereq,4	; =1: request to set a waypoint                     (cave mode)
+#DEFINE request_waypoint_out	DM_flags_cavereq,5	; =1: request to go one waypoint out of the cave    (cave mode)
+#DEFINE request_waypoint_in		DM_flags_cavereq,6	; =1: request to go one waypoint into   the cave    (cave mode)
+;								DM_flags_cavereq,7	; --- unused
 
 ;---- Dive Mode - Data Recording Events
 #DEFINE event_occured			DM_flags_event,0	; =1: an event occurred (global indicator flag)
@@ -572,8 +620,8 @@
 #DEFINE event_bailout			DM_flags_event,3	; =1: a change to or of the OC gas occurred due to bailout
 #DEFINE event_SP_change			DM_flags_event,4	; =1: a change of the setpoint has occurred
 ;								DM_flags_event,5	; --- unused
-#DEFINE rs232_rx_timeout		DM_flags_event,6	; =1: RS232 receive timeout occurred  | no better place found
-#DEFINE i2c_error_flag			DM_flags_event,7	; =1: an I2C error occurred           | for these two flags...
+;								DM_flags_event,6	; --- unused
+;								DM_flags_event,7	; --- unused
 
 ;---- Dive Mode - Display Control / Layout
 #DEFINE safety_stop_enabled		DM_flags_layout1,0	; =1: safety        stop is enabled
@@ -594,6 +642,16 @@
 #DEFINE gas_needs_mode_last		DM_flags_layout2,6	; =1: last gas needs were computed for cave mode, =0: direct ascent
 #DEFINE tts_greater_99			DM_flags_layout2,7	; =1: TTS > 99 minutes
 
+#DEFINE tissue_graphic_layout	DM_flags_layout3,0	; =1: show pres+sat, =0: show N2/He pressures
+#DEFINE tissue_graphic_gf		DM_flags_layout3,1	; =1: show GF lines
+#DEFINE tissue_graphic_cns		DM_flags_layout3,2	; =1: shwo CNS value (surface mode graphic only)
+#DEFINE tissue_graphic_mode		DM_flags_layout3,3	; =1: logbook mode   (surface mode graphic only)
+;								DM_flags_layout3,4	; --- unused
+;								DM_flags_layout3,5	; --- unused
+;								DM_flags_layout3,6	; --- unused
+;								DM_flags_layout3,7	; --- unused
+
+
 ;---- Dive Mode - Display Control / Messages
 #DEFINE message_advice			DM_flags_message,0	; =1: an advice    is active in dive mode
 #DEFINE message_attention		DM_flags_message,1	; =1: an attention is active in dive mode or surface mode
@@ -604,16 +662,15 @@
 #DEFINE gas_needs_warning		DM_flags_message,6	; =1: the gas needs  warning   has been shown before
 #DEFINE o2_sensors_warning		DM_flags_message,7	; =1: the O2 sensors warning   has been shown before
 
-;---- Dive Mode - Display Control / Gas, Diluent
+;---- Dive Mode - Display Control / Gas, Diluent, Depth
 #DEFINE better_gas_hint			DM_flags_gas_dil,0	; =1: mark a gas when it is a better gas
-#DEFINE better_gas_available	DM_flags_gas_dil,1	; =1: a better gas is available
-#DEFINE better_gas_blinking		DM_flags_gas_dil,2	; =1: gas is blinking
-#DEFINE better_dil_available	DM_flags_gas_dil,3	; =1: a better diluent is available
-#DEFINE better_dil_blinking		DM_flags_gas_dil,4	; =1: diluent is blinking
-;								DM_flags_gas_dil,5	; --- unused
-;								DM_flags_gas_dil,6	; --- unused
-;								DM_flags_gas_dil,7	; --- unused
-
+#DEFINE color_code_gases		DM_flags_gas_dil,1	; =1: color code the gases by ppO2 & current depth
+#DEFINE better_gas_available	DM_flags_gas_dil,2	; =1: a better gas is available
+#DEFINE better_gas_blinking		DM_flags_gas_dil,3	; =1: gas is blinking
+#DEFINE better_dil_available	DM_flags_gas_dil,4	; =1: a better diluent is available
+#DEFINE better_dil_blinking		DM_flags_gas_dil,5	; =1: diluent is blinking
+#DEFINE gas6_or_EXIT			DM_flags_gas_dil,6	; =1: exit menu, =0: provide gas6 option
+#DEFINE depth_limit_exceeded	DM_flags_gas_dil,7	; =1: depth limit exceeded
 
 ;---- Menu System - Control
 #DEFINE surfmode_menu			MS_flags_control,0	; =1: surface      menu is shown (i.e. returning from it)
@@ -622,7 +679,7 @@
 #DEFINE compass_menu			MS_flags_control,3	; =1: "set bearing"     is shown
 #DEFINE is_diluent_menu			MS_flags_control,4	; =1: setting up diluents, =0: setting up OC gases
 #DEFINE is_bailout_menu			MS_flags_control,5	; =1: in bailout menu
-;								MS_flags_control,6	; --- unused
+#DEFINE custom_view_locked		MS_flags_control,6	; =1: the custom view is locked (defer CV auto-popup)
 ;								MS_flags_control,7	; --- unused
 
 ;---- Menu System - Data Imprinting
@@ -651,10 +708,10 @@
 #DEFINE leftbind				CVT_flags1,0		; =1: align numbers to the left
 #DEFINE win_invert				CVT_flags1,1		; =1: the text   shall be printed in inverse
 #DEFINE short_gas_descriptions	CVT_flags1,2		; =1: use short versions of gaslist_strcat_gas_cd and gaslist_strcat_setpoint
-#DEFINE ignore_digit3			CVT_flags1,3
-#DEFINE ignore_digit4			CVT_flags1,4
-#DEFINE ignore_digit5			CVT_flags1,5
-#DEFINE aux_flag				CVT_flags1,6		;     provided for local boolean arguments and storage
+#DEFINE ignore_digit3			CVT_flags1,3		;     controls suppression of digits when printing numbers
+#DEFINE ignore_digit4			CVT_flags1,4		;     controls suppression of digits when printing numbers
+#DEFINE ignore_digit5			CVT_flags1,5		;     controls suppression of digits when printing numbers
+;								CVT_flags1,6		; --- unused
 ;								CVT_flags1,7		; --- unused
 
 #DEFINE pre_zero_flag			CVT_flags2,0
@@ -667,15 +724,15 @@
 #DEFINE neg_flag				CVT_flags2,7		; =1: result is negative
 
 
-;---- Miscellaneous Flags 
+;---- Miscellaneous Flags
 #DEFINE ignore_last_edited_gas	misc_flags,0		; =1: ignore last edited gas while cleaning up gas/dil list
 #DEFINE copying_dil				misc_flags,1		; =1: copying a diluent
-#DEFINE comm_service_enabled	misc_flags,2		; =1: COMM service mode is enabled
-;								misc_flags,3		; --- unused
-;								misc_flags,4		; --- unused
-;								misc_flags,5		; --- unused
-;								misc_flags,6		; --- unused
-;								misc_flags,7		; --- unused
+#DEFINE comm_service_mode		misc_flags,2		; =1: service mode (extended command set) is enabled
+#DEFINE waypoint_reached_first	misc_flags,3		; =1: the first (most outside) waypoint is reached (cave mode)
+#DEFINE waypoint_reached_last	misc_flags,4		; =1: the last  (most inside)  waypoint is reached (cave mode)
+#DEFINE option_repaired			misc_flags,5		; =1: option value was set to default
+#DEFINE flash_wait				misc_flags,6		; =1: wait for flash write operation to complete
+#DEFINE aux_flag				misc_flags,7		;     local flag, used in various places
 
 ;---- HUD Status Byte (stored in access RAM)
 #DEFINE hud_connection_ok		hud_status_byte,0	; =1 HUD connection ok
@@ -690,76 +747,112 @@
 
 ;---------------------------- Macros ------------------------------------
 
+
+; ---- options checking ----
+
 TSTOSS	macro opt_reg				; TeST Option Skip next instruction if Set (not zero)
-	movff	opt_reg,WREG			; Attention: destroys WREG!
-	tstfsz	WREG,A					; Attention: must be followed by a plain machine
+	movff	opt_reg,EEDATA			; Attention: destroys EEDATA!
+	tstfsz	EEDATA,A				; Attention: must be followed by a plain machine
 	bra		$+4						;            command, do not let follow a macro!
 	endm							;
 
-
 TSTOSC	macro opt_reg				; TeST Option Skip next instruction if Clear (zero)
-	movff	opt_reg,WREG			; Attention: destroys WREG!
-	tstfsz	WREG,A					; Attention: must be followed by a plain machine
+	movff	opt_reg,EEDATA			; Attention: destroys EEDATA!
+	tstfsz	EEDATA,A				; Attention: must be followed by a plain machine
 	endm							;            command, do not let follow a macro!
 
 
-CLRI	macro int					; CLeaR Integer (version of clrf for 2 byte integers)
-	clrf	int+0					; Attention: must be in bank where target variable resides!
-	clrf	int+1					;
+; ---- literal operations ----
+
+CLRI	macro address				; CLeaR Integer (version of clrf for 2 byte integers)
+	clrf	address+0				; Attention: must be in bank where target variable resides!
+	clrf	address+1				;
+	endm							;
+
+CLRT	macro address				; CLeaR Three byte integer (version of clrf for 3 byte integers)
+	clrf	address+0				; Attention: must be in bank where target variable resides!
+	clrf	address+1				;
+	clrf	address+2				;
+	endm							;
+
+CLRR	macro	address,range		; CLeaR a Range of bytes   (version of clrf for 1-256 bytes)
+	movlw	low(range)				; initialize loop counter
+	lfsr	FSR1,address			; set start address
+	extern	memory_clear
+	call	memory_clear
+	endm
+
+SETI	macro address				; SET Integer (version of setf for 2 byte integers)
+	setf	address+0				; Attention: must be in bank where target variable resides!
+	setf	address+1				;
+	endm							;
+
+MOVLI	macro literal,address		; MOVe Literal to Integer
+	movlw	LOW  (literal)			; Attention: destroys WREG!
+	movwf	address+0				; Attention: must be in bank where target variable resides!
+	movlw	HIGH (literal)			;
+	movwf	address+1				;
 	endm							;
 
 
-SETI	macro int					; SET Integer (version of setf for 2 byte integers)
-	setf	int+0					; Attention: must be in bank where target variable resides!
-	setf	int+1					;
+; ---- arithetics ----
+
+INCI	macro address				; INCrement Integer (version of incf for 2 byte integers)
+	infsnz	address+0,F				; Attention: must be in bank where target variable resides!
+	incf	address+1,F				;
 	endm							;
 
-
-MOVLI	macro lit, int				; MOVe Literal to Integer
-	movlw	LOW  (lit)				; Attention: destroys WREG!
-	movwf	int+0					; Attention: must be in bank where target variable resides!
-	movlw	HIGH (lit)				;
-	movwf	int+1					;
-	endm							;
-
-
-INCI	macro int					; INCrement Integer (version of incf for 2 byte integers)
-	infsnz	int+0,F					; Attention: must be in bank where target variable resides!
-	incf	int+1,F					;
-	endm							;
-
-
-DECI	macro int					; DECrement Integer (version of decf for 2 byte integers)
+DECI	macro address				; DECrement Integer (version of decf for 2 byte integers)
 	movlw	.1						; Attention: destroys WREG!
-	subwf	int+0,F					; Attention: must be in bank where target variable resides!
+	subwf	address+0,F				; Attention: must be in bank where target variable resides!
 	movlw	.0						;
-	subwfb	int+1,F					;
+	subwfb	address+1,F				;
+	endm							;
+
+ADDLI	macro literal, address		; ADD Literal to Integer
+	movlw	LOW  (literal)			; Attention: destroys WREG!
+	addwf	address+0,F				; Attention: must be in bank where target variable resides!
+	movlw	HIGH (literal)			;
+	addwfc	address+1,F				;
+	endm							;
+
+SUBLI	macro literal, address		; SUBtract Literal from Integer
+	movlw	LOW  (literal)			; Attention: destroys WREG!
+	subwf	address+0,F				; Attention: must be in bank where target variable resides!
+	movlw	HIGH (literal)			;
+	subwfb	address+1,F				;
 	endm							;
 
 
-ADDLI	macro lit, int				; ADD Literal to Integer
-	movlw	LOW  (lit)				; Attention: destroys WREG!
-	addwf	int+0,F					; Attention: must be in bank where target variable resides!
-	movlw	HIGH (lit)				;
-	addwfc	int+1,F					;
+; ---- moves ----
+
+MOVCC	macro from,to				; MOVe     1 byte Char    (actually an alias for movff)
+	movff	from,to
+	endm
+
+MOVII	macro from,to				; MOVe     2 byte Integer (version of movff for 2 bytes)
+	movff	from+0,to+0				; copy 1st byte
+	movff	from+1,to+1				; copy 2nd byte
 	endm							;
 
-
-SUBLI	macro lit, int				; SUBtract Literal from Integer
-	movlw	LOW  (lit)				; Attention: destroys WREG!
-	subwf	int+0,F					; Attention: must be in bank where target variable resides!
-	movlw	HIGH (lit)				;
-	subwfb	int+1,F					;
+MOVTT	macro from,to				; MOVe Three byte Integer (version of movff for 3 bytes)
+	movff	from+0,to+0				; copy 1st byte
+	movff	from+1,to+1				; copy 2nd byte
+	movff	from+2,to+2				; copy 3rd byte
 	endm							;
 
+MOVRR	macro from,to,range			; MOVe a Range of bytes   (version of movff for 1-256 bytes)
+	movlw	low(range)				; initialize loop counter
+	lfsr	FSR1,from				; from
+	lfsr	FSR2,to					; to
+	extern	memory_move
+	call	memory_move
+	endm
 
-MOVII	macro from, to				; MOVe Integer to Integer (version of movff for 2 byte integers)
-	movff	from+0,to+0				; banksafe
-	movff	from+1,to+1				;
-	endm							;
 
+; ---- ISR-safe moves ----
 
-SMOVII	macro from, to				; isr-Safe MOVe 2 byte Integer to Integer (version of MOVII for integers updated in ISR)
+SMOVII	macro from, to				; isr-Safe MOVe     2 byte Integer (version of MOVII for ISR-safe copying)
 	local	retry					;
 retry:
 	bcf		trigger_isr_updates		; clear flag, it will be set by the ISR in case it had kicked in
@@ -769,8 +862,7 @@ retry:
 	bra		retry					; YES - retry copy
 	endm							; NO  - done
 
-
-SMOVTT	macro from, to				; isr-Safe MOVe Three byte integer to integer (version of MOVII for integers updated in ISR)
+SMOVTT	macro from, to				; isr-Safe MOVe Three byte integer (version of MOVTT for ISR-safe copying)
 	local	retry					;
 retry:
 	bcf		trigger_isr_updates		; clear flag, it will be set by the ISR in case it had kicked in
@@ -781,8 +873,7 @@ retry:
 	bra		retry					; YES - retry copy
 	endm							; NO  - done
 
-
-SMOVFF	macro from, to				; isr-Safe MOVe Four byte integer to integer (version of MOVII for integers updated in ISR)
+SMOVQQ	macro from, to				; isr-Safe MOVe  Quad byte integer (version of MOVII for ISR-safe copying)
 	local	retry					;
 retry:
 	bcf		trigger_isr_updates		; clear flag, it will be set by the ISR in case it had kicked in
@@ -793,7 +884,6 @@ retry:
 	btfsc	trigger_isr_updates		; did the ISR kicked in since we cleared the flag?
 	bra		retry					; YES - retry copy
 	endm							; NO  - done
-
 
 SMOVSS	macro from, to				; isr-Safe MOVe Six byte integer to integer (version of MOVII for integers updated in ISR)
 	local	retry					;
@@ -869,21 +959,27 @@ retry:
 	extern	hud_status_byte
 	extern	hud_battery_mv
 
- endif
+ endif	; ACCESS_RAM_VARS
 
 ;---------------------------- Bank0 NORMAL RAM ------------------------------
 isr_backup	equ			0x060		; Alias for "banksel isr_backup"
 isr_backup	udata_ovr	isr_backup	; Bank 0 ISR data
 
-;---- Backup for general Registers
+;---- Backup for general Registers, used by ISR Routines
 PROD_backup						res 2
 FSR0_backup						res 2
 BSR_backup						res 1
 
-;---- Multi-Purpose Register for ISR Routines
+;---- Multi-Purpose Registers, used by ISR Routines
 isr_mpr							res 2		; used in ms5541.asm and isr.asm
-#DEFINE isr_lo					isr_mpr+0	;
-#DEFINE isr_hi					isr_mpr+1	;
+#DEFINE isr_lo					isr_mpr+0	; ...
+#DEFINE isr_hi					isr_mpr+1	; ...
+
+;---- Multi-Purpose Registers, NOT USED by ISR Routines
+backup_mpr						res 2		; used in rtc.asm
+#DEFINE backup_lo				backup_mpr+0
+#DEFINE backup_hi				backup_mpr+1
+
 
 ;---- Time and Date - Real Time Clock
 rtc_year						res 1		; running year     | Attention:
@@ -983,13 +1079,14 @@ analog_sw1						res 1		; analog value for switch 1
 analog_sw2						res 1		; analog value for switch 2
 button_polarity					res 1		; 0xFF (both normal), 0x00 (both inverted), 0x01 (left inverted only), 0x02 (right inverted only)
 
+
 ;--- resettable min and max Depth Option
  IFDEF _min_depth_option
 pressure_rel_min_trip			res 2		; resettable minimum relative pressure
 pressure_rel_max_trip			res 2		; resettable maximum relative pressure
  ENDIF
 
-; 141 byte used, 19 byte free
+; 143 byte used, 17 byte free
 
  
 ;---------------------------- Common DATA ------------------------------------
@@ -1010,13 +1107,14 @@ mpr								res 6		; will be used as base address of 1, 2, 3, 4 and 6 byte buffer
 MS_flags_control				res 1		; menu system - control
 MS_flags_imprint				res 1		; menu system - data imprinting
 
-;---- Flags - Dive Mode (7 byte)
+;---- Flags - Dive Mode (9 byte)
 DM_flags_state					res 1		; dive mode - dive states
 DM_flags_sensor					res 1		; dive mode - O2 sensors
-DM_flags_request				res 1		; dive mode - user requests
+DM_flags_request				res 1		; dive mode - user requests / general
 DM_flags_event					res 1		; dive mode - data recording events
 DM_flags_layout1				res 1		; dive mode - display control / layout (1)
 DM_flags_layout2				res 1		; dive mode - display control / layout (2)
+DM_flags_layout3				res 1		; dive mode - display control / layout (3)
 DM_flags_message				res 1		; dive mode - display control / messages
 DM_flags_gas_dil				res 1		; dive mode - display control / gas, diluent
 
@@ -1048,11 +1146,12 @@ sub_a							res 2
 sub_b							res 2
 sub_c							res 2
 
-;---- Menu System and Views (4 byte)
+;---- Menu System and Views (5 byte)
 menu_pos_cur					res 1		; current position in main menu
 menu_pos_max					res 1		; highest position in main menu
 active_premenu					res 1		; currently shown pre-menu (0: none)
-active_customview				res 1		; currently shown custom view
+active_customview				res 1		; currently  shown custom view
+backup_customview				res 1		; previously shown custom view
 
 ;---- Miscellaneous (6 byte)
 batt_voltage					res 2		; battery voltage in mV (no ISR involved)
@@ -1061,7 +1160,7 @@ message_counter					res 1		; counts amount of messages
 message_page					res 1		; current message page number
 pairing_slot					res 1		; slot number, used in transmitter pairing
 
-;---- Dive Mode / all modes (25 byte)
+;---- Dive Mode / all modes (26 byte)
 divesecs_avg_trip				res 2		; time accumulator for the resettable average depth & stopwatch
 divesecs_avg_total				res 2		; time accumulator for the total dive average depth
 pressure_rel_avg_trip			res 2		; calculated resettable average depth
@@ -1082,6 +1181,13 @@ best_dil_number					res 1		; number of the "best dil": 0= none found, 1-5= dils 
 active_dil						res 1		; the currently used diluent (1-5)
  ENDIF
 
+ IFDEF _cave_mode
+DM_flags_cavereq				res 1		; dive mode - user requests / cave mode
+backtrack_deltatime				res 1		; time elapsed since last depth recording in seconds
+backtrack_waypoint_num			res 1		; current waypoint number
+backtrack_waypoint_turn			res 1		; waypoint number of the turn point
+ ENDIF
+
 ;---- Dive Mode / apnoe mode (2 byte)
 apnoe_max_pressure				res 2		; max depth over all dives in the series
 
@@ -1097,12 +1203,13 @@ event_byte1						res 1		;
 event_byte2						res 1		;
 CNS_start						res 2		; CNS value at beginning of dive
 
-;---- External Flash (13 byte)
-ext_flash_rw					res 1		; transfer register for data read / write
+;---- External Flash (14 byte)
 ext_flash_address				res 3		; 24 bit address
+ext_flash_length_counter		res 3		; 24 bit length counter
 ext_flash_log_pointer			res 3		; 24 bit address for logbook profile storing
 ext_flash_end_pointer			res 3		; 24 bit address for logbook profile storing
-ext_flash_dive_counter			res 3		; 24 bit counter for dive length (increased in write_byte_ext_flash_plus)
+ext_flash_rw					res 1		; transfer register for data read / write
+ext_flash_rollover_threshold	res 1		; rollover threshold for address increment operations
 
 ;---- Battery Management (12 byte)
 battery_capacity_internal		res 2		; for internal battery gauging
@@ -1149,7 +1256,8 @@ compass_flags					res 1		; flags are defined in compass_ops.asm
 comm_timeout_timer				res 1		; timeout for communication
 
 ;---- eeprom_rs232.asm
-uart_timeout_timer				res 3		; RS232 receive timeout counter
+eeprom_loop						res 1		; loop counter (actually used in flash and serial, too)
+rx_timoeut_tmr5h_load			res 1		; TMR5H load value for RS232 RX timeout
 
 ;---- i2c.asm
 i2c_temp1						res 1		; temporary data
@@ -1174,14 +1282,19 @@ proc_item						res 3		; address of the current procedure
 text_item						res 2		; address of the current text
 
 ;---- options.asm
-opt_type						res 1		; option type
-opt_default						res 1		; default value
-opt_inc							res 1		; also used for default+1 (string) and enum low
-opt_min							res 1		; minimum value, also used for enum high
-opt_max							res 1		; maximum value
-opt_unit						res 2		; multi-lingual unit text
-opt_eeprom						res 1		; storage position in EEPROM
-opt_backup_tbl					res 3		; buffer for table pointer
+#DEFINE opt_definiton_bytes		.12			; | Attention: do not change the relative position of these vars!
+opt_type						res 1		; | option type
+opt_serial						res 1		; | index used for option read/write via RS232
+opt_inc							res 1		; | increment value, also used for enum low  and string default+1
+opt_min							res 1		; | minimum   value, also used for enum high
+opt_max							res 1		; | maximum   value
+opt_default						res 1		; | default   value
+opt_unit						res 2		; | pointer to multi-lingual unit text
+opt_memory						res 2		; | pointer to memory position
+opt_eeprom_index				res 1		; | pointer to EEPROM position (index)
+opt_eeprom_bank					res 1		; | pointer to EEPROM position (bank)
+opt_end_token					res 1		; | =0xFF: end of table reached (does not count into opt_definiton_bytes)
+
 
 ;---- tft.asm
 tft_save_top					res 1
@@ -1205,7 +1318,7 @@ ds_count						res 1		; repetition count
 wait_counter					res 1
 
 
-; 193 byte used, 15 byte free (208 byte total)
+; 201 byte used, 7 byte free (208 byte total)
 
 
 ;============================ LOCAL DATA ======================================
@@ -1251,10 +1364,6 @@ start_mins						res 1		; minute                                  | to each other
 start_secs						res 1		; second, not used, for code commonality  |
 
 supersat_start					res 1		; leading tissue supersaturation at beginning of the dive
-
-;---- Backup for lost Gas Function (10 byte)
-opt_gas_type_backup				res 5		; 0=Disabled, 1=First, 2=Travel, 3=Deco   | ATTENTION:
-opt_dil_type_backup				res 5		; 0=Disabled, 1=First, 2=Normal           | (as above)
 
 ;---- O2 Sensors (9 byte, updated by ISR when sensors are connected via datalink)
  IFDEF _external_sensor
@@ -1305,9 +1414,9 @@ compass_DZ_f					res 2		; filtered Data
 accel_DX_f						res 2		; filtered Data
 accel_DY_f						res 2		; filtered Data
 accel_DZ_f						res 2		; filtered Data
-compass_CX_f					res 2		; calibration data
-compass_CY_f					res 2		; calibration data
-compass_CZ_f					res 2		; calibration data
+compass_CX_f					res 2		; calibration data (stored via options system)
+compass_CY_f					res 2		; calibration data (stored via options system)
+compass_CZ_f					res 2		; calibration data (stored via options system)
 
 ;---- temporary Data for Q15 Arithmetics (7 byte, compass_ops.asm, called from C)
 compass_a						res 2		;
@@ -1336,16 +1445,30 @@ time_last_2nd					res 2		; last pressure reading time       in seconds    |
  ENDIF
 
 
-; 166 byte used, 90 byte free
+; 156 byte used, 100 byte free
 
 
-;----------------------- Bank 2 General Purpose Buffer -------------------------
-; Reserved for general purpose buffer (strings, images, etc).
-; NOTE: Needs to be aligned with a bank (LOW(buffer)==0).
+;----------------------- Bank 2 General Purpose Buffer 1 -----------------------
+; general purpose buffer no.1
+;
+; NOTE: needs to be aligned with a bank (low(buffer)=0)
 
 buffer		udata_ovr	0x200
+buffer							res	.256	; buffer 1 - string buffer, etc.
 
-buffer							res	.256	; used for string assembly / display output
+
+;----------------------- Bank 11 General Purpose Buffer 2 ----------------------
+; general purpose buffer no. 2
+;
+; NOTE: needs to be aligned with a bank (low(buffer)=0)
+
+; Remark: this memory block is already allocated in shared_definitions.h for
+;         use while in dive mode, so we need to make a hard reference here
+;
+;buffer2	udata_ovr	0xB00
+;buffer2						res	.256	; buffer 2 - backtracking, flash mirror, etc.
+
+#DEFINE buffer2					0xB00
 
 
 ;---------------------- Bank 14 Options Table ---------------------------------
@@ -1375,6 +1498,9 @@ opt_ccr_mode					res 1		; CCR/pSCR sub   mode: =0: fixed/calculated SP,   =1: Se
 opt_name						res opt_name_length
 
 ;---- various other Settings
+opt_fw_version_major			res 1		; firmware version, major | use read-only!
+opt_fw_version_minor			res 1		; firmware version, minor |
+opt_fw_version_beta				res 1		; firmware version, beta  |
 opt_surface_interval			res 1		; surface interval, used by deco calculator
 opt_brightness					res 1		; =0: Eco, =1:Medium, =2:Full
 opt_salinity					res 1		; 0-5%
@@ -1391,7 +1517,7 @@ opt_compass_gain				res 1		; 0-7 (230LSB/Gauss to 1370LSB/Gaus)
 opt_sampling_rate				res 1		; =1: 10s, =0: 2s
 opt_dive_color_scheme			res 1		; 0-3
 opt_pressure_adjust				res 1		; SIGNED char (two's complement), -20/+20mbar max.
-opt_enable_safetystop			res 1		; =1: a safety stop is shown
+opt_safetystop					res 1		; =1: a safety stop is shown
 opt_calibration_O2_ratio		res 1		; %O2 of calibration gas
 opt_x_s1						res 2		; calibration factor (Not stored in EEPROM)
 opt_x_s2						res 2		; calibration factor (Not stored in EEPROM)
@@ -1400,8 +1526,8 @@ opt_sensor_fallback				res 1		; NOT USED ANY MORE, KEPT FOR COMPATIBILITY WITH E
 opt_flip_screen					res 1		; =1: flip the screen
 opt_cR_button_left				res 1		; left button  sensitivity (cR hardware)
 opt_cR_button_right				res 1		; right button sensitivity (cR hardware)
-opt_modwarning					res 1		; =1:do a red blinking warning, =0:default behavior
-opt_vsitextv2					res 1		; =1:use the depth dependent ascend rate limits
+opt_depth_warn					res 1		; =1:do a red blinking warning, =0:default behavior
+opt_vsitext						res 1		; =1:use the depth dependent ascend rate limits
 opt_vsigraph					res 1		; =1:draw the graphical VSI bar
 opt_showppo2					res 1		; =1:always show the ppO2 value in the warning position
 opt_temperature_adjust			res 1		; SIGNED char (two's complement), -2.0/+2.0 °C max.
@@ -1411,22 +1537,24 @@ opt_safety_stop_end				res 1		; [cbar]
 opt_safety_stop_reset			res 1		; [cbar]
 opt_diveTimeout					res 1		; timeout for dive mode [min]
 opt_sim_setpoint_number			res 1		; setpoint to use for deco calculation
-opt_calc_asc_gasvolume			res 1		; calculate OC gas volume needs for ascent
+opt_calc_gasvolume				res 1		; calculate OC gas volume needs for ascent
 opt_sim_use_aGF					res 1		; =0: use GF, =1: use aGF for deco calculation
 opt_enable_IBCD					res 1		; enable IBCD warning
 opt_sat_multiplier_gf			res 1		; Buhlmann safety factor for GF deco
 opt_desat_multiplier_gf			res 1		; Buhlmann safety factor for GF deco
 opt_sat_multiplier_non_gf		res 1		; Buhlmann safety factor for NON-GF deco
 opt_desat_multiplier_non_gf		res 1		; Buhlmann safety factor for NON-GF deco
-opt_ZfactorUse					res 1		; =1: figure in compression factor Z when converting gas volume <-> gas pressure
-opt_ZfactorTemp					res 1		; temperature setpoint for compression factor Z
 opt_2ndDepthDisp				res 1		; =1: show average depth instead of max depth
 opt_max_depth					res 1		; depth at which a warning will be given
-opt_store_apnoe_dive			res 1		; =1: store dives in apnoe mode into logbook
+opt_store_apnoe					res 1		; =1: store dives in apnoe mode into logbook
 opt_tissue_graphics				res 1		; =0: show N2 and He pressures, =1: show pressures and saturations
 opt_logoffset_step				res 1		; step size when adjusting log offset
 opt_layout						res 1		; initial layout of dive mode screen
-opt_extended_stops				res 1		; =1: place gas switches also below 1st stop depth
+opt_ext_stops					res 1		; =1: place gas switches also below 1st stop depth
+opt_s8_mode						res 1		; S8 mode - analog / digital
+opt_gas_contingency_sim			res 1		; =1: deco calculator: switch to alternative gas if best gas is used up
+opt_gas_contingency_dive		res 1		; =1: real dive mode:  switch to alternative gas if best gas is used up
+opt_cave_mode					res 1		; =1: cave mode switched on
 
 ;---- RX Function Settings
 opt_transmitter_id_1			res 2		; 16 bit transmitter ID for Gas 1
@@ -1444,7 +1572,7 @@ opt_TR_1st_pres					res 1		; TR functions - 1st pressure assignment
 opt_TR_2nd_pres					res 1		; TR functions - 2nd pressure assignment
 opt_TR_Bail_pres				res 1		; TR functions - bailout pressure assignment
 
-; ==> 187 bytes used - 57 bytes free (244 usable bytes only in bank 14 as the upper 12
-;                                     bytes may be used for SFRs on some PIC devices)
+; ==> 190 bytes used - 54 bytes free (244 usable bytes only in bank 14 as the upper 12
+;                                     bytes are reserved for special function registers)
 
 ;-----------------------------------------------------------------------------

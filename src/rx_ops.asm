@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File rx_ops.asm                           combined next generation V3.03.7
+;   File rx_ops.asm                           combined next generation V3.03.8
 ;
 ;   RX (Tank Pressure Transmitter) Routines.
 ;
@@ -225,11 +225,11 @@ output_pressure_2:
 	;bsf	ex,char_transmitter_low_bat	;                                          DEBUG CODE TO FAKE A LOW BAT WARNING
 	retlw	.0							;     - return with success code 0
 output_pressure_3:
-	movf	POSTINC1,W					; dummy read to advance FSR0 to byte 2 position
+	movf	POSTINC1,W					; dummy read to advance FSR1 to byte 2 position
 output_pressure_4:
 	dcfsnz	up,F						; decrement loop counter, last slot searched?
 	bra		output_pressure_5			; YES - return with error code
-	movf	POSTINC1,W					; NO  - dummy reads to advance FSR0 to byte 3 (any other code would not be more compact...)
+	movf	POSTINC1,W					; NO  - dummy reads to advance FSR1 to byte 3 (any other code would not be more compact...)
 	movf	POSTINC1,W					;     -                            ... byte 4
 	movf	POSTINC1,W					;     -                            ... byte 5
 	movf	POSTINC1,W					;     -                            ... byte 6 = first byte of next slot

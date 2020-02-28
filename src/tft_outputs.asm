@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft_outputs.asm                      next combined generation V3.06.2
+;   File tft_outputs.asm                      next combined generation V3.08.7
 ;
 ;   high-level Display Outputs
 ;
@@ -29,6 +29,7 @@
 #include "calibrate.inc"
 #include "gaslist.inc"
 #include "rx_ops.inc"
+#include "logbook.inc"
 
 
 ;---- external Functions -----------------------------------------------------
@@ -40,10 +41,13 @@
 ;---- external Texts ---------------------------------------------------------
 
 	extern	tFirmware
+	extern	tFirmwareDate
 	extern	tHardware
 	extern	tSerial
 	extern	tTotalDives
 	extern	tBatteryV
+	extern	tSensorC
+	extern	tSensorD
 	extern	tUptime
 	extern	tPPO2MIN
 	extern	tPPO2Max
@@ -80,6 +84,12 @@ TFT_debug_output:
 	WIN_TINY   .0, .0					; dive    mode: overwrites depth label
 	call	TFT_standard_color
 	lfsr	FSR2,buffer
+
+	; print an 16 bit integer as x.yy
+	;MOVII	int_O_profiling_overrun,mpr
+	;output_16dp .3
+	;STRCAT_PRINT ""
+	;return
 
 	; deco engine scheduling performance
 	MOVII	int_O_profiling_overrun,mpr		; runtime +/- versus target
@@ -320,7 +330,7 @@ TFT_color_code_stop_1:
 
 
 TFT_color_code_depth:
-	TSTOSS	opt_modwarning				; MOD warning switched on?
+	TSTOSS	opt_depth_warn				; depth warning switched on?
 	bra		TFT_color_code_depth_no_mod	; NO
 	btfsc	depth_limit_exceeded		; YES - deeper than depth limit?
 	bra		TFT_color_code_depth_warn	;       YES - set to warning color
@@ -447,10 +457,7 @@ TFT_color_code_ppo2_hud_cont:
 ;=============================================================================
 
 TFT_color_code_battery:					; color-code the battery display, with battery percent in lo
-	movlw	battery_warn_level_36+1		; get threshold for 3.6 Volt battery warning, incremented by 1
-	btfss	battery_is_36v				; actually a 3.6 Volt battery detected?
-	movlw	battery_warn_level_15+1		; NO - replace with 1.5 Volt battery warning, incremented by 1
-	cpfsgt	batt_percent				; is battery percent < threshold?
+	btfsc	battery_low_condition		; battery low condition detected?
 	bra		TFT_warning_color			; YES - set to warning color and return
 	bra		TFT_memo_color				; NO  - set to memo    color and return
 
@@ -569,12 +576,12 @@ TFT_show_color_schemes:					; update the color schemes
 	movlw	d'4'
 	movwf	ignore_digits
 	bsf		ignore_digit5				; (flag will be cleared by output_16)
-	output_16dp	d'0'					; .1m in SMALL font
+	output_16dp d'0'					; .1m in SMALL font
 	STRCAT_PRINT ""						; display decimeters
 
 	; Max. Depth demo
 	WIN_MEDIUM .64,.54
-	bsf		ignore_digit4				; no 0.1m
+	bsf		ignore_digit4				; no 0.1 m
 	bsf		leftbind
 	MOVLI	.6349,mpr
 	output_16
@@ -588,7 +595,7 @@ TFT_show_color_schemes:					; update the color schemes
 	bsf		ignore_digit5				; (flag will be cleared by output_16)
 	bsf		leftbind
 	MOVLI	.6349,mpr
-	output_16dp	d'0'
+	output_16dp d'0'
 	STRCAT_PRINT ""						; display decimeters
 	bcf		leftbind
 
@@ -699,7 +706,7 @@ TFT_speed_table:
 TFT_velocity_set_color:						; set color based on speed table or use static thresholds, with divA+0 = m/min
 	bsf		aux_flag						; for alternative layout: default is to show numerical VSI
 	; check if old/new ascend logic is used
-	TSTOSS	opt_vsitextv2					; 0=standard, 1=dynamic
+	TSTOSS	opt_vsitext						; 0=standard, 1=dynamic
 	bra		TFT_velocity_set_color_static	; static ascend rate limit
 
 	; point to speed table
@@ -757,7 +764,7 @@ TFT_velocity_num_imperial:
 	movff	divA+0,WREG						; divA+0 = m/min
 	mullw	.100							; PROD   = mbar/min
 	MOVII	PRODL,mpr						; copy to hi:lo
-	call	convert_mbar_to_feet			; convert value in hi:lo from mbar to feet
+	call	convert_cm_to_feet				; convert value in hi:lo from [cm] to [feet]
 	tstfsz	hi								; > 255 ?
 	setf	lo								; YES - set lo to 255
 	movlw	'-'								; load coding for minus sign
@@ -990,7 +997,7 @@ TFT_show_tts:
 	MOVII	int_O_TTS_norm,mpr			;     - get the TTS
 	btfsc	hi,int_invalid_flag			;     - is the invalid flag set?
 	call	TFT_disabled_color			;       YES - use disabled color
-	bcf		hi,int_invalid_flag			;     - eventually clear the invalid flag
+	bcf		hi,int_invalid_flag			;     - clear the invalid flag if applicable
 	btfss	alt_layout_active			;     - in alternative layout?
 	bra		TFT_display_tts_999x		;       NO
 	MOVII	mpr, sub_a					;       YES - copy TTS to   sub_a
@@ -1036,7 +1043,11 @@ TFT_display_tts_clear:					; clear remains from TTS > 99
 TFT_show_ndl:
 	btfsc	dive_main_menu				; is the dive mode menu shown?
 	return								; YES - abort
-	movff	char_O_NDL_norm,lo			; NO  - get NDL time in normal plan
+	call	TFT_memo_color				; NO  - set color
+	movff	int_O_NDL_norm+1,lo			;     - get high byte of NDL time in normal plan
+	btfsc	lo,int_invalid_flag			;     - is the invalid flag set?
+	call	TFT_disabled_color			;       YES - switch to disabled color
+	movff	int_O_NDL_norm+0,lo			;     - get low byte of NDL time in normal plan
 	btfsc	deco_locked					;     - was the dive in deco?
 	bra		TFT_show_ndl_norm			;       YES - use normal layout
 	btfsc	alt_layout_active			;       NO  - alternative layout active?
@@ -1045,7 +1056,6 @@ TFT_show_ndl:
 
 TFT_show_ndl_norm:						; set position
 	WIN_MEDIUM dm_ndl_value_col_norm,dm_ndl_value_row_norm
-	call	TFT_memo_color				; set color
 	output_8							; display 0...240
 TFT_show_ndl_exit_1:
 	STRCAT_PRINT "'"					; print minutes symbol
@@ -1058,14 +1068,12 @@ TFT_show_ndl_alt:
 										; clear potential remains from NDL normal and set position
 	WIN_BOX_BLACK dm_ndl_value_row_norm, dm_3rdrow_bot, dm_ndl_value_col_norm, dm_ndl_value_col_alt ; top, bottom, left, right
 	WIN_LARGE dm_ndl_value_col_alt, dm_ndl_value_row_alt
-	call	TFT_memo_color				; set color
 	output_99							; display 0...99
 	STRCAT_PRINT ""						; finalize output
 	bra		TFT_show_ndl_exit_2			; done
 
 TFT_show_ndl_alt_safety:
 	WIN_MEDIUM dm_ndl_value_col_norm,dm_ndl_value_row_norm
-	call	TFT_memo_color				; set color
 	PUTC	" "							; fill first digit position
 	output_99							; display 0...99
 	bra		TFT_show_ndl_exit_1			; print minutes symbol and done
@@ -1089,7 +1097,7 @@ TFT_divemode_sign_show_alt:
 	bra		TFT_divemode_sign_show_alt_1;       YES - no need to clear area again
 	btfsc	bailout_mode				;       NO  - in bailout?
 	bra		TFT_divemode_sign_show_alt_1;             YES - no need to clear the area
-										;             NO  - eventually clear area from "bar" label and loop mode
+										;             NO  - clear area from "bar" label and loop mode if applicable
 	WIN_BOX_BLACK dm_active_dil_row, dm_3rdrow_bot, dm_active_sp_label_col, dm_sign_rgt_alt ; top, bottom, left, right
 TFT_divemode_sign_show_alt_1:
 	WIN_TOP  dm_sign_row_alt			;     - set row    position
@@ -1388,10 +1396,9 @@ TFT_avr_stopwatch_mask_2:
  ENDIF
 
 
-	global	TFT_avr_stopwatch			; data for average depth and stopwatch
+	global	TFT_avr_stopwatch			; dive mode custom view: average depth and stopwatch
 TFT_avr_stopwatch:
 	call	TFT_memo_color
-	bsf		leftbind
 
  IFNDEF _min_depth_option
 
@@ -1404,27 +1411,25 @@ TFT_avr_stopwatch:
 	bra		TFT_avr_stopwatch_max		;       NO  - show max depth
 	;bra	TFT_avr_stopwatch_avg		;       YES - show avg depth
 TFT_avr_stopwatch_avg:
-	MOVII	pressure_rel_avg_total,mpr	; get total dive average depth into hi:lo
+	MOVII	pressure_rel_avg_total,mpr	; get total dive average pressure into hi:lo
 	bra		TFT_avr_stopwatch_2			; continue
 TFT_avr_stopwatch_1:
 	btfss	alt_layout_active			; YES - in alternative layout?
 	bra		TFT_avr_stopwatch_avg		;       NO  - show avg depth
 	;bra	TFT_avr_stopwatch_max		;       YES - show max depth
 TFT_avr_stopwatch_max:
-	MOVII	pressure_rel_max_cached,mpr	; get maximum depth into hi:lo
+	MOVII	pressure_rel_max_cached,mpr	; get maximum pressure into hi:lo
 	;bra	TFT_avr_stopwatch_2			; continue
 TFT_avr_stopwatch_2:
-	call	adjust_depth_with_salinity	; compute salinity setting into hi:lo [mbar]
+	call	convert_pres_to_depth		; convert pressure in [mbar] to depth in [cm]
 	TSTOSS	opt_units						 ; 0=m, 1=ft
 	bra		TFT_update_avr_stopwatch1_metric ; 0 - metric
 TFT_update_avr_stopwatch1_imp:				 ; 1 - imperial
-	call	convert_mbar_to_feet		; convert value in hi:lo from mbar to feet
-	output_16							; yxz
-	STRCAT	"  "						; wipe out remains from last output
-	clrf	WREG
-	movff	WREG,buffer+.3				; limit string length to 3 digits
+	call	convert_cm_to_feet			; convert value in hi:lo from [cm] to [feet]
+	output_16_3							; yxz
 	bra		TFT_update_avr_stopwatch2
 TFT_update_avr_stopwatch1_metric:
+	bsf		leftbind
 	bsf		ignore_digit5				; no cm (flag will be cleared by output_16)
 	output_16dp .3						; yxz.a
 	PUTC	" "							; wipe out remains from last output
@@ -1435,18 +1440,16 @@ TFT_update_avr_stopwatch2:
 
 	; stopped average depth
 	WIN_MEDIUM dm_custom_avr_stop_column3,dm_custom_avr_stop_row
-	MOVII	pressure_rel_avg_trip,mpr	; get the resettable average depth
-	call	adjust_depth_with_salinity	; compute salinity setting into hi:lo [mbar]
+	MOVII	pressure_rel_avg_trip,mpr	; get the resettable average pressure
+	call	convert_pres_to_depth		; convert pressure in [mbar] to depth in [cm]
 	TSTOSS	opt_units						 ; 0=m, 1=ft
 	bra		TFT_update_avr_stopwatch2_metric ; 0 - metric
 TFT_update_avr_stopwatch2_imp:				 ; 1 - imperial
-	call	convert_mbar_to_feet		; convert value in hi:lo from mbar to feet
-	output_16							; yxz
-	STRCAT	"  "						; wipe out remains from last output
-	clrf	WREG
-	movff	WREG,buffer+.3				; limit string length to 3 digits/characters
+	call	convert_cm_to_feet			; convert value in hi:lo from [cm] to [feet]
+	output_16_3							; yxz
 	bra		TFT_update_avr_stopwatch3
 TFT_update_avr_stopwatch2_metric:
+	bsf		leftbind
 	bsf		ignore_digit5				; no cm (flag will be cleared by output_16)
 	output_16dp .3						; yxz.a
 	PUTC	" "							; wipe out remains from last output
@@ -1460,26 +1463,26 @@ TFT_update_avr_stopwatch3:
 	; resettable maximum depth - needs ISR-safe copy!
 	WIN_MEDIUM dm_custom_avr_stop_column1,dm_custom_avr_stop_row		; column   0
 	call	TFT_memo_color
-	SMOVII	pressure_rel_max_trip,mpr
+	SMOVII	pressure_rel_max_trip,mpr	; get resettable maximum pressure
 	rcall	TFT_avr_stopwatch_helper
 
 	; resettable average depth
 	WIN_MEDIUM dm_custom_avr_stop_column2-.1,dm_custom_avr_stop_row		; column  54 -  1 =  53
 	call	TFT_attention_color
-	MOVII	pressure_rel_avg_trip,mpr
+	MOVII	pressure_rel_avg_trip,mpr	; get resettable average pressure
 	rcall	TFT_avr_stopwatch_helper
 
 	; resettable minimum depth - needs ISR safe copy!
 	WIN_MEDIUM dm_custom_avr_stop_column3-.12,dm_custom_avr_stop_row	; column 118 - 12 = 106
 	call	TFT_memo_color
-	SMOVII	pressure_rel_min_trip,mpr
+	SMOVII	pressure_rel_min_trip,mpr	; get resettable minimum pressure
 	rcall	TFT_avr_stopwatch_helper
 
 	; done
 	bra		TFT_display_exit_2
 
 TFT_avr_stopwatch_helper:
-	call	adjust_depth_with_salinity	; compute salinity setting into hi:lo [mbar]
+	call	convert_pres_to_depth		; convert pressure in [mbar] to depth in [cm]
 	output_16dp .3						; yxz.ab
 	PUTC	" "							; wipe out remains from last output
 	clrf	WREG
@@ -1515,7 +1518,7 @@ TFT_update_stopwatch_1:
 	clrf	WREG
 	movff	WREG,buffer+.5				; limit to 5 chars
 	STRCAT_PRINT ""
-	bra		TFT_display_exit_2
+	bra		TFT_display_exit_2			; clear leftbind and return
 TFT_update_stopwatch_2:
 	movff	hi,lo						; transfer minutes (low  byte) to lo
 	movff	up,hi						; transfer minutes (high byte) to hi
@@ -1530,19 +1533,28 @@ TFT_CNS_mask:
 	WIN_TINY dm_custom_cns3_column1, dm_custom_cns3_title_row
 	STRCPY_TEXT_PRINT tCNSsurf
 	WIN_TINY dm_custom_cns3_column2, dm_custom_cns3_title_row
+
+ IFDEF _cave_mode
+	btfss	cave_mode					; cave mode switched on?
+	bra		TFT_CNS_mask_1				; NO
+	STRCPY_TEXT_PRINT tCNScave			; YES - print cave TTS label
+	bra		TFT_CNS_mask_3				;     - continue with 3rd column
+ ENDIF
+
+TFT_CNS_mask_1:
 	btfsc	FLAG_oc_mode				; in OC mode?
-	bra		TFT_CNS_mask_1				; YES - print fTTS label
+	bra		TFT_CNS_mask_2				; YES - print fTTS label
 	btfsc	bailout_mode				; in bailout?
-	bra		TFT_CNS_mask_1				; YES - print fTTS label (label will be printed, but a fTTS will actually not be calculated)
-	TSTOSS	opt_calc_asc_gasvolume		; bailout volume calculation requested?
-	bra		TFT_CNS_mask_1				; NO  - print fTTS label
+	bra		TFT_CNS_mask_2				; YES - print fTTS label (label will be printed, but a fTTS will actually not be calculated)
+	TSTOSS	opt_calc_gasvolume			; bailout volume calculation requested?
+	bra		TFT_CNS_mask_2				; NO  - print fTTS label
 	STRCPY_TEXT_PRINT tCNSBO			; YES - print bailout label
-	bra		TFT_CNS_mask_2
-TFT_CNS_mask_1:							; OC or bailout
+	bra		TFT_CNS_mask_3				;     - continue with 3rd column
+TFT_CNS_mask_2:							; OC or bailout
 	STRCPY_TEXT_PRINT tCNSfTTS			; print fTTS label
-TFT_CNS_mask_2:
+TFT_CNS_mask_3:
 	WIN_TINY dm_custom_cns3_column3, dm_custom_cns3_title_row
-	STRCPY_TEXT_PRINT tCNSnow
+	STRCPY_TEXT_PRINT tCNSnow			; print CNS now label
 	bra		TFT_display_exit_2
 
 
@@ -1559,7 +1571,7 @@ TFT_CNS:
 	WIN_STD dm_custom_cns3_column2+.2,dm_custom_cns3_row
 	btfsc	bailout_mode				; in bailout?
 	bra		TFT_CNS_3					; YES - show "---"
-	TSTOSS	opt_calc_asc_gasvolume		; NO  - bailout volume calculation requested?
+	TSTOSS	opt_calc_gasvolume			; NO  - bailout volume calculation requested?
 	bra		TFT_CNS_1					;       NO  - continue checking fTTS extra time
 	btfss	FLAG_oc_mode				;       YES - in OC mode?
 	bra		TFT_CNS_2					;             NO - show CNS%
@@ -1573,6 +1585,16 @@ TFT_CNS_2:								; YES - show CNS%
 	STRCAT_PRINT "% "
 	bra		TFT_CNS_4
 TFT_CNS_3:
+ IFDEF _cave_mode
+	btfss	cave_mode					; cave mode switched on?
+	bra		TFT_CNS_3a					; NO  - show dashes
+	btfsc	backtrack_entire_full		; YES - cave mode shut down due to storage fully used up?
+	bra		TFT_CNS_3a					;       YES - show dashes
+	btfss	dive_turned					;       NO  - dive turned?
+	bra		TFT_CNS_2					;             NO  - show cave CNS
+	;bra	TFT_CNS_3a					;             YES - show dashes
+ ENDIF
+TFT_CNS_3a:
 	call	TFT_memo_color
 	STRCPY_PRINT "---  "
 TFT_CNS_4:
@@ -1586,6 +1608,181 @@ TFT_display_exit_2:
 	bcf		leftbind
 	goto	TFT_standard_color			; and return...
 
+;=============================================================================
+
+ IFDEF _cave_mode
+
+	global	TFT_cave_tts_mask				; mask for cave mode data
+TFT_cave_tts_mask:
+	call	TFT_divemask_color
+	WIN_TINY dm_custom_cave_title_column1,dm_custom_cave_title_row
+	STRCPY_TEXT_PRINT tCaveStops
+	WIN_TINY dm_custom_cave_title_column2,dm_custom_cave_title_row
+	STRCPY_TEXT_PRINT tCaveTTS
+	WIN_TINY dm_custom_cave_title_column3,dm_custom_cave_title_row
+	STRCPY_TEXT_PRINT tCaveRuntime
+	bra		TFT_display_exit_2
+
+
+	global	TFT_cave_tts				; dive mode custom view: cave TTS
+TFT_cave_tts:
+	; total time of all stops
+	WIN_MEDIUM dm_custom_cave_data_column1,dm_custom_cave_data_row		; column 8
+	call	TFT_memo_color				; set default color
+	btfss	cave_mode					; cave mode switched on?
+	bra		TFT_cave_1b					; NO  - print dashes
+	MOVII	int_O_TST_norm,mpr			; YES - get normal plan total stops time
+	btfss	mpr+1,int_not_yet_computed	;     - not yet computed?
+	bra		TFT_cave_1a					;       NO  - continue
+	call	TFT_disabled_color			;       YES - switch to disabled color
+	bra		TFT_cave_1b					;           - print dashes
+TFT_cave_1a:
+	btfsc	mpr+1,int_invalid_flag		; stops time invalid?
+	call	TFT_disabled_color			; YES - switch to disabled color
+	bcf		mpr+1,int_invalid_flag		; clear invalid flag if applicable
+	movf	mpr+0,W						; copy     low  byte of stops time to WREG
+	iorwf	mpr+1,W						; ior with high byte of stops time
+	bz		TFT_cave_1b					; print dashes if stops time is zero
+	output_16_3							; output as xxx
+	STRCAT_PRINT "'"					; print minutes symbol
+	bra		TFT_cave_2					; continue
+TFT_cave_1b:
+	STRCAT_PRINT ",-,-,-,"				; print 3 dashes (',' produces a half-width space)
+TFT_cave_2:
+	; cave TTS
+	WIN_MEDIUM dm_custom_cave_data_column2,dm_custom_cave_data_row		; column 60
+	call	TFT_memo_color				; set default color
+	btfsS	cave_mode					; cave mode switched on?
+	bra		TFT_cave_2b					; NO  - print dashes
+	MOVII	int_O_TTS_norm,mpr			; YES - get normal plan total time to surface
+	btfss	mpr+1,int_not_yet_computed	;     - not yet computed?
+	bra		TFT_cave_2a					;       NO  - continue
+	call	TFT_disabled_color			;       YES - switch to disabled color
+	bra		TFT_cave_2b					;           - print dashes
+TFT_cave_2a:
+	btfsc	mpr+1,int_invalid_flag		; TTS invalid?
+	call	TFT_disabled_color			; YES - switch to disabled color
+	bcf		mpr+1,int_invalid_flag		; clear invalid flag if applicable
+	output_16_3							; output as xxx
+	STRCAT_PRINT "'"					; print minutes symbol
+	bra		TFT_cave_3					; continue
+TFT_cave_2b:
+	STRCAT_PRINT ",-,-,-,"				; print 3 dashes (',' produces a half-width space)
+TFT_cave_3:
+	; estimated total runtime
+	WIN_MEDIUM dm_custom_cave_data_column3,dm_custom_cave_data_row		; column 114
+	;									; keep color from cave TTS
+	btfss	cave_mode					; cave mode switched on?
+	bra		TFT_cave_3b					; NO  - print dashes
+	SMOVII	counted_divetime_mins,mpr	; YES - ISR safe copy of counted dive time to MPR
+	movff	int_O_TTS_norm+0,WREG		;     - get TTS, low  byte, into WREG
+	addwf	mpr+0,F						;     - add TTS, low  byte, to dive time in MPR
+	movff	int_O_TTS_norm+1,WREG		;     - get TTS, high byte, into WREG
+	btfsc	WREG,int_not_yet_computed	;     - not yet computed?
+	bra		TFT_cave_3b					;       YES - print dashes
+	bcf		WREG,int_invalid_flag		;       NO  - clear invalid flag if applicable
+	addwfc	mpr+1,F						;           - add TTS, high byte, to dive time in MPR
+	output_16_3							;           - output as xxx
+	STRCAT_PRINT "'"					;           - print minutes symbol
+	bra		TFT_display_exit_2			;           - done
+TFT_cave_3b:
+	STRCAT_PRINT ",-,-,-,"				; print 3 dashes (',' produces a half-width space)
+	bra		TFT_display_exit_2			; done
+
+
+	global	TFT_cave_waypoints
+TFT_cave_waypoints:
+	; title row
+	WIN_TINY .70,dm_custom_cave_title_row;adjust column to display position of current waypoint
+	call	TFT_divemask_color			; select color
+	btfss	cave_mode					; cave mode switched on?
+	bra		TFT_cave_waypoints_3		; NO  - do not show any marker (any more)
+	btfss	dive_turned					; YES - dive turned?
+	bra		TFT_cave_waypoints_1		;       NO  - print marker on right side
+	bra		TFT_cave_waypoints_2		;       YES - print marker in the middle
+TFT_cave_waypoints_1:
+	movlw	.12							; start with 12 space chars
+	call	TFT_fillup_with_spaces		; fill buffer with space chars
+TFT_cave_waypoints_2:
+	STRCAT	"<====="					; print marker symbol
+TFT_cave_waypoints_3:
+	movlw	.18							; set overall number of chars
+	call	TFT_fillup_with_spaces		; fill buffer with space chars
+	STRCAT_PRINT ""						; finalize output
+	; data row
+	btfsc	cave_mode					; cave mode switched on?
+	bra		TFT_cave_waypoints_4		; YES - show graphics
+	WIN_STD .0,dm_custom_cave_data_row	; NO  - show "Cave Mode off" text
+	call	TFT_attention_color			;     - select attention color
+	STRCPY	"  "						;     - print 2 space chars
+	STRCAT_TEXT tCaveMode				;     - print "Cave Mode"
+	PUTC	" "							;     - print a space char
+	STRCAT_TEXT tOff					;     - print "off"
+	movlw	.17							;     - set max number of chars
+	call	TFT_fillup_with_spaces		;     - fill up FSR2 with spaces (total string length in #WREG)
+	STRCAT_PRINT ""						;     - finalize output
+	return								;     - done
+TFT_cave_waypoints_4:
+	WIN_MEDIUM .0,dm_custom_cave_data_row; start in column 0
+	call	TFT_memo_color				; select default color
+	tstfsz	DM_flags_cavereq			; any pending cave mode requests?
+	call	TFT_disabled_color			; YES - switch to disabled color
+	; 1st section: previous waypoint number or beginning line
+	movlw	.1							; load a one into WREG
+	cpfsgt	backtrack_waypoint_num		; current waypoint number > 1 ?
+	bra		TFT_cave_waypoints_5		; NO  - print line segment only
+	STRCAT	",-,"						; YES - print one dash
+	movff	backtrack_waypoint_num,lo	;     - copy current waypoint number to lo
+	decf	lo,F						;     - create previous waypoint number
+	output_99							;     - print previous waypoint number in two digit format
+	STRCAT	","							;     - print a half-space
+	bra		TFT_cave_waypoints_6		;     - continue with next section
+TFT_cave_waypoints_5:
+	STRCAT	",-,-----"					; print line segment
+TFT_cave_waypoints_6:
+	; 2nd section: solid line
+	STRCAT	"---"						; print a solid line
+	; 3rd section: current waypoint number, turn point symbol or line segment
+	tstfsz	backtrack_waypoint_num		; does a current waypoint exist?
+	bra		TFT_cave_waypoints_8		; YES - print its number or the turn point symbol
+	btfss	dive_turned					; NO  - dive turned?
+	bra		TFT_cave_waypoints_7		;       NO  - print a separated  line segment
+	STRCAT	"------"					;       YES - print a continuous line
+	bra		TFT_cave_waypoints_10		;           - continue with next section
+TFT_cave_waypoints_7:
+	STRCAT	",----,"					; print a separated line segment
+	bra		TFT_cave_waypoints_10		; continue with next section
+TFT_cave_waypoints_8:
+	STRCAT	","							; print a half-width space
+	movff	backtrack_waypoint_num,lo	; copy current waypoint number to lo
+	movf	backtrack_waypoint_turn,W	; copy turn point number to WREG
+	cpfseq	lo							; current waypoint = turn point ?
+	bra		TFT_cave_waypoints_9		; NO  - show waypoint number
+	STRCAT_PRINT "--|,     "			; YES - print end-of-line symbol, clear remaining output and finalize output
+	return								;     - done
+TFT_cave_waypoints_9:
+	movff	backtrack_waypoint_num,lo	; copy  current waypoint number to lo
+	output_99 							; print current waypoint number in two digit format
+	STRCAT	","							; print a half-space
+TFT_cave_waypoints_10:
+	; 4th section: solid line
+	STRCAT	"---"						; print a solid line
+	; 5th section: next waypoint number or end of line symbol
+	incf	backtrack_waypoint_num,W	; load WREG with next waypoint number
+	cpfseq	backtrack_waypoint_turn		; next waypoint number = turn point number ?
+	btfsc	waypoint_reached_last		; NO  - is the current waypoint the last waypoint?
+	bra		TFT_cave_waypoints_11		; YES / YES - print end-of-line symbol
+	STRCAT	","							;       NO  - print a half-space
+	incf	backtrack_waypoint_num,W	;           - (re)load WREG with next waypoint number
+	movwf	lo							;       NO  - copy  next waypoint number to lo
+	output_99 							;           - print next waypoint number in two digit format
+	STRCAT_PRINT ""						;           - finalize output
+	return								;           - done
+TFT_cave_waypoints_11:
+	STRCAT_PRINT "---|,"				; print end-of-line symbol and finalize output
+	return								; done
+
+ ENDIF
 
 ;=============================================================================
 
@@ -1899,7 +2096,15 @@ TFT_menu_calibrate_common:
 	SMOVII	sensor3_mv,mpr				; in 0.1mV steps
 	output_16dp .4						; xxx.y mV
 	STRCAT_PRINT "mV  "
-	bra		TFT_display_exit_3
+	TSTOSS	opt_s8_mode					; =0: analog, =1: digital RS232
+	bra		TFT_display_exit_3			; analog - done
+	; also imprint HUD battery voltage
+	WIN_TINY .20,.209					; digital
+	STRCPY	"HUD Batt: "				; print label
+	SMOVII	hud_battery_mv,mpr			; get HUD battery voltage
+	output_16dp .2						; print as -x.yyy
+	STRCAT_PRINT "V "					; finalize output
+	bra		TFT_display_exit_3			; done
 
  ENDIF	; _external_sensor
 
@@ -1940,9 +2145,9 @@ TFT_show_time_date_menu_fast:
 	movff	rtc_latched_secs,lo
 	output_99x
 	STRCAT	"  "
-	movff	rtc_latched_day,lo
+	movff	rtc_latched_year, lo
 	movff	rtc_latched_month,hi
-	movff	rtc_latched_year,up
+	movff	rtc_latched_day,  up
 	call	TFT_convert_date			; convert into "DD/MM/YY" or "MM/DD/YY" or "YY/MM/DD" in postinc2
 	STRCAT_PRINT " "
 	return
@@ -1955,7 +2160,7 @@ TFT_surface_decosettings:
 	call	TFT_standard_color
 	WIN_SMALL surf_gaslist_column,surf_gaslist_row
 	STRCAT_PRINT "ZH-L16"
-	movff	char_I_deco_model,WREG
+	movff	char_I_model,WREG
 	iorwf	WREG
 	bnz		TFT_surface_decosettings1
 	; Display ZH-L16 sat/desat model
@@ -1982,7 +2187,7 @@ TFT_surface_decosettings1:
 	STRCAT_PRINT ""
 TFT_surface_decosettings2:				; fTTS
 	WIN_SMALL surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.2)
-	STRCPY_TEXT tFTTSMenu
+	STRCPY_TEXT tFTTSSurf
 	movff	char_I_extra_time,lo
 	bsf		leftbind
 	output_8
@@ -1995,7 +2200,7 @@ TFT_surface_decosettings2:				; fTTS
 	STRCAT_TEXT_PRINT tMeters
 	; Salinity
 	WIN_SMALL surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.4)
-	STRCPY_TEXT tDvSalinity
+	STRCPY_TEXT tDvSalinitySurf
 	movff	opt_salinity,lo
 	output_8
 	bcf		leftbind
@@ -2003,11 +2208,11 @@ TFT_surface_decosettings2:				; fTTS
 	return
 
 
-	global	TFT_divetimeout				; show timeout counter
+	global	TFT_divetimeout
 TFT_divetimeout:
-	call	TFT_set_message_window		; set the row and column for the current message
+	call	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_memo_color
 	STRCPY	0x94						; "End of dive" symbol
 	movff	opt_diveTimeout,WREG		; in [min]
@@ -2033,49 +2238,75 @@ TFT_divetimeout:
 
 	global	TFT_show_ftts
 TFT_show_ftts:
-	call	TFT_set_message_window		; sets the row and column for the current warning
+	call	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO  - done
-	btfsc	FLAG_oc_mode				; YES - in OC mode?
-	bra		TFT_display_ftts_1			;       YES - print fTTS label
-	TSTOSS	opt_calc_asc_gasvolume		;       NO  - bailout volume calculation requested?
-	bra		TFT_display_ftts_1			;             NO  - print fTTS label
-	STRCPY	"B/O"						;             YES - print bailout label
-	bra		TFT_display_ftts_2
-TFT_display_ftts_1:						; OC or CCR/pSCR but no bailout volume calculation
-	STRCPY	"@+"						; print fTTS label
-TFT_display_ftts_2:
-	movff	char_I_extra_time,lo		; get fTTS delay time
+	return								; NO  - skip message in this cycle
 	bsf		leftbind					; print with alignment to the left
+ IFDEF _cave_mode
+	btfss	cave_mode					; cave mode switched on?
+	bra		TFT_display_ftts_2			; NO  - classic open water TTS
+	btfss	dive_turned					; YES - dive turned?
+	bra		TFT_display_ftts_1			;       NO  - cTTS from current position
+	STRCPY	"WP"						;       YES - print waypoint mark
+	movf	backtrack_waypoint_num,W	;           - copy current waypoint number to WREG
+	cpfseq	backtrack_waypoint_turn		;           - current waypoint = turn point ?
+	bra		TFT_display_ftts_0			;             NO - print waypoint number
+	STRCAT	"-| "						;             YES - print turn point symbol
+	bra		TFT_display_ftts_5			;                 - continue with TTS
+TFT_display_ftts_0:
+	movwf	lo							; copy current waypoint number to lo
+	output_99							; print waypoint number
+	PUTC	" "							; append a space char
+	bra		TFT_display_ftts_5			; continue with TTS
+TFT_display_ftts_1:
+	STRCPY	"cTTS "						; print cave TTS label followed by a space
+	bra		TFT_display_ftts_5			; continue with TTS
+ ENDIF	; _cave_mode
+TFT_display_ftts_2:
+	btfsc	FLAG_oc_mode				; in OC mode?
+	bra		TFT_display_ftts_3			; YES - print fTTS label
+	TSTOSS	opt_calc_gasvolume			; NO  - bailout volume calculation requested?
+	bra		TFT_display_ftts_3			;       NO  - print fTTS label
+	STRCPY	"B/O"						;       YES - print bailout label
+	bra		TFT_display_ftts_4			;           - continue
+TFT_display_ftts_3:						; OC or CCR/pSCR but no bailout volume calculation
+	STRCPY	"@+"						; print fTTS label
+TFT_display_ftts_4:
+	movff	char_I_extra_time,lo		; get   fTTS delay time
 	output_8							; print fTTS delay time
 	PUTC	":"							; ":"
+TFT_display_ftts_5:
 	MOVII	int_O_TTS_alt,mpr			; get alternative TTS
 	call	TFT_memo_color				; set memo color
 	btfss	hi,int_invalid_flag			; is the invalid flag set?
-	bra		TFT_display_ftts_3			; NO  - keep memo color
+	bra		TFT_display_ftts_6			; NO  - keep memo color
 	bcf		hi,int_invalid_flag			; YES - clear flag
 	call	TFT_disabled_color			;     - switch to disabled color
-TFT_display_ftts_3:
-	btfsc	hi,int_not_yet_computed		; is the not-computed-yet flag set?
-	bra		TFT_display_ftts_4			; YES - show dashes
-	movf	lo,W
-	iorwf	hi,W						; extra_ascenttime = 0 ?
-	bz		TFT_display_ftts_5			; YES - show "NDL"
-	movff	char_O_deco_info,up			; get deco info vector
-	btfsc	up,deco_zone				; fTTS <= TTS ?
-	call	TFT_advice_color			; YES - set to advice color (green)
+TFT_display_ftts_6:
+	btfsc	hi,int_not_yet_computed		; is the not-yet-computed flag set?
+	bra		TFT_display_ftts_8			; YES - show dashes
+ IFDEF _cave_mode
+	btfsc	cave_mode					; cave mode switched on?
+	bra		TFT_display_ftts_7			; YES - take shortcut
+ ENDIF
+	movff	int_O_TST_alt+1,WREG		; get high byte of the alternative total stops time
+	btfsc	WREG,int_is_zero			; total stops time = zero ?
+	bra		TFT_display_ftts_9			; YES - show "NDL"
+	btfsc	WREG,deco_zone				; NO  - fTTS <= TTS ?
+	call	TFT_advice_color			;       YES - set to advice color (green)
+TFT_display_ftts_7:
 	output_16							; print ascent time
 	PUTC	"'"							; print minutes symbol
-	bra		TFT_display_ftts_6
-TFT_display_ftts_4:
-	STRCAT	"---"						; "---" for not computed
-	bra		TFT_display_ftts_6
-TFT_display_ftts_5:
-	STRCAT_TEXT tNDL					; "NDL"
-TFT_display_ftts_6:
+	bra		TFT_display_ftts_10			; continue
+TFT_display_ftts_8:
+	STRCAT	"---"						; print "---" for not computed
+	bra		TFT_display_ftts_10			; continue
+TFT_display_ftts_9:
+	STRCAT_TEXT tNDL					; print "NDL"
+TFT_display_ftts_10:
 	movlw	dm_warning_length			; dive mode string length
 	call	TFT_fillup_with_spaces		; fill up FSR2 with spaces (total string length in #WREG)
-	STRCAT_PRINT ""
+	STRCAT_PRINT ""						; finalize output
 	bcf		leftbind					; clear left alignment
 	goto	TFT_standard_color			; ...and return
 
@@ -2115,7 +2346,7 @@ TFT_show_temp_divemode:
 	movlw	index_compass_dm				; index of compass custom view
 	cpfseq	active_customview				; compass shown in custom view?
 	bra		TFT_temp_common					; NO  - proceed with temperature
-	bra		TFT_update_stopwatch			; YES - show resettable dive time instead of temperature
+	goto	TFT_update_stopwatch			; YES - show resettable dive time instead of temperature
 TFT_temp_common:
 	SMOVII	temperature_cur,mpr				; ISR-safe 2 byte copy of current temperature to hi:lo
 	TSTOSC	opt_units						; 0=°C, 1=°F
@@ -2130,7 +2361,7 @@ TFT_temp_common:
 	cpfslt	lo
 	bra		TFT_temp_common_1				; > 10.0°C, skip here
 	bsf		leftbind
-	output_16dp	d'4'						; x.y°C
+	output_16dp d'4'						; x.y°C
 	bcf		leftbind
 	bra		TFT_temp_common_3				; done
 TFT_temp_common_1:
@@ -2496,8 +2727,8 @@ TFT_dillist_surfmode:					; displays diluent list
 
 	global	TFT_show_depth
 TFT_show_depth:
-	MOVII	pressure_rel_cur_cached,mpr	; copy relative pressure to hi:lo
-	call	adjust_depth_with_salinity	; compute salinity setting into hi:lo [mbar]
+	MOVII	pressure_rel_cur_cached,mpr	; copy relative pressure to MPR
+	call	convert_pres_to_depth		; convert pressure in [mbar] to depth in [cm]
 	call	TFT_color_code_depth		; set warning / attention flags and color-code the output
 	rcall	TFT_depth_blink				; control animation (blinking)
 	rcall	TFT_depth_position_m_ft		; set output position
@@ -2512,19 +2743,15 @@ TFT_depth_imperial:
 	call	cmpU16						; compare (sub_a - sub_b)
 	btfss	neg_flag					; depth shallower than 30 cm ?
 	bra		depth_0_feet				; YES - print a zero directly
-	call	convert_mbar_to_feet		; NO  - convert value in hi:lo from mbar to feet
-	bsf		leftbind					;     - print left-aligned
-	output_16							;     - feet in large or huge font
-	bcf		leftbind					;     - reset alignment
-	movlw	.3							;     - limit to three chars
-	call	TFT_fillup_with_spaces		;     - fill up FSR2 with spaces
+	call	convert_cm_to_feet			; NO  - convert value in hi:lo from [cm] to [feet]
+	output_16_3							;     - feet in large or huge font
 	STRCAT_PRINT ""						;     - finalize output
 TFT_depth_imperial_1:
 	bcf		win_invert					;      - reset invert flag
 	bra		TFT_depth_exit			;      - show target depth if in simulator mode and return
 
 depth_0_feet:
-	STRCAT_PRINT "0  "					; print a zero directly
+	STRCAT_PRINT "  0"					; print a zero directly
 	bra		TFT_depth_imperial_1		; continue with common part
 
 TFT_depth_metric:
@@ -2591,10 +2818,10 @@ TFT_depth_metric_100m:					; show full meters only
 	bcf		leftbind					; reset alignment
 	STRCAT_PRINT ""						; finalize output
 	bcf		win_invert					; reset invert flag
-	bra		TFT_depth_exit			; show target depth if in simulator mode and return
+	bra		TFT_depth_exit				; show target depth if in simulator mode and return
 
 TFT_depth_blink:
-	TSTOSS	opt_modwarning				; 0=standard, 1=blink
+	TSTOSS	opt_depth_warn				; 0=standard, 1=blink
 	return								; standard, done
 	btfsc	depth_warn_att_last			; was there a warning or attention on the depth in the previous cycle?
 	bra		TFT_depth_blink_prev		; YES
@@ -2858,7 +3085,7 @@ TFT_batt_surfmode:
 	output_8
 	PUTC	":"
 	MOVII	batt_voltage,mpr
-	output_16dp .2
+	output_16dp .2					; print as -x.yyy
 	bcf		leftbind
 	PUTC	'V'
 	movff	buffer+8,buffer+6
@@ -2904,74 +3131,82 @@ TFT_convert_signed_16bit:
 	return							; done
 
 ;=============================================================================
-
+; input: lo  year
+;        hi  month
+;        up  day
+;
+; output format by option opt_dateformat:
+;         0: MMDDYY
+;         1: DDMMYY
+;         2: YYMMDD
+;
 	global	TFT_convert_date
-TFT_convert_date:					; convert into "DD/MM/YY" or "MM/DD/YY" or "YY/MM/DD" in postinc2
-	movff	opt_dateformat,WREG		; =0:MMDDYY, =1:DDMMYY, =2:YYMMDD
-	movwf	EEDATA					; used as temp here
-	tstfsz	EEDATA
-	bra		TFT_convert_date_1		; opt_dateformat is 1 or 2
-									; opt_dateformat is 0
-									; use MMDDYY
-	movff	lo,hy					; incoming: lo = day,   hi = month
-	movff	hi,lo					; swap
-	movff	hy,hi					; now:      lo = month, hi = day
-	bra		TFT_convert_date_common
-
+TFT_convert_date:					; convert into "DD/MM/YY" or "MM/DD/YY" or "YY/MM/DD" in output buffer
+	movff	opt_dateformat,EEDATA	; get format (EEDATA used as temp here)
+	tstfsz	EEDATA					; shall use format 0 ?
+	bra		TFT_convert_date_1		; NO  - check for format 1 or 2
+									; YES - use format 0: MMDDYY
+	movff	lo,hy					;     - backup year  to hy
+	movff	hi,lo					;     - copy   month to lo
+	movff	up,hi					;     - copy   day   to hi
+	movff	hy,up					;     - copy   year  to up
+	bra		TFT_convert_date_common	;     - start output
 TFT_convert_date_1:
-	decfsz	EEDATA,F
-	bra		TFT_convert_date_2		; opt_dateformat is 2
-									; opt_dateformat is 1
-									; use DDMMYY
-TFT_convert_date_common:
-	bsf		leftbind
-	output_99x						; with lo = month or day   or year
-	PUTC	'.'
-	movff	hi,lo					; now  lo = day   or month or month
-	output_99x
-	PUTC	'.'
-	movff	up,lo					; now  lo = year  or year  or day
-	output_99x
-	bcf		leftbind
-	return
+	decfsz	EEDATA,F				; shall use format 1 ?
+	bra		TFT_convert_date_common	; NO  - use format 2: YYMMDD - can print directly
+									; YES - use format 1: DDMMYY
+	movff	lo,hy					;     - backup year to hy
+	movff	up,lo					;     - copy day    to lo
+	movff	hy,up					;     - copy year   to up
 
-TFT_convert_date_2:
-									; opt_dateformat is 2
-									; use YYMMDD
-	movff	lo,hy					; incoming: lo = day,  up = year
-	movff	up,lo					; swap
-	movff	hy,up					; now     : lo = year, up = day
-	bra		TFT_convert_date_common
+TFT_convert_date_common:
+	bsf		leftbind				; start left-alignment
+	output_99x						; print lo
+	PUTC	'.'						; print spacing dot
+	movff	hi,lo					; print hi
+	output_99x						; ...
+	PUTC	'.'						; print spacing dot
+	movff	up,lo					; print up
+	output_99x						; ...
+	bcf		leftbind				; end left-alignment
+	return							; done
+
 
 ;=============================================================================
-
+; show date by month & day
+;
+; input: lo  year   (not used here)
+;        hi  month
+;        up  day
+;
+; output format by option opt_dateformat:
+;         0: MMDD(YY)
+;         1: DDMM(YY)
+;         2: (YY)MMDD
+;
 	global	TFT_convert_date_short
-TFT_convert_date_short:				; convert into "DD/MM" or "MM/DD" or "MM/DD" in postinc2
-	movff	opt_dateformat,WREG		; =0:MMDDYY, =1:DDMMYY, =2:YYMMDD
-	movwf	EEDATA					; used as temp here
-	tstfsz	EEDATA
-	bra		TFT_convert_date_short_1
-									; opt_dateformat is 0
-									; use MMDD(YY)
-TFT_convert_date_short_0:
-	movff	lo,hy					; incoming: lo = day,   hi = month
-	movff	hi,lo					; swap
-	movff	hy,hi					; now:      lo = month, hi = day
-	bra		TFT_convert_date_short_common
-
-TFT_convert_date_short_1:
-	decfsz	EEDATA,F
-	bra		TFT_convert_date_short_0; opt_dateformat is 2 -> use (YY)MMDD
-									; opt_dateformat is 1
-									; use DDMM(YY)
-TFT_convert_date_short_common:
-	bsf		leftbind
-	output_99x						; with lo = month or day
-	PUTC	'.'
-	movff	hi,lo					; now  lo = day   or month
-	output_99x
-	bcf		leftbind
-	return
+TFT_convert_date_short:				; convert into "DD/MM" or "MM/DD" or "MM/DD" into output buffer
+	movff	opt_dateformat,EEDATA	; get format (EEDATA used as temp here)
+	tstfsz	EEDATA					; shall use format 0 ?
+	bra		TFT_convert_date_short2	; NO  - check for format 1 or 2
+TFT_convert_date_short1:			; YES - use format 0: MMDD
+	movff	hi,lo					;     - copy month to lo
+	movff	up,hi					;     - copy day   to hi
+	bra		TFT_convert_date_short3 ;     - start output
+TFT_convert_date_short2:
+	decfsz	EEDATA,F				; format 1 ?
+	bra		TFT_convert_date_short1	; NO  - use format 2: MMDD (here its like format 0)
+									; YES - use format 1: DDMM
+	movff	up,lo					;     - copy day to lo,
+									;     - month is already in hi
+TFT_convert_date_short3:
+	bsf		leftbind				; start left-alignment
+	output_99x						; print lo
+	PUTC	'.'						; print spacing dot
+	movff	hi,lo					; print hi
+	output_99x						; ...
+	bcf		leftbind				; end left-alignment
+	return							; done
 
 ;=============================================================================
 
@@ -2980,9 +3215,9 @@ TFT_date_surfmode:
 	WIN_SMALL	surf_date_column,surf_date_row
 	call	TFT_standard_color
 	SMOVSS	rtc_year,rtc_latched_year	; ISR-safe 6 byte copy of date and time
-	movff	rtc_latched_day,lo
+	movff	rtc_latched_year, lo
 	movff	rtc_latched_month,hi
-	movff	rtc_latched_year,up
+	movff	rtc_latched_day,  up
 	call	TFT_convert_date			; convert into "DD/MM/YY" or "MM/DD/YY" or "YY/MM/DD" in postinc2
 	STRCAT_PRINT ""
 	return
@@ -3009,27 +3244,27 @@ TFT_show_max_depth_1:
 	;bra	TFT_avg_depth_current		; YES - show avg depth
 
 TFT_avg_depth_current:
-	MOVII	pressure_rel_avg_total,mpr	; YES - get total dive average depth
+	MOVII	pressure_rel_avg_total,mpr	; YES - get total dive average pressure
 	bra		TFT_max_depth_common		;     - continue with common part
 
 TFT_max_depth_apnoe:
 	btfss	apnoe_at_surface			; apnoe mode, at the surface?
 	bra		TFT_max_depth_current		; NO  - show max depth of current dive
-	MOVII	apnoe_max_pressure,mpr		; YES - show max depth of all dives so far
+	MOVII	apnoe_max_pressure,mpr		; YES - get max pressure of all dives so far
 	bra		TFT_max_depth_common		;     - continue with common part
 
 TFT_max_depth_current:
-	MOVII	pressure_rel_max_cached,mpr	; get the "normal" max depth in mbar = cm
+	MOVII	pressure_rel_max_cached,mpr	; get the "normal" max pressure
 	;bra	TFT_max_depth_common		; continue with common part
 
 TFT_max_depth_common:
-	call	adjust_depth_with_salinity	; compute salinity setting into hi:lo [mbar]
+	call	convert_pres_to_depth		; convert pressure in [mbar] to depth in [cm]
 	TSTOSS	opt_units					; 0=m or 1=ft ?
 	bra		TFT_max_depth_metric		; 0 - use metric   version
 	;bra	TFT_max_depth_imperial		; 1 - use imperial version
 
 TFT_max_depth_imperial:
-	call	convert_mbar_to_feet		; convert value in hi:lo from mbar to feet
+	call	convert_cm_to_feet			; convert value in hi:lo from [cm] to [feet]
 	call	TFT_memo_color				; set output color
 	output_16_3							; print depth
 	bra		TFT_max_depth_finish		; finish output
@@ -3120,7 +3355,7 @@ TFT_show_gauge_max_avg_depth:
 	rcall	TFT_show_gauge_max_depth							; show max depth
 	call	TFT_memo_color										; set color
 	WIN_MEDIUM dm_gauge_avg_depth_col, dm_gauge_avg_depth_row	; set position for avg depth
-	MOVII	pressure_rel_avg_total,mpr							; get average depth into hi:lo
+	MOVII	pressure_rel_avg_total,mpr							; get average pressure into hi:lo
 	bra		TFT_show_gauge_depth								; show avg depth and return
 
 
@@ -3140,13 +3375,15 @@ TFT_show_apnoe_max_depth_com:
 	WIN_MEDIUM	dm_apnoe_last_max_depth_column, dm_apnoe_last_max_depth_row
 	call	TFT_memo_color
 TFT_show_gauge_max_depth:
-	MOVII	pressure_rel_max_cached,mpr		; get max depth into hi:lo
+	MOVII	pressure_rel_max_cached,mpr		; get max pressure into hi:lo
+	;bra	TFT_show_gauge_depth			; show max depth and return
+
 TFT_show_gauge_depth:
-	call	adjust_depth_with_salinity		; compute salinity setting into hi:lo [mbar]
+	call	convert_pres_to_depth			; convert pressure in [mbar] to depth in [cm]
 	TSTOSS	opt_units						; 0=m, 1=ft
 	bra		TFT_display_apnoe_last_m_metric ; 0 - metric
 TFT_display_apnoe_last_max_imp:				; 1 - imperial
-	call	convert_mbar_to_feet			; convert value in hi:lo from mbar to feet
+	call	convert_cm_to_feet				; convert value in hi:lo from [cm] to [feet]
 	output_16
 	bra		TFT_max_depth_finish			; finish output
 TFT_display_apnoe_last_m_metric:
@@ -3296,7 +3533,7 @@ TFT_clear_apnoe_surface:
 ; check if firmware is within expiry period, will return aux_flag set if not
 
 check_expiry:						; check if it is time for a firmware update
-	SMOVSS	rtc_year,rtc_latched_year	; ISR-safe 6 byte copy of date and time
+	SMOVSS	rtc_year,rtc_latched_year; ISR-safe 6 byte copy of date and time
 	movff	rtc_latched_day,lo		; get current day
 	movff	rtc_latched_month,hi	; get current month
 	movff	rtc_latched_year,up		; get current year
@@ -3342,7 +3579,7 @@ TFT_cat_debug_short:
 	STRCAT	"DBG."					; show short version
 	goto	TFT_warning_color		; set color
  ELSE
-	movlw	softwareversion_beta	; =0: release, =1: beta 1, =2: beta 2, ...
+	movlw	fw_version_beta	; =0: release, =1: beta 1, =2: beta 2, ...
 	movwf	lo						; copy to lo
 	tstfsz	lo						; release version?
 	bra		TFT_cat_beta_1			; NO  - must be beta version then
@@ -3432,29 +3669,26 @@ TFT_show_firmware:
 
 	global	info_menu_total_dives
 info_menu_total_dives:
-	lfsr	FSR1,tTotalDives
-	call	strcat_text
+	lfsr	FSR1,tTotalDives				; locate text
+	call	strcat_text						; print  text
 TFT_cat_total_dives:
-	read_int_eeprom	.2
-	movff	EEDATA,lo
-	read_int_eeprom	.3
-	movff	EEDATA,hi
-	bsf		leftbind
-	output_16
-	bcf		leftbind
-	return
-	
+	call	eeprom_total_dives_read			; read total number of dives
+	bsf		leftbind						; print left-aligned
+	output_16								; print number of total dives
+	bcf		leftbind						; quit  left-aligned
+	return									; done
+
 ;-----------------------------------------------------------------------------
 ; append firmware version to current string, including color-coding
 
 	global	TFT_cat_firmware
 TFT_cat_firmware:
-	movlw	softwareversion_x
+	movlw	fw_version_major
 	movwf	lo
 	bsf		leftbind
 	output_8								; print major in 1 or 2 digit format
 	PUTC	'.'
-	movlw	softwareversion_y
+	movlw	fw_version_minor
 	movwf	lo
 	output_99x								; print minor in two digit format
 	bcf		leftbind
@@ -3465,17 +3699,30 @@ TFT_cat_firmware:
 	goto	TFT_attention_color				;     - print in attention color (and return)
 
 ;-----------------------------------------------------------------------------
-; For the Information menu: firmware version
+; For the Information menu: firmware version and creation date
 
 	global	info_menu_firmware
 info_menu_firmware:
-	lfsr	FSR1,tFirmware
-	call	strcat_text
-	rcall	TFT_cat_firmware
-	PUTC	" "
-	rcall	TFT_cat_beta_rel
-	STRCAT_PRINT ""
-	return
+	lfsr	FSR1,tFirmware					; select label text
+	call	strcat_text						; print label
+	rcall	TFT_cat_firmware				; print firmware version
+	PUTC	" "								; print a dot
+	rcall	TFT_cat_beta_rel				; print beta/release
+	STRCAT_PRINT ""							; finalize output
+	return									; done
+
+	global	info_menu_fw_cration_date
+info_menu_fw_cration_date:
+	lfsr	FSR1,tFirmwareDate				; select label text
+	call	strcat_text						; print label
+	movlw	firmware_creation_year			; get firmware creation year
+	movwf	lo								; copy to lo
+	movlw	firmware_creation_month			; get firmware creation month
+	movwf	hi								; copy to hi
+	movlw	firmware_creation_day			; get firmware creation day
+	movwf	up								; copy to up
+	call	TFT_convert_date				; converts into "DD/MM/YY" or "MM/DD/YY" or "YY/MM/DD" in postinc2
+	return									; done
 
 ;-----------------------------------------------------------------------------
 ; For the Information menu: firmware version of the RX processor
@@ -3505,38 +3752,31 @@ TFT_print_firmware_rx:
 	global	info_menu_serial
 	global	TFT_cat_serial
 info_menu_serial:
-	lfsr	FSR1,tSerial
-	call	strcat_text
+	lfsr	FSR1,tSerial				; locate text
+	call	strcat_text					; print  text
 TFT_cat_serial:
-	clrf	EEADRH
-	clrf	EEADR					; get serial number LOW
-	call	read_eeprom				; read byte
-	movff	EEDATA,lo
-	incf	EEADR,F					; get serial number HIGH
-	call	read_eeprom				; read byte
-	movff	EEDATA,hi
-
-	bsf		leftbind
-	output_16
-	bcf		leftbind
-	return
+	call	eeprom_serial_number_read	; read OSTC serial number
+	bsf		leftbind					; start left-alignment
+	output_16							; print serial number
+	bcf		leftbind					; end   left-alignment
+	return								; done
 
 ;-----------------------------------------------------------------------------
 ; For the Information menu: hardware / software configuration
 
 	global	info_menu_config
 info_menu_config:
-	lfsr	FSR1,tHardware
-	call	strcat_text
-	call	I2C_init_compass		; start compass
-	movf	HW_descriptor,W			; copy hardware descriptor to WREG
-	output_hex						; print as hex
-	PUTC	"-"						; print a separator
-	movf	HW_variants,W			; copy hardware variants   to WREG
-	output_hex						; print as hex
-	PUTC	"-"						; print a separator
-	movlw	SW_CONF					; get software configuration
-	output_hex						; print as hex
+	lfsr	FSR1,tHardware				; locate text
+	call	strcat_text					; print  text
+	call	I2C_init_compass			; start compass
+	movf	HW_descriptor,W				; copy hardware descriptor to WREG
+	output_hex							; print as hex
+	PUTC	"-"							; print a separator
+	movf	HW_variants,W				; copy hardware variants   to WREG
+	output_hex							; print as hex
+	PUTC	"-"							; print a separator
+	movlw	SW_CONF						; get software configuration
+	output_hex							; print as hex
 	return
 
 
@@ -3549,13 +3789,59 @@ info_menu_battery_volts:
 	call	strcat_text
 	MOVII	batt_voltage,mpr
 	bsf		leftbind
-	output_16dp .2				; x.xxx
+	output_16dp .2						; print as -x.yyy
 	STRCAT	"V(T"
-	movff	battery_type,lo		; =0:1.5V, =1:3.6V Saft, =2:LiIon 3.7V/0.8Ah, =3:LiIon 3.7V/3.1Ah, =4: LiIon 3.7V/2.3Ah
+	movff	battery_type,lo				; =0:1.5V, =1:3.6V Saft, =2:LiIon 3.7V/0.8Ah, =3:LiIon 3.7V/3.1Ah, =4: LiIon 3.7V/2.3Ah
 	output_8
 	bcf		leftbind
 	PUTC	")"
 	return
+
+
+;-----------------------------------------------------------------------------
+; For the Information menu: sensor C1 and C5 values
+
+	global	info_menu_sensor_calib
+info_menu_sensor_calib:
+	lfsr	FSR1,tSensorC				; locate label
+	call	strcat_text					; print  label
+	movff	C1+1,WREG					; get   C1, high byte
+	output_hex							; print C1, high byte
+	movff	C1+0,WREG					; get   C1, low  byte
+	output_hex							; print C1, low  byte
+	PUTC	"-"							; print a separator
+	movff	C5+1,WREG					; get   C5, high byte
+	output_hex							; print C5, high byte
+	movff	C5+0,WREG					; get   C5, low  byte
+	output_hex							; print C5, low  byte
+	return								; done
+
+
+;-----------------------------------------------------------------------------
+; For the Information menu: sensor depth correction
+
+	global	info_menu_sensor_offset
+info_menu_sensor_offset:
+	lfsr	FSR1,tSensorD				; locate label
+	call	strcat_text					; print  label
+	movff	opt_pressure_adjust,WREG	; get pressure sensor offset
+	btfsc	WREG,7						; value negative?
+	bra		info_menu_sensor_offset_1	; YES
+	PUTC	"+"							; NO  - print plus sign
+	bra		info_menu_sensor_offset_2	;     - continue with common part
+info_menu_sensor_offset_1:
+	PUTC	"-"							; print a minus sign
+	negf	WREG						; negate WREG
+info_menu_sensor_offset_2:
+	PUTC	" "							; print a space
+	bsf		leftbind					; start left-bind printing
+	output_8							; print value
+	bcf		leftbind					; end left-bind printing
+	PUTC	" "							; print a space
+	lfsr	FSR1,tMBAR					; locate unit
+	call	strcat_text					; print  unit
+	return								; done
+
 
 ;-----------------------------------------------------------------------------
 ; For the Information menu: uptime
@@ -3564,23 +3850,23 @@ info_menu_battery_volts:
 info_menu_uptime:
 	lfsr	FSR1,tUptime
 	call	strcat_text
-	SMOVFF	uptime,xC		; ISR-safe copy of uptime:4 to xC:4
+	SMOVQQ	uptime,xC					; ISR-safe copy of uptime:4 to xC:4
 
 info_menu_uptime_com:
-	MOVLI	.3600,xB		; one hour = 3600s
-	call	div32x16		; xC:4 = xC:4 / xB:2 with xA as remainder -> xC+1:xC+0 holds full hours
+	MOVLI	.3600,xB					; one hour = 3600s
+	call	div32x16					; xC:4 = xC:4 / xB:2 with xA as remainder -> xC+1:xC+0 holds full hours
 	MOVII	xC,xA
-	MOVLI	.24,xB			; one day = 24 hours
-	call	div16x16		; xC:2 = xA:2 / xB:2 with xA as remainder -> xC+1:xC+0 holds full days, xA holds full hours
-	MOVII	xC,mpr			; copy full days into hi:lo
+	MOVLI	.24,xB						; one day = 24 hours
+	call	div16x16					; xC:2 = xA:2 / xB:2 with xA as remainder -> xC+1:xC+0 holds full days, xA holds full hours
+	MOVII	xC,mpr						; copy full days into hi:lo
 	bsf		leftbind
 	output_16
 	PUTC	"d"
-	movff	xA+0,lo			; full hours
+	movff	xA+0,lo						; full hours
 	output_8
 	PUTC	"h"
 	bcf		leftbind
-	return					; done
+	return								; done
 
 ;-----------------------------------------------------------------------------
 
@@ -3730,9 +4016,9 @@ TFT_fillup_with_spaces2:
 
 	global	TFT_desaturation_time
 TFT_desaturation_time:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_memo_color
 	STRCPY	"Desat:"
 	MOVII	int_O_desaturation_time,mpr
@@ -3740,10 +4026,10 @@ TFT_desaturation_time:
 	movf	lo,W						; swap hi and lo
 	movff	hi,lo						; ...
 	movwf	hi							; ...
-	output_99x							; hours
-	PUTC	':'
-	movff	hi,lo						; minutes
-	output_99x
+	output_99x							; print hours
+	PUTC	':'							; print ":"
+	movff	hi,lo						; print minutes...
+	output_99x							; ... in two digits, leading zero
 	movlw	surf_warning_length			; only use surface string length
 	rcall	TFT_fillup_with_spaces		; fill up FSR2 with spaces (total string length in #WREG)
 	STRCAT_PRINT ""
@@ -3752,9 +4038,9 @@ TFT_desaturation_time:
 
 	global	TFT_nofly_time
 TFT_nofly_time:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_memo_color
 	movff	char_I_altitude_wait,WREG
 	tstfsz	WREG
@@ -3782,9 +4068,9 @@ TFT_nofly_time_2:
 
 	global	TFT_warning_agf
 TFT_warning_agf:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_attention_color
 	STRCPY_TEXT tDiveaGF_active			; "aGF!"
 	movlw	dm_warning_length			; dive mode string length
@@ -3795,9 +4081,9 @@ TFT_warning_agf:
 
 	global	TFT_warning_fallback
 TFT_warning_fallback:					; show fallback warning
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_warning_color
 	STRCPY_TEXT tDiveFallback			; "Fallback!"
 	movlw	dm_warning_length			; dive mode string length
@@ -3811,9 +4097,9 @@ TFT_warning_fallback:					; show fallback warning
 
 	global	TFT_advice_switch
 TFT_advice_switch:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_advice_color
 	STRCPY_TEXT tswap					; "Swap Tank"
 	movlw	dm_warning_length			; dive mode string length
@@ -3823,9 +4109,9 @@ TFT_advice_switch:
 
 	global	TFT_attention_transmitter
 TFT_attention_transmitter:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_attention_color
 	STRCPY_TEXT tTransmitter			; "P.Transm."
 	movlw	dm_warning_length			; dive mode string length
@@ -3842,9 +4128,9 @@ TFT_warning_pres_reading:				; entry point for warning
 	call	TFT_warning_color			; use warnings color
 	;bra	TFT_common_pres_reading		; continue with common code
 TFT_common_pres_reading:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO - done
+	return								; NO - skip message in this cycle
 	STRCPY_TEXT tPressure				; "Tank Pres"
 	movlw	dm_warning_length			; dive mode string length
 	rcall	TFT_fillup_with_spaces		; fill up FSR2 with spaces (total string length in #WREG)
@@ -3853,9 +4139,9 @@ TFT_common_pres_reading:
 
 	global	TFT_attention_sac
 TFT_attention_sac:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	MOVII	int_O_SAC_measured,mpr		; copy measured SAC rate to hi:lo
 	call	TFT_color_code_tank_pres_sac; color-code the output
 	STRCPY_TEXT tSAC					; "SAC", needs to be exactly 3 chars long
@@ -3874,9 +4160,9 @@ TFT_attention_sac:
 
 	global	TFT_info_deco
 TFT_info_deco							; show info when decompression obligation is steady or decreasing
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO  - return
+	return								; NO  - skip message in this cycle
 	call	TFT_advice_color			; YES - actually it is a memo, but we break the rules here and display in advice color (green)
 	STRCPY_TEXT tDecoInfo				;     - write "Deco Zone"
 	movlw	dm_warning_length			;     - select dive mode string length
@@ -3890,49 +4176,52 @@ TFT_info_deco							; show info when decompression obligation is steady or decre
 
 	global	TFT_info_cave_mode
 TFT_info_cave_mode:
-	rcall	TFT_set_message_window		; sets the row and column for the current warning
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO  - return
+	return								; NO  - skip message in this cycle
 	call	TFT_memo_color				; YES - set memo color
-	STRCPY_TEXT tCaveMode				;       write "Cave Mode"
-	movlw	dm_warning_length			;       select dive mode string length
-	rcall	TFT_fillup_with_spaces		;       fill up FSR2 with spaces (total string length in #WREG)
-	STRCAT_PRINT ""						;       print buffer
-	bra		TFT_warn_att_info_exit		; and return...
+	bsf		win_invert					;     - print in inverse
+	STRCPY_TEXT tCaveMode				;     - write "Cave Mode"
+	movlw	dm_warning_length			;     - select dive mode string length
+	rcall	TFT_fillup_with_spaces		;     - fill up FSR2 with spaces (total string length in #WREG)
+	STRCAT_PRINT ""						;     - print buffer
+	bcf		win_invert					;     - end inverse printing
+	bra		TFT_warn_att_info_exit		;     - and return...
 
-	global	TFT_info_dive_turned
-TFT_info_dive_turned:
-	rcall	TFT_set_message_window		; sets the row and column for the current warning
-	tstfsz	WREG						; is there room for the message?
-	return								; NO  - return
-	call	TFT_attention_color			; YES - set attention color
-	STRCPY_TEXT tDiveTurned				;       write "Dv.turned"
-	movlw	dm_warning_length			;       select dive mode string length
-	rcall	TFT_fillup_with_spaces		;       fill up FSR2 with spaces (total string length in #WREG)
-	STRCAT_PRINT ""						;       print buffer
-	bra		TFT_warn_att_info_exit		; and return...
 
-	global	TFT_warn_cave_shutdown
-TFT_warn_cave_shutdown:
-	rcall	TFT_set_message_window		; sets the row and column for the current warning
+	global	TFT_cave_shutdown_attention
+TFT_cave_shutdown_attention:
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO  - return
+	return								; NO  - skip message in this cycle
+	call	TFT_attention_color			; YES - set warning color
+	bra		TFT_cave_shutdown_common	;     - continue with common part
+
+
+	global	TFT_cave_shutdown_warning
+TFT_cave_shutdown_warning:
+	rcall	TFT_set_message_window		; set row and column for the message
+	tstfsz	WREG						; is there room for the message?
+	return								; NO  - skip message in this cycle
 	call	TFT_warning_color			; YES - set warning color
-	STRCPY_TEXT tCaveModeShutdown		;       write "X-Cave-X"
-	movlw	dm_warning_length			;       select dive mode string length
-	rcall	TFT_fillup_with_spaces		;       fill up FSR2 with spaces (total string length in #WREG)
-	STRCAT_PRINT ""						;       print buffer
+	;bra	TFT_cave_shutdown_common	;     - continue with common part
+
+TFT_cave_shutdown_common:
+	STRCPY_TEXT tCaveModeShutdown		; write "X-Cave-X"
+	movlw	dm_warning_length			; select dive mode string length
+	rcall	TFT_fillup_with_spaces		; fill up FSR2 with spaces (total string length in #WREG)
+	STRCAT_PRINT ""						; print buffer
 	bra		TFT_warn_att_info_exit		; and return...
 
  ENDIF	; _cave_mode
 
 ;=============================================================================
 
-	global	TFT_warning_sat
-TFT_warning_sat							; Saturation
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	global	TFT_warning_saturation
+TFT_warning_saturation
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	MOVII	int_O_lead_supersat,mpr		; bank-safe copy of leading tissue's supersaturation
 	call	TFT_color_code_gf			; color-code output
 ;	STRCPY	"GF:  "						; the two spaces are on purpose to align the output with other warnings' outputs
@@ -3954,12 +4243,12 @@ TFT_warn_att_info_exit:
 
 	global	TFT_warning_mbubbles
 TFT_warning_mbubbles:
-	rcall	TFT_set_message_window		; sets the row and column for the current warning
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_attention_color			; set attention color as default
 	movff	char_O_deco_warnings,WREG	; bank-safe copy for deco warnings
-	btfsc	WREG,mbubble_warning		; are we in the microbubbles zone right now?
+	btfsc	WREG,mbubble_warning		; are we in the micro bubbles zone right now?
 	call	TFT_warning_color			; YES - reconfigure to warning color
 	STRCPY_TEXT tMicroBubbles
 	movlw	dm_warning_length			; dive mode string length
@@ -3972,9 +4261,9 @@ TFT_warning_mbubbles:
 
 	global	TFT_warning_outside
 TFT_warning_outside:
-	rcall	TFT_set_message_window		; sets the row and column for the current warning
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_attention_color
 	movff	char_O_deco_warnings,WREG	; bank-safe copy for deco warnings
 	btfsc	WREG,outside_warning		; are we outside the ZH-L16 model right now?
@@ -3990,9 +4279,9 @@ TFT_warning_outside:
 
 	global	TFT_warning_depth
 TFT_warning_depth:
-	rcall	TFT_set_message_window		; sets the row and column for the current warning
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_warning_color
 	STRCPY_TEXT tMaxDepth				; "max.Depth"
 	movlw	dm_warning_length			; dive mode string length
@@ -4001,19 +4290,19 @@ TFT_warning_depth:
 	bra		TFT_warn_att_info_exit		; and return...
 
 
-	global	TFT_warning_gas_needs_warn
-TFT_warning_gas_needs_warn:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	global	TFT_warning_gas_needs
+TFT_warning_gas_needs:
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO  - skip message in this cycle
 	call	TFT_warning_color			; YES - set warning color
 	bra		TFT_warning_gas_needs_com	;     - continue with common part
 
-	global	TFT_warning_gas_needs_att
-TFT_warning_gas_needs_att:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	global	TFT_attention_gas_needs
+TFT_attention_gas_needs:
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO  - skip message in this cycle
 	call	TFT_attention_color			; YES - set attention color
 	;bra	TFT_warning_gas_needs_com	;     - continue with common part
 
@@ -4030,9 +4319,9 @@ TFT_warning_gas_needs_com:
 
 	global	TFT_warning_IBCD
 TFT_warning_IBCD:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_attention_color			; select attention color as default
 	STRCPY_TEXT tIBCD					; "IBCD N2He"
 	movlw	dm_warning_length			; dive mode string length
@@ -4046,9 +4335,9 @@ TFT_warning_IBCD:
 
 	global	TFT_warning_no_BO_gas
 TFT_warning_no_BO_gas:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_warning_color			; select warning color
 	STRCPY_TEXT tnoBOgas				; print "-B/O-Gas-"
 	movlw	dm_warning_length			; dive mode string length
@@ -4059,9 +4348,9 @@ TFT_warning_no_BO_gas:
 
 	global	TFT_advice_gas_change
 TFT_advice_gas_change:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_advice_color			; set advice color
 	STRCPY_TEXT tgaschange				; "Change?"
 	movlw	dm_warning_length			; dive mode string length
@@ -4074,10 +4363,10 @@ TFT_advice_gas_change:
  IFDEF _external_sensor
 
 	global	TFT_warning_sensor_disagree
-TFT_warning_sensor_disagree:			; show sensor disagree warning
-	rcall	TFT_set_message_window		; set the row and column for the current message
+TFT_warning_sensor_disagree:
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_warning_color
 	STRCPY_TEXT tSensorDisagree			; "Sensors<>"
 	movlw	dm_warning_length			; dive mode string length
@@ -4089,7 +4378,7 @@ TFT_warning_sensor_disagree:			; show sensor disagree warning
 
 ;=============================================================================
 
-TFT_set_message_window:						; set the row and column for the current message
+TFT_set_message_window:						; sets the row and column for the current message
 	; ignore warning (now)?
 	decf	message_counter,W				; load (message counter - 1) into WREG
 	bcf		STATUS,C						; clear carry bit
@@ -4138,9 +4427,9 @@ TFT_set_message_window_sf_row2:
 
 	global	TFT_msg_batt_percent_divemode
 TFT_msg_batt_percent_divemode:
-	rcall	TFT_set_message_window		; set the row and column for the current message
+	rcall	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	movff	batt_percent,lo				; get battery percent
 	call	TFT_color_code_battery		; color-code battery percent
 	STRCPY	"Batt:"
@@ -4220,20 +4509,20 @@ TFT_ceiling_GF_tissue_mask:
 	global	TFT_ceiling_GF_tissue		; data for ceiling, current GF and tissues
 TFT_ceiling_GF_tissue:
 	WIN_MEDIUM dm_custom_ceiling_column,dm_custom_ceiling_row
-	MOVII	int_O_ceiling,mpr
-	call	TFT_color_code_ceiling		; color-code the output
-	call	adjust_depth_with_salinity	; compute salinity setting into hi:lo [mbar]
-	bsf		leftbind
+	MOVII	int_O_ceiling,mpr			; get ceiling in [mbar] relative pressure
+	call	TFT_color_code_ceiling		; color-code the output (also strips off flags)
+	call	convert_pres_to_depth		; convert pressure in [mbar] to depth in [cm]
 	TSTOSS	opt_units					; 0=m, 1=ft
 	bra		TFT_ceiling_tissue_cGF_m
-	call	convert_mbar_to_feet		; convert value in hi:lo from mbar to feet
-	output_16							; yxz
+	call	convert_cm_to_feet			; convert value in hi:lo from [cm] to [feet]
+	output_16_3							; yxz
 	bra		TFT_ceiling_tissue_cGF0
 TFT_ceiling_tissue_cGF_m:
+	bsf		leftbind
 	bsf		ignore_digit5				; no cm (flag will be cleared by output_16)
 	output_16dp .3						; yxz.a
-TFT_ceiling_tissue_cGF0:
 	bcf		leftbind
+TFT_ceiling_tissue_cGF0:
 	STRCAT_PRINT " "
 	; Show tissue diagram
 	call	TFT_dive_tissues			; show tissue pressure diagram
@@ -4289,7 +4578,7 @@ TFT_clock_batt_surfpress:
 	WIN_SMALL dm_custom_battery_column, dm_custom_battery_volt_row
 	MOVII	batt_voltage,mpr
 	bsf		leftbind
-	output_16dp .2
+	output_16dp .2						; print as -x.yyy
 	PUTC	'V'
 	movff	buffer+5,buffer+4
 	movlw	0x00
@@ -4352,8 +4641,8 @@ TFT_pscr_info:
 
 ;=============================================================================
 
-	global	TFT_gas_needs_ascent_mask	; mask for gas needs ascent
-TFT_gas_needs_ascent_mask:
+	global	TFT_gas_needs_mask			; mask for gas needs ascent
+TFT_gas_needs_mask:
 	WIN_TINY dm_custom_gas_column_title, dm_custom_gas_mask_row
 	call	TFT_divemask_color
  IFDEF _cave_mode
@@ -4370,12 +4659,17 @@ TFT_gas_needs_mask_ascent_2:
  ELSE
 	STRCPY_TEXT tGasNeedsAscent			; "Gas Needs Ascent"
  ENDIF
+	movff	char_O_deco_info,WREG		; get the deco info vector
+	btfss	WREG,gas_needs_fTTS			; are the gas needs calculated for fTTS?
+	bra		TFT_gas_needs_mask_ascent_3	; NO  - continue
+	STRCAT	" fTTS"						; YES - append fTTS marking
+TFT_gas_needs_mask_ascent_3:
 	STRCAT_PRINT " (bar)"				; " (bar)"
 	bra		TFT_custview_exit1			; and return...
 
 
-	global	TFT_gas_needs_ascent		; data for gas needs ascent
-TFT_gas_needs_ascent:					; LIMITATION: there is only space for 4 gases on the screen - if 5 gases have a pres_need > 0, then only the first 4 will be shown!
+	global	TFT_gas_needs				; data for gas needs ascent
+TFT_gas_needs:							; LIMITATION: there is only space for 4 gases on the screen - if 5 gases have a pres_need > 0, then only the first 4 will be shown!
  IFDEF _cave_mode
 	movff	char_O_deco_info,WREG		; get deco info vector
 	btfss	WREG,gas_needs_cave			; are the gas needs calculated for cave mode?
@@ -4388,7 +4682,7 @@ TFT_gas_needs_ascent_1:
 	bra		TFT_gas_needs_ascent_3		;       YES - mask still valid
 	;bra	TFT_gas_needs_ascent_2		;       NO  - redraw mask
 TFT_gas_needs_ascent_2:
-	rcall	TFT_gas_needs_ascent_mask	; redraw mask
+	rcall	TFT_gas_needs_mask			; redraw mask
 TFT_gas_needs_ascent_3:
  ENDIF
 	clrf	up							; initialize gas index (0-4)
@@ -4400,7 +4694,7 @@ TFT_gas_needs_ascent_3:
 	rcall	TFT_gas_needs_helper
 	WIN_SMALL dm_custom_gas_column2+.5,dm_custom_gas_row2
 	rcall	TFT_gas_needs_helper
-	return
+	bra		TFT_custview_exit2			; and return...
 
 TFT_gas_needs_helper:
 	call	TFT_memo_color
@@ -4447,7 +4741,7 @@ TFT_gas_needs_helper_2:					; output gas type and pressure needed
 	output_16_3							; limit to 999 and display only (0-999)
 	STRCAT_PRINT " "					; adds a space to overwrite any potential remains of earlier outputs
 	incf	up,F						; increment to next gas
-	bra		TFT_custview_exit2			; and return...
+	return								; done
 
 
 	global	TFT_show_ppo2_mask			; helper function for several custom views
@@ -4507,12 +4801,12 @@ TFT_ppo2_ead_end_cns:
 	; Show END/EAD
 	WIN_SMALL	dm_custom_ead_column, dm_custom_ead_row
 	STRCPY_TEXT tEAD					; EAD:
-	movff	char_O_EAD,lo
-	rcall	TFT_end_ead_common			; print "lo m" (or ft) and limit to 8 chars
+	MOVII	int_O_EAD_pres,mpr			; copy EAD in [mbar] to MPR
+	rcall	TFT_end_ead_common			; convert to depth, print and limit to 8 chars
 	WIN_SMALL dm_custom_end_column, dm_custom_end_row
 	STRCPY_TEXT tEND					; END:
-	movff	char_O_END,lo
-	rcall	TFT_end_ead_common			; print "lo m" (or ft) and limit to 8 chars
+	MOVII	int_O_END_pres,mpr			; copy END in [mbar] to MPR
+	rcall	TFT_end_ead_common			; convert to depth, print and limit to 8 chars
  IFDEF _helium
 	; Show Gas Density
 	WIN_MEDIUM	dm_custom_cns_column-.5, dm_custom_cns_row
@@ -4521,7 +4815,7 @@ TFT_ppo2_ead_end_cns:
 	bsf		leftbind					; print left-aligned
 	movlw	.2							; suppress first and second digit
 	movwf	ignore_digits				; ...
-	output_16dp .2						; print as --x.yy
+	output_16dp .2						; print as -x.yyy
 	bcf		leftbind					; back to normal alignment
 	STRCAT_PRINT	""					; finalize output
  ELSE
@@ -4537,29 +4831,27 @@ TFT_ppo2_ead_end_cns:
 TFT_custview_exit2:
 	goto	TFT_standard_color			; and return...
 
-TFT_end_ead_common:						; print "lo m" (or ft) and limit to 8 chars
-	bsf		leftbind
+TFT_end_ead_common:
+	call	convert_pres_to_depth		; convert pressure in [mbar] to depth in [cm]
 	TSTOSS	opt_units					; 0=Meter, 1=Feet
-	bra		TFT_end_ead_common_metric
+	bra		TFT_end_ead_common_metric	; 0: meter
+	;bra	TFT_end_ead_common_imperial	; 1: feet
+
 TFT_end_ead_common_imperial:
-	movf	lo,W						; with lo in m
-	mullw	.100						; PRODL:PRODH = mbar/min
-	MOVII	PRODL,mpr
-	call	convert_mbar_to_feet		; convert value in hi:lo from mbar to feet
-	output_16_3
-	STRCAT_TEXT tFeets
-	clrf	WREG
-	movff	WREG,buffer+.8				; limit string length to 8
+	call	convert_cm_to_feet			; convert depth in [cm] to depth in [feet]
+	output_16_3							; print as xyz
 	bra		TFT_end_ead_common_exit
+
 TFT_end_ead_common_metric:
-	output_8
-	STRCAT_TEXT tMeters
+	bsf		ignore_digit4				; no decimals (flag will be cleared by output_16)
+	output_16dp .3						; print as yxz.--
+	movlw	'm'							; hard-coded unit
+	movff	WREG,buffer+.7				; place the unit onto the decimal point
+	;bra	TFT_end_ead_common_exit
+
 TFT_end_ead_common_exit:
-	bcf		leftbind
-	movlw	.8
-	call	TFT_fillup_with_spaces		; fill up FSR2 with spaces (total string length in #WREG)
-	STRCAT_PRINT ""
-	return
+	STRCAT_PRINT ""						; finalize output
+	return								; done
 
 ;=============================================================================
 
@@ -4632,8 +4924,9 @@ TFT_surface_lastdive:
 	STRCAT_PRINT "m "						;
 	bra		TFT_surface_lastdive_2			;
 TFT_surface_lastdive_1:
-	SMOVFF	surface_interval_secs,xC		; ISR-safe copy of surface_interval_secs:4 to xC:4
+	SMOVQQ	surface_interval_secs,xC		; ISR-safe copy of surface_interval_secs:4 to xC:4
 	call	info_menu_uptime_com			; use part of info_menu_uptime to convert and display in days and hours
+	STRCAT_PRINT ""							; finalize output
 TFT_surface_lastdive_2:
 	WIN_SMALL surf_gaslist_column+.48,surf_gaslist_row+(surf_gaslist_spacing*.1)
 	MOVII	lastdive_duration,mpr			; get duration of last dive, minutes
@@ -4645,8 +4938,7 @@ TFT_surface_lastdive_2:
 	rcall	TFT_surface_common				; finalize output
 TFT_surface_lastdive_3:
 	WIN_SMALL	surf_gaslist_column+.48,surf_gaslist_row+(surf_gaslist_spacing*.2)
-	MOVII	lastdive_maxdepth,mpr
-	call	adjust_depth_with_salinity		; compute (current) salinity setting into hi:lo [mbar]
+	MOVII	lastdive_maxdepth,mpr			; get max depth of last dive
 	bsf		leftbind						; print without leading spaces
 	TSTOSS	opt_units						; 0=Meter, 1=Feet
 	bra		TFT_surface_lastdive_metric		; 0 - metric
@@ -4656,24 +4948,26 @@ TFT_surface_lastdive_metric:
 	rcall	TFT_surface_metric				; print depth in meters
 TFT_surface_lastdive_4:
 	WIN_SMALL	surf_gaslist_column+.48,surf_gaslist_row+(surf_gaslist_spacing*.3)
-	MOVII	lastdive_avgdepth,mpr
-	call	adjust_depth_with_salinity		; compute (current) salinity setting into hi:lo [mbar]
+	MOVII	lastdive_avgdepth,mpr			; get avg depth of last dive
 	bsf		leftbind						; print without leading spaces
 	TSTOSS	opt_units						; 0=Meter, 1=Feet
 	bra		TFT_surface_metric				; 0 - metric   and return
 	;bra	TFT_surface_imperial			; 1 - imperial and return
 
 TFT_surface_imperial:
-	rcall	convert_mbar_to_feet			; convert value in hi:lo from mbar to feet
+	rcall	convert_cm_to_feet				; convert value in hi:lo from [cm] to [feet]
 	output_16_3								; limit to 999 and display only (0-999)
 	STRCAT_TEXT tFeets1						; "ft"
 	bra		TFT_surface_common				; finalize output
+
 TFT_surface_metric:
 	bsf		ignore_digit5					; no cm (flag will be cleared by output_16)
 	movlw	.1								; no 1000 meters
 	movwf	ignore_digits					; ...
 	output_16dp .3							; xxx.y
 	STRCAT_TEXT tMeters						; "m"
+	;bra	TFT_surface_common				; finalize output
+
 TFT_surface_common:
 	STRCAT_PRINT ""							; finalize output
 	bcf		leftbind						; clear left-alignment
@@ -4692,16 +4986,17 @@ TFT_surface_tissues:						; show tissue diagram in surface mode
 	call	TFT_standard_color
 	WIN_SMALL surf_tissue_N2_column,surf_tissue_N2_row
  IFDEF _helium
-	TSTOSS	opt_tissue_graphics 			; shall show N2+He or pressure and saturation?
-	bra		TFT_surface_tissues_1			; =0: show pressures and saturations
-											; =1: show N2 and He pressures
-	STRCPY_TEXT_PRINT tN2					; print "N2"
+	btfss	tissue_graphic_layout			; shall N2 and He?
+	bra		TFT_surface_tissues_1			; NO  - print "Tissues"
+	STRCPY_TEXT_PRINT tN2					; YES - print "N2"
 	WIN_SMALL surf_tissue_He_column,surf_tissue_He_row
-	STRCPY_TEXT_PRINT tHe					; print "He"
-	bra		TFT_surface_tissues_2			; continue with common part
+	STRCPY_TEXT_PRINT tHe					;     - print "He"
+	bra		TFT_surface_tissues_2			;     - continue with common part
  ENDIF
+
 TFT_surface_tissues_1:
 	STRCPY_TEXT_PRINT tDiveTissues			; print "Tissues"
+
 TFT_surface_tissues_2:
 	;---- draw scale ----------------------------------	;
 	movlw	color_deepblue
@@ -4740,9 +5035,11 @@ SCALELINE	macro	x
 	;---- Draw combined or N2 Tissue Pressures---------	;
 	lfsr	FSR2,char_O_tissue_pressure					; load base address of combined pressures by default
  IFDEF _helium
-	TSTOSC	opt_tissue_graphics							; shall show N2+He or pressure and saturation?
-	lfsr	FSR2,char_O_tissue_pres_N2					; =1: load base address of N2 pressures
+	btfsc	tissue_graphic_layout						; shall show N2+He ?
+	lfsr	FSR2,char_O_tissue_pres_N2					; YES - replace with base address of N2 pressures
  ENDIF
+	btfsc	tissue_graphic_mode							; in logbook mode?
+	lfsr	FSR2,header_buffer+index_tissue_pres_total	; YES - replace with base address from logbook
 	movlw	d'16'
 	movwf	lo											; tissue counter, 16 tissues
 	clrf	hi											; row    counter
@@ -4754,12 +5051,14 @@ TFT_surf_tissues_N2_loop:
 	decfsz	lo,F										; decrement tissue counter, done?
 	bra		TFT_surf_tissues_N2_loop					; NO - loop
  IFDEF _helium
-	TSTOSC	opt_tissue_graphics 						; shall show N2+He or pressure and saturation?
-	bra		TFT_surface_tissues_3						; =1: show He tissue pressures
+	btfsc	tissue_graphic_layout						; shall show N2+He ?
+	bra		TFT_surface_tissues_3						; YES - show He tissue pressures
  ENDIF
 
 	;---- Draw Tissue Saturations ---------------------	;
 	lfsr	FSR2,char_O_tissue_saturation				; load base address of tissue supersaturation
+	btfsc	tissue_graphic_mode							; in logbook mode?
+	lfsr	FSR2,header_buffer+index_tissue_supersat	; YES - replace with base address from logbook
 	movlw	d'16'
 	movwf	lo											; tissue counter, 16 tissues
 	clrf	hi											; row    counter
@@ -4793,13 +5092,15 @@ TFT_surf_tissues_sat_loop:
 	call	TFT_box										; draw line
 
 	; GF factors enabled?
-	TSTOSS	char_I_deco_model							; GF factors enabled?
+	btfss	tissue_graphic_gf							; GF factors enabled?
 	bra		TFT_surface_tissues_4						; NO - continue with CNS
 
 	;---- Print GF low Line --------------------------	;
 	movlw	surf_tissue_diagram_left+.4					; get left base position
 	movwf	win_leftx2									; set left base position (0-159)
 	movff	opt_GF_low,WREG								; get GF low in 0.01 %
+	btfsc	tissue_graphic_mode							; in logbook mode?
+	movff	header_buffer+index_gf_lo_hi+0,WREG			; YES - replace by GF low from logbook
 	mullw	.164										; multiply with 164
 	movf	PRODH,W										; divide   by   256 -> resulting scale factor is 164/256 = 0.640625
 	addwf	win_leftx2,F								; add to base position
@@ -4811,6 +5112,8 @@ TFT_surf_tissues_sat_loop:
 	movlw	surf_tissue_diagram_left+.4					; get left base position
 	movwf	win_leftx2									; set left base position (0-159)
 	movff	opt_GF_high,WREG							; get GF high in 0.01 %
+	btfsc	tissue_graphic_mode							; in logbook mode?
+	movff	header_buffer+index_gf_lo_hi+1,WREG			; YES - replace by GF high from logbook
 	mullw	.164										; multiply with 164
 	movf	PRODH,W										; divide   by   256 -> resulting scale factor is 164/256 = 0.640625
 	addwf	win_leftx2,F								; add to base position
@@ -4841,6 +5144,9 @@ TFT_surf_tissues_He_loop:
  ENDIF
 
 TFT_surface_tissues_4:
+	btfss	tissue_graphic_cns							; shall show CNS value?
+	goto	TFT_standard_color							; NO  - done
+
 	; ---- Draw CNS% ----------------------------------	;
 	WIN_SMALL surf_tissue_He_column+.22,surf_tissue_He_row	; position in-between tissue bars
 	MOVII	int_O_CNS_current,mpr						; get current CNS
@@ -4869,16 +5175,18 @@ TFT_surf_tissues_bargraph:
 
 
 ;=============================================================================
-; Draw saturation graph in dive mode
-
+; Draw saturation graph in dive mode custom view
+;
 TFT_dive_tissues:
-	;---- Draw Frame
+
+	;---- draw outer frame
 	call	TFT_standard_color
 	WIN_FRAME_COLOR16 dm_custom_tissue_diagram_top, dm_custom_tissue_diagram_bottom, dm_custom_tissue_diagram_left, .159 ; outer frame
 
 	;---- clear area showing leading tissue number as it may not be printed over
 	WIN_BOX_BLACK dm_custom_tissue_diagram_top+.16, dm_custom_tissue_diagram_top+.16+.10, dm_custom_tissue_diagram_left+.32, dm_custom_tissue_diagram_left+.32+.8 ; top, bottom, left, right
 
+TFT_dive_tissues_1:
 	;---- common initialization for Tissue Pressures and Saturation ----------
 	movlw	.1
 	movwf	win_height									; hight of the bargraph (0-239)
@@ -4895,8 +5203,8 @@ TFT_dive_tissues:
 	;---- Draw combined or N2 Tissue Pressures --------	;
 	lfsr	FSR2,char_O_tissue_pressure					; load base address of combined pressures by default
  IFDEF _helium
-	TSTOSC	opt_tissue_graphics 						; shall show N2+He or pressure and saturation?
-	lfsr	FSR2,char_O_tissue_pres_N2					; =1: load base address of N2 pressures
+	btfsc	tissue_graphic_layout						; shall show N2+He ?
+	lfsr	FSR2,char_O_tissue_pres_N2					; YES - load base address of N2 pressures
  ENDIF
 	movlw	d'16'
 	movwf	lo											; tissue counter, 16 tissues
@@ -4908,8 +5216,8 @@ TFT_dive_tissues_N2_loop:
 	decfsz	lo,F										; decrement tissue counter, done?
 	bra		TFT_dive_tissues_N2_loop					; NO - loop
  IFDEF _helium
-	TSTOSC	opt_tissue_graphics 						; shall show N2+He or pressure and saturation?
-	bra		TFT_dive_tissues_3							; =1: show He tissue pressures
+	btfsc	tissue_graphic_layout						; shall show N2+He ?
+	bra		TFT_dive_tissues_3							; YES - show He tissue pressures
  ENDIF
 
 	;---- Draw Tissue Saturations ---------------------	;
@@ -4945,7 +5253,7 @@ TFT_dive_tissues_sat_loop:
 	call	TFT_box										; draw line
 
 	; GF factors enabled?
-	TSTOSS	char_I_deco_model							; GF factors enabled?
+	btfss	tissue_graphic_gf							; shall show GF lines?
 	bra		TFT_dive_tissues_4							; NO - continue with number of leading tissue
 
 	;---- Print GF low Line --------------------------	;
@@ -4974,12 +5282,12 @@ TFT_dive_tissues_sat_loop:
  IFDEF _helium
 TFT_dive_tissues_3:
 	;---- Draw He Tissues Pressures -------------------	;
+	lfsr	FSR2,char_O_tissue_pres_He					; load base address of He pressures
 	movlw	dm_custom_tissue_diagram_left+.3+.4			; get dive mode left start position for He bars
 	movwf	win_leftx2									; set column left (0-159)
 	movlw	.159-dm_custom_tissue_diagram_left-.4-.4	; get max width for He bars
 	movwf	win_width+0									; set width (low byte)
 	clrf	win_width+1									; ...
-	lfsr	FSR2,char_O_tissue_pres_He					; load base address of He pressures
 	movlw	d'16'
 	movwf	lo											; tissue counter, 16 tissues
 	clrf	hi											; row    counter
@@ -4988,7 +5296,7 @@ TFT_dive_tissues_He_loop:
 	rcall	TFT_dive_tissues_bargraph					; draw tissue bargraph
 	incf	hi,F										; increment row counter
 	decfsz	lo,F										; decrement tissue counter, done?
-	bra		TFT_dive_tissues_He_loop					; NO - loop
+	bra		TFT_dive_tissues_He_loop					; NO  - loop
  ENDIF
 
 TFT_dive_tissues_4:
@@ -5039,9 +5347,9 @@ TFT_dive_tissues_bargraph:
 
 	global	TFT_show_cns
 TFT_show_cns:
-	call	TFT_set_message_window		; set the row and column for the current message
+	call	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	STRCPY_TEXT tCNS					; CNS:
 	MOVII	int_O_CNS_current,mpr		; get current CNS
 	call	TFT_color_code_cns			; color-code CNS output
@@ -5060,9 +5368,9 @@ TFT_show_cns:
 
 	global	TFT_warning_eod_cns
 TFT_warning_eod_cns:
-	call	TFT_set_message_window		; set the row and column for the current message
+	call	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_warning_color			; switch to warnings (red) text color
 	STRCPY_TEXT tCNSeod					; end-of-dive CNS warning text
 	movlw	dm_warning_length			; dive mode string length
@@ -5072,10 +5380,10 @@ TFT_warning_eod_cns:
 
 
 	global	TFT_show_ppo2_warning
-TFT_show_ppo2_warning:					; with ppO2 including attention/warning flags in hi:lo
-	call	TFT_set_message_window		; set the row and column for the current message
+TFT_show_ppo2_warning:
+	call	TFT_set_message_window		; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
-	return								; NO
+	return								; NO - skip message in this cycle
 	call	TFT_color_code_ppo2			; color-code output
 	btfsc	bailout_mode				; in bailout?
 	bra		TFT_display_diluent_2		; YES
@@ -5123,7 +5431,7 @@ TFT_surf_set_bearing:
 	global	TFT_LogOffset
 TFT_LogOffset:
 	STRCPY_TEXT tLogOffsetValue			; print "Offset" in selected language
-	call	do_logoffset_common_read	; read offset into lo:hi
+	call	eeprom_log_offset_read		; read offset into lo:hi
 ;	bsf		leftbind
 	output_16_4							; print offset in 4 digits
 ;	bcf		leftbind
@@ -5426,64 +5734,64 @@ TFT_surface_tankdata_print_3:
 
  ENDIF	; _rx_functions
 
-;=============================================================================    
+;=============================================================================
 
-	global	adjust_depth_with_salinity
-	global	adjust_depth_with_salinity_log
-adjust_depth_with_salinity:			; computes salinity setting into hi:lo [mbar]
-	btfsc	sensor_override_active	; in pressure sensor override mode?
-	return							; YES - do not apply salinity in override mode
-	movff	opt_salinity,WREG		; 0-5%
-adjust_depth_with_salinity_log:		; computes salinity setting (FROM WREG!) into hi:lo [mbar]
-	addlw	d'100'					; 1.00kg/l
-	movwf	up
+	global	convert_pres_to_depth
+convert_pres_to_depth:				; converts pressure in [mbar] to depth in [cm]
+	btfsc	sensor_override_active	; in pressure sensor override (simulator) mode?
+	return							; YES - convert with factor 1.0, i.e. make [mbar] = [cm]
 
-	movlw	d'105'					; 105% ?
-	cpfslt	up						; salinity upper limit
-	return							; out of limit, do not adjust hi:lo
-	movlw	d'99'					; 99% ?
-	cpfsgt	up						; salinity lower limit
-	return							; out of limit, do not adjust hi:lo
+	movff	opt_salinity,WREG		; get salinity setting (0 - 4 %, see option_table.asm)
+	addlw	d'100'					; add density of fresh water (1.00 kg/l)
+	movwf	up						; store salinity factor in up
 
-	MOVII	mpr,  xA				; depth in mbar
-	MOVLI	.102,xB					; 0.98 bar / 10 meter
+	movlw	.101+salinity_max		; load (upper limit + 1)
+	cpfslt	up						; current setting > upper limit?
+	bra		convert_fix_salinity	; YES - fix salinity setting
+
+	movlw	.99+salinity_min		; load (lower limit - 1)
+	cpfsgt	up						; current setting > lower limit?
+	bra		convert_fix_salinity	; YES - fix salinity setting
+
+convert_pres_to_depth_1:
+	MOVII	mpr, xA					; get pressure in [mbar]
+	MOVLI	.102,xB					; conversion factor x 100 for fresh water (1.02 cm per each 1 mbar)
 	call	mult16x16				; xC:4 = xA:2 * xB:2
-	movff	up,xB+0					; salinity
-	clrf	xB+1
+	movff	up,xB+0					; get salinity in [%]
+	clrf	xB+1					; ...
 	call	div32x16				; xC:4 = xC:4 / xB:2 with xA as remainder
-	MOVII	xC,mpr					; copy corrected values back to hi:lo
+	MOVII	xC,mpr					; copy back result as depth in [cm]
 	return
+
+convert_fix_salinity:
+	movlw	.100					; reset to 100%, i.e. set salinity to 0%
+	movwf	up						; fix value in up
+	bra		convert_pres_to_depth_1	; continue
 
 ;=============================================================================
 
-	global	convert_mbar_to_feet
-convert_mbar_to_feet:				; convert value in hi:lo from mbar to feet
-	MOVII	mpr, xA					; depth in mbar (multiples of 0.01 meter)
-	btfsc	sensor_override_active	; in pressure sensor override mode?
-	bra		convert_mbar_to_feet_1	; YES
+	global	convert_cm_to_feet
+convert_cm_to_feet:					; converts depth in [cm] to depth in [feet]
+	MOVII	mpr, xA					; depth in [cm]
+	btfsc	sensor_override_active	; in pressure sensor override (simulator) mode?
+	bra		convert_meter_to_feet_1	; YES - convert with 334feet/100m
 	MOVLI	.328,xB					; NO  - convert with 328feet/100m
-	bra		convert_common_to_feet	;     - continue with common part
-convert_mbar_to_feet_1:
-	MOVLI	.334,xB					; YES - convert with 334feet/100m to be in sync with values shown in menu
 	bra		convert_common_to_feet	;     - continue with common part
 
 
 	global	convert_meter_to_feet
-convert_meter_to_feet:				; convert value in lo from meters to feet
-	movf	lo,W					; depth in meter
-	mullw	.100					; convert meter to mbar
-	MOVII	PRODL,xA				; depth in mbar (multiples of 0.01 meter)
-	MOVLI	.334,xB					; convert with 334feet/100m to have 10ft, 20ft, 30ft for stop depths
+convert_meter_to_feet:				; converts depth in [m] to depth in [feet]
+	movf	lo,W					; depth in [m]
+	mullw	.100					; factor to convert [m] to [cm]
+	MOVII	PRODL,xA				; copy depth in [cm] to xA
+convert_meter_to_feet_1:
+	MOVLI	.334, xB				; convert with 334feet/100m to have 10ft, 20ft, 30ft, ... for stop depths
+	;bra	convert_common_to_feet	; continue with common part
+
 
 convert_common_to_feet:
-	call	mult16x16				; xC = xA * xB = depth in 0.01 meter * xxx feet / 100 meter
-	movlw	d'50'					; round up
-	addwf	xC+0,F
-	movlw	.0
-	addwfc	xC+1,F
-	addwfc	xC+2,F
-	addwfc	xC+3,F
-	MOVLI	.10000,xB				; 10000 = 100 for depth in 0.01 meter to full meter  x  100 for feet factor is per 100 meter
+	call	mult16x16				; xC = xA * xB = depth in [cm] * 334 feet/100 m = depth in 0.0001 feet
+	MOVLI	.10000,xB				; divide by 10000 to turn into full feet
 	call	div32x16				; xC = xC / xB with xA as remainder
 	MOVII	xC,mpr					; store result
 

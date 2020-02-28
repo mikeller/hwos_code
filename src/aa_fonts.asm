@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File aa_fonts.asm                         combined next generation V3.03.5
+;   File aa_fonts.asm                         combined next generation V3.08.3
 ;
 ;   Font-data for the anti-aliased word processor
 ;
@@ -117,12 +117,12 @@ aa_font34_block:
 	; 93 is down arrow (dive start)
 	; 94 is up   arrow (dive end)
 	; 95 is left-right arrow (dive duration)
-	DB	'¤', 0x96						; unused
-	DB	0								; end of translation table
-	DB	aa_font34_firstChar				; to be subtracted
-	DB	aa_font34_chars					; max value
-	DB	0x87-aa_font34_firstChar		; replace by ¤ when unknown
-	DB	aa_font34_height + 0x80
+	DB		'¤', 0x96					; unused
+	DB		0							; end of translation table
+	DB		aa_font34_firstChar			; to be subtracted
+	DB		aa_font34_chars				; max value
+	DB		0x87-aa_font34_firstChar	; replace by ¤ when unknown
+	DB		aa_font34_height + 0x80
 ;
 #include	"../src/Fonts/aa_font34_idx.inc"
 #include	"../src/Fonts/aa_font34.inc"
@@ -135,15 +135,18 @@ aa_font36_end:
 ;---- MEDIUM font description and data ---------------------------------------
 	global	aa_font48_block
 aa_font48_block:
-	DB		0x27, 0x3B					; ' char
-	DB		'"', 0x3C
-	DB		'm', 0x3D
-	DB		'f', 0x3E
-	DB		' ', 0x3F
-	DB		0
-	DB		aa_font48_firstChar
-	DB		aa_font48_chars
-	DB		0x3E-aa_font48_firstChar
+	DB		' ',  0x3F					; space, full-width
+;	DB		',',  0x2C					; space, half-width, on position of ','
+;	DB		'-',  0x2D					; minus, half-width, on position of '-'
+	DB		'|',  0x2F					; |      half-width
+	DB		0x27, 0x3B					; '      half-width
+	DB		'"',  0x3C					; "
+	DB		'm',  0x3D					; m
+	DB		'f',  0x3E					; ft-ligature
+	DB		0							; end of translation table
+	DB		aa_font48_firstChar			; to be subtracted
+	DB		aa_font48_chars				; max value
+	DB		0x3F-aa_font48_firstChar	; replace by space when unknown
 	DB		aa_font48_height + 0x80		; AA flag
 ;
 #include	"../src/Fonts/aa_font48_idx.inc"

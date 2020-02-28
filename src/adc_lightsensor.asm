@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File adc_lightsensor.asm                  combined next generation V3.06.1
+;   File adc_lightsensor.asm                  combined next generation V3.08.8
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -20,19 +20,20 @@ adc_light	CODE
 ;=============================================================================
 
 wait_adc:									; bank-safe
-	movwf	ADCON0
-	nop
+	movwf	ADCON0							; select ADC channel
+	nop										; wait a short moment
 	bsf		ADCON0,1						; start ADC
 wait_adc2:
-	btfsc	ADCON0,1						; wait...
-	bra		wait_adc2
-	return
+	btfsc	ADCON0,1						; ADC done?
+	bra		wait_adc2						; NO  - wait
+	return									; YES - done
 
 	global	get_battery_voltage
 get_battery_voltage:						; start ADC and wait until finished
 	btfss	battery_gauge_available			; battery gauge IC available?
 	bra		get_battery_voltage_2			; NO  - OSTC hardware without gauge IC
-	call	lt2942_get_accumulated_charge	; YES - read coulomb counter
+	bsf		battery_is_36v					; YES - gauge IC available, 3.6V battery
+	call	lt2942_get_accumulated_charge	;     - read coulomb counter
 	call	lt2942_get_voltage				;     - read battery voltage
 	call	lt2942_get_temperature			;     - read battery temperature
 	tstfsz	batt_voltage+1					;     - read voltage < 256 mV ?
@@ -43,6 +44,7 @@ get_battery_voltage:						; start ADC and wait until finished
 	;bra	get_battery_voltage_1			;           - proceed
 
 get_battery_voltage_1:
+	rcall	get_battery_voltage_low			; check for battery low condition
 	btfsc	divemode						; in dive mode?
 	return									; YES - done
 
@@ -61,35 +63,35 @@ get_battery_voltage_1:
 	;bra	charge_cv_active				;       YES - charging in CV mode
 
 charge_cv_active:
-	decfsz	get_bat_volt_counter,F
-	return
-	movlw	.15
-	cpfsgt	batt_voltage+1					; battery voltage >= 16*256mV (4.096V) ?
-	bra		charge_cc_active				; NO
-	bsf		cc_active
-	bsf		cv_active
-	bsf		LEDr							; indicate charging
-	call	lt2942_charge_done				; reset accumulating registers to 0xFFFF
-	WAITMS	d'10'
-	bcf		LEDr							; indicate charging
-	bsf		get_bat_volt_counter,0			; =1
-	return
+	decfsz	get_bat_volt_counter,F			; decrement counter, became zero?
+	return									; NO  - not yet, done
+	movlw	.15								; YES - battery voltage >= 16*256mV (4.096V)
+	cpfsgt	batt_voltage+1					;     - ... ?
+	bra		charge_cc_active				;     NO
+	bsf		cc_active						;     YES - set CC charging status
+	bsf		cv_active						;         - set CV charging status
+	bsf		LEDr							;         - indicate charging
+	call	lt2942_charge_done				;         - reset accumulating registers to 0xFFFF
+	WAITMS	d'10'							;         - wait 10 ms
+	bcf		LEDr							;         - indicate charging
+	bsf		get_bat_volt_counter,0			;         - set counter to 1
+	return									;         - done
 
 charge_cc_active:
-	bsf		cc_active
+	bsf		cc_active						; set CC charging mode
 	bsf		LEDr							; indicate charging
-	bcf		CHRG_OUT
+	bcf		CHRG_OUT						; 
 	bsf		TRISJ,2							; set chrg-Out output to high impedance
-	movlw	.15
-	cpfsgt	batt_voltage+1					; battery voltage >= 16*256mV (4.096 V)?
+	movlw	.15								; battery voltage >= 16*256mV (4.096 V)
+	cpfsgt	batt_voltage+1					; ... ?
 	bra		charge_cc_active2				; NO
-	movlw	.81
-	cpfslt	batt_voltage+0					; battery voltage >= 80mV (+4096mV from batt_voltage+1)?
-	bra		charge_cv_active				; YES
+	movlw	.81								; YES - battery voltage >= 80mV (+4096mV from batt_voltage+1)
+	cpfslt	batt_voltage+0					;     - ... ?
+	bra		charge_cv_active				;       YES
 charge_cc_active2:
-	movlw	.10
-	movwf	get_bat_volt_counter
-	return
+	movlw	.10								;       NO  - set counter to 10
+	movwf	get_bat_volt_counter			;           - ...
+	return									;           - done
 
 get_battery_voltage_2:						; no gauge IC available, use ADC to measure battery voltage
 	; additional charging disable in software
@@ -98,10 +100,9 @@ get_battery_voltage_2:						; no gauge IC available, use ADC to measure battery 
 
 	bsf		adc_is_running					; =1: the ADC is in use
 	movlw	b'00100000'						; 2.048 Volt Vref+ -> 1 LSB = 500 µV
-	movwf	ADCON1
+	movwf	ADCON1							; ...
 	movlw	b'00011001'						; power on ADC, select AN6
-	rcall	wait_adc
-
+	rcall	wait_adc						; take measurement
 	MOVII	ADRESL,batt_voltage				; store value
 	bcf		ADCON0,0						; power off ADC
 
@@ -130,7 +131,7 @@ get_battery_voltage_2:						; no gauge IC available, use ADC to measure battery 
 	movff	WREG,battery_gauge+5			;     - into battery gauge registers
 
 get_battery_voltage_3:						; 3.6V battery gauge mode
-	; SMOVFF "by hand" as the macro does not work with arguments that have a '+something' with them
+	; SMOVQQ "by hand" as the macro does not work with arguments that have a '+something' with them
 	bcf		trigger_isr_updates				; clear flag, it will be set by the ISR in case it had kicked in
 	movff	battery_gauge+5,xC+3
 	movff	battery_gauge+4,xC+2
@@ -200,7 +201,18 @@ get_battery_voltage_8:
 	btfsc	battery_is_36v					; using a 3.6 volt battery?
 	movff	lo,batt_percent					; YES - take new value (always use computed value for 3.6V battery)
 	bcf		adc_is_running					; done with ADC
-	return
+	;bra	get_battery_voltage_low			; check for battery low condition (and return)
+
+get_battery_voltage_low:
+	; check for battery low condition
+	movlw	battery_warn_level_36+1			; get threshold for 3.6 Volt battery warning, incremented by 1
+	btfss	battery_is_36v					; actually a 3.6 Volt battery detected?
+	movlw	battery_warn_level_15+1			; NO - replace with 1.5 Volt battery warning, incremented by 1
+	bsf		battery_low_condition			; set battery low condition by default
+	cpfslt	batt_percent					; current battery level <= warning threshold ?
+	bcf		battery_low_condition			; NO  - clear battery low condition
+	return									;     - done
+
 
 get_battery_voltage_9:
 	; use 1.5V battery voltage mode
@@ -496,12 +508,12 @@ get_analog_switches_1:
 	btfsc	adc_is_running					; ADC in use?
 	return									; YES - abort
 	btfsc	cc_active						; NO  - charging?
-	bra	get_analog_switches0					;       YES - abort (And clear both flags)
+	bra		get_analog_switches0			;       YES - abort (and clear both flags)
 	;bra	get_analog_switches_2			;       NO  - read switches
 
 get_analog_switches_2:
-	bsf	adc_is_running
-	bcf	ADCON2,ADFM						; left justified
+	bsf		adc_is_running
+	bcf		ADCON2,ADFM						; left justified
 	clrf	ADCON1
 	movlw	b'00100101'						; power on ADC, select AN9
 	rcall	wait_adc
@@ -611,8 +623,8 @@ get_analog_switches_sw1_pressed:
 	bsf		analog_sw1_pressed				; set right button as pressed
 
 get_analog_switches_4:
-	bsf	ADCON2,ADFM						; restore to right justified
-	bcf	adc_is_running
+	bsf		ADCON2,ADFM						; restore to right justified
+	bcf		adc_is_running
 	banksel	common							; back to bank common
 	btfsc	analog_sw1_pressed				; right button pressed?
 	return									; YES - done

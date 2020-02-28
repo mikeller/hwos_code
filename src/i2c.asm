@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File i2c.asm                              combined next generation V3.03.5
+;   File i2c.asm                              combined next generation V3.08.8
 ;
 ;   I2C Interface
 ;
@@ -49,6 +49,7 @@
 #include "wait.inc"
 #include "math.inc"
 #include "external_flash.inc"
+#include "eeprom_rs232.inc"
 
 
 i2c	CODE
@@ -569,7 +570,7 @@ I2C_init_compass0:
 	rcall		WaitMSSP
 	
 	; accelerometer
-	rcall	I2C_sleep_accelerometer0		; registers can only be changed in standby mode
+	rcall	I2C_sleep_accelerometer0	; registers can only be changed in standby mode
 
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
@@ -691,50 +692,50 @@ I2C_init_compass2:
 
 I2C_init_compass3:
 	; magnetic
-	bsf		SSP1CON2,SEN	; Start condition
+	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP
-	movlw	0x3C            ; address
-	rcall       I2C_TX
-	movlw	0xA0		; 0x20 with auto-increment (MSB=1)
-	rcall       I2C_TX
-	movlw	b'01110000'	; CTRL_REG1_M (10Hz) 0x20
-	rcall       I2C_TX
-	movlw	b'01100000'	; CTRL_REG2_M (Full-scale: +/- 16gauss) 0x21
-	rcall       I2C_TX
-	movlw	b'01000000'	; CTRL_REG3_M (Continuous) 0x22
-	rcall       I2C_TX
-	movlw	b'00000000'	; CTRL_REG4_M (Z in Low-power mode) 0x23
-	rcall       I2C_TX
-	movlw	b'00000000'	; CTRL_REG5_M 0x24
-	rcall       I2C_TX
-	movlw	b'00000000'	; CTRL_REG5_M 0x24
-	rcall       I2C_TX
-	bsf		SSP1CON2,PEN	; Stop condition
+	movlw	0x3C						; address
+	rcall	I2C_TX
+	movlw	0xA0						; 0x20 with auto-increment (MSB=1)
+	rcall	I2C_TX
+	movlw	b'01110000'					; CTRL_REG1_M (10Hz) 0x20
+	rcall	I2C_TX
+	movlw	b'01100000'					; CTRL_REG2_M (Full-scale: +/- 16gauss) 0x21
+	rcall	I2C_TX
+	movlw	b'01000000'					; CTRL_REG3_M (Continuous) 0x22
+	rcall	I2C_TX
+	movlw	b'00000000'					; CTRL_REG4_M (Z in Low-power mode) 0x23
+	rcall	I2C_TX
+	movlw	b'00000000'					; CTRL_REG5_M 0x24
+	rcall	I2C_TX
+	movlw	b'00000000'					; CTRL_REG5_M 0x24
+	rcall	I2C_TX
+	bsf		SSP1CON2,PEN				; Stop condition
 	rcall	WaitMSSP
-	
+
 	;accelerometer
-	bsf	SSP1CON2,SEN		; Start condition
-        rcall	WaitMSSP
-	movlw	0x3A            ; address
+	bsf	SSP1CON2,SEN					; start condition
+	rcall	WaitMSSP
+	movlw	0x3A						; address
 	rcall	I2C_TX
 	movlw	0x20
-	rcall   I2C_TX
-	movlw	b'10010111'	; CTRL_REG1_A (100Hz, x,y,z = ON, BDU=OFF) 0x20
-	rcall   I2C_TX
-	movlw	b'00000000'	; CTRL_REG2_A 0x21
-	rcall   I2C_TX
-	movlw	b'00000000'	; CTRL_REG3_A 0x22
-	rcall   I2C_TX
-        movlw	b'11001100'	; CTRL_REG4_A 0x23
-        rcall       I2C_TX
-	bsf	SSP1CON2,PEN		; Stop condition
-	bra	WaitMSSP	; (And return)
+	rcall	I2C_TX
+	movlw	b'10010111'					; CTRL_REG1_A (100Hz, x,y,z = ON, BDU=OFF) 0x20
+	rcall	I2C_TX
+	movlw	b'00000000'					; CTRL_REG2_A 0x21
+	rcall	I2C_TX
+	movlw	b'00000000'					; CTRL_REG3_A 0x22
+	rcall	I2C_TX
+	movlw	b'11001100'					; CTRL_REG4_A 0x23
+	rcall	I2C_TX
+	bsf	SSP1CON2,PEN					; stop condition
+	bra	WaitMSSP						; (and return)
 
 
 	global	I2C_sleep_compass
 I2C_sleep_compass:
 	btfss	compass_enabled				; compass active?
-	return						; NO - return
+	return								; NO - return
 	bcf		compass_enabled
 	btfsc	compass_type3				; compass 3 ?
 	bra		I2C_sleep_compass3			; YES
@@ -760,7 +761,7 @@ I2C_sleep_compass0:
 	rcall	I2C_TX
 	bsf		SSP1CON2,PEN				; stop condition
 	rcall	WaitMSSP
-	
+
 I2C_sleep_accelerometer0:   ;(needed)
 	; accelerometer
 	bsf		SSP1CON2,SEN				; start condition
@@ -794,8 +795,8 @@ I2C_sleep_compass1:
 	movlw	b'00000010'					; data for CTRL_REG7: magnetic sensor power-down mode
 	rcall	I2C_TX
 	bsf		SSP1CON2,PEN				; stop condition
-	bra 	WaitMSSP					; (And return) - no I2C_sleep_accelerometer1 required (sleeps with magnetic sensor)
-	
+	bra		WaitMSSP					; (And return) - no I2C_sleep_accelerometer1 required (sleeps with magnetic sensor)
+
 
 I2C_sleep_compass2:
 	; magnetic
@@ -853,7 +854,7 @@ I2C_sleep_compass3:
 	movlw	b'00000000'					; CTRL_REG1_A (100Hz, x,y,z = OFF) 0x20
 	rcall	I2C_TX
 	bsf		SSP1CON2,PEN				; stop condition
-	bra	WaitMSSP					; ... and return
+	bra		WaitMSSP					; ... and return
 
 WaitMSSP:
 	decfsz	i2c_temp1,F					; check for timeout during I2C action
@@ -1076,7 +1077,7 @@ lt2942_get_accumulated_charge:			; read accumulated charge and compute percent
 	movlw	.100						; max. value is  100 %
 	cpfslt	batt_percent				; batt_percent < 100 % ?
 	movwf	batt_percent				; NO  - limit to 100 %
-	return
+	return								; done
 
 lt2942_set_to_zero_percent:
 	clrf	i2c_temp1
@@ -1126,6 +1127,28 @@ I2C_RX_GAUGE:
 	rcall	I2C_WaitforACK
 	bsf		SSP1CON2,RCEN				; enable receive mode
 	bra		WaitMSSP					; ... and return
+
+
+	global	reset_battery_gauge_and_lt2942	; called from comm and menu tree
+reset_battery_gauge_and_lt2942:				; reset battery gauge chip and battery registers
+	btfsc	battery_gauge_available			; battery gauge chip available?
+	call	lt2942_charge_done				; YES - reset meter to 0xFFFF
+	;bra	reset_battery_gauge				; continue resetting gauge registers
+
+	global	reset_battery_gauge
+reset_battery_gauge:						; reset gauge registers
+	bsf		block_battery_gauge				; suspend ISR from accessing the battery registers
+	movlw	.100							; set battery level to 100%
+	movwf	batt_percent					; ...
+	banksel	battery_gauge					; select bank ISR data
+	clrf	battery_gauge+0					; null the battery registers
+	clrf	battery_gauge+1					; ...
+	clrf	battery_gauge+2					; ...
+	clrf	battery_gauge+3					; ...
+	clrf	battery_gauge+4					; ...
+	clrf	battery_gauge+5					; ...
+	banksel	common							; back to bank common
+	goto	eeprom_battery_gauge_write		; update battery registers in EEPROM, unblock ISR and return
 
 
 ;=============================================================================

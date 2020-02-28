@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File customview.inc                       combined next generation V3.03.2
+;   File customview.inc                       combined next generation V3.08.6
 ;
 ;   Customview for divemode and surfacemode
 ;
@@ -10,9 +10,11 @@
 ;   2011-08-10 : [mH] Import into hwOS sources
 
 ; Dive mode
-	extern	dive_customview_mask
 	extern	dive_customview_second
+	extern	dive_customview_show
+	extern	dive_customview_recall
 	extern	dive_customview_toggle
+	extern	dive_customview_callup
 
 	extern	menuview_toggle
 	extern	menuview_toggle_reset
