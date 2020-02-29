@@ -22,23 +22,10 @@ Change Note hwos TECH Firmware 3.08
   decluttered. All settings are now sorted into the groups dive setup,
   deco setup, SAC (gas needs) setup, ppO2 setup and stops & depths setup.
 
-- There is a new option "Swap on empty" in Dive Setup -> SAC Setup.
-  It is only effective if "CalcGas(B/O)" is switched on, too. If both
-  options are switched on, the deco calculation will switch to another
-  tank (i.e. gas) once the tank of the current gas is calculated to be
-  used up.
-  This function can be used to automatically calculate a contingency in
-  case of running out of a deco gas, as the deco calculation will then
-  continue to calculate a deco making use of the spares from the another
-  gases carried. Another application is with two or more tanks holding
-  the same gas (i.e. independent double configuration, side-mount), as
-  the calculations will then take the cumulative amount of gas carried
-  into account before raising a gas needs attention or alarm.
-
 - Fixed the urge of the better gas hint to always favor one specific gas
   out of a set of two or more gases that have the same change depth.
 
-- For dives done on firmware >= 3.08 the logbook will have one more page
+- For dives done on firmware >= 3.09 the logbook will have one more page
   showing the tissue pressures and supersaturation levels as of at the
   end of dive (i.e. when surfacing).
 
