@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft_outputs.asm                      next combined generation V3.08.7
+;   File tft_outputs.asm                      next combined generation V3.09.1 fix
 ;
 ;   high-level Display Outputs
 ;
@@ -1043,11 +1043,7 @@ TFT_display_tts_clear:					; clear remains from TTS > 99
 TFT_show_ndl:
 	btfsc	dive_main_menu				; is the dive mode menu shown?
 	return								; YES - abort
-	call	TFT_memo_color				; NO  - set color
-	movff	int_O_NDL_norm+1,lo			;     - get high byte of NDL time in normal plan
-	btfsc	lo,int_invalid_flag			;     - is the invalid flag set?
-	call	TFT_disabled_color			;       YES - switch to disabled color
-	movff	int_O_NDL_norm+0,lo			;     - get low byte of NDL time in normal plan
+	movff	int_O_NDL_norm+0,lo			; NO  - get low byte of NDL time in normal plan
 	btfsc	deco_locked					;     - was the dive in deco?
 	bra		TFT_show_ndl_norm			;       YES - use normal layout
 	btfsc	alt_layout_active			;       NO  - alternative layout active?
@@ -1056,6 +1052,7 @@ TFT_show_ndl:
 
 TFT_show_ndl_norm:						; set position
 	WIN_MEDIUM dm_ndl_value_col_norm,dm_ndl_value_row_norm
+	rcall	TFT_show_ndl_set_color		; set color
 	output_8							; display 0...240
 TFT_show_ndl_exit_1:
 	STRCAT_PRINT "'"					; print minutes symbol
@@ -1068,15 +1065,23 @@ TFT_show_ndl_alt:
 										; clear potential remains from NDL normal and set position
 	WIN_BOX_BLACK dm_ndl_value_row_norm, dm_3rdrow_bot, dm_ndl_value_col_norm, dm_ndl_value_col_alt ; top, bottom, left, right
 	WIN_LARGE dm_ndl_value_col_alt, dm_ndl_value_row_alt
+	rcall	TFT_show_ndl_set_color		; set color
 	output_99							; display 0...99
 	STRCAT_PRINT ""						; finalize output
 	bra		TFT_show_ndl_exit_2			; done
 
 TFT_show_ndl_alt_safety:
 	WIN_MEDIUM dm_ndl_value_col_norm,dm_ndl_value_row_norm
+	rcall	TFT_show_ndl_set_color		; set color
 	PUTC	" "							; fill first digit position
 	output_99							; display 0...99
 	bra		TFT_show_ndl_exit_1			; print minutes symbol and done
+
+TFT_show_ndl_set_color:
+	movff	int_O_NDL_norm+1,lo			; get high byte of NDL time in normal plan
+	btfss	lo,int_invalid_flag			; is the invalid flag set?
+	goto	TFT_memo_color				; NO  - select memo     color and return
+	goto	TFT_disabled_color			; YES - select disabled color and return
 
 
 	global	TFT_divemode_sign_show

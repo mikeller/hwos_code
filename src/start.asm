@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File start.asm                            combined next generation V3.08.8
+;   File start.asm                            combined next generation V3.09.1 fix
 ;
 ;   Startup subroutines
 ;
@@ -282,11 +282,6 @@ restart:
 	clrf	CVT_flags1						; convert and display functions
 	clrf	CVT_flags2						; convert and display functions
 
-	; check if option values have changed and thus if the EEPROM needs to be updated
-	btfsc	options_changed					; do the options need to be stored to EEPROM ?
-	call	option_check_and_store_all		; YES - check and store all option values in EEPROM
-	bcf		options_changed					; clear flag
-
 	; configure the OSTC model descriptor (stored in HW_descriptor)
 	bcf		tft_power						; inverted, here needed for I2C_probe_OSTC_rx, to wake-up RX circuity
 	bsf		ambient_sensor					; set ambient light sensor as available by default
@@ -432,6 +427,11 @@ restart5:
 
 	btfsc	use_old_batt_flag				; shall reload last battery data?
 	call	get_battery_data				; YES - get last battery data
+
+	; check if option values have changed and thus if the EEPROM needs to be updated
+	btfsc	options_changed					; do the options need to be stored to EEPROM ?
+	call	option_check_and_store_all		; YES - check and store all option values in EEPROM
+	bcf		options_changed					; clear flag
 
 	; set screen orientation
 	bcf		flip_screen						; set default screen orientation

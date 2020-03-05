@@ -1,4 +1,3 @@
-
 Performance Measurement
 -----------------------
 
@@ -7,7 +6,7 @@ When compiled in, the dive mode screen shows 5 performance data values:
 AAAA.BBB.CC.DD.EE
 
 AAAA: Relative runtime of the last deco engine invocation, in ms,
-      signed value: positive numbers: longer than target
+      signed value: positive numbers: overrun on target runtime
                     negative numbers: unused time budget
 
 BBB:  longest runtime found, in ms
@@ -16,25 +15,23 @@ CC:   Calculation phase in which the longest runtime occurred, see table below
 
 DD:   Number of deco engine invocations required to complete the last normal plan
 
-EE:   as above, but for alternative plan
+EE:   as above, but for alternative plan (cave return or CCR bailout or OC fTTS plan)
 
 
 Calculation Phases
 ------------------------------------------------------------------------------------------------------
 
-PHASE_00_DONE					00	calculation cycle finished
-PHASE_10_DIVE_INIT				10	once-per-dive    initialization of the deco engine
-PHASE_11_CYCLIC_INIT			11	once-every-cycle initialization of the deco engine
-PHASE_20_EXTENDED_BOTTOM_TIME	20	calculate extended bottom time
-PHASE_30_NDL_TIME				30	calculate NDL time
-PHASE_40_CAVE_ASCENT			40	calculate cave mode return/ascent
-PHASE_50_INITIAL_ASCENT			50	calculate initial ascent
-PHASE_60_DECO_STOPS				60	calculate deco stops
-PHASE_70_RESULTS				70	results - initialization
-PHASE_71_RESULTS_STOPS_TABLE	71	results - publish stops table
-PHASE_72_RESULTS_NDL			72	results - publish data / within NDL
-PHASE_73_RESULTS_DECO			73	results - publish data / in deco
-PHASE_80_GAS_NEEDS_SWITCHES		80	calculate gas needs - find gas switches in NDL bailout mode
-PHASE_81_GAS_NEEDS_ASCENT		81	calculate gas needs - needs of bottom segment and ascent
-PHASE_82_GAS_NEEDS_PRESSURES	82	calculate gas needs - conversion from volumes to pressures
-PHASE_90_FINISH					90	finish calculation cycle
+PHASE_00_DONE					0x00	// calculation cycle finished
+PHASE_10_DIVE_INIT				0x10	// once-per-dive    initialization of the deco engine
+PHASE_20_CYCLIC_INIT			0x20	// once-every-cycle initialization of the deco engine
+PHASE_30_EXTENDED_BOTTOM_TIME	0x30	// calculate extended bottom time
+PHASE_40_BOTTOM_GAS_NEED		0x40	// calculate gas needs for bottom segment
+PHASE_50_NDL_TIME				0x50	// calculate NDL time
+PHASE_70_ASCENT					0x70	// calculate ascent
+PHASE_80_RESULTS				0x80	// results - initialization
+PHASE_81_RESULTS_STOPS_TABLE	0x81	// results - publish stops table
+PHASE_82_RESULTS_NDL			0x82	// results - publish data / within NDL
+PHASE_83_RESULTS_DECO			0x83	// results - publish data / in deco
+PHASE_84_GAS_NEEDS_PRESSURES	0x84	// results - convert gas needs from volumes to pressures
+PHASE_85_GAS_NEEDS_CAVE			0x85	// results - tag gas needs as calculated in cave or open water mode
+PHASE_90_FINISH					0x90	// finish calculation cycle

@@ -174,19 +174,34 @@ ext_flash_write_block_stop:
 	global	ext_flash_write_range
 ext_flash_write_range:
 	movwf	eeprom_loop						; load loop counter (eeprom variable used here)
+
+;	btfsc	flash_block_write				; does the FLASH support block-write?
+;	bra		ext_flash_write_range_block		; YES - write date via block operation
+;	;bra	ext_flash_write_range_seq		; NO  - write data via sequential single writes
+
+ext_flash_write_range_seq:					; sequential write
+ext_flash_write_range_loop_s:
+	movff	POSTINC1,ext_flash_rw			; read  byte from     memory     to  ext_flash_rw
+	rcall	ext_flash_byte_write			; write byte from  ext_flash_rw  to     FLASH
+	rcall	incf_ext_flash_address_p1_0x40	; increase address with wrap-around at 0x400000
+	decfsz	eeprom_loop,F					; decrement loop counter, all done?
+	bra		ext_flash_write_range_loop_s	; NO  - continue loop
+	return									; YES - done
+
+ext_flash_write_range_block:				; block write
 	movff	POSTINC1,ext_flash_rw			; read  first byte from memory
 	rcall	ext_flash_write_block_start		; write first byte to FLASH
 	bra		ext_flash_write_range_loop_start; jump into loop
-ext_flash_write_range_loop:
+ext_flash_write_range_loop_b:
 	movff	POSTINC1,ext_flash_rw			; read  next byte from memory
 	rcall	ext_flash_write_block			; write next byte to FLASH
 ext_flash_write_range_loop_start:
 	decfsz	eeprom_loop,F					; decrement loop counter, all done?
-	bra		ext_flash_write_range_loop		; NO  - continue loop
+	bra		ext_flash_write_range_loop_b	; NO  - continue loop
 	bra		ext_flash_write_block_stop		; YES - end writing to flash (and return)
 
 ; ----------------------------------------------------------------------------
-
+	
 ;	global	write_byte_ext_flash_plus_header
 ; write_byte_ext_flash_plus_header:
 ;	movwf	ext_flash_rw					; store byte to write
