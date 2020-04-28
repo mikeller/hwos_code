@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File rtc.asm                              combined next generation V3.08.8
+;   File rtc.asm                            * combined next generation V3.09.4k
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -10,11 +10,17 @@
 
 #include "hwos.inc"
 #include "math.inc"
+#include "convert.inc"
 
-rtc		CODE
 
 ;=============================================================================
+rtc1	CODE
+;=============================================================================
 
+
+;-----------------------------------------------------------------------------
+; Initialize RTC to Firmware creation Date
+;
 	global	rtc_init
 rtc_init:
 	banksel	isr_backup				; select bank ISR data
@@ -32,6 +38,10 @@ rtc_init:
 	movwf	rtc_latched_year		; ...
 	;bra	rtc_set_rtc				; set the real time clock
 
+
+;-----------------------------------------------------------------------------
+; Set new Time & Date
+;
 	global	rtc_set_rtc
 rtc_set_rtc:
 	banksel	isr_backup				; select bank ISR data
@@ -105,14 +115,17 @@ rtc_set_rtc:
 	return							; done
 
 
+;-----------------------------------------------------------------------------
+; Helper Function - convert from decimal to BCD
+;
 rtc_dec2bcd:
 	banksel	common					; switch to bank common
 	movwf	lo						; input in decimal
 	setf	hi						; 10s
 rtc_dec2bcd2:
 	incf	hi,F					; count 10's
-	movlw	d'10'
-	subwf	lo,F
+	movlw	d'10'					; ...
+	subwf	lo,F					; ...
 	btfss	STATUS,N				; result negative?
 	bra		rtc_dec2bcd2			; NO  - loop
 	movlw	d'10'					; YES - 
@@ -123,8 +136,13 @@ rtc_dec2bcd2:
 	return							;     - done
 
 
+;-----------------------------------------------------------------------------
+; Helper Function - check Validity of Day according to Month
+;
 ; wrap-around the month depending on the number of days per month
+;
 ; Attention: needs to be called in bank isr_backup!
+;
 rtc_check_day:
 	movlw	.28						; the default February has 28 days
 	btfsc	rtc_latched_year,0		; is the year an even year?
@@ -165,9 +183,16 @@ rtc_check_day_1:
 	retlw	.0						;     - done, signal a correction was made
 
 
-; Add minutes in mpr:2 to the time/date in in rtc_latched and rounds up/down to next full minute
+;=============================================================================
+rtc2	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Add minutes in mpr:2 to the time/date in in rtc_latched and rounds up/down
+; to next full minute
 ;
-; Attention: This code works for a maximum of 1439 minutes to add (23 hours, 59 minutes)!
+; Attention:
+; This code works for a maximum of 1439 minutes to add (23 hours, 59 minutes)!
 ;
 	global	rtc_add_minutes
 rtc_add_minutes:
@@ -198,7 +223,7 @@ rtc_add_minutes_1:
 rtc_add_minutes_2:
 	clrf	WREG					; create a zero
 	addwfc	rtc_latched_day,F		; add the carry bit
-	rcall	rtc_check_day			; check & correct the resulting day with respect to #days in month
+	call	rtc_check_day			; check & correct the resulting day with respect to #days in month
 	tstfsz	WREG					; was the day beyond the last day of the month before correction?
 	bra		rtc_add_minutes_3		; NO  - done
 	banksel	isr_backup				; YES - select bank isr_backup again

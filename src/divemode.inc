@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File divemode.inc                         combined next generation V3.08.5
+;   File divemode.inc                       * combined next generation V3.09.4g
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -8,8 +8,9 @@
 ; HISTORY
 ;  2011-08-15 : [mH] moving from OSTC code
 
-	extern	set_dive_modes
+
 	extern	diveloop
+	extern	check_dive_modes_surf
 	extern	apnoe_calc_maxdepth
 	extern	check_gas_best
 	extern	setup_gas_registers
@@ -29,17 +30,24 @@
 ; row    = 0...239
 ; column = 0...159 (x2)
 
+
 ; Divemode has multiple layouts but basicly splits the screen into 3 rows:
 ;   - upper  content row: depth, max depth, dive time, etc.
 ;   - custom content row: selectable views
 ;   - bottom content row: temp, gas, ndl, tts, etc.
 
+
+;-----------------------------------------------------------------------------
 ; I. The upper content row (0-99)
+;-----------------------------------------------------------------------------
+
 ;    The top row is divided in 2 areas:
 ;    - header : holds the titles (mask)
 ;    - content: holds the values
 
-;******* upper content / header row *******
+
+;-----------------------------------------------------------------------------
+; Upper Content / Header Row
 
 #DEFINE dm_mask_depth_row						.0
 #DEFINE dm_mask_depth_column					.2
@@ -58,9 +66,11 @@
 ;   - max depth and warning messages
 ;   - dive time, apnea dive times and warning icon
 
-;******* upper content / content row / 1st col *******
 
-; GLOBAL
+;-----------------------------------------------------------------------------
+; Upper Content / Content Row / 1st Column
+
+; Global
 #DEFINE dm_offset								.14								;  14  start of content row
 
 ; Depth - full meters or feet
@@ -87,17 +97,18 @@
 
 ; ascend/descend rate - graphical display
 #DEFINE dm_velocity_graph_top					dm_offset+.10					;  24
-#DEFINE dm_velocity_graph_lft					dm_depth_rgt_large+.3			;  61		+2 / 61
+#DEFINE dm_velocity_graph_lft					dm_depth_rgt_large+.3			;  61
 #DEFINE dm_velocity_graph_bot					dm_velocity_graph_top+.70		;  94
-#DEFINE dm_velocity_graph_rgt					dm_upcnt_2ndcol-.3				;  72		-2 / 72
-#DEFINE dm_velocity_graph_width					.10								;  12		12
+#DEFINE dm_velocity_graph_rgt					dm_upcnt_2ndcol-.3				;  72
+#DEFINE dm_velocity_graph_width					.10								;  12
 
 
-;******* upper content / content row / 2nd col *******
+;-----------------------------------------------------------------------------
+; Upper Content / Content Row / 2nd Column
 
 ; Start column
-#DEFINE dm_upcnt_2ndcol							.74								;  74 - with vertical speed indicator enabled
-#DEFINE dm_upcnt_2ndcol_nvsi					.64								;  64 - with vertical speed indicator disabled
+#DEFINE dm_upcnt_2ndcol							.74								;  74 (vertical speed indicator  enabled)
+#DEFINE dm_upcnt_2ndcol_nvsi					.64								;  64 (vertical speed indicator disabled)
 
 ; max depth
 #DEFINE dm_max_depth_row						dm_offset						;  14
@@ -114,7 +125,7 @@
 
 ; Warning area (combined)
 #DEFINE dm_warning_row							dm_offset+.36					;  50
-#DEFINE dm_warning_column						dm_upcnt_2ndcol+.23				;  97	ex +.0
+#DEFINE dm_warning_column						dm_upcnt_2ndcol+.23				;  97
 #DEFINE dm_warning_bot							dm_warning_row+.49				;  99
 #DEFINE dm_warning_rgt							dm_warning_column+.62			; 136
 #DEFINE dm_warning_length						.9								;      total string length in number of characters
@@ -132,7 +143,8 @@
 #DEFINE dm_warning2_rgt							dm_warning_rgt					; 136
 
 
-;******* upper content / content row / 3rd col *******
+;-----------------------------------------------------------------------------
+; Upper Content / Content Row / 3rd Column
 
 ; Dive time
 #DEFINE dm_divetime_row							dm_offset						;  14
@@ -170,17 +182,22 @@
 #DEFINE dm_total_apnoe_text_row					dm_apnoe_total_divetime_row-.11	;  53
 #DEFINE dm_total_apnoe_text_col					.132							; 132
 
-; I. end of the upper content row. (0-99)
+
+;-----------------------------------------------------------------------------
+; End of the Upper Content Row (0-99)
 
 ; 1px space between the 1st and 2nd content rows
 #DEFINE dm_sep_1_2_row							dm_offset+.86					; 100
 
 
+;-----------------------------------------------------------------------------
 ; II. custom/selectable content row
+;-----------------------------------------------------------------------------
 
 ;   The custom view display area is: 101,163,0,159 (t,b,l,r), or 0,101->159,163
 
-;******* Custom View: Global *******
+;-----------------------------------------------------------------------------
+; Custom View: Global
 
 #DEFINE dm_customview_row						dm_offset+.87					; 101
 #DEFINE dm_customview_column					.0								;   0
@@ -188,7 +205,8 @@
 #DEFINE dm_customview_rgt						.159							; 159
 
 
-;******* Custom View: Avg depth, stopwatch and avg depth *******
+;-----------------------------------------------------------------------------
+; Custom View: avg Depth, Stopwatch and avg Depth
 
 #DEFINE dm_custom_avr_stop_title_row			dm_customview_row+.1			; 102
 #DEFINE dm_custom_avr_stop_row					dm_customview_row+.16			; 117
@@ -197,7 +215,8 @@
 #DEFINE dm_custom_avr_stop_column3				.118							; 118
 
 
-;******* Custom View: Decompressions stops *******
+;-----------------------------------------------------------------------------
+; Custom View: Decompressions Stops
 
 ; Title
 #DEFINE dm_custom_decoplan_title_row			dm_customview_row				; 101
@@ -222,7 +241,8 @@
 #DEFINE dm_cust_dstop_7th_stop_column			dm_cust_dstop_6th_stop_column	; 111
 
 
-;******* Custom View: Time, Battery, Surface Pressure *******
+;-----------------------------------------------------------------------------
+; Custom View: Time, Battery, Surface Pressure
 
 ; Clock
 #DEFINE dm_custom_clock_title_row				dm_customview_row+.1			; 102
@@ -231,8 +251,8 @@
 
 ; Battery
 #DEFINE dm_custom_battery_title_row				dm_customview_row+.1			; 102
-#DEFINE dm_custom_battery_volt_row				dm_customview_row+.16			; 117
-#DEFINE dm_custom_battery_percent_row			dm_custom_ead_row+.23			; 140
+#DEFINE dm_custom_battery_volt_row				dm_customview_row+.15			; 116
+#DEFINE dm_custom_battery_percent_row			dm_custom_ead_row+.21			; 138
 #DEFINE dm_custom_battery_column				.62								;  62
 
 ; Surface Pressure
@@ -241,7 +261,8 @@
 #DEFINE dm_custom_surfpres_column				.95								;  95
 
 
-;****** Custom View: ppO2, EAD/ENDS and CNS *******
+;-----------------------------------------------------------------------------
+; Custom View: ppO2, EAD/ENDS and CNS
 
 ; ppO2
 #DEFINE dm_custom_ppo2_title_row				dm_customview_row+.1			; 102
@@ -250,9 +271,9 @@
 
 ; EAD/END
 #DEFINE dm_custom_eadend_title_row				dm_customview_row+.1			; 102
-#DEFINE dm_custom_ead_row						dm_customview_row+.16			; 117
+#DEFINE dm_custom_ead_row						dm_customview_row+.14			; 115
 #DEFINE dm_custom_ead_column					.50								;  50
-#DEFINE dm_custom_end_row						dm_custom_ead_row+.23			; 140
+#DEFINE dm_custom_end_row						dm_custom_ead_row+.21			; 138
 #DEFINE dm_custom_end_column					dm_custom_ead_column			;  50
 
 ; CNS
@@ -261,7 +282,8 @@
 #DEFINE dm_custom_cns_column					.115							; 115
 
 
-;****** Custom View: tripple CNS *******
+;-----------------------------------------------------------------------------
+; Custom View: tripple CNS
 
 #DEFINE dm_custom_cns3_title_row				dm_customview_row+.1			; 102
 #DEFINE dm_custom_cns3_row						dm_customview_row+.16			; 117
@@ -270,7 +292,8 @@
 #DEFINE dm_custom_cns3_column3					.115							; 115
 
 
-;****** Custom View: Ceiling, Tissues, (current GF)
+;-----------------------------------------------------------------------------
+; Custom View: Ceiling, Tissues, (current GF)
 
 ; Ceiling
 #DEFINE dm_custom_ceiling_title_row				dm_customview_row+.1			; 102
@@ -294,7 +317,8 @@
 #DEFINE dm_custom_tissue_diagram_frame_spacing	.8								;   8
 
 
-;******* Custom View: GF-lo/hi, aGF-lo/hi, current GF value *******
+;-----------------------------------------------------------------------------
+; Custom View: GF-lo/hi, aGF-lo/hi, current GF Value
 
 ; Title
 #DEFINE dm_custom_gf_title_row					dm_customview_row+.1			; 102
@@ -304,17 +328,18 @@
 #DEFINE dm_custom_gf_column3					.95								;  95
 
 
-;******* Custom View: Compass *******
+;-----------------------------------------------------------------------------
+; Custom View: Compass
 
 ; Title
 #DEFINE dm_custom_compass_mask_row				dm_customview_row				; 101
 #DEFINE dm_custom_compass_mask_column			.65								;  65
 
 ; Head and arrows
-#DEFINE dm_custom_compass_head_row				dm_customview_row+.39			; 140
+#DEFINE dm_custom_compass_head_row				dm_customview_row+.37			; 138
 #DEFINE dm_custom_compass_head_column			.62								;  62
 #DEFINE dm_custom_compass_ldir_column			.5								;   5
-#DEFINE dm_custom_compass_rdir_column			.140							; 140
+#DEFINE dm_custom_compass_rdir_column			.138							; 138
 
 ; Ruler
 #DEFINE dm_custom_compass_graph_row				dm_customview_row				; 101
@@ -328,7 +353,8 @@
 #DEFINE dm_custom_compass_tick_bot_bot			dm_custom_compass_graph_row+.33	; 134
 
 
-;******* Custom View: O2 Sensor Values *******
+;-----------------------------------------------------------------------------
+; Custom View: O2 Sensor Values
 
 #DEFINE dm_custom_hud_title_row					dm_customview_row+.1			; 102
 #DEFINE dm_custom_hud_row						dm_customview_row+.16			; 117
@@ -337,17 +363,19 @@
 #DEFINE dm_custom_hud_sensor3_column			.118							; 118
 
 
-;******* Custom View: Gas Needs *******
+;-----------------------------------------------------------------------------
+; Custom View: Gas Needs
 
 #DEFINE dm_custom_gas_mask_row					dm_customview_row				; 101
 #DEFINE dm_custom_gas_row1						dm_customview_row+.14			; 115
 #DEFINE dm_custom_gas_row2						dm_customview_row+.37			; 138
-#DEFINE dm_custom_gas_column_title				.29								;  29
+#DEFINE dm_custom_gas_column_title				.20								;  20
 #DEFINE dm_custom_gas_column1					.5								;   5
 #DEFINE dm_custom_gas_column2					.85								;  85
 
 
-; ******* Custom View: Tank Pressures *******
+;-----------------------------------------------------------------------------
+; Custom View: Tank Pressures
 
 #DEFINE dm_custom_tankdata_mask_row				dm_customview_row+.1			; 102
 #DEFINE dm_custom_tankdata_row					dm_customview_row+.16			; 117
@@ -356,7 +384,8 @@
 #DEFINE dm_custom_tankdata_SAC_col				.56								;  56
 
 
-;******* Custom View: Sensor Check *******
+;-----------------------------------------------------------------------------
+; Custom View: Sensor Check
 
 #DEFINE dm_custom_s_check_title_row				dm_customview_row+.1			; 102
 #DEFINE dm_custom_s_check_row					dm_customview_row+.18			; 119
@@ -365,7 +394,8 @@
 #DEFINE dm_custom_ppDil_column					.2								;   2
 
 
-;******* Custom View: pSCR Info *******
+;-----------------------------------------------------------------------------
+; Custom View: pSCR Info
 
 #DEFINE dm_custom_pscr_title_row				dm_customview_row+.1			; 102
 #DEFINE dm_custom_pscr_row						dm_customview_row+.18			; 119
@@ -373,7 +403,8 @@
 #DEFINE dm_custom_pscr_ratio_column				.105							; 105
 
 
-;******* Custom View: cave TTS *******
+;-----------------------------------------------------------------------------
+; Custom View: cave TTS
 
 #DEFINE dm_custom_cave_title_row				dm_customview_row+.1			; 102
 #DEFINE dm_custom_cave_title_column1			.2								;   2
@@ -386,15 +417,18 @@
 #DEFINE dm_custom_cave_data_column3				.114							; 114
 
 
-
-; II. end of the custom content row (101-163)
+;-----------------------------------------------------------------------------
+; End of the Custom Content Row (101-163)
 
 ; 1px space between the 2nd and 3rd content rows
 #DEFINE dm_sep_2_3_row							dm_offset+.150					; 164
 
 
+;-----------------------------------------------------------------------------
 ; III. The 3rd content row contains temperature, active gas, NDL/TTS time,
-; simulator menu, active/dil gas, decostop, Apnea surface time and max depth
+;      simulator menu, active/dil gas, decostop, Apnea surface time and max depth
+;-----------------------------------------------------------------------------
+
 ;  The content row contains 2 columns:
 ;   - temperature, gas names
 ;   - NDL/TTS, DecoStop
@@ -405,7 +439,8 @@
 #DEFINE dm_3rdrow_rgt							.159							; 159
 
 
-;******* Bottom content / 1st col *******
+;-----------------------------------------------------------------------------
+; Bottom Content / 1st Column
 
 ; Temperature
 #DEFINE dm_temp_row								dm_3rdrow_top-.3				; 162
@@ -439,7 +474,9 @@
 #DEFINE dm_sign_bot_alt							dm_sign_row_alt+.38				; 231
 #DEFINE dm_sign_rgt_alt							dm_sign_col_alt+.22				;  74
 
-;******* Bottom content / 2nd col *******
+
+;-----------------------------------------------------------------------------
+; Bottom content / 2nd Column
 
 ; 1st Deco Stop
 #DEFINE dm_decostop_row_norm					dm_3rdrow_top					; 165
@@ -485,7 +522,8 @@
 #DEFINE dm_gassep_column						.78								;  78
 
 
-;******* Bottom content / Apnea mode *******
+;-----------------------------------------------------------------------------
+; Bottom Content / Apnea Mode
 
 #DEFINE dm_apnoe_last_max_depth_text_row		.192							; 192
 #DEFINE dm_apnoe_last_max_depth_text_col		.20								;  20
@@ -498,7 +536,9 @@
 #DEFINE dm_apnoe_surface_time_column			.80								;  80
 
 
-;******* Bottom content / Gauge mode *******
+;-----------------------------------------------------------------------------
+; Bottom content / Gauge mode
+
 #DEFINE dm_gauge_max_depth_text_row				.192
 #DEFINE dm_gauge_max_depth_text_col				.25
 #DEFINE dm_gauge_max_depth_row					.207
@@ -510,8 +550,9 @@
 #DEFINE dm_gauge_avg_depth_col					.85
 
 
-
-; IV. The last set of parameters is for the menus displayed in dive mode
+;-----------------------------------------------------------------------------
+; IV. The last set of parameters is for the menu displayed in dive mode
+;-----------------------------------------------------------------------------
 
 ; Divemode menu
 #DEFINE dm_menu_row								.164							; 164  upper row, the frame's top line is the separator

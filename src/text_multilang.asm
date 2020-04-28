@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File text_multilang.asm                    combined next generation V3.0.4
+;   File text_multilang.asm                 * combined next generation V3.09.4k
 ;
 ;   Implementation text in various selectable languages.
 ;
@@ -12,14 +12,34 @@
 #include "hwos.inc"
 #include "text_multilang.inc"
 
-; Because text are indexed by 12 bits values in FSR register, they can't
-; just be anywhere. It is safe to make them start at address 0xHHH000.
-texts	code	0x009000
+
+; Because multi-lingual texts are indexed using a FSR register and a FSR
+; register only holds 12 bit, the texts need to be aligned to a 4 kB block
+; in program memory. That is, they need to start at an address 0xXX000.
+
+
+
+; fast hack **ONLY** for **CHANGING** languages ( en / de / fr / it )
+
+#undefine _language_1
+#define   _language_1 fr
+;
+#undefine _language_2
+#define   _language_2 it
+
+
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; LANGUAGE 1
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 
 ;=============================================================================
+text_1_base	CODE 0x09000	;     ! DO NOT CHANGE !        *** Index Table ***
+;=============================================================================
+
 	global	text_1_base
 text_1_base:
-;---- PASS 1 : generate description block ------------------------------------
+
 tcode_idx	set		0
 LANG		set		0
 #define		TCODE	TCODE_1
@@ -49,7 +69,14 @@ LANG		set		0
 
 #undefine	TCODE
 
-;---- PASS 2 : generate text contents ----------------------------------------
+
+;=============================================================================
+text_1_text	CODE_PACK	;                                   *** Text Table ***
+;=============================================================================
+
+	global	text_1_text
+text_1_text:
+
 tcode_idx	set		0
 #define		TCODE	TCODE_2
 
@@ -73,13 +100,22 @@ tcode_idx	set		0
 
 #undefine	TCODE
 
-;=============================================================================
 
- IF _language_2!=none
+
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+; LANGUAGE 2
+;~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ IF _language_2 != none
+
+
+;=============================================================================
+text_2_base	CODE 0x09400	;     ! DO NOT CHANGE !        *** Index Table ***
+;=============================================================================
 
 	global	text_2_base
 text_2_base:
-;---- PASS 1 : generate description block ------------------------------------
+
 tcode_idx	set		0
 LANG		set		1
 #define		TCODE	TCODE_1
@@ -109,7 +145,14 @@ LANG		set		1
 
 #undefine	TCODE
 
-;---- PASS 2 : generate text contents ----------------------------------------
+
+;=============================================================================
+text_2_text	CODE_PACK	;                                   *** Text Table ***
+;=============================================================================
+
+	global	text_2_text
+text_2_text:
+
 tcode_idx	set		0
 #define	TCODE	TCODE_2
 
@@ -133,8 +176,8 @@ tcode_idx	set		0
 
 #undefine	TCODE
 
- ENDIF
+ ENDIF	; _language_2
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 
 	END

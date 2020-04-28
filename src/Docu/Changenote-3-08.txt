@@ -1,0 +1,66 @@
+Change Note hwos TECH Firmware 3.08
+====================================
+
+- Removed option 'ascent speed', ascent calculation is done with a fixed
+  speed of 10 meters/minute now (equals the ascent speed limit by Bühlmann).
+
+- Improved calculation accuracy of the initial ascent. Remark: this will
+  have a slight impact on the resulting deco schedule compared to firmware
+  3.07.
+
+- The deco calculator now figures in the salinity setting.
+
+- Aligned logbook and last dive summery of avg and max depth regarding
+  rounding and incorporation of salinity setting.
+
+- Done some fine-tuning of depth outputs when using imperial units (feet).
+
+- In dive mode, sometimes the temperature was not shown any more after a
+  gas change - fixed now.
+
+- The menu system around setting up the dive mode & settings has been
+  decluttered. All settings are now sorted into the groups dive setup,
+  deco setup, SAC (gas needs) setup, ppO2 setup and stops & depths setup.
+
+- There is a new option "Swap on empty" in Dive Setup -> SAC Setup.
+  It is only effective if "CalcGas(B/O)" is switched on, too. If both
+  options are switched on, the deco calculation will switch to another
+  tank (i.e. gas) once the tank of the current gas is calculated to be
+  used up.
+  This function can be used to automatically calculate a contingency in
+  case of running out of a deco gas, as the deco calculation will then
+  continue to calculate a deco making use of the spares from the another
+  gases carried. Another application is with two or more tanks holding
+  the same gas (i.e. independent double configuration, side-mount), as
+  the calculations will then take the cumulative amount of gas carried
+  into account before raising a gas needs attention or alarm.
+
+- Fixed the urge of the better gas hint to always favor one specific gas
+  out of a set of two or more gases that have the same change depth.
+
+- For dives done on firmware >= 3.08 the logbook will have one more page
+  showing the tissue pressures and supersaturation levels as of at the
+  end of dive (i.e. when surfacing).
+
+- As long as a gas or diluent is currently selected as breathed, it can
+  not be set into the lost state any more.
+
+- When changing the battery or doing a cold start, the current CNS value
+  does not get lost any more.
+
+- During loading of a new firmware the clock will not loose time any more
+  (on old firmware it became late by about 15 sec on each firmware update).
+
+- When run from a 3.6 V battery (either replaceable or built-in), the
+  surface mode timeout is now extended to 4 minutes before going to sleep
+  mode. If the OSTC is run from 1.5 V disposables, the timeout remains at
+  the previous 90 seconds to save on battery runtime.
+
+- Internal improvement: the code for the internal storage system and for
+  the communication system (firmware uploading, dive data downloading)
+  has been re-factored to secure maintainability for the next years to come.
+
+- Internal improvement: the scheduler for the dive mode calculation plans
+  (fTTS, bailout) has been completely rewritten for better maintainability.
+
+- Brand new feature: Cave Mode. See supplemental manual for further details.

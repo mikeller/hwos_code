@@ -13,13 +13,23 @@
 
 ;=============================================================================
 
+
+	extern	wait_1s
+
+
+WAITS	macro	s_to_wait
+	movlw	s_to_wait+1
+	extern	WAITSX
+	call	WAITSX
+	endm
+
+
 WAITMS	macro	ms_to_wait
 	movlw	ms_to_wait
 	extern	WAITMSX
 	call	WAITMSX
 	endm
 
-	extern	wait_1s
 
 ; asm routines in hwos.asm
 	extern	request_speed_eco			; SPEED_ECO:      1 MHz

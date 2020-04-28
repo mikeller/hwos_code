@@ -1,5 +1,5 @@
 // ***************************************************************************
-// p2_deco.c                                  combined next generation V3.08.8
+// p2_deco.c                                  combined next generation V3.09.4
 //
 //  Created on: 12.05.2009
 //  Author: heinrichs weikamp, contributions by Ralph Lembcke and others
@@ -819,8 +819,9 @@ rom const float e10min[2*16] = {
 
 
 // p2deco code moved from 0x0D000 to 0x0C000 in v.108
+//             moved from 0x0C000 to 0x0B000 in v3.09
 #ifndef UNIX
-#	pragma code p2_deco = 0x0C000
+#	pragma code p2_deco = 0x0B000
 #endif
 
 
@@ -1926,7 +1927,7 @@ void calc_alveolar_pressures(void)
 		ppHe = 0.0;
 	}
 
-#ifdef _helium
+#ifdef _ccr_pscr
 	// calculating real tissues?
 	if( tissue_increment & TISSUE_SELECTOR )
 	{
@@ -1935,13 +1936,13 @@ void calc_alveolar_pressures(void)
 		// compute gas density of current mix in multiples of 0.01 grams per liter
 		int_O_gas_density = (unsigned int)( 17.9 * ppHe + 125.1 * ppN2 + 142.8 * ppO2 );
 
-		// convert gas density into a 8 bit integer
+		// convert gas density into an 8 bit integer, scaling 0.1 grams per liter
 		temp = (unsigned char)( (int_O_gas_density + 9) / 10 );
 
 		// limit to display max and set warning or attention flag
-		     if( temp > 99                      ) int_O_gas_density  = 999 | INT_FLAG_WARNING;
-		else if( temp > char_I_gas_density_warn ) int_O_gas_density |=       INT_FLAG_WARNING;
-		else if( temp > char_I_gas_density_att  ) int_O_gas_density |=       INT_FLAG_ATTENTION;
+		     if( temp >  99                      ) int_O_gas_density  = 999 | INT_FLAG_WARNING;
+		else if( temp >= char_I_gas_density_warn ) int_O_gas_density |=       INT_FLAG_WARNING;
+		else if( temp >= char_I_gas_density_att  ) int_O_gas_density |=       INT_FLAG_ATTENTION;
 	}
 #endif
 }

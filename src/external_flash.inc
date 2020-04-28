@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File external_flash.inc                   combined next generation V3.08.8
+;   File external_flash.inc                 * combined next generation V3.09.4e
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -14,29 +14,32 @@
 ; 0x000000 - 0x1FFFFF    2 MB dive profile data, shared ring buffer
 ; 0x200000 - 0x2FFFFF    1 MB dive header  data, last 256 dives, 4 kB / dive
 ; 0x300000 - 0x3DFFFF  896 kB unused
-; 0x3E0000 - 0x3DFFFF  120 kB firmware buffer
-; 0x3E0000 - 0x3FFFFF    8 kB unused
+; 0x3C0000 - 0x3DDFFF  120 kB backup firmware
+; 0x3DE000 - 0x3DFFFF    8 kb unused
+; 0x3E0000 - 0x3FDFFF  120 kB firmware buffer
+; 0x3FE000 - 0x3FFFFF    8 kB reserved for factory use
 
 
 ; Write: WREG -> FLASH with address increment and wrap-around at 0x200000
-	extern	write_byte_ext_flash_plus_prof		; with    increase of ext_flash_dive_counter
-	extern	write_byte_ext_flash_plus_nocnt		; without increase of ext_flash_dive_counter
-	extern	write_byte_ext_flash_plus_nodel		; without increase of ext_flash_dive_counter, without delete on entering new page
+	extern	ext_flash_write_byte_0x20_incdc		; with increment of ext_flash_dive_counter
+	extern	ext_flash_write_byte_0x20			; standard flash write
+	extern	ext_flash_write_byte_0x20_nodel		; without delete on entering new page
 
 
 ; Write: WREG -> FLASH with address increment and wrap-around at 0x400000
-	extern	write_byte_ext_flash_plus_comms		; without wait for use with fast comm (~86us fixed delay due to 115200 Bauds - use with caution)
+	extern	ext_flash_write_byte_0x40_nowait	; without wait for use with fast comm (~86us fixed delay due to 115200 Bauds - use with caution)
 
 
 ; Read: block-read FLASH -> WREG
 	extern	ext_flash_read_block_start			; initial    read of one  byte at ext_flash_address:3
 	extern	ext_flash_read_block_0x40			; subsequent read of next byte(s) with wrap-around at 0x400000
-	extern	ext_flash_read_block_0x20			; subsequent read of next byte(s) with wrap-around at 0x200000
+;	extern	ext_flash_read_block_0x20			; subsequent read of next byte(s) with wrap-around at 0x200000
 	extern	ext_flash_read_block_stop			; terminate  read
 
 
 ; Erase:
-	extern	ext_flash_erase_4kB					; erase one 4 kB sector @ext_flash_address:3
+	extern	ext_flash_erase_4kB					; erase   one 4kB block  starting at ext_flash_address:3
+	extern	ext_flash_erase_range				; erase #WREG 4kB blocks starting at ext_flash_address:3
 	extern	erase_complete_logbook				; erase complete logbook (FLASH and EEPROM)
 
 
@@ -44,6 +47,16 @@
 	extern	ext_flash_enable_protection			; enable  write protection
 	extern	ext_flash_disable_protection		; disable write protection
 
+; Misc
+	extern	ext_flash_read_jedec				; read JEDEC IDs
+	extern	ext_flash_inc_address_4kB			; increment address by 0x001000, no check for wrap-around
+
+
+ IFDEF _firmware_recovery
+; Firmware Copying
+	extern	copy_fw_active_to_backup			; copy active firmware code to backup storage
+	extern	copy_fw_backup_to_active			; copy backup firmware code to update storage
+ ENDIF
 
 
 ;-----------------------------------------------------------------------------
@@ -51,48 +64,61 @@
 ;-----------------------------------------------------------------------------
 
 
-; read 1 byte from FLASH to WREG with address auto-increment and wrap-around at 0x200000
+; read 1 byte from FLASH to WREG with address increment and wrap-around at 0x200000
 ;
 ; the byte read is also copied to ext_flash_rw
 ;
 FLASH_CW_READ_0x20	macro
-	extern	ext_flash_byte_read_plus_0x20
-	call	ext_flash_byte_read_plus_0x20
+	extern	ext_flash_read_byte_0x20
+	call	ext_flash_read_byte_0x20			; read from FLASH to WREG
 	endm
 
 
-; read 1 byte from FLASH to memory with address auto-increment and wrap-around at 0x200000
+; read 1 byte from FLASH to WREG with address increment and wrap-around at 0x400000
 ;
-; mem_address: address:2 containing target address in memory
+; the byte read is also copied to ext_flash_rw
+;
+FLASH_CW_READ_0x40	macro
+	extern	ext_flash_read_byte_0x40
+	call	ext_flash_read_byte_0x40			; read from FLASH to WREG
+	endm
+
+
+; read 1 byte from FLASH to memory with address increment and wrap-around at 0x200000
+;
+; mem_address: target address in memory, must be in current bank!
 ;
 FLASH_CC_READ_0x20	macro	mem_address
-	extern	ext_flash_byte_read_plus_0x20
-	call	ext_flash_byte_read_plus_0x20		; read from flash
-	movff	WREG,mem_address					; copy to   memory
+	extern	ext_flash_read_byte_0x20
+	call	ext_flash_read_byte_0x20			; read from FLASH to WREG
+	movwf	mem_address							; copy from WREG  to memory
 	endm
 
 
 ; read 2 bytes from FLASH to memory with address auto-increment and wrap-around at 0x200000
 ;
-; mem_address: address:2 containing start address in memory
+; mem_address: target address in memory, must be in current bank!
 ;
 FLASH_II_READ_0x20	macro	mem_address
-	extern	ext_flash_byte_read_plus_0x20
-	call	ext_flash_byte_read_plus_0x20		; read 1st byte from flash
-	movff	WREG,mem_address+0					; copy 1st byte to   memory
-	call	ext_flash_byte_read_plus_0x20		; read 2nd byte from flash
-	movff	WREG,mem_address+1					; copy 2nd byte to   memory
+	extern	ext_flash_read_byte_0x20
+	call	ext_flash_read_byte_0x20			; read 1st byte from FLASH to WREG
+	movwf	mem_address+0						; copy 1st byte from WREG  to memory
+	call	ext_flash_read_byte_0x20			; read 2nd byte from FLASH to WREG
+	movwf	mem_address+1						; copy 2nd byte from WREG  to memory
 	endm
 
 
-; read a range of data from FLASH to memory (destroys WREG, FSR1) - wraps around at 0x400000
-;                                                                 - increments ext_flash_address
-; flash_start : address:3 containing start address in flash
+; read a range of data from FLASH to memory (destroys WREG, FSR1)
+;
 ; memory_start: address:2 containing start address in memory
 ; range       : literal:1 giving the number of bytes to read (1-256)
 ;
-FLASH_RR_READ		macro	flash_start, memory_start, range
-	MOVTT	flash_start,ext_flash_address			; set start address in FLASH
+; Attention: function does NOT check for a wrap-around!
+;
+; -> flash_start is at ext_flash_address
+; -> ext_flash_address is NOT changed
+;
+FLASH_RR_READ		macro	memory_start, range
 	lfsr	FSR1,memory_start						; set start address in memory
 	movlw	low(range)								; set size of range to read
 	extern	ext_flash_read_range
@@ -100,18 +126,34 @@ FLASH_RR_READ		macro	flash_start, memory_start, range
 	endm
 
 
-; write a range of data from memory to FLASH (destroys WREG, FSR1) - Attention: range must fit into a 256 byte block!
-;                                                                  - does not increment ext_flash_address!
+; write a range of data from memory to FLASH (destroys WREG, FSR1)
+;
 ; memory_start: address:2 containing start address in memory
-; flash_start : address:3 containing start address in flash
 ; range       : literal:1 giving the number of bytes to write (1-256)
 ;
-FLASH_RR_WRITE		macro	memory_start, flash_start, range
+; Attention: low(ext_flash_address) + range must be <= 256 !
+;
+; -> flash_start is at ext_flash_address
+; -> old flash chip: ext_flash_address is incremented according to range parameter
+; -> new flash chip: ext_flash_address is set to start of next 256 byte block
+;
+FLASH_RR_WRITE		macro	memory_start, range
 	lfsr	FSR1,memory_start						; set start address in memory
-	MOVTT	flash_start,ext_flash_address			; set start address in FLASH
-	movlw	low(range)								; set size of range to read
+	movlw	low(range)								; set size of range to write
 	extern	ext_flash_write_range
 	call	ext_flash_write_range					; execute range-write
+	endm
+
+
+; set ext_flash_address to a given address
+;
+EXT_FLASH_ADDR	macro	address
+	movlw	LOW   (address         )
+	movwf	ext_flash_address+0
+	movlw	HIGH  (address & 0xFFFF)
+	movwf	ext_flash_address+1
+	movlw	UPPER (address         )
+	movwf	ext_flash_address+2
 	endm
 
 
@@ -119,10 +161,10 @@ FLASH_RR_WRITE		macro	memory_start, flash_start, range
 ;
 ; increment: literal (1-255)
 ;
-ext_flash_inc_address_0x40		macro	increment
-		movlw	increment
-		extern	incf_ext_flash_address0_0x40
-		call	incf_ext_flash_address0_0x40
+EXT_FLASH_INC_ADDRESS_0x40	macro	increment
+	movlw	increment
+	extern	ext_flash_inc_address_0x40_exec
+	call	ext_flash_inc_address_0x40_exec
 	endm
 
 
@@ -130,19 +172,16 @@ ext_flash_inc_address_0x40		macro	increment
 ;
 ; increment: literal (1-255)
 ;
-ext_flash_inc_address_0x20		macro	increment
-		movlw	increment
-		extern	incf_ext_flash_address0_0x20
-		call	incf_ext_flash_address0_0x20
+EXT_FLASH_INC_ADDRESS_0x20	macro	increment
+	movlw	increment
+	extern	ext_flash_inc_address_0x20_exec
+	call	ext_flash_inc_address_0x20_exec
 	endm
 
 
-; decrement length count
+; decrement length counter by 1
 ;
-; decrement: literal (1-255)
-;
-ext_flash_dec_length			macro	decrement
-		movlw	decrement
-		extern	decf_ext_flash_length0
-		call	decf_ext_flash_length0
+EXT_FLASH_DEC_LENGTH		macro
+	extern	ext_flash_dec_length_exec
+	call	ext_flash_dec_length_exec
 	endm

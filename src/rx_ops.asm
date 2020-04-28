@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File rx_ops.asm                           combined next generation V3.03.8
+;   File rx_ops.asm                         * combined next generation V3.09.4f
 ;
 ;   RX (Tank Pressure Transmitter) Routines.
 ;
@@ -13,7 +13,6 @@
 #include "math.inc"
 #include "wait.inc"
 
-;=============================================================================
 
  IFDEF _rx_functions
 
@@ -36,8 +35,8 @@
 #DEFINE time_accu_target_CCR		.180; [s] target time accumulator filling level in CCR mode
 
 
-rx_ops	CODE
-
+;=============================================================================
+rx_ops1		CODE
 ;=============================================================================
 
 
@@ -106,6 +105,10 @@ get_pressure_readings_2c:
 	movff	ex,char_I_pressure_stat+1	; copy status data
 	return
 
+
+;-----------------------------------------------------------------------------
+; Helper Function - set pressure data to not available
+;
 get_pressure_readings_H1:
 	clrf	lo							; set pressure to 0 (low  byte)
 	clrf	hi							; set pressure to 0 (high byte)
@@ -116,6 +119,10 @@ get_pressure_readings_H1:
 
 
  IFDEF _ccr_pscr
+
+;-----------------------------------------------------------------------------
+; Helper Function - pre-process Measurement Selection
+;
 get_pressure_readings_H2:
 	movlw	.11
 	subwf	ul,F
@@ -147,9 +154,13 @@ get_pressure_readings_H2d:
 	movlw	.1
 	movwf	ul							; ul >= 15 -> should not happen, default to ul = 1
 	return
- ENDIF	;  _ccr_pscr
+
+ ENDIF	; _ccr_pscr
 
 
+;-----------------------------------------------------------------------------
+; Helper Function - get Transmitter ID
+;
 get_pressure_readings_H3:
 	lfsr	FSR1,opt_transmitter_id_1	; load base address of transmitter ID array
 	decf	ul,W						; (1-10) -> (0-9)
@@ -509,6 +520,9 @@ calc_pres_drop_common_3a:
 	return
 
 
+;-----------------------------------------------------------------------------
+; Helper Function - do an Accumulator Reduction
+;
 calc_pres_drop_reduce_accus:
 	; subtract 1 second from the time accumulator: time_accu (divA) -= 1 (only the low byte needs to be processed)
 	decf	divA+0,F					; decrement low byte of time_accu
@@ -530,6 +544,10 @@ calc_pres_drop_reduce_accus:
 	clrf	mpr+3						;     - clear pressure accumulator, highest byte
 	return								;     - done
 
+
+;-----------------------------------------------------------------------------
+; Helper Function - reset everything
+;
 calc_pres_drop_reset:
 	; store the current gas as the last gas
 	movlw	offset_FSR1_gas__last		; load index of            last gas
@@ -547,6 +565,12 @@ calc_pres_drop_reset:
 	movlw	offset_FSR1_time_last+1		; load index of last pressure time, high byte
 	clrf	PLUSW1						; clear         last pressure time, high byte
 
+	;bra	calc_pres_drop_restart
+
+
+;-----------------------------------------------------------------------------
+; Helper Function - reset both Accumulators and set average Pressure drop to not available
+;
 calc_pres_drop_restart:
 	; clear pressure accumulator - FSR0 was left pointing to address of highest byte
 	clrf	POSTDEC0					; clear pressure accumulator, highest byte
@@ -569,7 +593,7 @@ calc_pres_drop_restart:
 
 
 ;-----------------------------------------------------------------------------
-; set up SAC calculation dependent on TR mode
+; Set-up SAC Calculation dependent on TR Mode
 ;
 	global	configure_sac_calculation
 configure_sac_calculation:
@@ -612,20 +636,23 @@ configure_sac_calculation_5:
 	return
 
 
-;-----------------------------------------------------------------------------
-; Update TR module
-;
+;=============================================================================
+rx_ops2		CODE
+;=============================================================================
 
  IFDEF _rx_update
 
+;-----------------------------------------------------------------------------
+; Update TR module
+;
 	global	update_tr_module
 update_tr_module:
 	movlw	LOW   rx_firmware_storage	; setup program memory read for embedded TR firmware
-	movwf	TBLPTRL
-	movlw	HIGH  rx_firmware_storage
-	movwf	TBLPTRH
-	movlw	UPPER rx_firmware_storage
-	movwf	TBLPTRU
+	movwf	TBLPTRL						; ...
+	movlw	HIGH  rx_firmware_storage	; ...
+	movwf	TBLPTRH						; ...
+	movlw	UPPER rx_firmware_storage	; ...
+	movwf	TBLPTRU						; ...
 
 	bsf		active_reset_ostc_rx		; apply a reset to the RX co-processor
 	WAITMS	.200						; wait 200 ms
@@ -640,7 +667,7 @@ update_tr_module:
 update_tr_module_loop:					; (loop 64 times)
 	call	I2C_update_OSTC_rx			; send a batch of 64 bytes to the RX co-processor
 	tstfsz	WREG						; WREG = 0, i.e. data sent successfully?
-	bra		update_tr_module_fail		; NO - transfer error, abort
+	bra		update_tr_module_fail		; NO  - transfer error, abort
 	decfsz	lo,F						; YES - decrement loop counter, became zero?
 	bra		update_tr_module_loop		;       NO  - loop
 	bra		update_tr_module_done		;       YES - transfer complete & successful
@@ -652,28 +679,23 @@ update_tr_module_fail:
 
 update_tr_module_done:
 	bsf		INTCON,GIE					; re-enable interrupts
-
-	call	wait_1s						; wait (up to)        1 second
-	call	wait_1s						; wait (another full) 1 second
-
+	WAITS	.1							; wait 1 second
 	bsf		active_reset_ostc_rx		; apply a reset to the RX co-processor
 	WAITMS	.200						; wait 200 ms
 	bcf		active_reset_ostc_rx		; release reset
-	call	wait_1s						; wait (up to)        1 second
-	call	wait_1s						; wait (another full) 1 second
-	call	wait_1s						; wait (another full) 1 second
+	WAITS	.2							; wait 2 seconds
 
 	call	I2C_probe_OSTC_rx			; check if RX co-processor is alive, will set ostc_rx_present if so (1st try)
 	btfsc	ostc_rx_present				; RX co-processor up & running?
 	return								; YES
-	call	wait_1s						; NO  - wait (up to) 1 second
+	WAITS	.1							; NO  - wait 1 second
 	call	I2C_probe_OSTC_rx			;     - give it a 2nd try
-	return								;     - finally done (whatever result on 2nd tray)
+	return								;     - finally done (whatever result on 2nd try)
 
  ENDIF	; _rx_update
 
-;=============================================================================
-
  ENDIF	; _rx_functions
+
+;-----------------------------------------------------------------------------
 
 	END

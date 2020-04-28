@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File gaslist.asm                          combined next generation V3.08.8
+;   File gaslist.asm                        * combined next generation V3.09.5
 ;
 ;   Managing OSTC gas list
 ;
@@ -18,462 +18,284 @@
 #include "shared_definitions.h"
 #include "wait.inc"
 #include "rx_ops.inc"
+#include "colorschemes.inc"
 
-
-	extern	convert_meter_to_feet
-	extern	tSetup_GasDepth
-	extern	tGasDisabled
-	extern	tDilDisabled
-	extern	tLiter
-	extern	tbar10
-	extern	tbar
-
- IFDEF _cave_mode
-	extern	cavemode_waypoint_set_check
-	extern	cavemode_waypoint_out_check
-	extern	cavemode_waypoint_in_check
-	extern	cavemode_turndive_check
- ENDIF
-
-
-gaslist	CODE
-
-;-----------------------------------------------------------------------------
 
 ;=============================================================================
-; Helper Functions for divemenu_tree.asm
-;
-; These functions need to be placed in a different
-; file than where the MENU_DYNAMIC macros use them.
-
-;-----------------------------------------------------------------------------
-
-	global	label_do_toggle_gf
-label_do_toggle_gf:
-	movff	char_I_model,WREG			; 0 = ZH-L16, 1 = ZH-L16-GF
-	decfsz	WREG,W						; toggle GF only in GF modes - in GF mode?
-	bra		do_toggle_gf_label_1		; NO - print in disabled color
-	movff	opt_enable_aGF,WREG			; =1: aGF can be selected underwater
-	decfsz	WREG,W						; aGF enabled?
-	bra		do_toggle_gf_label_1		; NO - print in disabled color
-	bra		do_toggle_gf_label_2		; YES to both - print in standard color
-do_toggle_gf_label_1:
-	call	TFT_disabled_color			; print in disabled color
-do_toggle_gf_label_2:
-	STRCAT_TEXT tDivemenu_ToggleGF		; output label
-	return								; done
-
-
-	global	label_do_gas6_or_exit
-label_do_gas6_or_exit:
-	btfsc	gas6_or_EXIT				; shall print exit?
-	bra		label_do_gas6_or_exit_1		; YES - print exit  label
-	STRCAT_TEXT tGas6					; NO  - print gas 6 label
-	return								;     - done
-label_do_gas6_or_exit_1:
-	STRCAT_TEXT tExit					; print exit label
-	return								; done
-
-;-----------------------------------------------------------------------------
-
- IFDEF _cave_mode
-
-	global	label_do_turn_dive
-label_do_turn_dive:
-	call	cavemode_turndive_check		; check if command is allowed
-	tstfsz	WREG						; command allowed?
-	call	TFT_disabled_color			; NO - switch to disabled color
-	btfss	cave_mode					; cave mode switched on?
-	bra		label_do_turn_dive_1		; NO  - print turn dive label
-	btfss	dive_turned					; YES - dive turned?
-	bra		label_do_turn_dive_1		;       NO  - print turn dive label
-	STRCAT_TEXT tDivemenu_ContDive		;       YES - print continue dive label
-	return								;           - done
-label_do_turn_dive_1:
-	STRCAT_TEXT tDivemenu_TurnDive		; print turn dive label
-	return								; done
-
-	global	label_do_wp_set
-label_do_wp_set:
-	call	cavemode_waypoint_set_check	; check if command is allowed to execute
-	tstfsz	WREG						; command allowed?
-	call	TFT_disabled_color			; NO - switch to disabled color
-	STRCAT_TEXT tDivemenu_wp_set		; print label
-	return								; done
-
-	global	label_do_wp_out
-label_do_wp_out:
-	call	cavemode_waypoint_out_check	; check if command is allowed to execute
-	tstfsz	WREG						; command allowed?
-	call	TFT_disabled_color			; NO - switch to disabled color
-	STRCAT_TEXT tDivemenu_wp_out		; print label
-	return								; done
-
-	global	label_do_wp_in
-label_do_wp_in:
-	call	cavemode_waypoint_in_check	; check if command is allowed to execute
-	tstfsz	WREG						; command allowed?
-	call	TFT_disabled_color			; NO - switch to disabled color
-	STRCAT_TEXT tDivemenu_wp_in			; print label
-	return								; done
-
- ENDIF
-
-;-----------------------------------------------------------------------------
-
- IFDEF _rx_functions
-
-	global	do_toggle_max_pres_diff_label
-do_toggle_max_pres_diff_label:
-	movff	opt_TR_mode,WREG			; get TR mode
-	xorlw	.2							; compare with 2 (ind.double)
-	tstfsz	WREG						; equal?
-	call	TFT_disabled_color			; NO - print in disabled color
-	STRCAT_TEXT tTrMaxDeltaP			; output label
-	movff	char_I_max_pres_diff,lo
-	output_99
-	STRCAT_TEXT	tbar					; " bar"
-	return
-
- ENDIF
-
-;-----------------------------------------------------------------------------
-
- IFDEF _ccr_pscr
-
-	global	gaslist_copy_dil_to_oc
-gaslist_copy_dil_to_oc:
-;
-;  Memory Map:
-;  -----------------------------------------
-;  opt_gas_O2_ratio				res 5
-;  opt_dil_O2_ratio				res 5
-;  opt_gas_He_ratio				res 5
-;  opt_dil_He_ratio				res 5
-;  opt_gas_type					res 5
-;  opt_dil_type					res 5
-;  opt_gas_change				res 5
-;  opt_dil_change				res 5
-;
-;  char_I_gas_avail_size		res 10
-;  char_I_gas_avail_pres		res 10
-;
-	bcf		copying_dil					; default to copying a gas
-	movf	gaslist_gas,W				; copy current gas or diluent number to WREG
-	btfss	is_diluent_menu				; setting up diluents?
-	bra		gaslist_copy_dil_to_oc_1	; NO  - gaslist_gas is already pointing to an OC gas
-	addlw	-.5							; YES - subtract offset between diluents and gases
-	movwf	gaslist_gas					;     - let gaslist_gas point to the corresponding OC gas
-	bsf		copying_dil					;     - we are copying a diluent
-	bcf		is_diluent_menu				;     - pretend we are setting up OC gases
-gaslist_copy_dil_to_oc_1:
-	lfsr	FSR0,opt_dil_O2_ratio		; load base address of diluents settings, ASM variables
-	lfsr	FSR1,opt_gas_O2_ratio		; load base address of gas      settings, ASM variables
-	movff	PLUSW0,PLUSW1				; copy O2 ratio
-	addlw	.10							; add offset from O2 ratios to He ratios
-	movff	PLUSW0,PLUSW1				; copy He ratio
-	addlw	.10							; add offset from He ratios to types
-	movff	PLUSW0,PLUSW1				; copy type
-	addlw	.10							; add offset from type to change depth
-	movff	PLUSW0,PLUSW1				; copy change depth
-	addlw	-.30						; wind back to initial gas number
-	lfsr	FSR0,char_I_gas_avail_size+5; load base address of diluents settings, shared variables
-	lfsr	FSR1,char_I_gas_avail_size+0; load base address of gas      settings, shared variables
-	movff	PLUSW0,PLUSW1				; copy tank size
-	addlw	.10							; add offset from tank sizes to pressure budget
-	movff	PLUSW0,PLUSW1				; copy pressure budget
-	call	gaslist_cleanup_list		; make sure that there will be just one first gas
-	btfss	copying_dil					; are we copying a diluent?
-	return								; NO  - done
-	bsf		is_diluent_menu				; YES - restore to be setting up diluents
-	movlw	.5							;     - offset between OC gases and diluents
-	addwf	gaslist_gas,F				;     - let gaslist_gas point to the diluent again
-	WIN_BOX_BLACK .30,.239,.0,.159		;     - create some visual effect to show activity
-	WAITMS	.200						;     - pause for 200 ms
-	return								;     - done
-
- ENDIF
-
+gaslist1	CODE
 ;=============================================================================
 
-;=============================================================================
-; Append gas description to current string
+;-----------------------------------------------------------------------------
+; Append Mix ("Nxlo", "Txlo/hi", "Air" or "O2") to current String
 ;
-; Input:  PRODL : gas number (0..4)
-;         FSR2  : Current string position
-; Output: Text appended into buffer pointed by FSR2
-
-	global	gaslist_strcat_gas
-	global	gaslist_strcat_gas_WREG
-gaslist_strcat_gas:						; entry point with gas/dil in PRODL (0-4) and flag 'is_diluent_menu' set accordingly
+; Input:  PRODL : gas/dil number (0..4)
+;         flag 'is_diluent_menu' for gas/dil selection
+;
+	global	gaslist_strcat_mix_PRODL
+gaslist_strcat_mix_PRODL:
 	movff	PRODL,gaslist_gas			; get current menu item (0-4)
 	movlw	.5							; offset between gases and diluents
 	btfsc	is_diluent_menu				; setting up diluents?
 	addwf	gaslist_gas,F				; YES - add the offset
 	movf	gaslist_gas,W				; copy to WREG
-gaslist_strcat_gas_WREG:				; entry point with gas/dil in WREG (0-9)
+	;bra	gaslist_strcat_mix_WREG		; continue
+
+
+;-----------------------------------------------------------------------------
+; Append Mix ("Nxlo", "Txlo/hi", "Air" or "O2") to current String
+;
+; Input:  WREG : gas/dil number (0..9)
+;
+	global	gaslist_strcat_mix_WREG
+gaslist_strcat_mix_WREG:				; entry point with gas/dil in WREG (0-9)
 	lfsr	FSR1,opt_gas_O2_ratio		; load base address of opt_gas_O2_ratio
 	movff	PLUSW1,lo					; read O2 ratio
 	lfsr	FSR1,opt_gas_He_ratio		; load base address of opt_gas_He_ratio
 	movff	PLUSW1,hi					; read He ratio
-	goto	gaslist_show_mix			; put "Nxlo", "Txlo/hi", "Air" or "O2" into Postinc2, and RETURN
+	;bra	gaslist_strcat_mix			; put "Nxlo", "Txlo/hi", "Air" or "O2" into Postinc2, and RETURN
 
-
-;=============================================================================
-; Append current mix to current string (for dive mode)
-;
-; Input:  FSR2 : Current string position
-; Output: Text appended into buffer pointed by FSR2
-
-	global	gaslist_strcat_gas6
-gaslist_strcat_gas6:					; show current O2/He mix
-	STRCAT_TEXT tTakeGas				; print "take"
-	PUTC	" "							; print one space
-	movff	gas6_O2_ratio,hi			; TFT_color_code_gaslist needs O2 ratio in hi
-	call	TFT_color_code_gaslist		; color-code according to O2 ratio and depth
-	movff	gas6_O2_ratio,lo			; gaslist_show_mix needs O2 ratio in lo
- IFDEF _helium
-	movff	gas6_He_ratio,hi			;                ... and He ratio in hi
- ELSE
-	clrf	hi							;                ... and He ration will be zero
- ENDIF
-	goto	gaslist_show_mix			; put "Nxlo", "Txlo/hi", "Air" or "O2" into Postinc2, and return
-
-
-;=============================================================================
-; Helper functions for menu_tree
-
-	global	gaslist_GasDepth
-gaslist_GasDepth:
-	movf	gaslist_gas,W				; load gas/dil index into WREG (0-9)
-	lfsr	FSR1,opt_gas_change			; load base address of change depths
-	tstfsz	PLUSW1						; change depth = 0 ?
-	bra		gaslist_GasDepth_1			; NO
-	lfsr	FSR1,opt_gas_type			; YES - load base address of opt_gas_type
-	tstfsz	PLUSW1						;     - type = disabled ?
-	call	TFT_attention_color			;       NO  - print in attention color (yellow)
-gaslist_GasDepth_1:
-	STRCAT_TEXT tSetup_GasDepth
-	return
-
-
-	global	gaslist_show_type
-gaslist_show_type:
-	movf	gaslist_gas,W
-	lfsr	FSR1,opt_gas_type			; load base address of opt_gas_type
-	movff	PLUSW1,lo					; read gas type
-	STRCAT_TEXT tType
-	lfsr	FSR1,tGasDisabled			; load base address of gas type labels
-	btfsc	is_diluent_menu				; setting up diluents?
-	lfsr	FSR1,tDilDisabled			; YES - load base address of diluent type labels
-	movff	lo,WREG						; 0-3
-	rlncf	WREG						; x2
-	addwf	FSR1L,F						; adjust address pointer to required text
-	movlw	.0
-	addwfc	FSR1H,F
-	call	strcat_text					; copy label text
-	return
-
-
-	global	gaslist_toggle_type
-gaslist_toggle_type:
-	lfsr	FSR1,opt_gas_type			; load base address of opt_gas_type
-	movf	gaslist_gas,W				; copy gas number (0-9) to WREG
-	movff	PLUSW1,lo					; read      type value
-	incf	lo,F						; increment type value
-	movlw	num_gas_types				; get number of gas types by default
-	btfsc	is_diluent_menu				; setting up diluents?
-	movlw	num_dil_types				; YES - replace by number of diluent types
-	cpfslt	lo							; type value valid?
-	clrf	lo							; NO - clear to zero
-	movf	gaslist_gas,W				; restore gas number (0-9) in WREG
-	movff	lo,PLUSW1					; copy back result
-	return								; done
-
-;=============================================================================
-
- IFDEF _ccr_pscr
-
-	global	gaslist_strcat_setpoint
-	global	gaslist_strcat_setpoint_0
-gaslist_strcat_setpoint:				; entry point with setpoint index in PRODL
-	movff	PRODL,gaslist_gas			; get current menu item (0-4)
-gaslist_strcat_setpoint_0:				; entry point with setpoint index in gaslist_gas
-	bsf		leftbind
-	btfsc	short_gas_descriptions		; shall use short versions of gaslist_strcat_setpoint?
-	bra		gaslist_strcat_setpoint2	; YES - use short version
-	STRCAT_TEXT tSP						; "SP"
-	incf	gaslist_gas,W				; (0-4) -> (1-5) into WREG
-	movwf	lo
-	output_8							; print SP number
-	bcf		leftbind
-	PUTC	":"
-gaslist_strcat_setpoint2:				; short version
-	btfsc	divemode
-	bra		gaslist_strcat_setpoint4	; no "*" in dive mode
-	movf	gaslist_gas,W				; (0-4) into WREG
-	bnz		gaslist_strcat_setpoint3	; SP index = 0 ?
-	PUTC	"*"							; YES - print *
-	bra		gaslist_strcat_setpoint4	;     - continue with cbar value
-gaslist_strcat_setpoint3:				; NO
-	PUTC	" "							;     - print a space
-gaslist_strcat_setpoint4:
-	movf	gaslist_gas,W				; (0-4) into WREG
-	lfsr	FSR1,opt_setpoint_cbar		; load base address of setpoint cbar values
-	movf	PLUSW1,W					; read cbar value
-	movwf	lo
-	clrf	hi
-	bsf		leftbind
-	output_16dp d'3'					; print as X.XX
-	btfsc	divemode					; in dive mode?
-	bra		gaslist_strcat_setpoint5	; YES - skip text in dive mode
-	STRCAT_TEXT tbar					; NO  - print "bar"
-gaslist_strcat_setpoint5:
-	PUTC	" "							; print a space
-	movf	gaslist_gas,W				; (0-4) into WREG
-	lfsr	FSR1,opt_setpoint_change	; load base address of switch depths
-	movff	PLUSW1,lo					; read switch depth into lo
-	bra		gaslist_strcat_depth		; print depth in meters or ft
-
- ENDIF	; _ccr_pscr
 
 ;----------------------------------------------------------------------------
-; Append gas description to current string
+; Append Mix ("Nxlo", "Txlo/hi", "Air" or "O2") to current String
+;
+; Input: lo  O2%
+;        hi  He%
+;
+; Includes capability to show trimix gases to be able to properly decode data
+; from logbook in case trimix dives are stored on an OSTC running the sport FW
+;
+	global	gaslist_strcat_mix
+gaslist_strcat_mix:
+	tstfsz	hi							; He=0?
+	bra		gaslist_strcat_mix_5		; NO - print a TX
+
+gaslist_strcat_mix_1:
+	movlw	.21							; air is 21% O2
+	cpfseq	lo							; Air ?
+	bra		gaslist_strcat_mix_2		; NO  - try next
+	STRCAT_TEXT tSelectAir				; YES - print "Air"
+	bra		gaslist_strcat_mix_4b		;     - continue
+
+gaslist_strcat_mix_2:
+	movlw	.100						; O2 is 100% O2
+	cpfseq	lo							; O2 ?
+	bra		gaslist_strcat_mix_3		; NO  - try next
+	STRCAT_TEXT tSelectO2				; YES - print "O2"
+	bra		gaslist_strcat_mix_4b		;     - continue
+
+gaslist_strcat_mix_3:
+	movlw	.21							; strange mix has no He and O2 < 21%
+	cpfslt	lo							; < Nx21 ?
+	bra		gaslist_strcat_mix_4		; NO  - try next
+	STRCAT_TEXT tGasErr					; YES - print "Err"
+	output_99							;     - print O2%
+	bra		gaslist_strcat_mix_4c		;     - continue
+
+gaslist_strcat_mix_4:
+	STRCAT_TEXT tSelectNx				; print "Nx"
+	output_99							; print O2%
+
+gaslist_strcat_mix_4b:
+	STRCAT	" "							; print a space
+
+gaslist_strcat_mix_4c:
+	btfsc	divemode					; in dive mode?
+	return								; YES - done
+	STRCAT	"  "						; NO  - add two spaces
+	return								;     - done
+
+gaslist_strcat_mix_5:
+	btfsc	divemode					; in dive mode?
+	bra		gaslist_strcat_mix_6		; YES - do short version
+	STRCAT_TEXT tSelectTx				; NO  - print "Tx"
+
+gaslist_strcat_mix_6:
+	output_99							; print O2%
+	PUTC	"/"							; print "/"
+	movff	hi,lo						; move He% into lo
+	output_99							; print He%
+	return								; done
+
+
+;----------------------------------------------------------------------------
+; Append full Gas Description to current String
 ;
 ; Prints gas number, * if first, = if deco gas, gas composition and change depth,
 ; including fancy color-coding
 ;
 ; Input:  PRODL gas number (0..4)
-;         FSR2  current string position
-; Output: text appended to buffer pointed by FSR2
+;         flag 'is_diluent_menu' for gas/dil selection
 ;
 ; NOTE: used in the menu-tree for the MENU_CALLBACK entry
-
-	global	gaslist_strcat_gas_cd
-gaslist_strcat_gas_cd:					; entry point with gas in PRODL (0-4) and flag 'is_diluent_menu' set accordingly
+;
+	global	gaslist_strcat_gas_PRODL
+gaslist_strcat_gas_PRODL:
 	movff	PRODL,gaslist_gas			; get current menu item (0-4)
 	movlw	.5							; offset between gases and diluents
 	btfsc	is_diluent_menu				; dealing with diluents?
 	addwf	gaslist_gas,F				; YES - add the offset
-	;bra	gaslist_gastitle			; continue with gaslist_gastitle function
+	;bra	gaslist_strcat_gas			; continue with gaslist_strcat_gas function
 
-	global	gaslist_gastitle
-gaslist_gastitle:						; entry point with gas/dil in gaslist_gas (0-4 for gases, 5-9 for diluents)
-	bcf		win_invert					; clear flag for inverted output by default
-	btfsc	short_gas_descriptions		; shall use short versions of gaslist_strcat_gas_cd?
-	bra		gaslist_gastitle1			; YES - use short version
-	incf	gaslist_gas,W				; (0-9) -> (1-10) into WREG
-	movwf	lo							; copy gas index to lo
-	movlw	.6							; diluents start with 6
-	cpfslt	lo							; gas number < 6 ?
-	bra		gaslist_gastitle_dil		; NO  - it's a diluent
-	STRCAT_TEXT tGas					; YES - it's a gas
-	bra		gaslist_gastitle0			;     - continue
+
+;----------------------------------------------------------------------------
+; Append full Gas Description to current String
+;
+; Print gas number, * if first, = if deco gas, gas composition and change depth,
+; including fancy color-coding
+;
+; Input:  gaslist_gas gas/dil number (0..9)
+;
+; NOTE: used in the menu-tree for the MENU_CALLBACK entry
+;
+	global	gaslist_strcat_gas
+gaslist_strcat_gas:
+	btfsc	short_gas_descriptions		; shall use short versions of gaslist_strcat_gas_PRODL?
+	bra		gaslist_gastitle_short		; YES - use short version
+	incf	gaslist_gas,W				; NO  - (0-9) -> (1-10) into WREG
+	movwf	lo							;     - copy gas index to lo
+	movlw	.6							;     - diluents start with 6
+	cpfslt	lo							;     - gas number < 6 ?
+	bra		gaslist_gastitle_dil		;       NO  - it's a diluent
+	;bra	gaslist_gastitle_gas		;       YES - it's a gas
+
+gaslist_gastitle_gas:
+	STRCAT_TEXT tGas					; it's a gas
+	bra		gaslist_gastitle_gas_num	; continue
+
 gaslist_gastitle_dil:
 	STRCAT_TEXT tDil					; it's a diluent
 	movlw	.5							; offset between gases and diluents
 	subwf	lo,F						; subtract offset from diluent number (6-10) -> (1-5) again
-gaslist_gastitle0:
-	bsf		leftbind
-	output_8							; print gas/dil number (1-5)
-	bcf		leftbind
-	PUTC	":"
-gaslist_gastitle1:						; short version of gaslist_strcat_gas_cd
+
+gaslist_gastitle_gas_num:
+	output_9							; print gas/dil number (1-5)
+	PUTC	":"							; print ":"
+
+gaslist_gastitle_short:
 	btfsc	divemode					; in dive mode?
-	bra		gaslist_gastitle3			; YES - no "*" and "=" in front of gas composition, no highlighting for transmitters paired
+	bra		gaslist_gastitle_color_avail; YES - no "*" and "=" in front of gas composition, no highlighting for transmitters paired
 
  IFDEF _rx_functions
-	btfss	tr_functions_activated		; NO  - TR functions activated?
-	bra		gaslist_gastitle2			;       NO  - continue with gas type
-	lfsr	FSR1,opt_transmitter_id_1	;       YES - load base address of transmitter ID table
-	movf	gaslist_gas,W				;           - (0-4 for OC/Bailout, 5-9 for Diluents)
-	rlncf	WREG,W						;           - index x2 because IDs are 2 byte
-	tstfsz	PLUSW1						;           - transmitter ID low byte <> 0 ?
-	bsf		win_invert					;             YES - flag transmitter paired by inverting output
-	incf	WREG,W						;           - increment index
-	tstfsz	PLUSW1						;           - transmitter ID high byte <> 0 ?
-	bsf		win_invert					;             YES - flag transmitter paired by inverting output
- ENDIF
+	btfss	tr_functions_activated		; TR functions activated?
+	bra		gaslist_gastitle_type_1		; NO  - continue with gas type
+	lfsr	FSR1,opt_transmitter_id_1	; YES - load base address of transmitter ID table
+	movf	gaslist_gas,W				;     - (0-4 for gases, 5-9 for diluents)
+	rlncf	WREG,W						;     - index x2 because IDs are 2 byte
+	tstfsz	PLUSW1						;     - transmitter ID low byte <> 0 ?
+	bsf		win_invert					;       YES - flag transmitter paired by inverting output
+	incf	WREG,W						;     - increment index
+	tstfsz	PLUSW1						;     - transmitter ID high byte <> 0 ?
+	bsf		win_invert					;       YES - flag transmitter paired by inverting output
+ ENDIF	; _rx_functions
 
-gaslist_gastitle2:
-	rcall	gaslist_strcat_gas_type		; print "*" for first gas/dil, "=" for a deco gas or " " else
-gaslist_gastitle3:
-	call	TFT_standard_color
+gaslist_gastitle_type_1:
+	rcall	gaslist_strcat_gas_type		; print type marking ("*", "=", "X", ...)
+
+gaslist_gastitle_color_avail:
+	FONT_COLOR_MEMO						; default to standard color
 	btfsc	divemode					; in dive mode?
 	rcall	gaslist_strcat_gas_better	; YES - check if this is a "better gas", if yes switch to green and inverted output
 	lfsr	FSR1,opt_gas_type			; load base address of gas types
 	movf	gaslist_gas,W				; load index into WREG (0-4 for gases, 5-9 for diluents)
 	movf	PLUSW1,W					; read gas/dil type into WREG
 	btfsc	WREG,gas_lost				; gas/dil lost?
-	bra		gaslist_gastitle3a			; YES - switch to disabled color
+	bra		gaslist_gastitle_not_avail	; YES - switch to disabled color and skip ppO2 check
 	btfsc	WREG,gas_staged				; gas/dil staged?
-	bra		gaslist_gastitle3a			; YES - switch to disabled color
-	bnz		gaslist_gastitle4			; type = disabled ?
-gaslist_gastitle3a:
-	call	TFT_disabled_color			; YES - switch to disabled color
-	bra		gaslist_gastitle5			;     - skip ppO2 check for disabled gases
-gaslist_gastitle4:
+	bra		gaslist_gastitle_not_avail	; YES - switch to disabled color and skip ppO2 check
+	bnz		gaslist_gastitle_color_ppo2	; type not disabled -> color code by ppO2
+	;bz		gaslist_gastitle_not_avail	; type     disabled -> switch to disabled color and skip ppO2 check
+
+gaslist_gastitle_not_avail:
+	FONT_COLOR_DISABLED					; switch to disabled color
+	bra		gaslist_gastitle_mix		; skip ppO2 check for disabled gases
+
+gaslist_gastitle_color_ppo2:
 	btfss	divemode					; in dive mode?
-	bra		gaslist_gastitle5			; NO  - no color-coding if not in dive mode
+	bra		gaslist_gastitle_mix		; NO  - no color-coding if not in dive mode
 	btfss	color_code_gases			; YES - shall color-code the gases by ppO2 and current depth?
-	bra		gaslist_gastitle5			;       NO  - skip color-coding
+	bra		gaslist_gastitle_mix		;       NO  - skip color-coding
 	lfsr	FSR1,opt_gas_O2_ratio		;       YES - load base address of opt_gas_O2_ratio
 	movf	gaslist_gas,W				;           - load index into WREG (0-4 for gases, 5-9 for diluents)
 	movff	PLUSW1,hi					;           - read O2 ratio into hi
 	call	TFT_color_code_gaslist		;           - set color according to ppO2 limits
-gaslist_gastitle5:
+
+gaslist_gastitle_mix:
 	movf	gaslist_gas,W				; copy gas/dil index to WREG (0-9)
-	rcall	gaslist_strcat_gas_WREG		; print gas composition
+	rcall	gaslist_strcat_mix_WREG		; print gas composition
 	btfss	divemode					; in dive mode?
-	bra		gaslist_gastitle6			; NO  - continue printing a space
-	rcall	gaslist_strcat_gas_type		; YES - print "*" for first gas/dil, "=" for a deco gas, or a space else
-	bra		gaslist_gastitle7			;     - continue with change depth
-gaslist_gastitle6:
+	bra		gaslist_gastitle_no_type	; NO  - print no type marking
+	;bra	gaslist_gastitle_type_2		; YES - print    type marking
+
+gaslist_gastitle_type_2:
+	rcall	gaslist_strcat_gas_type		; print type marking ("*", "=", "X", ...)
+	bra		gaslist_gastitle_depth		; continue with change depth
+
+gaslist_gastitle_no_type:
 	PUTC	" "							; print a space
-gaslist_gastitle7:
+
+gaslist_gastitle_depth:
 	lfsr	FSR1,opt_gas_change			; load base address of change depths
 	movf	gaslist_gas,W				; load gas/dil index into WREG (0-9)
 	movff	PLUSW1,lo					; read change depth into lo
-gaslist_strcat_depth:					; entry point for general printing of depths with value in meters in lo
-	TSTOSS	opt_units					; check depth units
-	bra		gaslist_strcat_depth_metric	; 0 - use Meters
-gaslist_strcat_depth_imperial:			; 1 - use Feet
-	call	convert_meter_to_feet		; convert value in lo from [m] to [feet]
-	output_16_3							; limit to 999 and display only 0-999
-	STRCAT_TEXT tFeets					; append "ft"	REMARK: still one char to long for space available in dive mode menu!
-	return
-gaslist_strcat_depth_metric:
-;	PUTC	" "							; print a space
-;	output_99
-	output_8
-	STRCAT_TEXT tMeters					; "m"
-	return
+	;bra	gaslist_strcat_depth		; print depth and return
 
 
-; check for better gas
+;-----------------------------------------------------------------------------
+; Helper Function - print Depths in Meters or Feet
 ;
-gaslist_strcat_gas_better:				; color-code output if this is the best gas/diluent
-	btfss	better_gas_hint				; shall better gas hints be given?
-	return								; NO - return
-	movf	best_gas_number,W			; get best gas number into WREG
- IFDEF _ccr_pscr
-	btfsc	is_diluent_menu				; setting up diluents?
-	movf	best_dil_number,W			; YES - overwrite with best diluent number
- ENDIF
-	tstfsz	WREG						; is a best gas/dil available?
-	bra		gaslist_strcat_gas_better1	; YES - proceed
+; input: lo  depth in meters
+;
+gaslist_strcat_depth: 
+	TSTOSS	opt_units					; check depth units
+	bra		gaslist_strcat_depth_meter	; 0 - use Meters
+	;bra	gaslist_strcat_depth_feet	; 1 - use Feet
+
+gaslist_strcat_depth_feet:
+	call	convert_meter_to_feet		; convert value in lo from [m] to [feet]
+	output_999							; print depth (0-999)
+	STRCAT_TEXT tFeets					; append "ft"	REMARK: still one char to long for space available in dive mode menu!
+	return								; done
+
+gaslist_strcat_depth_meter:
+	output_256							; print 0-256
+	STRCAT_TEXT tMeters					; append "m"
+	return								; done
+
+
+;-----------------------------------------------------------------------------
+; Helper Function - color-code Output if this is the best Gas/Diluent
+;
+gaslist_strcat_gas_better:
+	btfss	better_gas_hint				; shall better gas cues be given?
 	return								; NO  - return
+	movf	best_gas_number,W			; YES - get best gas number into WREG
+ IFDEF _ccr_pscr
+	btfsc	is_diluent_menu				;     - setting up diluents?
+	movf	best_dil_number,W			;       YES - replace with best diluent number
+ ENDIF	; _ccr_pscr
+	tstfsz	WREG						;     - is a best gas/dil available?
+	bra		gaslist_strcat_gas_better1	;       YES - proceed
+	return								;       NO  - done
+
 gaslist_strcat_gas_better1:
 	decf	WREG,W						; (1-5) -> (0-4)
 	btfsc	is_diluent_menu				; setting up diluents?
-	addlw	.5							; YES - add offset between gases and diluents (0-4) -> (5-9)
-	cpfseq	gaslist_gas					; compare with given gas/dil (0-4 for OC bailout gases, 5-9 for diluents)
-	return								; not equal - return
-	bsf		win_invert					;     equal - invert
-	movlw	color_green					;           - select green color (gas is something "good")
-	goto	TFT_set_color				;           - activate color and return
+	addlw	.5							; YES - add offset between gases and diluents (0-4) -> (5-9) to better gas number
+	cpfseq	gaslist_gas					; is the current gas/dil the best one?
+	return								; NO  - done
+	bsf		win_invert					; YES - print invert
+	FONT_COLOR color_green				;     - select green color (gas is something "good")
+	return								;     - done
 
 
+;-----------------------------------------------------------------------------
+; Helper Function - print      "*"     for   first    Gas/Dil
+;                         a down arrow for a Work     Gas/Dil
+;                              "="     for a Deco     Gas
+;                              " "     for a disabled Gas/Dil
+;                              "X"     for a lost     Gas/Dil
+;                              "S"     for a staged   Gas/Dil
+;
 gaslist_strcat_gas_type:
 	lfsr	FSR1,opt_gas_type			; load base address of gas types
 	movf	gaslist_gas,W				; load index to WREG (0-4 for gases, 5-9 for diluents)
@@ -483,421 +305,49 @@ gaslist_strcat_gas_type:
  IFDEF _cave_mode
 	btfsc	WREG,gas_staged				; gas set as staged?
 	bra		gaslist_strcat_gas_type_5	; YES - print staged marking
- ENDIF
+ ENDIF	; _cave_mode
 	decf	WREG,W						; decrement gas type (-1 for disabled,  0 for first,  1 for work/normal, 2 for deco)
 	bnz		gaslist_strcat_gas_type_1	; type = first? NO  - continue with checking for work and deco gas
 	PUTC	"*"							;               YES - print "*" for first
 	return								;                   - done
+
 gaslist_strcat_gas_type_1:
 	decf	WREG,W						; decrement gas type (-2 for disabled, -1 for first,  0 for work/normal, 1 for deco)
 	bnz		gaslist_strcat_gas_type_2	; type = work? NO  - continue with checking for deco gas
 	PUTC	"\xb8"						;              YES - print down-arrow for a work gas
 	return								;                  - done
+
 gaslist_strcat_gas_type_2:
 	decf	WREG,W						; decrement gas type (-3 for disabled, -2 for first, -1 for work/normal, 0 for deco)
 	bnz		gaslist_strcat_gas_type_3	; type = deco? NO  - neither first nor deco
 	PUTC	"="							;              YES - print "=" for a deco gas
-	return								;                   - done
+	return								;                  - done
+
 gaslist_strcat_gas_type_3:
-	PUTC	" "							; neither first nor deco, print a space
+	PUTC	" "							; type = disabled, print a space
 	return								; done
+
 gaslist_strcat_gas_type_4:
 	PUTC	"x"							; print lost marking
 	return								; done
+
  IFDEF _cave_mode
 gaslist_strcat_gas_type_5:
 	PUTC	"S"							; print staged marking
 	return								; done
- ENDIF
+ ENDIF	; _cave_mode
 
 
 ;----------------------------------------------------------------------------
-; Housekeeping for the gas/dil settings, e.g. making sure there is one FIRST only
-;
-; Input:  gaslist_gas  last edited gas/dil (0-9)
-
-	global	gaslist_cleanup_list
-gaslist_cleanup_list:
-	lfsr	FSR1,opt_gas_type			; load base address of opt_gas_type
- IFDEF _ccr_pscr
-	movlw	.5							; offset between gases and diluents
-	btfsc	is_diluent_menu				; setting up diluents?
-	subwf	gaslist_gas,F				; YES - subtract offset from gaslist_gas: (5-9) -> (0-4)
- ENDIF
-gaslist_cleanup_list0:
-	bcf		ignore_last_edited_gas
-gaslist_cleanup_list1:
-	clrf	lo							; counter for number of "firsts" found
-	movlw	.5							; initialize hi as loop counter for checking 5 gases/diluents
-	movwf	hi
-gaslist_cleanup_list2:					; loop body
-	decf	hi,W						; WREG = current gas/dil (0-4)
- IFDEF _ccr_pscr
-	btfsc	is_diluent_menu				; setting up diluents?
-	addlw	.5							; YES - add offset from gases to diluents -> (5-9)
- ENDIF
-	movff	PLUSW1,WREG					; read type into WREG
-	decfsz	WREG						; is type = first (ex type code 1)?
-	bra		gaslist_cleanup_list3		; NO  - done with this gas/dil
-	incf	lo,F						; YES - increment number of "firsts" found
-	btfss	ignore_last_edited_gas		;     - shall we ignore the last edited gas/dil?
-	bra		gaslist_cleanup_list2b		;       NO  - continue remembering the "last first" gas/dil (do a shortcut)
-	decf	hi,W						;       YES - get the current gas/dil as (0-4)
-	cpfseq	gaslist_gas					;           - is this the last edited gas/dil?
-gaslist_cleanup_list2b:
-	movff	hi,up						;             (NO) - remember the last "first gas" found
-gaslist_cleanup_list3:
-	decfsz	hi,F						; decrement loop counter, did loop counter became 0?
-	bra		gaslist_cleanup_list2		; NO  - loop
-	tstfsz	lo							; YES - any first gas/dil at all?
-	bra		gaslist_cleanup_list4		;       YES - at least one first gas/dil existing
- IFDEF _ccr_pscr
-	btfsc	is_diluent_menu				;       NO  - setting up diluents?
-	lfsr	FSR1,opt_dil_type			;             YES - load base address of opt_gas_type
- ENDIF
-	movlw	.1							;           - load coding for first gas
-	movwf	INDF1						;           - make gas/dil 1 the first gas
-	return								;           - done
-gaslist_cleanup_list4:
-	movlw	.1							; total number of Firsts that should exist is 1
-	cpfsgt	lo							; more then one "first gas" found?
-	return								; NO  - done
-	decf	up,W						; YES - WREG = last found "first gas" - 1 (0-4)
-	cpfseq	gaslist_gas					;     - is this the last edited gas/dil?
-	bra		gaslist_cleanup_list4b		;       NO  - disable it
-	bsf		ignore_last_edited_gas		;       YES - do not disable last edited gas, search again but ignore the last edited gas
-	bra		gaslist_cleanup_list1		;           - loop until only one "first" is left over
-gaslist_cleanup_list4b:
- IFDEF _ccr_pscr
-	btfsc	is_diluent_menu				; setting up diluents?
-	addlw	.5							; YES - adjust offset
- ENDIF
-	clrf	PLUSW1						; disable gas
-	bra		gaslist_cleanup_list0		; redo from start until only one "first" is left over
-	return
-
-
-;----------------------------------------------------------------------------
-; Tank Settings
-;
-; Input: char_I_gas_avail_size   size of the tank in liters
-;        char_I_gas_avail_pres   available pressure in multiples of 10 bar
-
-	global	gaslist_tank_size_pres
-gaslist_tank_size_pres:					; dynamic title: xx l, xx0 bar
-	lfsr	FSR1,char_I_gas_avail_size	; load base address of char_I_gas_avail_size
-	movf	gaslist_gas,W				; load index (0-9)
-	movff	PLUSW1,lo					; read char_I_gas_avail_size[WREG] into lo
-	lfsr	FSR1,char_I_gas_avail_pres	; load base address of char_I_gas_avail_pres
-	movff	PLUSW1,hi					; read char_I_gas_avail_pres[WREG] into hi
-	STRCAT	"     "						; print 5 leading spaces for alignment
-	output_8							; print tank size
-	STRCAT_TEXT tLiter					; print unit (" l")
-	movff	hi,lo						; copy fill pressure into lo
-	output_8							; print fill pressure (it is stored in multiples of 10 bar)
-	STRCAT_TEXT tbar10					; print unit ("0 bar")
-	return
-
-
-	global	gaslist_tank_size
-gaslist_tank_size:						; adjust char_I_gas_avail_size between min_tank_size and max_tank_size
-	lfsr	FSR1,char_I_gas_avail_size	; load base address of char_I_gas_avail_size
-	movf	gaslist_gas,W				; load index (0-9)
-	movff	PLUSW1,lo					; read char_I_gas_avail_size[WREG] into lo
-	incf	lo,F						; increment tank size by 1 liter
-	movlw	max_tank_size				; load max. allowed value into WREG
-	cpfsgt	lo							; tank size <= max value?
-	bra		gaslist_tank_size_1			; YES - new value can be used
-	movlw	min_tank_size				; NO  - wrap-around to min value
-	movwf	lo							;     - and write to lo
-gaslist_tank_size_1:
-	movf	gaslist_gas,W				; re-load index
-	movff	lo,PLUSW1					; write back tank size to char_I_gas_avail_size[WREG]
-	return
-
-
-	global	gaslist_tank_pres
-gaslist_tank_pres:						; adjust char_I_gas_avail_pres between 5(0) and 29(0) bar
-	lfsr	FSR1,char_I_gas_avail_pres	; load base address of char_I_gas_avail_pres
-	movf	gaslist_gas,W				; load index (0-9)
-	movff	PLUSW1,lo					; read char_I_gas_avail_pres[WREG] into lo
-	incf	lo,F						; increment fill press by by 1(0) bar
-	movlw	max_fill_press				; load max. allowed value into WREG
-	cpfsgt	lo							; press <= max value?
-	bra		gaslist_tank_pres_1			; YES - new value can be used
-	movlw	min_fill_press				; NO  - wrap-around to min value
-	movwf	lo							;     - and write to lo
-gaslist_tank_pres_1:
-	movf	gaslist_gas,W				; re-load index
-	movff	lo,PLUSW1					; write back tank size to char_I_gas_avail_pres[WREG]
-	return
-
-
-;=============================================================================
-
- IFDEF _rx_functions
-
-; Transmitter functions - ID
-;
-	global	gaslist_tank_id_pres
-gaslist_tank_id_pres:					; dynamic title: shows ID and pressure from transmitter with ID opt_transmitter_id[gaslist_gas]
-										;                When changing layout, adapt output position TFT_menu_tank_pres!
-	STRCAT	"  ID: "					; print header
-	; get ID							;
-	lfsr	FSR1,opt_transmitter_id_1	; load base address of opt_transmitter_id
-	movf	gaslist_gas,W				; load index (0-9)
-	rlncf	WREG,W						; multiply by 2 because IDs are 2 byte in size
-	movff	PLUSW1,lo					; copy opt_transmitter_id+0[gaslist_gas] to lo
-	incf	WREG,W						; increment index
-	movff	PLUSW1,hi					; copy opt_transmitter_id+1[gaslist_gas] to hi
-	; check if a transmitter is paired to this tank
-	tstfsz	hi							; high byte of ID <> 0 ?
-	bra		gaslist_tank_id_pres_1		; YES - a transmitter is paired to the tank
-	tstfsz	lo							; low  byte of ID <> 0 ?
-	bra		gaslist_tank_id_pres_1		; YES - a transmitter is paired to the tank
-	STRCAT	"----"						; NO  - no transmitter paired
-	bcf		imprint_xmitter_pres		;     - stop imprinting of transmitter pressure data
-	return								;     - done
-gaslist_tank_id_pres_1:					; YES - show ID
-	movf	hi,W						;     - copy high byte of ID to WREG
-	output_hex							;     - print it
-	movf	lo,W						;     - copy low  byte of ID to WREG
-	output_hex							;     - print it
-	bsf		imprint_xmitter_pres		;     - start imprinting of transmitter pressure data
-	return								;     - done
-
-
-; Transmitter functions - Pairing
-;
-	global	gaslist_tank_pairing
-gaslist_tank_pairing:
-	incf	pairing_slot,F				; goto next RX data slot
-	btfsc	pairing_slot,3				; slot = 8?
-	bra		gaslist_tank_pairing_none	; YES - offer unpairing
-	movf	pairing_slot,W				; NO  - copy slot to WREG
-	call	get_transmitter_id_by_slot	; WREG = slot (0-7) -> hi:lo = transmitter ID
-	tstfsz	hi							; transmitter found (probe on high byte)?
-	bra		gaslist_tank_pairing_common	; YES - select this transmitter
-	tstfsz	hi							; transmitter found (probe on low byte)?
-	bra		gaslist_tank_pairing_common	; YES - select this transmitter
-	bra		gaslist_tank_pairing		; NO  - try next slot
-gaslist_tank_pairing_common:
-	lfsr	FSR1,opt_transmitter_id_1	; load base address of opt_transmitter_id
-	movf	gaslist_gas,W				; load index into WREG (0-9)
-	rlncf	WREG,W						; multiply by 2 because IDs are 2 byte in size
-	movff	lo,PLUSW1					; copy lo to opt_transmitter_id+0[gaslist_gas]
-	incf	WREG,W						; increment index
-	movff	hi,PLUSW1					; copy hi to opt_transmitter_id+1[gaslist_gas]
-	return								; done
-gaslist_tank_pairing_none:
-	setf	pairing_slot				; prime slot number with 255 aka -1
-	clrf	hi							; adjust "no transmitter" ID
-	clrf	lo							; adjust "no transmitter" ID
-	bra		gaslist_tank_pairing_common	; continue with common part
-
- ENDIF
-
-;=============================================================================
-
-;----------------------------------------------------------------------------
-; Helper Functions for Menu Operations
-
-
-; Increment O2 ratio
-;
-	global	gaslist_pO2
-gaslist_pO2:
-	movf	gaslist_gas,W				; load index (0-9)
-	lfsr	FSR1,opt_gas_He_ratio		; load base address of opt_gas_He_ratio
-	movff	PLUSW1,hi					; read He ratio into hi
-	lfsr	FSR1,opt_gas_O2_ratio		; load base address of opt_gas_O2_ratio
-	movff	PLUSW1,lo					; read O2 ratio into lo
-
-	incf	lo,F						; O2++
-	movf	hi,W						; get He ratio into WREG
-	addwf	lo,W						; add O2 ratio to   WREG
-	movwf	up							; move sum He + O2 to up
-	movlw	.101						;
-	cpfslt	up							; O2 + He < 101?
-	decf	lo,F						; O2-- (revoke ++)
-	movf	gaslist_gas,W				; re-load index
-	movff	lo,PLUSW1					; write back O2 ratio to opt_gas_O2_ratio[WREG]
-	return
-
-
-; Decrement O2 ratio
-;
-	global	gaslist_mO2
-gaslist_mO2:
-	movf	gaslist_gas,W				; load index (0-9)
-	lfsr	FSR1,opt_gas_O2_ratio		; load base address of opt_gas_O2_ratio
-	movff	PLUSW1,lo					; read O2 ratio into lo
-
-	decf	lo,F						; O2--
-	movlw	gaslist_min_o2				; get minimum allowed O2 ratio
-	cpfslt	lo							; current O2 ratio below allowed minimum?
-	bra		gaslist_mO2_1				; NO
-	movwf	lo							; YES - copy minimum O2 ratio to lo
-gaslist_mO2_1:
-	movf	gaslist_gas,W				; re-load index
-	movff	lo,PLUSW1					; write back O2 ratio to opt_gas_O2_ratio[WREG]
-	return
-
-;=============================================================================
-
- IFDEF _helium
-
-; Increment He ratio
-;
-	global	gaslist_pHe
-gaslist_pHe:
-	movf	gaslist_gas,W				; load index (0-9)
-	lfsr	FSR1,opt_gas_O2_ratio		; load base address of opt_gas_O2_ratio
-	movff	PLUSW1,lo					; read O2 ratio into lo
-	lfsr	FSR1,opt_gas_He_ratio		; load base address of opt_gas_He_ratio
-	movff	PLUSW1,hi					; read He ratio into hi
-
-	incf	hi,F						; He++
-	movf	hi,W						; get He ratio into WREG
-	addwf	lo,W						; add O2 ratio to WREG
-	movwf	up							; move sum He + O2 to up
-	movlw	.101						;
-	cpfslt	up							; O2 + He < 101?
-	decf	hi,F						; He-- (revoke ++)
-	movf	gaslist_gas,W				; re-load index
-	movff	hi,PLUSW1					; write back He ratio to opt_gas_He_ratio[WREG]
-	return
-
-; Decrement He ratio
-;
-	global	gaslist_mHe
-gaslist_mHe:
-	movf	gaslist_gas,W				; load index (0-9)
-	lfsr	FSR1,opt_gas_He_ratio		; load base address of opt_gas_He_ratio
-	movff	PLUSW1,hi					; read He ratio into hi
-
-	decf	hi,F						; He--
-	bnn		gaslist_mHe_1				; He ratio negative?
-	clrf	hi							; YES - set He ratio to 0
-gaslist_mHe_1:
-	movf	gaslist_gas,W				; re-load index
-	movff	hi,PLUSW1					; write back He ratio to opt_gas_He_ratio[WREG]
-	return
-
- ENDIF	; _helium
-
-;=============================================================================
-
-; Increment switch depth
-;
-	global	gaslist_pDepth
-gaslist_pDepth:
-	lfsr	FSR1,opt_gas_change			; load base address of opt_gas_change
-	movf	gaslist_gas,W				; load index (0-4)
-	movff	PLUSW1,lo					; read switch depth into lo
-	incf	lo,F						; increment switch depth
-	movlw	gaslist_max_change_depth	; get max change depth
-	cpfsgt	lo							; above max change depth?
-	bra		gaslist_pDepth_1			; NO
-	movwf	lo							; YES - revert to max change depth
-gaslist_pDepth_1:
-	movf	gaslist_gas,W				; re-load index
-	movff	lo,PLUSW1					; write back switch depth
-	return
-
-
-; Decrement switch depth
-;
-	global	gaslist_mDepth
-gaslist_mDepth:
-	lfsr	FSR1,opt_gas_change			; load base address of opt_gas_change
-	movf	gaslist_gas,W				; load index (0-4)
-	movff	PLUSW1,lo					; read switch depth into lo
-	decf	lo,F						; decrement switch depth
-	btfsc	STATUS,N					; did depth became negative?
-	clrf	lo							; YES - reset to zero
-	movff	lo,PLUSW1					; write back switch depth
-	return
-
-;=============================================================================
-
- IFDEF _ccr_pscr
-
-; Increment setpoint
-;
-	global	gaslist_spplus
-gaslist_spplus:
-	movf	gaslist_gas,W
-	lfsr	FSR1,opt_setpoint_cbar
-	movff	PLUSW1,lo					; read setpoint
-	movlw	gaslist_sp_stepsize
-	addwf	lo,F
-	movlw	gaslist_sp_max
-	cpfsgt	lo
-	bra		gaslist_spplus2
-	movlw	gaslist_sp_min
-	movwf	lo
-gaslist_spplus2:
-	movf	gaslist_gas,W
-	movff	lo,PLUSW1					; write back setpoint
-	return
-
-
-; Increment setpoint switch depth
-;
-	global	gaslist_spdepthplus
-gaslist_spdepthplus:
-	movf	gaslist_gas,W				; get setpoint number (0-4)
-	bz		gaslist_spdepthplus2		; setpoint number = 0? YES - force depth to always be 0m
-	lfsr	FSR1,opt_setpoint_change	; load base address of opt_setpoint_change
-	movff	PLUSW1,lo					; read setpoint depth into lo
-	incf	lo,F						; increment depth
-	movlw	gaslist_max_change_depth	; get max. depth
-	cpfsgt	lo							; switch depth > max. depth?
-	bra		gaslist_spdepthplus_1		; NO
-	movwf	lo							; YES - copy to lo
-gaslist_spdepthplus_1:
-	movf	gaslist_gas,W				; re-load index
-	movff	lo,PLUSW1					; write back setpoint depth
-	return
-
-
-; Decrement set point switch depth
-;
-	global	gaslist_spdepthminus
-gaslist_spdepthminus:
-	movf	gaslist_gas,W				; get setpoint number (0-4)
-	bz		gaslist_spdepthminus2		; setpoint number = 0? YES - force depth to always be 0m
-	lfsr	FSR1,opt_setpoint_change	; load base address of opt_setpoint_change
-	movff	PLUSW1,lo					; read setpoint depth into lo
-	decf	lo,F						; decrement switch depth
-	btfsc	STATUS,N					; did depth became negative?
-	clrf	lo							; YES - reset to zero
-	movff	lo,PLUSW1					; write back setpoint depth
-	return
-
-
-; helper for increment/decrement setpoint switch depth
-;
-gaslist_spdepthplus2:
-gaslist_spdepthminus2:
-	movlw	.0
-	movff	WREG,opt_setpoint_change+0; hard reset to 0m
-	return
-
- ENDIF	; _ccr_pscr
-
-;=============================================================================
-
-
-;----------------------------------------------------------------------------
+; Helper Function:
 ; Compute MOD from O2 ratio and char_I_ppO2_max_work / char_I_ppO2_max_deco
 ; Compute MOD from O2 ratio and char_I_ppO2_max_deco
 ;
-; Input:  gaslist_gas                   = current gas index.
+; Input:  gaslist_gas                   = current gas index
 ;         opt_gas_O2_ratio[gaslist_gas] = current O2 ratio
 ; Output: WREG                          = MOD [m]
 ;
+	global gaslist_calc_mod
 gaslist_calc_mod:
 	lfsr	FSR1,opt_gas_type			; load base address of opt_gas_type
 	movf	gaslist_gas,W				; load index (0...9)
@@ -910,22 +360,169 @@ gaslist_calc_mod_deco:
 	lfsr	FSR1,opt_gas_O2_ratio		; load base address of opt_gas_O2_ratio
 	movf	gaslist_gas,W				; load index (0...9)
 	movff	PLUSW1,xB+0					; read O2 ratio into xB+0
-	movf	xB+1,W						; copy ppO2 max into WREG
+	movf	xB+1,W						; copy ppO2 [cbar] max into WREG
 	clrf	xB+1						; clear xB+1 for div16x16 operation
 	mullw	.10							; multiply ppO2 max value with 10
 	MOVII	PROD,xA						; copy result to xA
 	call	div16x16					; xC = xA / xB with xA as remainder
-	movf	xC+0,W						; copy low  byte of the result to WREG
-	addlw	-.10						; subtract 10 cbar
+	movf	xC+0,W						; copy low byte of the result to WREG
+	addlw	-.10						; subtract 10 m to remove the 1 bar surface pressure
 	return								; return with final result [in meters] in WREG
 
-;----------------------------------------------------------------------------
 
-; print ppO2 as x.xx for gas/diluent in gaslist_gas (0-9)
+;=============================================================================
+gaslist2	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Clean up the Gas/Diluent Settings so that there is only one FIRST Gas/Diluent
+;
+; Input:  gaslist_gas  last edited gas/dil (0-9)
+;
+	global	gaslist_cleanup_list
+gaslist_cleanup_list:
+	lfsr	FSR1,opt_gas_type			; load base address of opt_gas_type
+
+ IFDEF _ccr_pscr
+	movlw	.5							; offset between gases and diluents
+	btfsc	is_diluent_menu				; setting up diluents?
+	subwf	gaslist_gas,F				; YES - subtract offset from gaslist_gas: (5-9) -> (0-4)
+ ENDIF	; _ccr_pscr
+
+gaslist_cleanup_list_loop_1:
+	bcf		ignore_last_edited_gas		; allow the last edited gas/dil to be found as a "first"
+
+gaslist_cleanup_list_loop_2:
+	clrf	lo							; clear number of "first" gases found
+	movlw	.5							; initialize hi as loop counter for checking 5 gases/diluents
+	movwf	hi							; ...
+
+gaslist_cleanup_list_loop_3:
+	decf	hi,W						; WREG = current gas/dil to check (4..0)
+
+ IFDEF _ccr_pscr
+	btfsc	is_diluent_menu				; setting up diluents?
+	addlw	.5							; YES - add offset from gases to diluents -> (9..5)
+ ENDIF	; _ccr_pscr
+
+	movff	PLUSW1,WREG					; read type into WREG
+	decfsz	WREG						; type = first ?
+	bra		gaslist_cleanup_1			; NO  - done with this gas/dil
+	incf	lo,F						; YES - increment number of "firsts" found
+	btfss	ignore_last_edited_gas		;     - shall the last edited gas/dil be skipped?
+	bra		gaslist_cleanup_set_first	;       NO  - set the currently checked gas/dil as last "first" found
+	decf	hi,W						;       YES - get the currently checked gas/dil (0..4)
+	cpfseq	gaslist_gas					;           - is  the currently checked gas/dil == the last edited gas/dil ?
+gaslist_cleanup_set_first:
+	movff	hi,up						;             (NO) - set current gas/dil as the last "first" found (1..5)
+
+gaslist_cleanup_1:
+	decfsz	hi,F						; decrement loop counter, did loop counter became 0?
+	bra		gaslist_cleanup_list_loop_3	; NO  - check next gas/dil
+	tstfsz	lo							; YES - any first gas/dil at all?
+	bra		gaslist_cleanup_list_2		;       YES - one or more "first" gas/dil found
+
+ IFDEF _ccr_pscr
+	btfsc	is_diluent_menu				;       NO  - setting up diluents?
+	lfsr	FSR1,opt_dil_type			;             YES - load base address of opt_gas_type
+ ENDIF	; _ccr_pscr
+
+	movlw	.1							;           - load coding for first gas
+	movwf	INDF1						;           - make gas/dil 1 the first gas
+	bsf		option_changed				;           - flag that the EEPROM needs to be updated
+	return								;           - done
+
+gaslist_cleanup_list_2:
+	movlw	.1							; total number of "first" gas/dil allowed is 1
+	cpfsgt	lo							; more than one "first" found?
+	return								; NO  - done
+	decf	up,W						; YES - get last found "first" (0-4)
+	cpfseq	gaslist_gas					;     - is  last found "first" == last edited gas/dil ?
+	bra		gaslist_cleanup_disable		;       NO  - disable it
+	bsf		ignore_last_edited_gas		;       YES - do not find the last edited gas/dil as "first" any more
+	bra		gaslist_cleanup_list_loop_2	;           - loop until only one "first" is left over
+
+gaslist_cleanup_disable:
+ IFDEF _ccr_pscr
+	btfsc	is_diluent_menu				; setting up diluents?
+	addlw	.5							; YES - adjust offset
+ ENDIF	; _ccr_pscr
+
+	clrf	PLUSW1						; disable the gas/dil
+	bsf		option_changed				; flag that the EEPROM needs to be updated
+	bra		gaslist_cleanup_list_loop_1	; redo from start until only one "first" is left over
+
+
+;=============================================================================
+gaslist3	CODE
+;=============================================================================
+
+ IFDEF _ccr_pscr
+
+;-----------------------------------------------------------------------------
+; Main Menu Item - print Setpoint by 'PRODL' (dynamic Title)
+;
+	global	gaslist_strcat_setpoint_PRODL
+gaslist_strcat_setpoint_PRODL:
+	movff	PRODL,gaslist_gas			; get current menu item (0-4)
+	;bra	gaslist_strcat_setpoint		; continue
+
+
+;-----------------------------------------------------------------------------
+; Main Menu Item - print Setpoint by 'gaslist_gas' (dynamic Title)
+;
+	global	gaslist_strcat_setpoint
+gaslist_strcat_setpoint:
+	btfsc	short_gas_descriptions		; shall use short version?
+	bra		gaslist_strcat_setpoint2	; YES - use short version
+	STRCAT_TEXT tSP						; "SP"
+	incf	gaslist_gas,W				; (0-4) -> (1-5) into WREG
+	movwf	lo							; copy to lo
+	output_9							; print SP number (0-9)
+	PUTC	":"							; ":"
+
+gaslist_strcat_setpoint2:
+	btfsc	divemode					; in dive mode?
+	bra		gaslist_strcat_setpoint4	; YES - do not add the "*" in dive mode
+	movf	gaslist_gas,W				; NO  - (0-4) into WREG
+	bnz		gaslist_strcat_setpoint3	;     - SP index = 0 ?
+	PUTC	"*"							;       YES - print *
+	bra		gaslist_strcat_setpoint4	;     - continue with cbar value
+
+gaslist_strcat_setpoint3:
+	PUTC	" "							; print a space
+
+gaslist_strcat_setpoint4:
+	movf	gaslist_gas,W				; (0-4) into WREG
+	lfsr	FSR1,opt_setpoint_cbar		; load base address of setpoint cbar values
+	movf	PLUSW1,W					; read cbar value
+	movwf	lo							; copy to lo
+	bsf		decimal_digit2				; place a decimal point in front of digit 2
+	output_256							; print as x.xx
+	btfsc	divemode					; in dive mode?
+	bra		gaslist_strcat_setpoint5	; YES - skip text in dive mode
+	STRCAT_TEXT tbar					; NO  - print "bar"
+
+gaslist_strcat_setpoint5:
+	PUTC	" "							; print a space
+	movf	gaslist_gas,W				; (0-4) into WREG
+	lfsr	FSR1,opt_setpoint_change	; load base address of switch depths
+	movff	PLUSW1,lo					; read switch depth into lo
+	goto	gaslist_strcat_depth		; print depth (meters or ft)
+
+ ENDIF	; _ccr_pscr
+
+
+;=============================================================================
+gaslist4	CODE
+;=============================================================================
+
+;----------------------------------------------------------------------------
+; Main Menu Item - print ppO2 at Change Depth (dynamic Title)
 ;
 	global	gaslist_ppo2
 gaslist_ppo2:
-	STRCAT_TEXT tppO2					; ppO2:
+	STRCAT_TEXT tppO2					; print "ppO2:"
 	lfsr	FSR1,opt_gas_change			; load base address of opt_gas_change
 	movf	gaslist_gas,W				; load index (0-9)
 	movf	PLUSW1,W					; read change depth into WREG
@@ -938,59 +535,59 @@ gaslist_ppo2:
 	clrf	xB+1						; clear xB+1
 	call	mult16x16					; calculate char_I_O2_ratio * (p_amb/10)
 	MOVII	xC,xA						; copy result to xA
-	movlw	d'100'						; load 100 to xB
-	movwf	xB+0
-	clrf	xB+1
+	MOVLI	.100,xB						; load 100    to xB
 	call	div16x16					; xC = xA / xB = (char_I_O2_ratio * p_amb/10)/100
 	; check for very high ppO2
 	tstfsz	xC+2						; xC+2 remains from mult16x16, xC+2 > 0 (-> ppO2 is > 6.55 bar) ?
-	bra		gaslist_ppo2_1				; YES - display a fixed max value
-	MOVII	xC,mpr						; copy result to hi:lo
-	bcf		ignore_digit4
-	bsf		leftbind
-	output_16dp d'3'					; print ppO2 as x.xx
-	STRCAT_TEXT tbar					; print "bar"
-	return
+	bra		gaslist_ppo2_2				; YES - display a fixed max value
+	PUTC	" "							; NO  - print a space
+	MOVII	xC,mpr						;     - copy result to hi:lo
+	bsf		leftbind					;     - print left-aligned
+	bsf		decimal_digit2				;     - place a decimal point in front of digit 2
+	output_999							;     - print ppO2 (0.00-655.35)
 gaslist_ppo2_1:
-	STRCAT	">6.6"
-	return
+	STRCAT_TEXT tbar					;     - print "bar"
+	return								;     - done
+
+gaslist_ppo2_2:
+	STRCAT	">6.55"						; print ">6.55"
+	bra		gaslist_ppo2_1				; append unit and return
 
 
-; print MOD and END for gas in gaslist_gas (0-9)
+;-----------------------------------------------------------------------------
+; Main Menu Item - print MOD and END for a Gas (dynamic Title)
 ;
 	global	gaslist_MOD_END
 gaslist_MOD_END:
 	STRCAT_TEXT tMOD					; print "MOD:"
-	rcall	gaslist_calc_mod			; compute MOD into WREG
+	call	gaslist_calc_mod			; compute MOD into WREG
 	movwf	lo							; copy result to lo
+	movwf	hi							; keep copy   in hi
 	call	gaslist_strcat_depth		; print depth in meters or feet as configured
 	PUTC	"/"							; print "/"
 	STRCAT_TEXT tEND					; print "END:"
-	rcall	gaslist_calc_mod			; compute MOD into WREG
+	movf	hi,W						; retrieve MOD
 	addlw	.10							; compute MOD = MOD + 10m
-	movwf	xB+0
-	clrf	xB+1
-	movlw	d'100'
-	movwf	xA+0
+	movwf	xB+0						; copy to xB
+	clrf	xB+1						; ...
+	MOVLI	.100,xA						; load 100 to xA
 	lfsr	FSR1,opt_gas_He_ratio		; load base address of opt_gas_He_ratio
 	movf	gaslist_gas,W				; load index (0...9)
-	movf	PLUSW1,W					; read He ration into WREG
-	subwf	xA+0,F						; xA+0 = 100 - He ratio in %
-	clrf	xA+1
-	call	mult16x16					; xA*xB=xC
-	MOVII	xC,xA
-	movlw	d'100'
-	movwf	xB+0
-	clrf	xB+1
+	movf	PLUSW1,W					; read He ratio into WREG
+	subwf	xA+0,F						; xA = 100 - He ratio in %
+	call	mult16x16					; xC = xA * xB
+	MOVII	xC,xA						; copy result to xA
+	MOVLI	.100,xB						; load 100 to xB
 	call	div16x16					; xC = xA / xB with xA as remainder
 	;									; xC:2 = ((MOD+10) * 100 - HE Value in %) / 100
 	movlw	d'10'						; subtract 10 m
 	subwf	xC+0,F						; ...
 	movff	xC+0,lo						; copy result to lo
-	bra		gaslist_strcat_depth		; print depth in meters or feet as configured and return
+	goto	gaslist_strcat_depth		; print depth and return
 
 
-; print change depth of gas in gaslist_gas (0-9), use warning color if > MOD
+;-----------------------------------------------------------------------------
+; Main Menu Item - print 'reset to MOD' (dynamic Title)
 ;
 	global	gaslist_reset_mod_title
 gaslist_reset_mod_title:
@@ -999,80 +596,22 @@ gaslist_reset_mod_title:
 	lfsr	FSR1,opt_gas_change			; load base address of opt_gas_change
 	movf	gaslist_gas,W				; load index (0-9)
 	movff	PLUSW1,hi					; read change depth into hi
-	rcall	gaslist_calc_mod			; compute MOD for ppO2 max work/deco dependent on gas type into WREG
+	call	gaslist_calc_mod			; compute MOD for ppO2 max work/deco dependent on gas type into WREG
 	movwf	lo							; copy (true) MOD   to lo
 	movf	hi,W						; copy change depth to WREG
 	cpfslt	lo							; change depth > MOD ?
-	bra		gaslist_strcat_depth		; NO  - print MOD from value in lo
-	call	TFT_attention_color			; YES - use attention color
-	rcall	gaslist_calc_mod_deco		;     - compute MOD for ppO2 max deco into WREG
+	bra		gaslist_reset_mod_title_exit; NO  - print MOD from value in lo
+	FONT_COLOR_ATTENTION				; YES - use attention color
+	call	gaslist_calc_mod_deco		;     - compute MOD for ppO2 max deco into WREG
 	movwf	up							;     - copy result to up
 	movf	hi,W						;     - copy change depth to WREG again
 	cpfslt	up							;     - change depth > MOD deco ?
-	bra		gaslist_strcat_depth		;       NO  - print MOD from value in lo, keeping attention color
-	call	TFT_warning_color			;       YES - switch to warning color
-	bra		gaslist_strcat_depth		;           - print MOD from value in lo
+	bra		gaslist_reset_mod_title_exit;       NO  - print MOD from value in lo, keeping attention color
+	FONT_COLOR_WARNING					;       YES - switch to warning color
+	;bra	gaslist_reset_mod_title_exit;           - print MOD depth
 
-
-; set change depth of gas in gaslist_gas (0-9) to its MOD
-;
-	global	gaslist_reset_mod
-gaslist_reset_mod:
-	rcall	gaslist_calc_mod			; compute MOD into WREG
-	movwf	lo							; copy result to lo
-	lfsr	FSR1,opt_gas_change			; load base address of opt_gas_change
-	movf	gaslist_gas,W				; load index (0-9)
-	movff	lo,PLUSW1					; write back new change depth
-	return
-
-;----------------------------------------------------------------------------
-; put "Nxlo", "Txlo/hi", "Air" or "O2" into postinc2
-;
-; Includes capability to show trimix gases to be able to properly decode data
-; from logbook in case trimix dives are stored on an OSTC running the sport FW.
-
-	global	gaslist_show_mix
-gaslist_show_mix:
-	tstfsz	hi							; He=0?
-	bra		gaslist_show_mix5			; NO - show a TX
-	movlw	.21
-	cpfseq	lo							; Air?
-	bra		gaslist_show_mix2			; NO
-	STRCAT_TEXT tSelectAir				; YES - show "Air"
-	bra		gaslist_show_mix4b
-gaslist_show_mix2:
-	movlw	.100
-	cpfseq	lo							; O2?
-	bra		gaslist_show_mix3			; NO
-	STRCAT_TEXT tSelectO2				; YES - show "O2"
-	bra		gaslist_show_mix4b
-gaslist_show_mix3:
-	movlw	.21
-	cpfslt	lo							; < Nx21?
-	bra		gaslist_show_mix4			; NO
-	STRCAT_TEXT tGasErr					; YES - show "Err"
-	output_99							; O2 ratio is still in "lo"
-	bra		gaslist_show_mix4c
-gaslist_show_mix4:
-	STRCAT_TEXT tSelectNx				; show "Nx"
-	output_99							; O2 ratio is still in "lo"
-gaslist_show_mix4b:
-	STRCAT	" "
-gaslist_show_mix4c:
-	btfsc	divemode					; in dive mode?
-	return								; YES
-	STRCAT	"  "
-	return
-gaslist_show_mix5:
-	btfsc	divemode
-	bra		gaslist_show_mix6
-	STRCAT_TEXT tSelectTx				; show "Tx"
-gaslist_show_mix6:
-	output_99							; O2 ratio is still in "lo"
-	PUTC	"/"
-	movff	hi,lo
-	output_99							; He ratio
-	return
+gaslist_reset_mod_title_exit:
+	goto	gaslist_strcat_depth		; print MOD depth and return
 
 ;-----------------------------------------------------------------------------
 

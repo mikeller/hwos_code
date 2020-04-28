@@ -1,6 +1,6 @@
 /////////////////////////////////////////////////////////////////////////////
 //
-// compass_calib.c                                    next generation V3.03.4
+// compass_calib.c                                    next generation V3.09.4
 //
 // Calibrate hard-iron for magnetic compass measurements.
 // Copyright (c) 2012-2019, JD Gascuel, HeinrichsWeikamp, all rights reserved.
@@ -31,6 +31,7 @@
 			LFSR	2, 0x800	\
 		_endasm
 #	pragma udata overlay bank9_compass
+#	pragma code compass_cal
 #else
 #	define RESET_C_STACK
 #endif

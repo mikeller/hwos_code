@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File math.asm                             combined next generation V3.04.3
+;   File math.asm                           * combined next generation V3.09.4k
 ;
 ;   Math subroutines
 ;
@@ -12,28 +12,17 @@
 
 #include "hwos.inc"						; mandatory header
 
-math	CODE
 
 ;=============================================================================
+math1	CODE
+;=============================================================================
 
-	global	convert_time				; converts hi:lo in minutes to hours (up:hi) and minutes (lo)
-										; also usable for conversion of seconds to minutes and seconds
-										; trashes xA, xB, xC
-convert_time:
-	movff	lo,xA+0						; copy hi:lo to xA
-	movff	hi,xA+1						;
-	movlw	d'60'						; set divisor to 60
-	movwf	xB+0						; write 60 to xB
-	clrf	xB+1						; 
-	rcall	div16x16					; xC = xA / xB with xA as remainder
-	movff	xC+1,up						; result    is hours   / minutes, copy to up (high byte)
-	movff	xC+0,hi						; result    is hours   / minutes, copy to hi (low  byte)
-	movff	xA+0,lo						; remainder is minutes / seconds, copy to lo
-	return
-
-
-	global	div16						; divA:2 = divA:2 / 2^WREG
-										; trashes WREG
+;-----------------------------------------------------------------------------
+; Divide a 16 Bit Integer by a Power of 2:  divA:2 = divA:2 / 2^WREG
+;
+; trashes WREG
+;
+	global	div16
 div16:
 	bcf		STATUS,C					; clear carry
 	rrcf	divA+1						; rotate right high byte, carry into MSB, LSB into carry
@@ -43,8 +32,16 @@ div16:
 	return								; YES - done
 
 
-	global	mult16						; xA:2 = xA:2 * 2^WREG
-										; trashes WREG
+;=============================================================================
+math2	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Multiply a 16 bit Integer by a Power of 2:  xA:2 = xA:2 * 2^WREG
+;
+; trashes WREG
+;
+	global	mult16
 mult16:
 	bcf		STATUS,C					; clear carry
 	rlcf	divA+0,F					; rotate left low  byte, carry into LSB, MSB into carry
@@ -54,8 +51,16 @@ mult16:
 	return								; YES - done
 
 
-	global	addU16						; ; sub_c:2 = sub_a:2 + sub_b:2	with USIGNED values
-										; trashes WREG
+;=============================================================================
+math3	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Add two UNSIGNED 16 bit Integers:  sub_c:2 = sub_a:2 + sub_b:2
+;
+; trashes WREG
+;
+	global	addU16
 addU16:
 	movf	sub_a+0,W					; get 1st summand (low  byte) to WREG
 	addwf	sub_b+0,W					; add 2nd summand (low  byte) and store result in WREG
@@ -66,9 +71,16 @@ addU16:
 	return								; done
 
 
-	global	sub16						; sub_c:2 = sub_a:2 - sub_b:2   with SIGNED values
-										; sets neg_flag if result is < 0
-										; trashes WREG
+;=============================================================================
+math4	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Subtract two SIGNED 16 Bit Integers:  sub_c:2 = sub_a:2 - sub_b:2
+;
+; sets neg_flag if result is < 0, trashes WREG
+;
+	global	sub16
 sub16:
 	bcf		neg_flag					; clear flag which will indicate if result is negative
 	movf	sub_b+0,W					; get value to be subtracted, low byte
@@ -87,9 +99,16 @@ sub16:
 	return								;     - done
 
 
-	global	subU16						; sub_c:2 = sub_a:2 - sub_b:2   with UNSIGNED values
-										; sets neg_flag if result is < 0
-										; trashes WREG
+;=============================================================================
+math5	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Subtract two UNSIGNED 16 Bit Integers:  sub_c:2 = sub_a:2 - sub_b:2
+;
+; sets neg_flag if result is < 0, trashes WREG
+;
+	global	subU16
 subU16:
 	bcf		neg_flag					; clear flag which will indicate if result is negative
 	movf	sub_b+0,W					; get value to be subtracted, low byte
@@ -108,9 +127,17 @@ subU16:
 	return								;     - done
 
 
-	global	cmpU16						; sub_a:2 - sub_b:2	with UNSIGNED values
-										; sets neg_flag if result is < 0, but does not store result itself
-										; trashes WREG
+;=============================================================================
+math6	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Compare two UNSIGNED 16 Bit Integers:  sub_a:2 - sub_b:2
+;
+; sets neg_flag if result is < 0, trashes WREG
+; the subtraction result is not stored
+;
+	global	cmpU16
 cmpU16:
 	bcf		neg_flag					; clear flag which will indicate if result is negative
 	movf	sub_b+0,W					; get value to be subtracted, low byte
@@ -122,44 +149,61 @@ cmpU16:
 	return								; done
 
 
-	global	mult16x16					; xC:4 = xA:2 * xB:2   with UNSIGNED values
-										; trashes PRODL, PRODH, WREG
+;=============================================================================
+math7	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Multiply two UNSIGNED 16 bit Integers:  xC:4 = xA:2 * xB:2
+;
+; trashes PRODL, PRODH, WREG
+;
+	global	mult16x16
 mult16x16:
 	clrf	xC+2						; clear the high-order bits
-	clrf	xC+3
-	;
+	clrf	xC+3						; ...
+
 	movf	xA+0,W						; do the "L" multiplication
 	mulwf	xB+0
 	movff	PRODL,xC+0					; copy result to xC
 	movff	PRODH,xC+1
-	;
+
 	movf	xA+0,W						; do the "I" multiplication
 	mulwf	xB+1
 	movf	PRODL,W						; get the product's low byte...
 	addwf	xC+1,F						; ... and add it to xC+1
 	movf	PRODH,W						; get the product's high byte...
 	addwfc	xC+2,F						; ... and add it to xC+2 obeying carry bit from xC+1
-	;
+
 	movf	xA+1,W						; do the "O" multiplication
 	mulwf	xB+0
-	movf	PRODL,W						;  get the product's low byte...
+	movf	PRODL,W						; get the product's low byte...
 	addwf	xC+1,F						; ... and add it to xC+1
 	movf	PRODH,W						; get the product's high byte...
 	addwfc	xC+2,F						; ... and add it to xC+2 obeying carry bit from xC+1
 	clrf	WREG						; clear WREG...
 	addwfc	xC+3,F						; ... add add it to xC+3 obeying carry bit from xC+2 (can only happen in "O" multiplication)
-	;
+
 	movf	xA+1,W						; do the "F" multiplication
 	mulwf	xB+1
-	movf	PRODL,W						;   get the product's low byte...
+	movf	PRODL,W						; get the product's low byte...
 	addwf	xC+2,F						; ... and add it to xC+2
 	movf	PRODH,W						; get the product's high byte...
 	addwfc	xC+3,F						; ... and add it to xC+3 obeying carry bit from xC+2
-	return
+
+	return								; done
 
 
-	global	div16x16					; xC:2 = xA:2 / xB:2 with xA as remainder
-										; trashes WREG
+;=============================================================================
+math8	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Divide two UNSIGNED 16 Bit Integers:  xC:2 = xA:2 / xB:2 with xA as remainder
+;
+; trashes WREG
+;
+	global	div16x16
 div16x16:
 	movlw		.16						; process 16 bits ...
 	movwf		math_loop				; ... initialize loop counter
@@ -193,8 +237,16 @@ div16x16_3:
 	return								; YES - done
 
 
-	global	div32x16					; xC:4 = xC:4 / xB:2 with xA as remainder
-										; trashes WREG
+;=============================================================================
+math9	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Divide a 32 Bit Integer by a 16 Bit Integer: xC:4 = xC:4 / xB:2 with xA as remainder
+;
+; trashes WREG
+;
+	global	div32x16
 div32x16:
 	movlw		.32						; process 32 bits ...
 	movwf		math_loop				; ... initialize loop counter
@@ -228,73 +280,99 @@ div32x16_3:
 	return								; YES - done
 
 
+;-----------------------------------------------------------------------------
+;
+; ISR math functions
+;
+;-----------------------------------------------------------------------------
+
+;=============================================================================
+math10	CODE
 ;=============================================================================
 
-; ISR math functions
-
-	global	isr_shift_C31				; 24 bit shift, repeated WREG times, dedicated to a specific usage:
-										; Because less than 8 bits are shifted and only C[2:1] is needed,
-										; we don't care what bit is inserted.
+;-----------------------------------------------------------------------------
+; 24 Bit Shift, repeated WREG Times, dedicated to a specific Usage
+;
+; Because less than 8 bits are shifted and only C[2:1] is needed,
+; we don't care what bit is inserted.
+;
+	global	isr_shift_C31
 isr_shift_C31:
 	rrcf	isr_xC+3,F					; shift three bytes
-	rrcf	isr_xC+2,F
-	rrcf	isr_xC+1,F
+	rrcf	isr_xC+2,F					; ...
+	rrcf	isr_xC+1,F					; ...
 	decfsz	WREG						; decrement loop counter, done?
 	bra		isr_shift_C31				; NO  - loop
 	return								; YES - done
 
 
-	global	isr_unsigned_mult16x16		; isr_xC = isr_xA * _isr_xB   with UNSIGNED values
-										; trashes PRODL, PRODH, WREG
+;=============================================================================
+math11	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Multiply two UNSIGNED 16 Bit Integers: isr_xC = isr_xA * isr_xB
+;
+; trashes PRODL, PRODH, WREG
+;
+	global	isr_unsigned_mult16x16
 isr_unsigned_mult16x16:
 	movf	isr_xA+0,W					; multiply a[0] * b[0]
-	mulwf	isr_xB+0
+	mulwf	isr_xB+0					; ...
 	movff	PRODL,isr_xC+0				; store product to c[1]:c[0]
-	movff	PRODH,isr_xC+1
-	;
+	movff	PRODH,isr_xC+1				; ...
+
 	movf	isr_xA+1,W					; multiply a[1] * b[1]
-	mulwf	isr_xB+1
+	mulwf	isr_xB+1					; ...
 	movff	PRODL, isr_xC+2				; store product to  c[3]:c[2]
-	movff	PRODH, isr_xC+3
-	;
+	movff	PRODH, isr_xC+3				; ...
+
 	movf	isr_xA+0,W					; multiply a[0] * b[1]
-	mulwf	isr_xB+1
+	mulwf	isr_xB+1					; ...
 	movf	PRODL,W						; add cross product to c[3]:c[2]:c[1]
-	addwf	isr_xC+1,F
-	movf	PRODH,W
+	addwf	isr_xC+1,F					; ...
+	movf	PRODH,W						; ...
 	addwfc	isr_xC+2,F					; propagate carry
-	clrf	WREG
-	addwfc	isr_xC+3,F					; propagate carry
-	;
+	clrf	WREG						; ...
+	addwfc	isr_xC+3,F					; ...
+
 	movf	isr_xA+1,W					; multiply a[1] * b[0]
-	mulwf	isr_xB+0
+	mulwf	isr_xB+0					; ...
 	movf	PRODL,W						; add cross product
-	addwf	isr_xC+1,F
-	movf	PRODH,W
+	addwf	isr_xC+1,F					; ...
+	movf	PRODH,W						; ...
 	addwfc	isr_xC+2,F					; propagate carry
-	clrf	WREG
-	addwfc	isr_xC+3,F					; propagate carry
-	return
+	clrf	WREG						; ...
+	addwfc	isr_xC+3,F					; ...
+	return								; done
 
 
-	global	isr_signed_mult16x16		; isr_xC = isr_xA * isr_xB   with SIGNED values
-										; trashes PRODL, PRODH, WREG
+;-----------------------------------------------------------------------------
+; Multiply two   SIGNED 16 Bit Integers: isr_xC = isr_xA * isr_xB
+;
+; trashes PRODL, PRODH, WREG
+;
+	global	isr_signed_mult16x16
 isr_signed_mult16x16:
-	rcall	isr_unsigned_mult16x16		; do an unsigned multiplication first
-	;									; manage sign extension of operand B
+	; do an unsigned multiplication first
+	rcall	isr_unsigned_mult16x16
+
+	; manage sign extension of operand B
 	btfss	isr_xB+1,7					; is B negative ?
 	bra		isr_signed_mult_checkA		; NO  - continue checking operand A
-	movf	isr_xA+0,W					; Yes - add -65536 * A
-	subwf	isr_xC+2,F
-	movf	isr_xA+1,W
-	subwfb	isr_xC+3,F
+	movf	isr_xA+0,W					; YES - add -65536 * A
+	subwf	isr_xC+2,F					;     - ...
+	movf	isr_xA+1,W					;     - ...
+	subwfb	isr_xC+3,F					;     - ...
 isr_signed_mult_checkA					; manage sign extension of operand B
 	btfss	isr_xA+1,7					; is A negative ?
 	return								; NO  - done
-	movf	isr_xB+0,W					; Yes - add -65536 * B
-	subwf	isr_xC+2,F
-	movf	isr_xB+1,W
-	subwfb	isr_xC+3,F
-	return
+	movf	isr_xB+0,W					; YES - add -65536 * B
+	subwf	isr_xC+2,F					;     - ...
+	movf	isr_xB+1,W					;     - ...
+	subwfb	isr_xC+3,F					;     - ...
+	return								;     - done
+
+;-----------------------------------------------------------------------------
 
 	END

@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File wait.asm                             combined next generation V3.02.1
+;   File wait.asm                           * combined next generation V3.09.4
 ;
 ;   Wait routines
 ;
@@ -13,14 +13,16 @@
 
 #include "hwos.inc"
 
-wait	CODE
 
 
-; =============================================================================
-; WAIT 1 second
-; Warning: Do not use for time critical routines - can be between 0 and 1 sec!
-; =============================================================================
+;=============================================================================
+wait1	CODE
+;=============================================================================
 
+;-----------------------------------------------------------------------------
+; Wait 1 Second
+; Warning: do not use for time critical routines - can be between 0 and 1 sec!
+;
 	global	wait_1s
 wait_1s:
 	bcf		trigger_full_second	; clear any left-over trigger
@@ -29,11 +31,32 @@ wait_1s:
 	return						; YES - done
 
 
-; =============================================================================
-; WAIT for multiples of 1 Millisecond
-; Remark: not exact: 1.008 ms +/- 30.5 µs + worst case ISR latency
-; =============================================================================
+;=============================================================================
+wait2	CODE
+;=============================================================================
 
+;-----------------------------------------------------------------------------
+; Wait for a Multiple of 1 Second
+; Warning: do not use for time critical routines - can be up to 1 sec longer!
+;
+	global	WAITSX
+WAITSX:
+	bcf		trigger_full_second	; clear any left-over trigger
+	btfss	trigger_full_second	; did a new trigger occurred?
+	bra		$-2					; NO  - loop
+	decfsz	WREG,W				; YES - count down loop counter, became zero?
+	bra		WAITSX				;       NO  - loop
+	return						;       YES - done
+
+
+;=============================================================================
+wait3	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Wait for a Multiple of 1 Millisecond
+; Remark: not exact: 1.008 ms +/- 30.5 µs + worst case ISR latency
+;
 	global	WAITMSX
 WAITMSX:
 	movwf	wait_counter		; store number of milliseconds to wait
@@ -49,6 +72,6 @@ WAITMSX3:
 	bra		WAITMSX2			;       NO  - repeat outer loop
 	return						;       YES - done
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 
 	END

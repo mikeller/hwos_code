@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File surfmode.inc                           combined next generation V2.97
+;   File surfmode.inc                         combined next generation V3.09.4
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -11,7 +11,7 @@
 
 	extern surfloop
 	extern reset_timeout_surfmode
-	extern reset_timeout_time
+	extern restart_timeout_time
 	extern housekeeping
 
 

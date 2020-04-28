@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File aa_wordprocessor.asm                 combined next generation V3.03.7
+;   File aa_wordprocessor.asm               * combined next generation V3.08.4l
 ;
 ;   Anti-aliased word processor
 ;
@@ -11,33 +11,31 @@
 ;  2010-12-01 : [jDG] Adding 3bits anti-aliased fonts
 ;  2010-12-30 : [jDG] Revised to put temp into ACCESSRAM0
 ;  2012-08-12 : [mH]  Moved font28 into bootloader section 0x1C000
-;
-; BUGS :
-;  * If the three fonts are not in the same half of the PROM memory, TBLPTRU
-;    will be badly set, and font48 or font90 will display gibberish...
-;=============================================================================
-;
-; MEMORY FOOTPRINT:
-;------------------
-;
-; wp_wordprocessor : 8   KB, including fonts
-; aa_wordprocessor : 0.5 KB code
-;                  + 3.5 KB aa_font28 (reduced to 99 chars)
-;                  + 1.6 KB aa_font48
-;                  + 2.2 KB aa_font90
-;                  = 7.9 KB including fonts
-;
+
+
+;-----------------------------------------------------------------------------
+; Attention:
+; If the fonts are not in the same half of the PROM memory, TBLPTRU
+; will be set wrong and gibberish font output will result
+;-----------------------------------------------------------------------------
+
+
+;-----------------------------------------------------------------------------
 ; Input registers:
-;  buffer:26            String to print
-;  win_font             Font size (0=tiny, 1=small, 2=std, 3=medium, 4=large, 5=XL)
-;  win_color1:2         16bits unpacked color
-;  win_top, win_leftx2  Position on screen
-;  win_inverse          Inverse video mode
+; ----------------
+;  buffer:26            string to print
+;  font_size            font size (0=tiny, 1=small, 2=std, 3=medium, 4=large, 5=XL)
+;  font_color           font color (8 bit)
+;  win_top, win_leftx2  output position on screen
+;  win_inverse          inverse video mode selection
 ;
-; Available general purpose registers:
+; Trashed:
+; --------
 ;  PRODH, PRODL         needed for array indexing
-;  FSRx                 12bits, used for indirect addressing
-;=============================================================================
+;  FSRx                 12 bits, used for indirect addressing
+;
+;-----------------------------------------------------------------------------
+
 
 #include "hwos.inc"
 #include "tft.inc"
@@ -52,24 +50,38 @@
 	extern	convert_for_display2
 
 
+;=============================================================================
 aa_word		CODE
-
 ;=============================================================================
 
+
 ;------------------------------------------------------------------------------
-; Setup pointers for a char:
-; Inputs   WREG = char to draw, win_font
-; Output   aa_start, aa_end, win_height, AA_flags
-; Trashed  PRODH, PRODL, TBLPTR, TABLAT
+; Setup Pointers for a Char
+;
+; Input    WREG       char to draw
+;          font_size  selected font
+;
+; Output   aa_start    pointer to start of character bitmap
+;          aa_end      pointer to end   of character bitmap
+;          win_height  font height
+;          AA_flags    font attributes
+;
+; Trashed  PRODH
+;          PRODL
+;          TBLPTR
+;          TABLAT
 ;
 aa_char_setup:
-	movwf	PRODL					; save char into PROD for now
-	movf	win_font,W				; get font number (updates Z flag)
-	bnz		aa_char_1				; requested tiny font? (bra of no)
+	movwf	PRODL					; save char to draw in PROD for later use
+	movf	font_size,W				; get font size
 
 	; 0: TINY font -------------------------------------------------------
 	; Font TINY character folding...
 aa_char_0:
+	tstfsz	WREG					; requested tiny font?
+	bra		aa_char_1				; NO
+
+aa_char_00:
 	movlw	LOW   aa_font16_block
 	movwf	TBLPTRL
 	movlw	HIGH  aa_font16_block
@@ -83,6 +95,7 @@ aa_char_0:
 aa_char_1:
 	decfsz	WREG					; requested small font?
 	bra		aa_char_2				; NO
+
 	movlw	LOW   aa_font28_block
 	movwf	TBLPTRL
 	movlw	HIGH  aa_font28_block
@@ -96,6 +109,7 @@ aa_char_1:
 aa_char_2:
 	decfsz	WREG					; requested std font?
 	bra		aa_char_3				; NO
+
 	movlw	LOW   aa_font34_block
 	movwf	TBLPTRL
 	movlw	HIGH  aa_font34_block
@@ -108,6 +122,7 @@ aa_char_2:
 aa_char_3:
 	decfsz	WREG				 	; requested medium font?
 	bra		aa_char_4				; NO
+
 	movlw	LOW   aa_font48_block
 	movwf	TBLPTRL
 	movlw	HIGH  aa_font48_block
@@ -120,6 +135,7 @@ aa_char_3:
 aa_char_4:
 	decfsz	WREG				 	; requested large font?
 	bra		aa_char_5				; NO
+
 	movlw	LOW   aa_font90_block
 	movwf	TBLPTRL
 	movlw	HIGH  aa_font90_block
@@ -128,65 +144,68 @@ aa_char_4:
 	movwf	TBLPTRU
 	bra		aa_char_99
 
-	; 5: XTRA LARGE font -------------------------------------------------
+	; 5: EXTRA LARGE font ------------------------------------------------
 aa_char_5:
+	decfsz	WREG				 	; requested extra large font?
+	bra		aa_char_00				; NO - illegal font code, default to tiny font
+
 	movlw	LOW   aa_font92_block
 	movwf	TBLPTRL
 	movlw	HIGH  aa_font92_block
 	movwf	TBLPTRH
 	movlw	UPPER aa_font92_block
 	movwf	TBLPTRU
+	;bra	aa_char_99
 
 
-	; Execute font block -------------------------------------------------
+	; Execute Font Block -------------------------------------------------
 aa_char_99:
-	; This is safe if all fonts are in the same code segment
-	; (and that segment does not span the 64K edge...)
+	; this is safe if all fonts are in the same code segment
+	; (and this segment does not cross the 64 K boundary)
 	movlw	UPPER aa_font16_block
 	movwf	TBLPTRU
 
-	; Proceed to character substitutions
+	; execute the character substitutions
 aa_char_30:
 	tblrd*+							; read FROM char
-	movf	TABLAT,W				; get it, and set Z,N
-	bz		aa_char_32				; break at end of translations
+	movf	TABLAT,W				; get  FROM char
+	bz		aa_char_32				; break at end of translation table
 
 	tblrd*+							; read TO char
-	cpfseq	PRODL					; FROM == current char ?
-	bra		aa_char_30				; different -> loop
-	movff	TABLAT, PRODL			; make substitution
-	bra		aa_char_30				; loop
+	cpfseq	PRODL					; FROM char == current char ?
+	bra		aa_char_30				; NO  - different, loop
+	movff	TABLAT, PRODL			; YES - make substitution
+	bra		aa_char_30				;     - loop to consume the rest of the translations
 
-	; Make sure char is in the available range
+	; make sure char is within the font set
 aa_char_32:
-	tblrd*+							; read first char
-	movf	TABLAT,W				; get it
-	subwf	PRODL,F					; (char - first) --> PRODL
-	tblrd*+							; read nb chars
-	movf	TABLAT,W				; nbchars --> WREG
+	tblrd*+							; read code of first char in font set
+	movf	TABLAT,W				; get  code of first char in font set
+	subwf	PRODL,F					; compute code of current char - of first char
+	tblrd*+							; read number of chars in font set
+	movf	TABLAT,W				; get  number of chars in font set
 	tblrd*+							; read default char
-	cpfslt	PRODL					; char > WREG ?
-	movff	TABLAT,PRODL			; replace PRODL
+	cpfslt	PRODL					; current char beyond last char in font set?
+	movff	TABLAT,PRODL			; YES - current char with default char
 
-	; Decode font height and anti-aliasing mode
+	; decode font height and anti-aliasing mode
 	bcf		aa_antialias			; default to no AA
 	tblrd*+							; read font height + AA flag
-	movf	TABLAT,W				; into WREG
-	bnn		aa_char_34				; high bit set ?
+	movf	TABLAT,W				; get  font height + AA flag
+	btfsc	WREG,7					; AA bit set?
 	bsf		aa_antialias			; YES - then the font is AA
-aa_char_34:
-	andlw	0x7F					; keep just font height,
-	movwf	win_height				; then save it (its a register)
+	andlw	0x7F					; strip the AA bit
+	movwf	win_height				; store the font height
 
-	; Set PROM pointer to the char index
+	; set PROM pointer to the char index
 	movf	PRODL,W					; read back char
 	mullw	2						; PROD = 2*(char - base), TBLPTR=idx
-	movf	PRODL,W
-	addwf	TBLPTRL,F				; add into TBLPTR (low byte)
-	movf	PRODH,W
-	addwfc	TBLPTRH,F				; and high byte
+	movf	PRODL,W					; add to base address of font data
+	addwf	TBLPTRL,F				; ...
+	movf	PRODH,W					; ...
+	addwfc	TBLPTRH,F				; ...
 
-	; Read start and stop pointers
+	; read pointers to character bitmap
 	tblrd*+							; aa_start = PROM16(*tblptr++)
 	movff	TABLAT,aa_start+0		; read low byte
 	tblrd*+
@@ -197,126 +216,120 @@ aa_char_34:
 	tblrd*+
 	movff	TABLAT,aa_end+1			; and high byte
 
-	return
+	return							; done
 
 
 ;------------------------------------------------------------------------------
-; Character width
+; Compute Character Width
 ; Input    aa_start, aa_end, win_width, win_height, AA_flags
 ; Output   width added to win_width
 ; Trashed  aa_bitlen, TBLPTR, TABLAT
 ;
 aa_char_width:
 	movff	aa_start+0, TBLPTRL		; TBLPTR = aa_start
-	movff	aa_start+1, TBLPTRH
-	clrf	aa_bitlen				; clear reminders...
+	movff	aa_start+1, TBLPTRH		; ...
+	clrf	aa_bitlen				; clear remaining pixels counter
 
-	; Read bitmap byte, and decode length:
+	; read bitmap byte and decode length
 aa_char_width_1:
-
-	ifdef AA_BYTE_SWAP
-		btg		TBLPTRL				; toggle low ptr bit
-		tblrd*
-		movf	TABLAT,W			; store to WREG
-		btg		TBLPTRL				; get is back
-		tblrd*+						; then increment (but trash TABLAT)
-		movwf	TABLAT				; then restore copy to TABLAT
-	else
-		tblrd*+						; normal read...
-		movf	TABLAT,W			; store copy to WREG
-	endif
-
+ ifdef AA_BYTE_SWAP
+	btg		TBLPTRL					; toggle low ptr bit
+	tblrd*							; read bitmap data
+	movf	TABLAT,W				; store to WREG
+	btg		TBLPTRL					; toggle back
+	tblrd*+							; do a dummy read to increment the pointer
+	movwf	TABLAT					; restore TABLAT
+ else
+	tblrd*+							; read bitmap data
+	movf	TABLAT,W				; store to WREG
+ endif
 	btfss	aa_antialias			; anti-aliased font ?
-	bra		aa_char_width_10		; NO - always 7 bit count
-
-	bn		aa_char_width_10		; none-white pixels?
-	andlw	0x1F					; YES - 5 bit count
+	bra		aa_char_width_10		; NO  - always 7 bit count
+	btfss	WREG,7					; YES - none-white pixels?
+	andlw	0x1F					;       YES - 5 bit count
 aa_char_width_10:
-	andlw	0x7F					; NO  - 7 bit count
-	incf	WREG 					; WREG = repetition count
-	addwf	aa_bitlen,F				; add remaining pixels from last code
+	andlw	0x7F					; mask out none-white pixel flag
+	incf	WREG,W					; WREG = repetition count
+	addwf	aa_bitlen,F				; add to remaining pixels
 
 	movf	win_height,W			; WREG -= height
-	negf	WREG
+	negf	WREG					; ...
 
-	; This is a hand-made division by successive subtraction of height
+	; this is a hand-made division by successive subtraction of the height
 aa_char_width_2:
-	addwf	aa_bitlen,F				; try to subtract win_height
-	bn		aa_char_width_3			; if neg it was a bad idea...
-
-	infsnz	win_width+0,F			; succeeded: do a 16 bit increment
-	incf	win_width+1,F			; on the win_width counter
-	bra		aa_char_width_2			; and loop
+	addwf	aa_bitlen,F				; try to subtract win_height, does it fit?
+	bn		aa_char_width_3			; NO  - done
+	infsnz	win_width+0,F			; YES - do a 16 bit increment of the win_width
+	incf	win_width+1,F			;     - ...
+	bra		aa_char_width_2			;     - loop
 
 aa_char_width_3:
 	negf	WREG					; WREG = +height
 	addwf	aa_bitlen,F				; restore true reminder
 
-	; Are we done ?
-	movf	TBLPTRL,W				; compare TBLPTR to aa_end
-	cpfseq	aa_end+0  
-	bra		aa_char_width_1			; loop if LOW is different
-	movf	TBLPTRH,W
-	cpfseq	aa_end+1				; loop to if HIGH is different
-	bra		aa_char_width_1
-	return
+	; all pixel data processed?
+	movf	TBLPTRL,W				; get TBLPTR, low  byte
+	cpfseq	aa_end+0				; TBLPTR, low  byte == end pointer, low  byte?
+	bra		aa_char_width_1			; NO  - loop
+	movf	TBLPTRH,W				; YES - get TBLPTR, high byte
+	cpfseq	aa_end+1				;     - TBLPTR, high byte == end pointer, high byte?
+	bra		aa_char_width_1			;       NO  - loop
+	return							;       YES - done
 
 
 ;------------------------------------------------------------------------------
-; String width
-; Input    buffer (SHOULD BE NULL TERMINATED)
+; Compute String Width
+; Input    buffer (NEEDS TO BE NULL TERMINATED)
 ; Output   win_width, win_height
 ; Trashed  PROD, TBLPTR, FSR2, aa_bitlen, aa_start, aa_end, AA_flags
 ;
 aa_string_width:
 	lfsr	FSR2, buffer			; FSR2 pointer to start of string
-	clrf	win_width+0				; clear width sum
-	clrf	win_width+1				; (16 bit counter)
+	clrf	win_width+0				; clear 16 bit width sum
+	clrf	win_width+1				; ...
 
 aa_string_width_1:
-	movf	POSTINC2,W  			; WREG = *FSR2++
+	movf	POSTINC2,W				; get character
 	bz		aa_string_width99		; exit if null byte encountered
 
-	rcall	aa_char_setup			; setup aa_start / aa_end
-	rcall	aa_char_width			; sum-up width into win_width
-	bra		aa_string_width_1		; and loop
+	rcall	aa_char_setup			; setup pointers for the char
+	rcall	aa_char_width			; win_width += character width
+	bra		aa_string_width_1		; loop
 
 aa_string_width99:
-	return
+	return							; done
 
 
 ;------------------------------------------------------------------------------
-; Decode a compressed char
+; Print a Character
 ; Input    aa_start, aa_end, win_height, win_invert, win_color1, win_color2
 ; Output   none
 ; Trashed  TBLPTR, TABLAT, PROD, aa_bitlen, AA_flags, aa_colorDir:2
 ;
 aa_decode_char:
-	movff	aa_start+0, TBLPTRL		; TBLPTR = aa_start
-	movff	aa_start+1, TBLPTRH
+	movff	aa_start+0, TBLPTRL		; set TBLPTR to start of character data
+	movff	aa_start+1, TBLPTRH		; ...
 
-	; Read bitmap byte, and decode color & length
+	; read bitmap byte and decode color & length
 aa_decode_1:
-
-	ifdef AA_BYTE_SWAP
-		btg		TBLPTRL				; toggle low ptr bit
-		tblrd*
-		movf	TABLAT,W			; store to WREG
-		btg		TBLPTRL				; get is back
-		tblrd*+						; then increment (but trash TABLAT)
-		movwf	TABLAT				; then restore copy to TABLAT
-	else
-		tblrd*+						; normal read...
-		movf	TABLAT,W			; store copy to WREG
-	endif
-
-	btfss	aa_antialias			; anti-aliased font?
-	bra		aa_decode_10			; NO - always 7 bit count
-	bn		aa_decode_10			; none-white pixels?
-	andlw	0x1F					; Yes - 5 bit count
+ ifdef AA_BYTE_SWAP
+	btg		TBLPTRL					; toggle low ptr bit
+	tblrd*							; read bitmap data
+	movf	TABLAT,W				; back-up TABLAT
+	btg		TBLPTRL					; toggle back
+	tblrd*+							; do a dummy read to increment the pointer
+	movwf	TABLAT					; restore TABLAT
+ else
+	tblrd*+							; normal read...
+	movf	TABLAT,W				; store copy to WREG
+ endif
+	btfss	aa_antialias			; anti-aliased font ?
+	bra		aa_decode_10			; NO  - always 7 bit count
+	btfss	WREG,7					; YES - none-white pixels?
+	andlw	0x1F					;       YES - 5 bit count
 aa_decode_10:
-	andlw	0x7F					; NO  - 7 bit count
-	incf	WREG
+	andlw	0x7F					; mask out none-white pixel flag
+	incf	WREG,W					; WREG = repetition count
 	movwf	aa_bitlen				; repetition count --> aa_bitlen
 
 	;---- COLOR DECODING -------------------------------------------------
@@ -327,25 +340,24 @@ aa_decode_10:
 	;   010       50%       50%
 	;   001       75%       25%
 	;   000      100%        0% : Managed by aa_decode_13, too
-	;
-	movf	TABLAT,W				; get back code
+
+	movf	TABLAT,W				; get back pixel data
 	btfss	aa_antialias			; anti-aliased font?
 	bra		aa_decode_13			; NO - 1 bit case
 
-	; Asymmetry test: 1xx code is another case for 1bit color.
-	; This have to be done before inverse video, because
-	; of the asymmetric processing!
+	; asymmetry test: 1xx code is another case for 1 bit color
+	; This has to be done before inverse video, because of the asymmetric processing!
 	bn		aa_decode_13			; decode as none-aa
 
-	; Manage 000 special case too:
+	; manage 000 special case
 	andlw	0xE0					; select color bits, is it a 000 ?
 	bz		aa_decode_13			; YES
 
-	; Apply reverse video, in a reversed way
+	; apply reverse video, in a reversed way
 	btfss	win_invert				; inverse video mode?
 	sublw	0x80					; NO
 
-	; Extract color quarter and color half information
+	; extract color quarter and color half information
 	bsf		aa_antialias			; set AA mode
 	bcf		aa_color_quarter		; default to no color quarter
 	btfsc	WREG,5					; color quarter encoded?
@@ -355,10 +367,10 @@ aa_decode_10:
 	bsf		aa_color_half			; YES - set flag
 
 	;---- 2 bit x RGB(16bits) computation --------------------------------
-	clrf	PRODL					; we will accumulate result here...
-	clrf	PRODH
+	clrf	PRODL					; clear accumulator
+	clrf	PRODH					; ...
 
-	; Take color div 2 into aa_temp. Max red = 15/31
+	; take color / 2 into aa_temp (max red = 15/31)
 	rrcf	win_color1,W			; xRRRRxGG
 	andlw	b'01111011'				; 0RRRR0GG (don't change C)
 	movwf	aa_temp+0
@@ -366,16 +378,16 @@ aa_decode_10:
 	andlw	b'11101111'				; GGG0BBBB
 	movwf	aa_temp+1
 
-	btfss	aa_color_half
-	bra		aa_decode_12
+	btfss	aa_color_half			; color half encoded?
+	bra		aa_decode_12			; NO
+	movff	aa_temp+0,PRODH			; YES - add color/2, TFT is big endian, so swap here
+	movff	aa_temp+1,PRODL			;     - ...
 
-	movff	aa_temp+0,PRODH			; add color/2 if bit set
-	movff	aa_temp+1,PRODL			; TFT is big endian, so swap here
 aa_decode_12:
-	btfss	aa_color_quarter
-	bra		aa_decode_3
+	btfss	aa_color_quarter		; color quarter encoded?
+	bra		aa_decode_3				; NO
 
-	; Divide it once again by 2. Max red = 7/31.
+	; divide once again by 2 (max red = 7/31)
 	rrcf	aa_temp+0,W				; xxRRRxxG
 	andlw	b'00111001'				; 00RRR00G (don't change C)
 	movwf	aa_temp+0
@@ -389,30 +401,27 @@ aa_decode_12:
 	addwfc	PRODH,F					; in right order, to propagate carry
 
 aa_decode_12b:
-	btfss	screen_type2			; display 2?
-	bra		aa_decode_3				; NO - done
+	btfsc	screen_type2			; display type 2 ?
+	call	convert_for_display2	; YES - convert 16 bit RGB b'RRRRRGGG GGGBBBBB' into 24 bit RGB b'RRRRRR00 GGGGGG00 BBBBBB00'
+	bra		aa_decode_3				; continue
 
-	call	convert_for_display2	; convert 16 bit RGB b'RRRRRGGG GGGBBBBB' into 24 bit RGB b'RRRRRR00 GGGGGG00 BBBBBB00'
-
-	bra		aa_decode_3				; done
-
-	; ---- Simple BLACK and WHITE cases ------------------------------
-aa_decode_13:						; got a 1xx or a 000 code...
-	btfsc	win_invert				; inverse video mode ?
+	; ---- simple BLACK and WHITE cases ------------------------------
+aa_decode_13:						; got a 1xx or a 000 code
+	btfsc	win_invert				; inverse video mode?
 	xorlw	0x80					; YES - invert levels
-	bn		aa_decode_2				; then test high bit
+	bn		aa_decode_2				; black pixel? -> YES
 
 	; WHITE pixel (i.e. full color)
-	movff	win_color1,PRODH		; current draw color
-	movff	win_color2,PRODL		; remark: DISPLAY is big endian
-	bra		aa_decode_12b
+	movff	win_color1,PRODH		; set current drawing color (display is big endian)
+	movff	win_color2,PRODL		; ...
+	bra		aa_decode_12b			; post-process in case of display type 2
 
 aa_decode_2:
-	clrf	PRODH					; BLACK pixel
-	clrf	PRODL
-	clrf	win_color5
-	clrf	win_color4
-	clrf	win_color3
+	clrf	PRODH					; set drawing color to black
+	clrf	PRODL					; ...
+	clrf	win_color5				; set drawing color to black (display type 2)
+	clrf	win_color4				; ...
+	clrf	win_color3				; ...
 
 aa_decode_3:
 	;---- PIXEL WRITE LOOP -----------------------------------------------
@@ -426,75 +435,76 @@ aa_decode_3:
 	movff	PRODH,PORTA				; move high byte to PORTA
 	movff	PRODL,PORTH				; move low  byte to PORTH
 aa_decode_3_display0and1:
-	bcf		tft_nwr
-	bsf		tft_nwr					; tick
-	decf	aa_bitlen,F
-	bnz		aa_decode_3_display0and1
-	bra		aa_decode_3_done
+	bcf		tft_nwr					; tick
+	bsf		tft_nwr					; ...
+	decfsz	aa_bitlen,F				; decrement length counter, became zero?
+	bra		aa_decode_3_display0and1; NO  - loop
+	bra		aa_decode_3_done		; YES -  done
 
 aa_decode_3_display2:
-	movff	win_color5,PORTH		; move high byte to PORTH (DISPLAY is big endian)
-	bcf		tft_nwr
-	bsf		tft_nwr					; tick
-	movff   win_color4,PORTH		; move low byte to PORTH
-	bcf		tft_nwr
-	bsf		tft_nwr					; tick
-	movff   win_color3,PORTH		; move low(est) byte to PORTH
-	bcf		tft_nwr
-	bsf		tft_nwr					; tick
-	decf	aa_bitlen,F
-	bnz		aa_decode_3_display2
-	bra		aa_decode_3_done
+	movff	win_color5,PORTH		; move high byte to PORTH (display is big endian)
+	bcf		tft_nwr					; tick
+	bsf		tft_nwr					; ...
+	movff	win_color4,PORTH		; move low byte to PORTH
+	bcf		tft_nwr					; tick
+	bsf		tft_nwr					; ...
+	movff	win_color3,PORTH		; move low(est) byte to PORTH
+	bcf		tft_nwr					; tick
+	bsf		tft_nwr					; ...
+	decfsz	aa_bitlen,F				; decrement length counter, became zero?
+	bra		aa_decode_3_display2	; NO  - loop
+	bra		aa_decode_3_done		; YES - done
 
 aa_decode_3_display3:
-	movff	PRODH,PORTH				; move high byte to PORTH (DISPLAY is big endian)
-	bcf		tft_nwr
-	bsf		tft_nwr					; tick
-	movff	PRODL,PORTH				; move low byte to PORTH
-	bcf		tft_nwr
-	bsf		tft_nwr					; tick
-	decf	aa_bitlen,F
-	bnz		aa_decode_3_display3
+	movff	PRODH,PORTH				; move high byte to PORTH (display is big endian)
+	bcf		tft_nwr					; tick
+	bsf		tft_nwr					; ...
+	movff	PRODL,PORTH				; move low  byte to PORTH
+	bcf		tft_nwr					; tick
+	bsf		tft_nwr					; ...
+	decfsz	aa_bitlen,F				; decrement length counter, became zero?
+	bra		aa_decode_3_display3	; NO  - loop
 
 aa_decode_3_done:
 	;---- BYTE-CODE LOOP -------------------------------------------------
-	; are we done ?
-	movf	TBLPTRL,W				; compare TBLPTR with aa_end
-	cpfseq	aa_end+0
-	bra		aa_decode_1				; loop if LOW is different
-	movf	TBLPTRH,W
-	cpfseq	aa_end+1				; loop to if HIGH is different
-	bra		aa_decode_1
-	return
+	; all pixel data processed?
+	movf	TBLPTRL,W				; get TBLPTR, low  byte
+	cpfseq	aa_end+0				; TBLPTR, low  byte == end pointer, low  byte?
+	bra		aa_decode_1				; NO  - loop
+	movf	TBLPTRH,W				; YES - get TBLPTR, high byte
+	cpfseq	aa_end+1				;     - TBLPTR, high byte == end pointer, high byte?
+	bra		aa_decode_1				;       NO  - loop
+	return							;       YES - done
 
 
 ;------------------------------------------------------------------------------
-; Setup pointers for a char:
-; Inputs : buffer : string to print (NULL TERMINATED)
-; Output : TFT commands on PORTH (Upper) and PORTA (lower) + clocks
+; Print the Output Buffer to Screen
 ;
-	global	aa_wordprocessor		; callable from C-code
+; Input   buffer - string to print (NULL TERMINATED)
+; Output  chars printed to screen
+;
+	global	aa_wordprocessor
 aa_wordprocessor:
-	rcall	aa_string_width			; set win_height, compute win_width:2
-	call	TFT_box_write			; use that for the box
-
-	; Restart the loop for each char to print
-	lfsr	FSR2, buffer			; FSR2 points to the start of the string
-
-	; DATA block command
-	Index_out	0x22				; index_out is a macro defined in tft.inc
+	movf	font_color,W			; get selected font color (8 bit)
+	call	TFT_set_color			; compute printing color (16 bit)
+	rcall	aa_string_width			; set win_height and compute win_width:2
+	call	TFT_box_write			; set up output box
+	lfsr	FSR2,buffer				; set FSR2 to the start of the output buffer
+	Index_out	0x22				; DATA block command (macro defined in tft.inc)
 
 aa_wordprocessor_1:
-	movf	POSTINC2,W				; WREG = *FSR2++
-	bz		aa_wordprocessor_99		; exit if null byte encountered
+	movf	POSTINC2,W				; read character from the buffer
+	bz		aa_wordprocessor_99		; done if null byte encountered
 
-	rcall	aa_char_setup			; setup aa_start / aa_end
-	rcall	aa_decode_char			; write pixels to screen
-	bra		aa_wordprocessor_1		; and loop
+	rcall	aa_char_setup			; setup pointers for the char
+	rcall	aa_decode_char			; print character to screen
+	bra		aa_wordprocessor_1		; loop
 
 aa_wordprocessor_99:
-	; END of bloc command
-	Index_out	0x00
-	return
+	Index_out	0x00				; send end of bloc command
+	bcf		win_invert				; terminate inverse printing
+	return							; done
+
+;------------------------------------------------------------------------------
 
 	END

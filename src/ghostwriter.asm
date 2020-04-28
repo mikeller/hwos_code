@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File ghostwriter.asm                      combined next generation V3.08.8
+;   File ghostwriter.asm                    * combined next generation V3.09.4k
 ;
 ;   Ghostwriter (Log profile recorder)
 ;
@@ -19,13 +19,14 @@
 #include "divemode.inc"
 #include "rtc.inc"
 #include "logbook.inc"
+#include "convert.inc"
 
 
 	extern	deco_pull_tissues_from_vault
 
 
-; ----------------------------------------------------------------------------
-;  Macros - write PROFILE data to FLASH (all macros are bank-safe)
+;-----------------------------------------------------------------------------
+;  Macros - write PROFILE Data to FLASH (all macros are bank-safe)
 
 FLASH_LIT_PROFILE	macro	literal				; write 1 byte LITERAL     to FLASH profile data
 	movlw	literal
@@ -47,7 +48,7 @@ FLASH_II_PROFILE	macro	memory_address		; write 2 byte from memory to FLASH profi
 	endm
 
 
-; ----------------------------------------------------------------------------
+;-----------------------------------------------------------------------------
 ;   private local Variables
 
 	CBLOCK	local3						; max size is 16 Byte !!!
@@ -62,11 +63,13 @@ FLASH_II_PROFILE	macro	memory_address		; write 2 byte from memory to FLASH profi
 	ENDC								; used: 8 byte, remaining: 8 byte
 
 
-ghostwriter	CODE
-
+;=============================================================================
+ghostwrite1		CODE
 ;=============================================================================
 
-
+;-----------------------------------------------------------------------------
+; prepare Data Recording
+;
 	global	init_recording_params		; initialize profile recording parameters
 init_recording_params:
 	movlw	div_temperature				; get divisor for temperature storage
@@ -105,6 +108,13 @@ init_recording_params_2:
 	return
 
 
+;=============================================================================
+ghostwrite2		CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; sample and store a Set of Dive Data
+;
 	global	store_dive_data
 store_dive_data:
 	bcf		trigger_sample_divedata		; clear flag
@@ -143,7 +153,7 @@ check_extended2:
 	decfsz	divisor_supersat,W			; check divisor if it will become 0, dump decremented value to WREG
 	bra		check_extended3				; NO  - skip
 	movlw	infolength_gf				; YES - get length of extra data
-	addwf	ProfileFlagByte,F			; add to ProfileFlagByte
+	addwf	ProfileFlagByte,F			;     - add to ProfileFlagByte
 check_extended3:
  IFDEF _external_sensor
 	decfsz	divisor_ppo2_sensors,W		; check divisor if it will become 0, dump decremented value to WREG
@@ -226,7 +236,7 @@ store_dive_data3:
 	FLASH_CC_PROFILE ProfileFlagByte	; store ProfileFlagByte
 
 	btfss	event_occured				; global event flag set?
-	bra		store_dive_data4			; NO - no events to store
+	bra		store_dive_data4			; NO  - no events to store
 
 	; store the EventByte(s) + additional bytes now
 	FLASH_CC_PROFILE event_byte1		; store 1st event byte
@@ -433,15 +443,18 @@ store_dive_temperature:
 ; flash writing through the macros
 ;
 ghostwrite_II_profile_exec:
-	movf	POSTINC0,W							; get byte into WREG
-	call	write_byte_ext_flash_plus_prof		; write to external flash -> profile data
-	movf	POSTINC0,W							; get next byte into WREG
+	movf	POSTINC0,W						; get byte into WREG
+	call	ext_flash_write_byte_0x20_incdc	; write to external flash and increment ext_flash_dive_counter
+	movf	POSTINC0,W						; get next byte into WREG
 ghostwrite_WREG_profile_exec:
-	goto	write_byte_ext_flash_plus_prof		; write to external flash -> profile data (and return)
+	goto	ext_flash_write_byte_0x20_incdc	; write to external flash and increment ext_flash_dive_counter (and return)
 ;
 ; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
+;-----------------------------------------------------------------------------
+; finish Dive Data Recording and write Header
+;
 	global	ghostwriter_end_dive
 ghostwriter_end_dive:
 	; save end-of-profile pointer for later storage in EEPROM
@@ -468,7 +481,7 @@ ghostwriter_end_dive_0:
 
 	; check if dive is worth storage at all
 	btfss	divetime_longer_1min			; dive longer than one minute?
-	goto	ghostwriter_end_dive_common		; NO - discard everything
+	goto	ghostwriter_end_dive_common		; NO  - discard everything
 
  ifndef _DEBUG
 	; in DEBUG compile, write simulated dives to logbook
@@ -506,7 +519,8 @@ ghostwriter_end_dive_00:
 	goto	ghostwriter_end_dive_cleanup	;       NO  - skip logging but do the after-dive cleanup
 
 ghostwriter_end_dive_1:
-	; dive finished (and longer than one minute)
+
+	;---- dive finished (and longer than one minute) -------------------------
 
 	; close profile recording
 	FLASH_LIT_PROFILE 0xFD					; write end-of-profile code, byte 1
@@ -515,23 +529,23 @@ ghostwriter_end_dive_1:
 	; save end-of-profile pointer for later storage in header and EEPROM
 	MOVTT	ext_flash_address,ext_flash_log_pointer
 
-	; set to first address of profile data again to store dive length (number of recorded bytes)
-	rcall	ghostwriter_load_pointer
+	; go back again to start of profile data to store the profile length (number of recorded bytes)
+	call	ghostwriter_load_pointer
 
 	; skip internal "0xFA 0xFA #Divenumber:2 0xFA 0xFA" header, i.e. the first 6 bytes
-	ext_flash_inc_address_0x20 d'6'
+	EXT_FLASH_INC_ADDRESS_0x20 d'6'
 
-	; store dive length (-> profile, NO ext_flash_length_counter increase, NO page delete)
-	movf	ext_flash_length_counter+0,W
-	call	write_byte_ext_flash_plus_nodel
-	movf	ext_flash_length_counter+1,W
-	call	write_byte_ext_flash_plus_nodel
-	movf	ext_flash_length_counter+2,W
-	call	write_byte_ext_flash_plus_nodel
+	; store dive length (NO ext_flash_length_counter increase, NO page delete)
+	movf	ext_flash_length_counter+0,W	; get length of profile data, low   byte
+	call	ext_flash_write_byte_0x20_nodel	; write to flash
+	movf	ext_flash_length_counter+1,W	; get length of profile data, high  byte
+	call	ext_flash_write_byte_0x20_nodel	; write to flash
+	movf	ext_flash_length_counter+2,W	; get length of profile data, upper byte
+	call	ext_flash_write_byte_0x20_nodel	; write to flash
 
 	; ... profile recording done
 
-	; read, increment, and store again total number of dives
+	; read, increment, and store updated total number of dives
 	call	eeprom_total_dives_read			; read total number of dives
 	INCI	mpr								; increment by one
 	call	eeprom_total_dives_write		; store updated number of total dives
@@ -598,7 +612,7 @@ end_dive_gaslist_diluent:					; write diluents
  ENDIF
 
 end_dive_gaslist_common:					; helper function for writing gas list entries
-;
+
 ;   Memory Map:
 ;   -------------------------
 ;   opt_gas_O2_ratio	res 5
@@ -609,7 +623,7 @@ end_dive_gaslist_common:					; helper function for writing gas list entries
 ;   opt_dil_type		res 5
 ;   opt_gas_change		res 5
 ;   opt_dil_change		res 5
-;
+
 	movlw	.5								; 5 gases to store
 	movwf	lo								; use lo as counter
 end_dive_gaslist_loop:
@@ -659,7 +673,7 @@ end_dive_gaslist_loop:
 	lfsr	FSR0,opt_setpoint_cbar			; base address of ppO2 values
 	lfsr	FSR1,opt_setpoint_change		; base address of change depths
 	lfsr	FSR2,header_buffer+index_sp1	; base address of setpoint data in header buffer
-	movlw	.5								; 5 setpoints (ppo2, depth) to be stored
+	movlw	.5								; 5 setpoints (ppO2, depth) to be stored
 	movwf	lo								; use lo as counter
 end_dive_sp_loop:
 	movff	POSTINC0,POSTINC2				; copy ppO2 value
@@ -763,17 +777,12 @@ end_dive_sat_gf_done:
 	MOVLI	0xFBFB,mpr
 	MOVII	mpr,header_buffer+index_header_stop
 
-	; compute start address of header data
+	; store header in the FLASH
 	call	eeprom_total_dives_read			; read total number of dives
 	decf	mpr+0,W							; compute index from low(total number of dives)
-	call	log_header_addr_by_index		; compute start address (returned in mpr:3)
-
-	; erase the FLASH 4 kB block where the header will be stored
-	MOVTT	mpr,ext_flash_address
-	call	ext_flash_erase_4kB
-
-	; write the header to the FLASH
-	FLASH_RR_WRITE	header_buffer,mpr,.256
+	call	log_header_addr_by_index		; compute header start address
+	call	ext_flash_erase_4kB				; erase the FLASH 4 kB block where the header will be stored
+	FLASH_RR_WRITE header_buffer,.256		; write the header to the FLASH
 
 ghostwriter_end_dive_cleanup:
 	call	eeprom_deco_data_write			; update deco data in EEPROM
@@ -824,7 +833,7 @@ ghostwriter_end_dive_common_1:
 
 
 ;-----------------------------------------------------------------------------
-; helper function for copying tissue pressures
+; Helper Function - copy Tissue Pressures
 ;
 copy_tissuepres_to_header:
 	movwf	eeprom_loop						; initialize loop counter (EEPROM var used here)
@@ -837,15 +846,23 @@ copy_tissuepres_to_header_loop:
 	bra		copy_tissuepres_to_header_loop	; NO  - loop
 	return									; YES - done
 
-;-----------------------------------------------------------------------------
-; load ext_flash_address from EEPROM
-;
-ghostwriter_load_pointer:
-	EEPROM_TT_READ	eeprom_log_pointer,ext_flash_address
-	return
 
 ;-----------------------------------------------------------------------------
-; write short header with dive number into profile memory
+; Helper Function - increment Log Offset
+;
+increment_log_offset:
+	call	eeprom_log_offset_read			; read current logbook offset into mpr
+	movf	mpr+0,W							; get               low  byte
+	iorwf	mpr+1,W							; inclusive-or with high byte, result zero?
+	bz		increment_log_offset_1			; YES - skip offset correction
+	INCI	mpr								; NO  - increment offset
+	call	eeprom_log_offset_write			;     - store incremented offset as new offset
+increment_log_offset_1:
+	return									; done
+
+
+;-----------------------------------------------------------------------------
+; start Dive Data Recording (write short Header with Dive Number)
 ;
 	global	ghostwriter_short_header
 ghostwriter_short_header:
@@ -863,7 +880,7 @@ ghostwriter_short_header:
 
 ghostwriter_short_header_init:
 	clrf	ext_flash_address+0				; low  byte: set to zero
-	movlw	0xF0							; high byte: keep higher nibble, set lower nibble to zero
+	movlw	0xF0							; high byte: keep upper nibble, set lower nibble to zero
 	andwf	ext_flash_address+1,F			; ...
 	movlw	.16								; increment ext_flash_address to next multiple of 16*256
 	addwf	ext_flash_address+1,F			; ...
@@ -890,26 +907,24 @@ ghostwriter_short_header_2:
 	FLASH_LIT_PROFILE 0xFA					; 2nd byte
 
 	; load total number of dives
-	call	eeprom_total_dives_read			; read total number of dives
+	call	eeprom_total_dives_read			; read total number of dives into mpr:2
 	incf	mpr+0,F							; increment low byte + 1
-	FLASH_II_PROFILE mpr
+	FLASH_II_PROFILE mpr					; write mpr:2 to FLASH
 
 	; close short header
 	FLASH_LIT_PROFILE 0xFA					; 1st byte
 	FLASH_LIT_PROFILE 0xFA					; 2nd byte
 
-	; Keep room for dive length ext_flash_length_counter:3 (stored at the end of the dive)
-	; Writing 0xFF three times here is mandatory
-	; - 0xFF can be overwritten after the dive
-	; - write_byte_ext_flash_plus_prof takes care of 4kB page switching
-	; - fixes an issue when we are at exactly 0xXXX000 here...
+	; Keep room for dive length ext_flash_length_counter:3 (stored at the end of the dive),
+	; writing 0xFF here is mandatory because 0xFF can be overwritten when closing the dive.
+	; The stored dive length counter itself is not part of the counted dive length.
 
-	setf	WREG								; write 0xFF
-	call	write_byte_ext_flash_plus_nocnt		; write to profile without ext_flash_length_counter increase
-	setf	WREG								; write 0xFF
-	call	write_byte_ext_flash_plus_nocnt		; write to profile without ext_flash_length_counter increase
-	setf	WREG								; write 0xFF
-	call	write_byte_ext_flash_plus_nocnt		; write to profile without ext_flash_length_counter increase
+	setf	WREG							; write 0xFF
+	call	ext_flash_write_byte_0x20		; write to profile (no dive length increment)
+	setf	WREG							; write 0xFF
+	call	ext_flash_write_byte_0x20		; write to profile (no dive length increment)
+	setf	WREG							; write 0xFF
+	call	ext_flash_write_byte_0x20		; write to profile (no dive length increment)
 
 	; store sizes and sampling rates of recording datasets
 
@@ -958,19 +973,16 @@ ghostwriter_short_header_2:
  ENDIF
 	FLASH_WREG_PROFILE							; WREG -> profile in ext. flash
 
+	return										; done
+
+
+;-----------------------------------------------------------------------------
+; Helper Function - load ext_flash_address from EEPROM
+;
+ghostwriter_load_pointer:
+	EEPROM_TT_READ	eeprom_log_pointer,ext_flash_address
 	return
 
 ;-----------------------------------------------------------------------------
-; increment log offset
-;
-increment_log_offset:
-	call	eeprom_log_offset_read			; read current logbook offset into mpr
-	movf	mpr+0,W							; get               low  byte
-	iorwf	mpr+1,W							; inclusive-or with high byte, result zero?
-	bz		increment_log_offset_1			; YES - skip offset correction
-	INCI	mpr								; NO  - increment offset
-	call	eeprom_log_offset_write			;     - store incremented offset as new offset
-increment_log_offset_1:
-	return									; done
 
 	END

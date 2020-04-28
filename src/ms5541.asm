@@ -1,8 +1,8 @@
 ;=============================================================================
 ;
-;   File ms5541.asm                           combined next generation V3.8.6
+;   File ms5541.asm                          * combined next generation V3.9.4f
 ;
-;   Sensor subroutines
+;   Sensor Subroutines
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
 ;=============================================================================
@@ -15,15 +15,19 @@
 
 ms5541	CODE
 
-;=============================================================================
+
 ; Expose internal variables to ease debug
 	global	D1, D2
 	global	C1, C2, C3, C4, C5, C6
 	global	xdT, xdT2, OFF, SENS, pressure_abs_avg, temperature_avg
 
-;=============================================================================
 
-	global calculate_compensation		; called from ISR and from sleep mode, returns in bank isr_data
+;-----------------------------------------------------------------------------
+; Convert Temperature & Pressure raw Values to compensated Values
+;
+; called from ISR and from sleep mode, returns in bank isr_data
+;
+	global calculate_compensation
 calculate_compensation:
 	banksel	isr_backup					; select bank ISR data
 
@@ -51,125 +55,112 @@ calculate_compensation:
 
 	; dT >= 0: divide by 8, i.e. 3 shifts rights
 	; dT <  0: divide by 2, i.e. 1 shifts rights
-	movlw	.3
-	btfss	xdT+1,7						 ; was dT negative ?
-	movlw	.1
+	movlw	.3							; 3 shifts by default
+	btfss	xdT+1,7						; was dT negative ?
+	movlw	.1							; YES - replace by 1 shift
 calc_loop_1:
-	bcf		STATUS,C					; dT^2 is positive, so injected zeros
-	rrcf	isr_xC+1,F
-	rrcf	isr_xC+0,F
-	decfsz	WREG
-	bra		calc_loop_1
+	bcf		STATUS,C					; dT^2 is positive, so injecte zeros
+	rrcf	isr_xC+1,F					; shift right high byte
+	rrcf	isr_xC+0,F					; shift right low  byte
+	decfsz	WREG						; decrement loop counter, all shifts done?
+	bra		calc_loop_1					; NO  - loop
 
 	movf	isr_xC+0,W					; dT2 = dT - (dT/128)*(dT/128)/(2 ...or... 8)
-	subwf	xdT+0,W
-	movwf	xdT2+0
-	movf	isr_xC+1,W
-	subwfb	xdT+1,W
-	movwf	xdT2+1
+	subwf	xdT+0,W						; ...
+	movwf	xdT2+0						; ...
+	movf	isr_xC+1,W					; ...
+	subwfb	xdT+1,W						; ...
+	movwf	xdT2+1						; ...
 
 	; calculate OFF = C2 + ((C4-250)*dT2)/2^12 + 10000 (range +9.246 .. +18.887)
 	MOVII	C4,  isr_xA					; C4 - 250 --> A
 	MOVII	xdT2,isr_xB					; dT2      --> B
-	call	isr_signed_mult16x16
+	call	isr_signed_mult16x16		; C = A*B
 
 	movlw	.12-.8						; a 12 bit shift = 1 byte + 4 bits
-	call	isr_shift_C31
+	call	isr_shift_C31				; special shift
 
 	movlw	LOW(.10000)					; add 10000
-	addwf	isr_xC+1,F
-	movlw	HIGH(.10000)
-	addwfc	isr_xC+2,F
+	addwf	isr_xC+1,F					; ...
+	movlw	HIGH(.10000)				; ...
+	addwfc	isr_xC+2,F					; ...
 
 	movf	C2+0,W						; add C2 and store result in OFF
-	addwf	isr_xC+1,W
-	movwf	OFF+0
-	movf	C2+1,W
-	addwfc	isr_xC+2,W
-	movwf	OFF+1
+	addwf	isr_xC+1,W					; ...
+	movwf	OFF+0						; ...
+	movf	C2+1,W						; ...
+	addwfc	isr_xC+2,W					; ...
+	movwf	OFF+1						; ...
 
 	; calculate SENS = C1/2 + ((C3+200)*dT)/2^13 + 3000
 	movlw	LOW(.200)					; C3+200 --> A
-	addwf	C3+0,W
-	movwf	isr_xA+0
-	movlw	HIGH(.200)
-	addwfc	C3+1,W
-	movwf	isr_xA+1
+	addwf	C3+0,W						; ...
+	movwf	isr_xA+0					; ...
+	movlw	HIGH(.200)					; ...
+	addwfc	C3+1,W						; ...
+	movwf	isr_xA+1					; ...
 										; B still contains dT2
-	call	isr_signed_mult16x16		; A*B --> C
+	call	isr_signed_mult16x16		; C = A*B
 	movlw	.13-.8						; A 13 bit shift = 1 byte + 5 bits
-	call	isr_shift_C31
+	call	isr_shift_C31				; special shift
 
 	bcf		STATUS,C					; SENS = C1 / 2
-	rrcf	C1+1,W
-	movwf	SENS+1
-	rrcf	C1+0,W
-	movwf	SENS+0
+	rrcf	C1+1,W						; ...
+	movwf	SENS+1						; ...
+	rrcf	C1+0,W						; ...
+	movwf	SENS+0						; ...
 
 	movlw	LOW(.3000)					; add 3000
-	addwf	isr_xC+1,F
-	movlw	HIGH(.3000)
-	addwfc	isr_xC+2,F
+	addwf	isr_xC+1,F					; ...
+	movlw	HIGH(.3000)					; ...
+	addwfc	isr_xC+2,F					; ...
 
 	movf	isr_xC+1,W					; and sum into SENS
-	addwf	SENS+0,F
-	movf	isr_xC+2,W
-	addwfc	SENS+1,F
+	addwf	SENS+0,F					; ...
+	movf	isr_xC+2,W					; ...
+	addwfc	SENS+1,F					; ...
 
 	; calculate absolute pressure = (sens * (d1-off))/2^12 + 1000 (for MS5541C)
 	; calculate absolute pressure = (sens * (d1-off))/2^11 + 1000 (for MS5541C-30)
 	movf	OFF+0,W						; d1-off --> a
-	subwf	D1+0,W
-	movwf	isr_xA+0
-	movf	OFF+1,W
-	subwfb	D1+1,W
-	movwf	isr_xA+1
+	subwf	D1+0,W						; ...
+	movwf	isr_xA+0					; ...
+	movf	OFF+1,W						; ...
+	subwfb	D1+1,W						; ...
+	movwf	isr_xA+1					; ...
 
-	MOVII	SENS,isr_xB					; sens --> b
-	call	isr_signed_mult16x16
-	movlw	.13
+	MOVII	SENS,isr_xB					; sens --> B
+	call	isr_signed_mult16x16		; C = A*B
+	movlw	.13							; 12 * 256 = 3328
 	cpfslt	C1+1						; C1 > 3328 ?
 	bra		isr_shift_ms5541_30			; YES - MS5541-30
 	movlw	.12-.8						; NO  - MS5541: 12 bit shift = 1 byte + 4 bits
-	bra		isr_shift_ms5541_common
+	bra		isr_shift_ms5541_common		;     - continue
 isr_shift_ms5541_30:
 	movlw	.11-.8						; MS5541-30:    11 bit shift = 1 byte + 3 bits
 isr_shift_ms5541_common:
-	call	isr_shift_C31
+	call	isr_shift_C31				; special shift
 	movlw	LOW  .1000					; add 1000
-	addwf	isr_xC+1,F
-	movlw	HIGH .1000
-	addwfc	isr_xC+2,F
+	addwf	isr_xC+1,F					; ...
+	movlw	HIGH .1000					; ...
+	addwfc	isr_xC+2,F					; ...
 
 	; add opt_pressure_adjust to result (SIGNED!)
-	movff	opt_pressure_adjust,isr_xC+0; get adjustment value (signed)
-	movf	isr_xC+0,F					; excite flags, opt_pressure_adjust = 0 ?
-	bz		calc_compensation_1			; YES - skip pressure adjustment
-	btfss	isr_xC+0,7					; NO  - opt_pressure_adjust < 0 ?
-	bra		pressure_extra_add			;       NO  - add offset
-	;bra	pressure_extra_sub			;       YES - subtract offset
-
-pressure_extra_sub:
-	comf	isr_xC+0,F					; complement opt_pressure_adjust
-	incf	isr_xC+0,F					; ...
-	movlw	.22							; check for max. of 20 mbar
-	cpfslt	isr_xC+0					; opt_pressure_adjust < 21 mbar ?
-	clrf	isr_xC+0					; NO - reset opt_pressure_adjust to zero
-	movf	isr_xC+0,W					; get opt_pressure_adjust to WREG
-	subwf	isr_xC+1,F					; pressure value -= opt_pressure_adjust, low  byte
-	movlw	.0							; pressure value -= opt_pressure_adjust, high byte
-	subwfb	isr_xC+2,F					; ...
-	bra		calc_compensation_1			; continue with checking for simulator mode
-
-pressure_extra_add:
-	movlw	.21							; check for max. of 20 mbar
-	cpfslt	isr_xC+0					; opt_pressure_adjust < 21 mbar ?
-	clrf	isr_xC+0					; NO - reset opt_pressure_adjust to zero
-	movf	isr_xC+0,W					; get opt_pressure_adjust to WREG
+	clrf	isr_xC+0					; prepare high byte for adjustment
+	movff	opt_pressure_adjust,WREG	; get     low  byte for adjustment (signed)
+	movf	WREG,W						; excite flags
+	bz		calc_compensation_1			; opt_pressure_adjust = 0 -> skip adjustment
+	btfss	STATUS,N					; opt_pressure_adjust < 0 ?
+	bra		calc_compensation_adjust	; NO  - positive
+	negf	WREG						; YES - negate opt_pressure_adjust for limit check
+	setf	isr_xC+0					;     - adopt high byte for adjustment
+calc_compensation_adjust:
+	addlw	-.21						; limit is 20 mbar, subtract 21
+	bnn		calc_compensation_1			; result not negative -> skip adjustment
+	movff	opt_pressure_adjust,WREG	; get opt_pressure_adjust,               low  byte
 	addwf	isr_xC+1,F					; pressure value += opt_pressure_adjust, low  byte
-	movlw	.0							; pressure value += opt_pressure_adjust, high byte
-	addwfc	isr_xC+2,F					; ...
-	;bra	calc_compensation_1			; continue with checking for simulator mode
+	movf	isr_xC+0,W					; get adjustment,                        high byte
+	addwfc	isr_xC+2,F					; pressure value += opt_pressure_adjust, high byte
 
 calc_compensation_1:
 	bcf		sensor_override_active		; clear sensor override active flag by default
@@ -270,145 +261,160 @@ calc_compensation_add_avg:
 
 	; calculate temp = 200 + dT*(C6+100)/2^11
 	movlw	LOW(.100)					; C6 + 100 --> A
-	addwf	C6+0,W
-	movwf	isr_xA+0
-	movlw	HIGH(.100)
-	addwfc	C6+1,W
-	movwf	isr_xA+1
+	addwf	C6+0,W						; ...
+	movwf	isr_xA+0					; ...
+	movlw	HIGH(.100)					; ...
+	addwfc	C6+1,W						; ...
+	movwf	isr_xA+1					; ...
 
 	MOVII	xdT2,isr_xB					; dT2 --> B
 	call	isr_signed_mult16x16		; A*B
 	movlw	.11-.8						; a 12 bit shift = 1 byte + 3 bits
-	call	isr_shift_C31
+	call	isr_shift_C31				; special shift
 
 	movlw	LOW(.200)					; add 200
-	addwf	isr_xC+1,F
-	movlw	HIGH(.200)
-	addwfc	isr_xC+2,F
+	addwf	isr_xC+1,F					; ...
+	movlw	HIGH(.200)					; ...
+	addwfc	isr_xC+2,F					; ...
 
 	; add opt_temperature_adjust to result (SIGNED!)
-	movff	opt_temperature_adjust,isr_xC+0
+	clrf	isr_xC+0					; prepare high byte for adjustment
+	movff	opt_temperature_adjust,WREG	; get     low  byte for adjustment (signed)
+	movf	WREG,W						; excite flags
+	bz		calc_temperature_add_avg	; opt_temperature_adjust = 0 -> skip adjustment
+	btfss	STATUS,N					; opt_temperature_adjust < 0 ?
+	bra		calc_temperature_adjust		; NO  - positive
+	negf	WREG						; YES - negate opt_temperature_adjust for limit check
+	setf	isr_xC+0					;     - adopt high byte for adjustment
+calc_temperature_adjust:
+	addlw	-.21						; limit is 2.0°C, subtract 21 (scaling is 0.1°C)
+	bnn		calc_temperature_add_avg	; result not negative -> skip adjustment
+	movff	opt_temperature_adjust,WREG	; get opt_temperature_adjust,                  low  byte
+	addwf	isr_xC+1,F					; temperature value += opt_temperature_adjust, low  byte
+	movf	isr_xC+0,W					; get adjustment                               high byte
+	addwfc	isr_xC+2,F					; temperature value += opt_temperature_adjust, high byte
 
-	btfss	isr_xC+0,7					; < 0 ?
-	bra		temperature_extra_add		; NO
-	comf	isr_xC+0,F					; YES
-	incf	isr_xC+0,F
-	movlw	.22							; check for max. of 2.0°C
-	cpfslt	isr_xC+0
-	clrf	isr_xC+0
-	movf	isr_xC+0,W					; subtract
-	subwf	isr_xC+1,F
-	movlw	.0
-	subwfb	isr_xC+2,F
-	bra		temperature_extra_common
-
-temperature_extra_add:
-	movlw	.21							; check for max. of 2.0°C
-	cpfslt	isr_xC+0
-	clrf	isr_xC+0
-	movf	isr_xC+0,W					; add
-	addwf	isr_xC+1,F
-	movlw	.0
-	addwfc	isr_xC+2,F
-
-temperature_extra_common:
-	movf	isr_xC+1,W
-	addwf	temperature_avg+0,F
-	movf	isr_xC+2,W
-	addwfc	temperature_avg+1,F
-
+calc_temperature_add_avg:
+	movf	isr_xC+1,W					; copy current temperature to WREG,       low  byte
+	addwf	temperature_avg+0,F			; temperature_avg += current temperature, low  byte
+	movf	isr_xC+2,W					; copy current temperature to WREG,       high byte
+	addwfc	temperature_avg+1,F			; temperature_avg += current temperature, high byte
 	return								; done
 
-;=============================================================================
 
-	global	get_pressure_start			; called from ISR and sleep mode, needs to be called bank isr_backup
+;-----------------------------------------------------------------------------
+; Start Pressure Measurement
+;
+; called from ISR and sleep mode, needs to be called in bank isr_backup
+;
+	global	get_pressure_start
 get_pressure_start:
-	rcall	reset_MS5541
+	rcall	reset_MS5541				; reset the chip
 	movlw	b'10100000'					; +3*high as start and 1+low as stop
-	movwf	dbuffer
-	movlw	d'12'
-	rcall	send_data_MS5541
-	return
+	movwf	dbuffer						; ....
+	movlw	d'12'						; send start command
+	rcall	send_data_MS5541			; ...
+	return								; done
 
-	global get_pressure_value			; called from ISR and sleep mode, needs to be called bank isr_backup
+
+;-----------------------------------------------------------------------------
+; Read Pressure Measurement Result
+;
+; called from ISR and sleep mode, needs to be called in bank isr_backup
+;
+	global get_pressure_value
 get_pressure_value:
 	btfsc	MS5541_miso					; conversion done?
-	return								; NO - done
-	rcall	get_2bytes_MS5541
-	movff	dMSB,D1+1
-	movff	dLSB,D1+0
-	return
+	return								; NO  - abort
+	rcall	get_2bytes_MS5541			; YES - read result
+	movff	dMSB,D1+1					; copy result to D1, high byte first
+	movff	dLSB,D1+0					; ...                low  byte second
+	return								; done
 
-;=============================================================================
 
-	global	get_temperature_start		; called from ISR and sleep mode, needs to be called in bank isr_backup
+;-----------------------------------------------------------------------------
+; Start Temperature Measurement
+;
+; called from ISR and sleep mode, needs to be called in bank isr_backup
+;
+	global	get_temperature_start
 get_temperature_start:
-	rcall	reset_MS5541
+	rcall	reset_MS5541				; reset chip
 	movlw	b'10010000'					; +3*high as start and 1+low as stop
-	movwf	dbuffer
-	movlw	d'12'
-	rcall	send_data_MS5541
-	return
+	movwf	dbuffer						; ...
+	movlw	d'12'						; send start command
+	rcall	send_data_MS5541			; ...
+	return								; done
 
 
-	global	get_temperature_value		; called from ISR and sleep mode, needs to be called in bank isr_backup
+;-----------------------------------------------------------------------------
+; Read Pressure Measurement Result
+;
+; called from ISR and sleep mode, needs to be called in bank isr_backup
+;
+	global	get_temperature_value
 get_temperature_value:
 	btfsc	MS5541_miso					; conversion done?
 	return								; NO - done
-	rcall	get_2bytes_MS5541
-	movff	dMSB,D2+1
-	movff	dLSB,D2+0
-	return
+	rcall	get_2bytes_MS5541			; YES - read result
+	movff	dMSB,D2+1					; copy result to D2, high byte first
+	movff	dLSB,D2+0					; ...                low  byte second
+	return								; done
 
-;=============================================================================
 
-	global	get_calibration_data		; called by start, returns in bank common
+;-----------------------------------------------------------------------------
+; Retrieve Calibration Data
+;
+; called by start, returns in bank common
+;
+	global	get_calibration_data
 get_calibration_data:
 	banksel	isr_backup					; select bank ISR data
 	bsf		block_sensor_interrupt		; disable sensor interrupts
 
-	rcall	reset_MS5541
+	rcall	reset_MS5541				; reset chip
+
 	movlw	b'01010100'					; +3*high as start and 1+low as stop
-	movwf	dbuffer
-	movlw	d'13'
-	rcall	send_data_MS5541
-	rcall	get_2bytes_MS5541
-	movff	dMSB,ir_s8_buffer+1
-	movff	dLSB,ir_s8_buffer+0
+	movwf	dbuffer						; ...
+	movlw	d'13'						; send command
+	rcall	send_data_MS5541			; ...
+	rcall	get_2bytes_MS5541			; read result
+	movff	dMSB,ir_s8_buffer+1			; copy result, high byte first
+	movff	dLSB,ir_s8_buffer+0			; copy result, low  byte second
 
 	movlw	b'01011000'					; +3*high as start and 1+low as stop
-	movwf	dbuffer
-	movlw	d'13'
-	rcall	send_data_MS5541
-	rcall	get_2bytes_MS5541
-	movff	dMSB,ir_s8_buffer+3
-	movff	dLSB,ir_s8_buffer+2
+	movwf	dbuffer						; ...
+	movlw	d'13'						; send command
+	rcall	send_data_MS5541			; ...
+	rcall	get_2bytes_MS5541			; read result
+	movff	dMSB,ir_s8_buffer+3			; copy result, high byte first
+	movff	dLSB,ir_s8_buffer+2			; copy result, low  byte second
 
 	movlw	b'01100100'					; +3*high as start and 1+low as stop
-	movwf	dbuffer
-	movlw	d'13'
-	rcall	send_data_MS5541
-	rcall	get_2bytes_MS5541
-	movff	dMSB,ir_s8_buffer+5
-	movff	dLSB,ir_s8_buffer+4
+	movwf	dbuffer						; ...
+	movlw	d'13'						; send command
+	rcall	send_data_MS5541			; ...
+	rcall	get_2bytes_MS5541			; read result
+	movff	dMSB,ir_s8_buffer+5			; copy result, high byte first
+	movff	dLSB,ir_s8_buffer+4			; copy result, low  byte second
 
 	movlw	b'01101000'					; +3*high as start and 1+low as stop
-	movwf	dbuffer
-	movlw	d'13'
-	rcall	send_data_MS5541
-	rcall	get_2bytes_MS5541
-	movff	dMSB,ir_s8_buffer+7
-	movff	dLSB,ir_s8_buffer+6
+	movwf	dbuffer						; ...
+	movlw	d'13'						; send command
+	rcall	send_data_MS5541			; ...
+	rcall	get_2bytes_MS5541			; read result
+	movff	dMSB,ir_s8_buffer+7			; copy result, high byte first
+	movff	dLSB,ir_s8_buffer+6			; copy result, low  byte second
 
-	; calculate C1 (16Bit)
-	movff	ir_s8_buffer+1, C1+1
+	; calculate C1 (16 Bit)
+	movff	ir_s8_buffer+1,C1+1
 	bcf		STATUS,C
 	rrcf	C1+1
 	bcf		STATUS,C
 	rrcf	C1+1
 	bcf		STATUS,C
 	rrcf	C1+1
-	movff	ir_s8_buffer+0, C1+0
+	movff	ir_s8_buffer+0,C1+0
 	bsf		STATUS,C
 	btfss	ir_s8_buffer+1,0
 	bcf		STATUS,C
@@ -422,7 +428,7 @@ get_calibration_data:
 	bcf		STATUS,C
 	rrcf	C1+0
 
-	; calculate C2 (16Bit)
+	; calculate C2 (16 Bit)
 	movff	ir_s8_buffer+2, C2+0
 	bsf		STATUS,C
 	btfss	ir_s8_buffer+3,0
@@ -469,7 +475,7 @@ get_calibration_data:
 	bcf		STATUS,C
 	rrcf	C2+1
 
-	; calculate C3 (16Bit)
+	; calculate C3 (16 Bit)
 	movff	ir_s8_buffer+5,C3+0
 	bsf		STATUS,C
 	btfss	ir_s8_buffer+4,7
@@ -485,7 +491,7 @@ get_calibration_data:
 	btfsc	ir_s8_buffer+5,6
 	bsf		C3+1,0
 
-	; calculate C4 (16Bit)
+	; calculate C4 (16 Bit)
 	movff	ir_s8_buffer+7,C4+0
 	bsf		STATUS,C
 	btfss	ir_s8_buffer+6,7
@@ -503,7 +509,7 @@ get_calibration_data:
 	addwfc	C4+1,W
 	movwf	C4+1
 
-	; calculate C5 (16Bit)
+	; calculate C5 (16 Bit)
 	movff	ir_s8_buffer+4,C5+0
 	bcf		C5+0,6
 	btfsc	ir_s8_buffer+2,0
@@ -544,13 +550,16 @@ get_calibration_data:
 	banksel	common						; back to bank common
 	return								; done
 
-;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Helper Function - Reset Chip
+;
 reset_MS5541_one:
-	bsf		MS5541_mosi
+	bsf		MS5541_mosi					; set MOSI
 	bra		send_clk_pulse				; send one high-low sequence on MS5541_clk and return
 
 reset_MS5541_zero:
-	bcf		MS5541_mosi
+	bcf		MS5541_mosi					; clear MOSI
 	bra		send_clk_pulse				; send one high-low sequence on MS5541_clk and return
 
 reset_MS5541:
@@ -578,77 +587,95 @@ reset_MS5541:
 	return
 
 
+;-----------------------------------------------------------------------------
+; Helper Function - read 2 Byte from Chip
+;
 get_2bytes_MS5541:
-	movlw	d'8'
-	movwf	clock_count
-	rcall	recieve_loop
-	movff	dbuffer,dMSB
-	movlw	d'8'
-	movwf	clock_count
-	rcall	recieve_loop
-	movff	dbuffer,dLSB
+	movlw	d'8'						; load counter for 8 bit
+	movwf	clock_count					; ...
+	rcall	recieve_loop				; receive 8 bits
+	movff	dbuffer,dMSB				; store result
+	movlw	d'8'						; load counter for 8 bit
+	movwf	clock_count					; ...
+	rcall	recieve_loop				; receive 8 bits
+	movff	dbuffer,dLSB				; store result
 	bra		send_clk_pulse				; send one high-low sequence on MS5541_clk and return
 
+
+;-----------------------------------------------------------------------------
+; Helper Function - read 1 Bit from Chip
+;
 recieve_loop:
 	rcall	send_clk_pulse				; send one high-low sequence on MS5541_clk
-	btfss	MS5541_miso					; MSB first
-	bcf		STATUS,C
-	btfsc	MS5541_miso					; MSB first
-	bsf		STATUS,C
-	rlcf	dbuffer,F
-	decfsz	clock_count,F
-	bra		recieve_loop
-	return
+	btfss	MS5541_miso					; read bit = 1 ? (MSB first)
+	bcf		STATUS,C					; NO - clear carry bit
+	btfsc	MS5541_miso					; read bit = 0 ? (MSB first)
+	bsf		STATUS,C					; NO - set   carry bit
+	rlcf	dbuffer,F					; shift buffer
+	decfsz	clock_count,F				; decrement counter, became zero?
+	bra		recieve_loop				; NO  - loop
+	return								; YES - done
 
+
+;-----------------------------------------------------------------------------
+; Helper Function - send a Clock Pulse
+;
 send_clk_pulse:
-	bsf		MS5541_clk
+	bsf		MS5541_clk					; set clock
 	nop
 	nop
 	nop
 	nop
 	nop
 	nop
-	bcf		MS5541_clk
+	bcf		MS5541_clk					; release clock
 	nop
 	nop
 	nop
 	nop
-	return
+	return								; done
 
 
+;-----------------------------------------------------------------------------
+; Helper Function - send a Command
+;
 send_data_MS5541:
 	movwf	clock_count					; from WREG
 	; send three start bits first
-	bcf		MS5541_clk
-	nop
-	nop
-	bsf		MS5541_mosi
-	movlw	d'3'
-	subwf	clock_count,F				; total bit counter
+	bcf		MS5541_clk					; revoke clock
+	nop									; wait
+	nop									; wait
+	bsf		MS5541_mosi					; set MOSI
+	movlw	d'3'						; compute total bit counter
+	subwf	clock_count,F				; ...
 	rcall	send_clk_pulse				; send one high-low sequence on MS5541_clk
 	rcall	send_clk_pulse				; send one high-low sequence on MS5541_clk
 	rcall	send_clk_pulse				; send one high-low sequence on MS5541_clk
-send_data_MS5541_loop:					; now send 8 bits from dbuffer and fill-up with zeros
-	bcf		MS5541_clk
-	nop
-	nop
-	btfss	dbuffer,7					; MSB first
-	bcf		MS5541_mosi
-	btfsc	dbuffer,7					; MSB first
-	bsf		MS5541_mosi
-	bsf		MS5541_clk
-	bcf		STATUS,C
-	rlcf	dbuffer,F
-	nop
-	nop
+
+send_data_MS5541_loop:
+	; now send 8 bits from dbuffer and fill-up with zeros
+	bcf		MS5541_clk					; revoke clock
+	nop									; wait
+	nop									; wait
+	btfss	dbuffer,7					; bit = 1 ? (MSB first)
+	bcf		MS5541_mosi					; NO  - clear MOSI
+	btfsc	dbuffer,7					; bit = 0 ? (MSB first)
+	bsf		MS5541_mosi					; NO  - set   MOSI
+	bsf		MS5541_clk					; set clock
+	bcf		STATUS,C					; clear carry bit
+	rlcf	dbuffer,F					; shift data byte
+	nop									; wait
+	nop									; wait
 ;	nop
 ;	nop
 ;	nop
 ;	nop
 ;	bcf		MS5541_clk
-	decfsz	clock_count,F
-	bra		send_data_MS5541_loop
-	bcf		MS5541_clk
-	return
+	decfsz	clock_count,F				; decrement bit counter, became zero?
+	bra		send_data_MS5541_loop		; NO  - loop
+	bcf		MS5541_clk					; YES - revoke clock
+	return								;     - done
+
+;-----------------------------------------------------------------------------
 
 	END

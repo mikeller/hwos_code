@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File mcp.asm                              combined next generation V3.06.1
+;   File mcp.asm                            * combined next generation V3.06.1
 ;
 ;   Basic routines for RX circuity
 ;
@@ -13,18 +13,23 @@
 #include "hwos.inc"
 #include "wait.inc"
 
-mcp	code
 
 ;=============================================================================
+mcp		code
+;=============================================================================
 
+
+;-----------------------------------------------------------------------------
+; Disable IR Receiver
+;
 	global	mcp_sleep
 mcp_sleep:
 	bcf		INTCON3,INT3IE			; disable INT3
-	bcf		mcp_power				; request IR receiver off
-	btfsc	mcp_power				; off confirmed?
+	bcf		mcp_power				; power down IR receiver
+	btfsc	mcp_power				; power drained down?
 	bra		$-6						; NO  - loop waiting
 	return							; YES - done
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 
 	END

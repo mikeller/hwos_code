@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File File color_processor.asm             combined next generation V3.03.7
+;   File File color_processor.asm           * combined next generation V3.09.4l
 ;
 ;   Decompress and draw an image
 ;
@@ -59,28 +59,30 @@
 
 	extern	convert_for_display2
 
-
+;=============================================================================
 color_proc	CODE
+;=============================================================================
 
 ;-----------------------------------------------------------------------------
-
+; Print a colored Bitmap Image
+;
 	global	color_image
 color_image:
 	tblrd*+							; read image width (in true width / 2)
-	movff	TABLAT,win_width
+	movff	TABLAT,win_width+0		; store in win_width, low  byte
+	clrf	win_width+1				; clear    win_width, high byte
 	tblrd*+							; read image height
-	movff	TABLAT,win_height
+	movff	TABLAT,win_height		; store in win_height
 	rcall	get_colors				; read the colors
-
 	tstfsz	encoding_format			; image encoded in version 0 format?
 	bra		color_image_1			; NO
 
-	; image encoding version 0 format: compute the overall number of pixels - 1 to draw
-	movf	win_width,W				; get width into WREG
-	mulwf	win_height				; multiply by hight
+	; image encoding version 0 format: compute overall number of pixels - 1
+	movf	win_width,W				; get           image width (/2) into WREG
+	mulwf	win_height				; multiply with image hight
 	movff	PRODL,overall_pixels+0	; store product, low  byte
 	movff	PRODH,overall_pixels+1	; ...            high byte
-	clrf	overall_pixels+2		; clear upper byte
+	clrf	overall_pixels+2		; clear product, upper byte
 	bcf		STATUS,C				; clear carry flag
 	rlcf	overall_pixels+0		; multiply by 2 via shift left, low   byte
 	rlcf	overall_pixels+1		; ...                           high  byte
@@ -91,7 +93,6 @@ color_image:
 	subwfb	overall_pixels+2,F		; ...
 
 color_image_1:
-	clrf	win_width+1				; clear width, high byte
 	bcf		STATUS,C				; clear carry flag
 	rlcf	win_width+0				; multiply width x 2 to get the true box width
 	rlcf	win_width+1				; ...
@@ -104,20 +105,20 @@ color_image_loop_xy:
 	clrf	pixel_count+1			; ...
 
 color_image_read_byte:
-	tblrd*+							; get next byte
+	tblrd*+							; get next image data byte
 	btfss	TABLAT,7				; high bit cleared ?
-	bra		color_image_decode_color; YES - this is a color byte
-	;bra	color_image_decode_count; NO  - this is a pixel count byte
+	bra		color_image_decode_color; YES - this is color data
+	;bra	color_image_decode_count; NO  - this is pixel count data
 
 color_image_decode_count:
 	; decode pixel repetition count
 	rlcf	TABLAT,F				; drop high bit
 	movlw	.7						; move 7 bits
 color_image_decode_count_loop:
-	rlcf	TABLAT,F				; get upper bit into carry
-	rlcf	pixel_count+0,F			; push bit into pixel count (16 bit operation)
-	rlcf	pixel_count+1,F			; ...
-	decfsz	WREG					; decrement loop counter, all bits done?
+	rlcf	TABLAT,F						; get upper bit into carry
+	rlcf	pixel_count+0,F					; push bit into pixel count (16 bit operation)
+	rlcf	pixel_count+1,F					; ...
+	decfsz	WREG							; decrement loop counter, all bits done?
 	bra		color_image_decode_count_loop	; NO  - loop
 	bra		color_image_read_byte			; YES - decode next byte
 
@@ -127,7 +128,7 @@ color_image_decode_color:
 	cpfslt	TABLAT					; color index < end-of-image tag?
 	return							; NO - done
 
-	; get pixel color into PROD
+	; translate color index into pixel color
 	lfsr	FSR2,buffer				; set FSR2 pointer to base address of color table
 	rlncf	TABLAT,W				; get color index * 2 into WREG
 	movwf	FSR2L					; adjust pointer to selected color
@@ -136,6 +137,7 @@ color_image_decode_color:
 
 	tstfsz	encoding_format			; image encoded in version 0 format?
 	bra		color_image_pixel		; NO
+
 	; image encoding version 0 format: subtract pixel count from the overall number of pixels to do
 	movf	pixel_count+0,W			; YES - 24 bit subtraction, low   byte
 	subwf	overall_pixels+0,F		; ...
@@ -145,12 +147,12 @@ color_image_decode_color:
 	subwfb	overall_pixels+2,F		; ...
 
 color_image_pixel:
-	; prepare sending of pixels to display
+	; prepare sending the pixels to display
 	infsnz	pixel_count+0			; increment pixel repetition count by 1
 	incf	pixel_count+1			; ...
 	incf	pixel_count+1			; because decrement is done first, increment high byte once more
 	bsf		tft_rs,0				; RS_H data
-	bcf		INTCON,GIE				; disable global interrupts
+	bcf		INTCON,GIE				; disable all interrupts
 
 	btfsc	screen_type2			; display type 2 ?
 	bra		color_image_display2	; YES
@@ -202,7 +204,7 @@ color_image_display3:
 ;	bra		color_image_pixel_com	; all pixels transmitted
 
 color_image_pixel_com:
-	bsf		INTCON,GIE				; re-enable global interrupts
+	bsf		INTCON,GIE				; re-enable all interrupts
 
 	tstfsz	encoding_format			; image encoded in version 0 format?
 	bra		color_image_loop_xy		; NO - loop to process next byte from image data
@@ -216,14 +218,16 @@ color_image_pixel_com:
 	return							;                  YES - done
 
 
+;-----------------------------------------------------------------------------
+; Helper Function - set up Pixel-Color Look-Up Table
+;
 	global	get_colors
 get_colors:
-	tblrd*+							; read number of image colors
-	movff	TABLAT,lo				; store in lo
-	movf	lo,W
+	tblrd*+							; read number of color indexes
+	movf	TABLAT,W				; store in lo
 	tblrd*+							; read image encoding format
 	movff	TABLAT,encoding_format	; store encoding format
-	lfsr	FSR2,buffer				; set up buffer as storage for the colors
+	lfsr	FSR2,buffer				; load base address of the look-up table
 get_colors_loop:
 	tblrd*+							; read color from stored image, low  byte
 	btfss	use_custom_colors		; shall use custom colors?
@@ -235,5 +239,7 @@ get_colors_loop:
 	bra		get_colors_loop			; NO  - loop
 	bcf		use_custom_colors		; YES - clear custom colors request
 	return							;     - done
+
+;-----------------------------------------------------------------------------
 
 	END

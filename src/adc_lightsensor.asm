@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File adc_lightsensor.asm                  combined next generation V3.08.8
+;   File adc_lightsensor.asm                * combined next generation V3.09.4e
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -15,21 +15,34 @@
 #include "i2c.inc"
 
 
+;=============================================================================
 adc_light	CODE
-
 ;=============================================================================
 
-wait_adc:									; bank-safe
+
+;-----------------------------------------------------------------------------
+; Helper Function - wait on ADC to finish conversion
+;
+; bank safe
+;
+wait_adc:
 	movwf	ADCON0							; select ADC channel
 	nop										; wait a short moment
+	nop										; ...
+	nop										; .....
+	nop										; .......
 	bsf		ADCON0,1						; start ADC
 wait_adc2:
 	btfsc	ADCON0,1						; ADC done?
 	bra		wait_adc2						; NO  - wait
 	return									; YES - done
 
+
+;-----------------------------------------------------------------------------
+; get Battery Voltage
+;
 	global	get_battery_voltage
-get_battery_voltage:						; start ADC and wait until finished
+get_battery_voltage:
 	btfss	battery_gauge_available			; battery gauge IC available?
 	bra		get_battery_voltage_2			; NO  - OSTC hardware without gauge IC
 	bsf		battery_is_36v					; YES - gauge IC available, 3.6V battery
@@ -106,7 +119,7 @@ get_battery_voltage_2:						; no gauge IC available, use ADC to measure battery 
 	MOVII	ADRESL,batt_voltage				; store value
 	bcf		ADCON0,0						; power off ADC
 
-; Multiply with 2.006 to be exact here...
+;	; multiply with 2.006 to be exact here...
 ;	bcf		STATUS,C
 ;	rlcf	xA+0,F
 ;	rlcf	xA+1,F							; x2
@@ -115,14 +128,14 @@ get_battery_voltage_2:						; no gauge IC available, use ADC to measure battery 
 	bcf		battery_is_36v					; by default assume it is a 1.5 battery
 	MOVII	batt_voltage,sub_b				; load measured battery voltage
 
-	; Check if the battery is a 3.6V lithium
+	; check if the battery is a 3.6V lithium
 	MOVLI	lithium_36v_low,sub_a			; load threshold for 3.6 Volt lithium battery
 	call	cmpU16							; sub_a - sub_b
 	btfss	neg_flag						; battery voltage > 3.6 V lithium threshold ?
 	bra		get_battery_voltage_9			; NO  - keep assumption of 1.5V battery
 	bsf		battery_is_36v					; YES - set flag
 
-	; Check if the battery is near-dead already
+	; check if the battery is near-dead already
 	MOVLI	lithium_36v_empty,sub_a			; load threshold for near-dead lithium battery
 	call	cmpU16							; sub_a - sub_b
 	btfsc	neg_flag						; battery voltage > dead-battery threshold ?
@@ -213,7 +226,6 @@ get_battery_voltage_low:
 	bcf		battery_low_condition			; NO  - clear battery low condition
 	return									;     - done
 
-
 get_battery_voltage_9:
 	; use 1.5V battery voltage mode
 	; use approximation (batt_voltage-aa_15v_low)/4 = lo
@@ -230,7 +242,12 @@ get_battery_voltage_9:
 	bra		get_battery_voltage_8			; check limits and return
 
 
-	global	get_ambient_level				; called from ISR only, in context bank isr_backup
+;-----------------------------------------------------------------------------
+; get ambient Light Level
+;
+; called from ISR only, in context bank isr_backup
+;
+	global	get_ambient_level
 get_ambient_level:
 	btfsc	sleepmode						; in sleep mode?
 	return									; YES - done
@@ -261,18 +278,28 @@ get_ambient_level1:							; using ambient sensor
 
 	; ambient_light:2 is between 4096 (direct sunlight) and about 200 (darkness)
 	; first: divide by 16
-	bcf		STATUS,C
-	rrcf	ambient_light+1
-	rrcf	ambient_light+0
-	bcf		STATUS,C
-	rrcf	ambient_light+1
-	rrcf	ambient_light+0
-	bcf		STATUS,C
-	rrcf	ambient_light+1
-	rrcf	ambient_light+0
-	bcf		STATUS,C
-	rrcf	ambient_light+1
-	rrcf	ambient_light+0
+
+	; bcf	STATUS,C						; old /16 code
+	; rrcf	ambient_light+1
+	; rrcf	ambient_light+0
+	; bcf	STATUS,C
+	; rrcf	ambient_light+1
+	; rrcf	ambient_light+0
+	; bcf	STATUS,C
+	; rrcf	ambient_light+1
+	; rrcf	ambient_light+0
+	; bcf	STATUS,C
+	; rrcf	ambient_light+1
+	; rrcf	ambient_light+0
+
+	movlw	.4								; divide by 2^4 = 16
+get_ambient_level1_loop:
+	bcf		STATUS,C						; clear carry
+	rrcf	ambient_light+1					; rotate right high byte, carry into MSB, LSB into carry
+	rrcf	ambient_light+0					; rotate right low  byte, carry into MSB, LSB into carry
+	decfsz	WREG							; decrement counter, done?
+	bra		get_ambient_level1_loop			; NO  - loop
+
 	; result: ambient_light:2/16
 	; now make sure to have value between ambient_light_low and ambient_light_max
 
@@ -296,6 +323,7 @@ get_ambient_level2:
 
 	btfsc	RCSTA1,7						; UART module on?
 	clrf	isr_lo							; YES - set temporary to eco mode
+
 	incf	isr_lo,F						; adjust 0-2 to 1-3
 
 	movlw	ambient_light_max_high_cr		; cR and 2 hardware brightest setting
@@ -307,127 +335,104 @@ get_ambient_level2:
 	movlw	ambient_light_max_high_36V		; YES - 3.6V battery brightest setting
 	banksel	isr_backup						; back to ISR default bank
 
-	dcfsnz	isr_lo,F
-	movlw	ambient_light_max_eco			; eco setting
-	dcfsnz	isr_lo,F
-	movlw	ambient_light_max_medium		; brightest setting
+	dcfsnz	isr_lo,F						; eco setting?
+	movlw	ambient_light_max_eco			; YES
+	dcfsnz	isr_lo,F						; medium setting?
+	movlw	ambient_light_max_medium		; YES
 
 	incf	ambient_light+0,F				; +1
 	cpfslt	ambient_light+0					; smaller than WREG?
 	movwf	ambient_light+0					; NO - set to max.
 
-	movff	opt_brightness,isr_lo
+	movff	opt_brightness,isr_lo			; get brightness setting
 	incf	isr_lo,F						; adjust 0-2 to 1-3
-	movlw	ambient_light_min_high			; darkest setting
-	dcfsnz	isr_lo,F
-	movlw	ambient_light_min_eco			; darkest setting
-	dcfsnz	isr_lo,F
-	movlw	ambient_light_min_medium		; darkest setting
-	dcfsnz	isr_lo,F
-	movlw	ambient_light_min_high			; darkest setting
+	movlw	ambient_light_min_high			; default to highest setting
+	dcfsnz	isr_lo,F						; eco setting?
+	movlw	ambient_light_min_eco			; YES
+	dcfsnz	isr_lo,F						; medium setting?
+	movlw	ambient_light_min_medium		; YES
+	dcfsnz	isr_lo,F						; highest setting?
+	movlw	ambient_light_min_high			; YES
 
 	cpfsgt	ambient_light+0					; bigger than WREG?
 	movwf	ambient_light+0					; NO - set to min
 
 	movff	ambient_light+0,max_CCPR1L		; store value for dimming in TMR7 interrupt
-	return
+	return									; done
 
 
-;=============================================================================
-; routines for reading analog-attached external sensors
+;-----------------------------------------------------------------------------
+; Read analog external Sensors
+;
+; called from outside ISR only
 ;
  IFDEF _external_sensor
 
-	global	get_analog_inputs				; called from outside ISR only
-get_analog_inputs:							; start ADC and wait until finished
+	global	get_analog_inputs
+get_analog_inputs:
 	bsf		adc_is_running					; =1: the ADC is in use
-	btfsc	TFT_PWM
-	bra		get_analog_inputs				; wait for PWM low
+	btfsc	TFT_PWM							; PWM active?
+	bra		get_analog_inputs				; YES - wait for PWM low
+
 	movlw	b'00100000'						; 2.048V Vref+ -> 1 LSB = 500 µV
-	movwf	ADCON1
-	banksel	sensor1_mv						; select bank where sensor1_mv is stored
+	movwf	ADCON1							; ...
+
 	; Sensor 1
 	movlw	b'00100001'						; power on ADC, select AN8
-	rcall	wait_adc
-	bcf		STATUS,C
-	rrcf	ADRESH,F						; /2
-	rrcf	ADRESL,W
-	addwf	sensor1_mv+0,F					; add to sensor1_mv:2
-	movf	ADRESH,W
-	addwfc	sensor1_mv+1,F
-	bcf		STATUS,C
-	rrcf	sensor1_mv+1,F					; divide /2
-	rrcf	sensor1_mv+0,F
-	movlw	HIGH ignore_mv
-	cpfsgt	sensor1_mv+1					; > ignore_mv ?
-	bra		get_analog_inputs1a				; NO
-	CLRI	sensor1_mv						; YES - ignore this reading
-get_analog_inputs1a:						; ignore 1.9 mV noise for not-connected inputs
-	tstfsz	sensor1_mv+1					; > 25.5 mV ?
-	bra		get_analog_inputs2				; YES - skip here
-	movlw	.19
-	cpfsgt	sensor1_mv+0					; > 1.9 mV ?
-	clrf	sensor1_mv+0					; NO - clear result
+	MOVII	sensor1_mv,mpr					; get last sensor voltage
+	rcall	get_analog_inputs_common		; update value
+	MOVII	mpr,sensor1_mv					; store new value
 
-get_analog_inputs2:
 	; Sensor 2
 	movlw	b'00100101'						; power on ADC, select AN9
-	rcall	wait_adc
-	bcf		STATUS,C
-	rrcf	ADRESH,F						; /2
-	rrcf	ADRESL,W
-	addwf	sensor2_mv+0,F					; add to sensor2_mv:2
-	movf	ADRESH,W
-	addwfc	sensor2_mv+1,F
-	bcf		STATUS,C
-	rrcf	sensor2_mv+1,F					; divide /2
-	rrcf	sensor2_mv+0,F
-	movlw	HIGH ignore_mv
-	cpfsgt	sensor2_mv+1					; > ignore_mv ?
-	bra		get_analog_inputs2a				; NO
-	CLRI	sensor2_mv						; YES - ignore this reading
-get_analog_inputs2a:						; ignore 1.9 mV noise for not-connected inputs
-	tstfsz	sensor2_mv+1					; > 25.5 mV ?
-	bra		get_analog_inputs3				; YES - skip here
-	movlw	.19
-	cpfsgt	sensor2_mv+0					; > 1.9 mV ?
-	clrf	sensor2_mv+0					; NO - clear result
+	MOVII	sensor2_mv,mpr					; get last sensor voltage
+	rcall	get_analog_inputs_common		; update value
+	MOVII	mpr,sensor2_mv					; store new value
 
-get_analog_inputs3:
 	; Sensor 3
 	movlw	b'00101001'						; power on ADC, select AN10
-	rcall	wait_adc
-	bcf		STATUS,C
-	rrcf	ADRESH,F						; /2
-	rrcf	ADRESL,W
-	addwf	sensor3_mv+0,F					; add to sensor3_mv:2
-	movf	ADRESH,W
-	addwfc	sensor3_mv+1,F
-	bcf		STATUS,C
-	rrcf	sensor3_mv+1,F					; divide /2
-	rrcf	sensor3_mv+0,F
-	movlw	HIGH ignore_mv
-	cpfsgt	sensor3_mv+1					; > ignore_mv ?
-	bra		get_analog_inputs3a				; NO
-	CLRI	sensor3_mv						; YES - ignore this reading
-get_analog_inputs3a:						; ignore 1.9 mV noise for not-connected inputs
-	tstfsz	sensor3_mv+1					; > 25.5 mV ?
-	bra		get_analog_inputs4				; YES - skip here
-	movlw	.19
-	cpfsgt	sensor3_mv+0					; > 1.9 mV ?
-	clrf	sensor3_mv+0					; NO - clear result
-get_analog_inputs4:
-	banksel	common							; back to bank common
+	MOVII	sensor3_mv,mpr					; get last sensor voltage
+	rcall	get_analog_inputs_common		; update value
+	MOVII	mpr,sensor3_mv					; store new value
+
 	bcf		ADCON0,0						; power off ADC
 	bcf		adc_is_running					; done with ADC
-	return
+	return									; done
+
+get_analog_inputs_common:
+	rcall	wait_adc						; wait for ADC
+	bcf		STATUS,C						; clear carry flag
+	rrcf	ADRESH,F						; divide /2
+	rrcf	ADRESL,W						; ...
+	addwf	mpr+0,F							; add to sensor_mv:2
+	movf	ADRESH,W						; ...
+	addwfc	mpr+1,F							; ...
+	bcf		STATUS,C						; clear carry flag
+	rrcf	mpr+1,F							; divide /2
+	rrcf	mpr+0,F							; ...
+	movlw	HIGH ignore_mv_above			; get upper limit of operational range
+	cpfsgt	mpr+1							; > limit ?
+	bra		get_analog_inputs_common_1		; NO  - ok to use
+	CLRI	mpr								; YES - ignore this reading
+	return									;     - done
+get_analog_inputs_common_1:
+	tstfsz	mpr+1							; > 25.5 mV ?
+	return									; YES - ok to use anyway
+	movlw	ignore_mv_below					; NO  - get lower limit of operational range
+	cpfsgt	mpr+0							;     - > limit ?
+	clrf	mpr+0							;       NO - ignore this reading
+	return									;     - done
 
  ENDIF	; _external_sensor
 
-;=============================================================================
 
-	global	piezo_config					; called from outside ISR only
-piezo_config:								; set up sensitivity of heinrichsweikamp piezo buttons (~30ms)
+;-----------------------------------------------------------------------------
+; Set the Sensitivity of the Piezo Buttons
+; 
+; called from outside ISR only, ~ 30 ms
+;
+	global	piezo_config
+piezo_config:
 	clrf	TMR5H							; clear TMR5H first
 	clrf	TMR5L							; clear TMR5L thereafter
 	bcf		PIR5,TMR5IF						; clear timer 5 overrun flag, will take ~ 2 seconds to overrun after reset
@@ -442,195 +447,212 @@ piezo_config0:
 	btfss	PIR5,TMR5IF						; timeout?
 	bra		piezo_config0					; NO - not yet, loop
 
-	bcf		INTCON,GIE
+	bcf		INTCON,GIE						; disable all interrupts
 
 	movff	opt_cR_button_right,WREG		; right button
 	btfsc	flip_screen						; 180° rotation ?
 	movff	opt_cR_button_left,WREG			; YES - left button
-	rcall	piezo_config_tx
+	rcall	piezo_config_tx					; send to button
 
 	movff	opt_cR_button_left,WREG			; left button
 	btfsc	flip_screen						; 180° rotation ?
 	movff	opt_cR_button_right,WREG		; YES - right button
-	rcall	piezo_config_tx
+	rcall	piezo_config_tx					; send to button
 
 	movlw	.20								; reserved
-	rcall	piezo_config_tx
+	rcall	piezo_config_tx					; send to button
 	movlw	.20								; reserved
-	rcall	piezo_config_tx
+	rcall	piezo_config_tx					; send to button
 
-	bsf		INTCON,GIE
-	return
+	bsf		INTCON,GIE						; re-enable all interrupts
+	return									; done
 
-piezo_config_tx:							; send one byte
-	movwf	lo								; store byte
-	movlw	.8
-	movwf	hi								; bit counter
+
+;-----------------------------------------------------------------------------
+; Helper Function - send 1 Byte to the Piezo Buttons
+;
+piezo_config_tx:
+	movwf	lo								; store byte to be sent
+	movlw	.8								; set up bit count
+	movwf	hi								; ...
 	bcf		TX3_PIEZO_CFG					; start bit
-	rcall	piezo_config_wait_bit
-piezo_config_tx_loop:
-	btfss	lo,0							; LSB first
-	bcf		TX3_PIEZO_CFG
-	btfsc	lo,0							; LSB first
-	bsf		TX3_PIEZO_CFG
-	rcall	piezo_config_wait_bit
-	rrncf	lo,F
-	decfsz	hi,F
-	bra		piezo_config_tx_loop
-	bsf		TX3_PIEZO_CFG					; stop bit
-	rcall	piezo_config_wait_bit
-	return
+	rcall	piezo_config_wait_bit			; wait
+piezo_config_tx_loop:						; LSB first
+	btfss	lo,0							; bit = 0 ?
+	bcf		TX3_PIEZO_CFG					; YES
+	btfsc	lo,0							; bit = 1 ?
+	bsf		TX3_PIEZO_CFG					; YES
+	rcall	piezo_config_wait_bit			; wait
+	rrncf	lo,F							; shift lo to access next bit
+	decfsz	hi,F							; decrement bit counter, all done?
+	bra		piezo_config_tx_loop			; NO  - loop
+	bsf		TX3_PIEZO_CFG					; YES - stop bit
+	rcall	piezo_config_wait_bit			;     - wait
+	return									;     - done
 
 piezo_config_wait_bit:
 	setf	TMR5H							; set TMR5H first (to 255)
-	movlw	.255-.26 						; 26 x 31.5 µs = 819 us
+	movlw	.255-.26 						; 26 x 31.5 µs = 819 µs
 	movwf	TMR5L							; set TMR5L thereafter
 	bcf		PIR5,TMR5IF						; clear timer 5 overrun flag
-piezo_config_wait_bit3:
+piezo_config_wait_bit_loop:
 	btfss	PIR5,TMR5IF						; timeout?
-	bra		piezo_config_wait_bit3			; NO  - loop
+	bra		piezo_config_wait_bit_loop		; NO  - loop
 	return									; YES - done
 
 
-	global	get_analog_switches				; called from ISR and from sleep mode, returns in bank common
-get_analog_switches:						; start ADC and wait until finished
-	banksel	HW_variants						; switch to bank where OSTC model variant is stored
+;-----------------------------------------------------------------------------
+; get the analog Switches
+;
+; called from ISR and from sleep mode, returns in bank common
+;
+	global	get_analog_switches
+get_analog_switches:
 	btfsc	analog_switches					; does the OSTC have analog switches?
 	bra		get_analog_switches_1			; YES
+
 get_analog_switches0:
-	banksel	common							; NO  - back to bank common
-	bcf		analog_sw1_pressed				;     - clear flag for analog switch 1
-	bcf		analog_sw2_pressed				;     - clear flag for analog switch 2
-	return									;     - done
+	bcf		analog_sw1_pressed				; clear flag for analog switch 1
+	bcf		analog_sw2_pressed				; clear flag for analog switch 2
+	return									; done
 
 get_analog_switches_1:
-	banksel	common							; back to bank common
 	btfsc	adc_is_running					; ADC in use?
 	return									; YES - abort
 	btfsc	cc_active						; NO  - charging?
 	bra		get_analog_switches0			;       YES - abort (and clear both flags)
-	;bra	get_analog_switches_2			;       NO  - read switches
 
 get_analog_switches_2:
-	bsf		adc_is_running
+	bsf		adc_is_running					; flag that ADC is in use
 	bcf		ADCON2,ADFM						; left justified
-	clrf	ADCON1
+	clrf	ADCON1							;
 	movlw	b'00100101'						; power on ADC, select AN9
-	rcall	wait_adc
+	rcall	wait_adc						; wait for ADC
 
 	banksel	isr_backup						; select bank ISR data
-	movff	ADRESH,WREG
-	addwf	analog_sw2_raw+0
-	movlw	.0
-	addwfc	analog_sw2_raw+1
+
+	movlw	.250							; set   upper limit
+	cpfslt	ADRESH							; above upper limit?
+	movff	analog_sw2,ADRESH				; YES - use (last) average instead
+
+	movf	ADRESH,W						; get ADC result (high byte)
+	addwf	analog_sw2_raw+0				; add to averaging register
+	movlw	.0								; ...
+	addwfc	analog_sw2_raw+1				; ...
 	decfsz	analog_counter,F				; continue averaging?
 	bra		get_analog_switches_2a			; YES
-	bcf		STATUS,C						; NO  - done, compute average
-	rrcf	analog_sw2_raw+1
-	rrcf	analog_sw2_raw+0				; /2
-	bcf		STATUS,C
-	rrcf	analog_sw2_raw+1
-	rrcf	analog_sw2_raw+0				; /4
-	bcf		STATUS,C
-	rrcf	analog_sw2_raw+1
-	rrcf	analog_sw2_raw+0				; /8
-	bcf		STATUS,C
-	rrcf	analog_sw2_raw+1
-	rrcf	analog_sw2_raw+0				; /16
-	movff	analog_sw2_raw+0,analog_sw2
-	clrf	analog_sw2_raw+1
-	clrf	analog_sw2_raw+0				; reset average registers
-;	movlw	.16
-;	movwf	analog_counter					; only once...
+
+	; compute average - divide by 16
+	swapf	analog_sw2_raw+1,F				; swap nibbles in high byte
+	movlw	b'11110000'						; keep only upper nibble
+	andwf	analog_sw2_raw+1,W				; ...
+	movwf	analog_sw2						; copy ex lower nibble of high byte to upper nibble of result
+	swapf	analog_sw2_raw+0,F				; swap nibble in low  byte
+	movlw	b'00001111'						; keep only lower nibble
+	andwf	analog_sw2_raw+0,W				; ...
+	iorwf	analog_sw2,F					; copy ex upper nibble of low  byte to lower nibble of result
+
+	clrf	analog_sw2_raw+1				; reset average registers
+	clrf	analog_sw2_raw+0				; ...
 
 get_analog_switches_2a:
 	bcf		analog_sw2_pressed				; default to not pressed
-	movff	opt_cR_button_left,WREG			; 20-100
-	bcf		STATUS,C
+	movff	opt_cR_button_left,WREG			; get button sensitivity (20-100)
+	bcf		STATUS,C						; clear carry bit
 	rrcf	WREG							; /2 -> 10-50
-	bcf		STATUS,C
-	rrcf	WREG							; /2 -> 5-25
+	bcf		STATUS,C						; clear carry bit
+	rrcf	WREG							; /4 -> 5-25
 	decf	WREG,W							; -1
 	decf	WREG,W							; -1
 	decf	WREG,W							; -1 -> 2-22
 	btfss	button_polarity,1				; (1= normal, 0=inverted)
-	bra		get_analog_switches_sw2_inv
-	addwf	analog_sw2,W					; average (~128)
-	cpfsgt	ADRESH							; pressed?
-	bra		get_analog_switches_3			; NO
-	bra		get_analog_switches_sw2_pressed	; YES (left button normal)
+	bra		get_analog_switches_sw2_inv		; 0
+	addwf	analog_sw2,W					; 1 - add average (~128)
+	cpfsgt	ADRESH							;   - pressed?
+	bra		get_analog_switches_3			;     NO  - continue with other button
+	bra		get_analog_switches_sw2_pressed	;     YES - (left button normal)
 
 get_analog_switches_sw2_inv:
-	subwf	analog_sw2,W					; average (~128)
+	subwf	analog_sw2,W					; subtract average (~128)
 	cpfslt	ADRESH							; pressed?
-	bra		get_analog_switches_3			; NO
-	;bra	get_analog_switches_sw2_pressed	; YES (left button inverted)
+	bra		get_analog_switches_3			; NO  - continue with other button
+	;bra	get_analog_switches_sw2_pressed	; YES - (left button inverted)
 
 get_analog_switches_sw2_pressed:
 	bsf		analog_sw2_pressed				; set left button as pressed
 
 get_analog_switches_3:
 	movlw	b'00101001'						; power on ADC, select AN10
-	rcall	wait_adc
-	movff	ADRESH,WREG
-	addwf	analog_sw1_raw+0
-	movlw	.0
-	addwfc	analog_sw1_raw+1
+	rcall	wait_adc						; wait on ADC
+
+	movlw	.250							; set   upper limit
+	cpfslt	ADRESH							; above upper limit?
+	movff	analog_sw1,ADRESH				; YES - use (last) average instead
+
+	movf	ADRESH,W						; get ADC result (high byte)
+	addwf	analog_sw1_raw+0				; add to averaging register
+	movlw	.0								; ...
+	addwfc	analog_sw1_raw+1				; ...
 	tstfsz	analog_counter					; continue averaging?
 	bra		get_analog_switches_3a			; YES
-	bcf		STATUS,C						; NO - done, compute average
-	rrcf	analog_sw1_raw+1
-	rrcf	analog_sw1_raw+0				; /2
-	bcf		STATUS,C
-	rrcf	analog_sw1_raw+1
-	rrcf	analog_sw1_raw+0				; /4
-	bcf		STATUS,C
-	rrcf	analog_sw1_raw+1
-	rrcf	analog_sw1_raw+0				; /8
-	bcf		STATUS,C
-	rrcf	analog_sw1_raw+1
-	rrcf	analog_sw1_raw+0				; /16
-	movff	analog_sw1_raw+0,analog_sw1
-	clrf	analog_sw1_raw+1
-	clrf	analog_sw1_raw+0				; reset average registers
-	movlw	.16
-	movwf	analog_counter					; only once...
+
+	; compute average - divide by 16
+	swapf	analog_sw1_raw+1,F				; swap nibbles in high byte
+	movlw	b'11110000'						; keep only upper nibble
+	andwf	analog_sw1_raw+1,W				; ...
+	movwf	analog_sw1						; copy ex lower nibble of high byte to upper nibble of result
+	swapf	analog_sw1_raw+0,F				; swap nibble in low  byte
+	movlw	b'00001111'						; keep only lower nibble
+	andwf	analog_sw1_raw+0,W				; ...
+	iorwf	analog_sw1,F					; copy ex upper nibble of low  byte to lower nibble of result
+
+	clrf	analog_sw1_raw+1				; reset average registers
+	clrf	analog_sw1_raw+0				; ...
+
+	; set up averaging counter for next call-up
+	movlw	.16								; 16 averaging rounds
+	movwf	analog_counter					; ...
 
 get_analog_switches_3a:
 	bcf		analog_sw1_pressed				; default to not pressed
 	movff	opt_cR_button_right,WREG		; 20-100
-	bcf		STATUS,C
+	bcf		STATUS,C						; clear carry bit
 	rrcf	WREG							; /2 -> 10-50
-	bcf		STATUS,C
+	bcf		STATUS,C						; clear carry bit
 	rrcf	WREG							; /2 -> 5-25
 	decf	WREG,W							; -1
 	decf	WREG,W							; -1
 	decf	WREG,W							; -1 -> 2-22
 	btfss	button_polarity,0				; (1= normal, 0=inverted)
-	bra		get_analog_switches_sw1_inv
-	addwf	analog_sw1,W					; average (~128)
-	cpfsgt	ADRESH							; pressed?
-	bra		get_analog_switches_4			; NO
-	bra		get_analog_switches_sw1_pressed	; YES (right button normal)
+	bra		get_analog_switches_sw1_inv		; 0
+	addwf	analog_sw1,W					; 1 - add to average (~128)
+	cpfsgt	ADRESH							;   - pressed?
+	bra		get_analog_switches_4			;     NO  - continue with clean-up
+	bra		get_analog_switches_sw1_pressed	;     YES - (right button normal)
 
 get_analog_switches_sw1_inv:
-	subwf	analog_sw1,W					; average (~128)
+	subwf	analog_sw1,W					; subtract from average (~128)
 	cpfslt	ADRESH							; pressed?
-	bra		get_analog_switches_4			; NO
-	;bra	get_analog_switches_sw1_pressed	; YES (right button inverted)
+	bra		get_analog_switches_4			; NO  - continue with clean-up
+	;bra	get_analog_switches_sw1_pressed	; YES - (right button inverted)
 
 get_analog_switches_sw1_pressed:
 	bsf		analog_sw1_pressed				; set right button as pressed
 
 get_analog_switches_4:
 	bsf		ADCON2,ADFM						; restore to right justified
-	bcf		adc_is_running
+	bcf		adc_is_running					; flag ADC not in use any more
+
 	banksel	common							; back to bank common
+
 	btfsc	analog_sw1_pressed				; right button pressed?
 	return									; YES - done
 	btfsc	analog_sw2_pressed				; left button pressed?
 	return									; YES - done
 	setf	TMR1H							; NO to both - no button pressed, set timer1 to overflow quickly
-	return
+	setf	TMR1L							;            - ...
+	return									;            - done
+
+;-----------------------------------------------------------------------------
 
 	END

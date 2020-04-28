@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File calibration.asm                      combined next generation V3.08.8
+;   File calibration.asm                    * combined next generation V3.09.4n
 ;
 ;   o2 sensor calibration subroutines
 ;
@@ -14,216 +14,228 @@
 #include "eeprom_rs232.inc"
 
 
-calibrate	CODE
-
 ;=============================================================================
+calibrate1	CODE
+;=============================================================================
+
 
  IFDEF _external_sensor
 
-	global	transmit_setpoint				; transmit current setpoint from WREG (in cbar) to external electronics
+;-----------------------------------------------------------------------------
+; Transmit current Setpoint from WREG (in cbar) to external Electronics
+;
+	global	transmit_setpoint
 transmit_setpoint:
 	return									; !!!! FUNCTION IS CURRENTLY DISABLED !!!!
-	btfss	s8_digital_avail				; do we have a digital S8 interface?
-	return									; NO  - ignore
-											; YES - transmit setpoint from WREG
-	clrf	lo								; initialize checksum
-	movff	char_I_const_ppO2,hi			; copy setpoint value to hi
-	movlw	0xAA							; start byte
-	rcall	tx_to_HUD						; transmit to HUD
-	movlw	0x60							; command new SP
-	rcall	tx_to_HUD						; transmit to HUD
-	movff	hi,WREG							; SP in cbar
-	rcall	tx_to_HUD						; transmit to HUD
-	movff	lo,WREG							; checksum
-	rcall	tx_to_HUD_cs					; transmit checksum
-	return
 
-tx_to_HUD:									; entry point to transmit a byte to the HUD
+;	btfsc	ext_input_optical				; optical input in use?
+;	return									; YES - setpoint - TX not supported
+;	TSTOSS	opt_s8_mode						; NO  - S8 mode selected?
+;	return									;       NO
+;	clrf	lo								;       YES - initialize checksum
+;	movff	char_I_const_ppO2,hi			;           - copy setpoint value to hi
+;	movlw	0xAA							;           - load start byte
+;	rcall	tx_to_HUD_chksum				;           - transmit to HUD
+;	movlw	0x60							;           - load command 'new SP'
+;	rcall	tx_to_HUD_chksum				;           - transmit to HUD
+;	movf	hi,W							;           - load SP in cbar
+;	rcall	tx_to_HUD_chksum				;           - transmit to HUD
+;	movf	lo,W							;           - load checksum
+;	rcall	tx_to_HUD						;           - transmit checksum
+;	return									;           - done
+
+
+;-----------------------------------------------------------------------------
+; Helper Function - Transmit Byte to external Electronics
+;
+tx_to_HUD_chksum:
 	addwf	lo,F							; add byte to checksum
-tx_to_HUD_cs:								; entry point to transmit the checksum
-	movff	WREG,TXREG2						; transmit byte
-	call	ir_s8_wait_tx					; wait for UART
-	return
+tx_to_HUD:
+	goto	ir_s8_tx_single					; transmit byte and return
 
 
+;-----------------------------------------------------------------------------
+; Compute Calibration Factors
+;
 	global	calibrate_mix
 calibrate_mix:
-	; set usage and calibration flags as per default
-	bsf		use_O2_sensor1
-	bsf		use_O2_sensor2
-	bsf		use_O2_sensor3
-	bsf		sensor1_calibrated_ok
-	bsf		sensor2_calibrated_ok
-	bsf		sensor3_calibrated_ok
+	; set usage and calibration flags to default values
+	bsf		use_O2_sensor1					; sensor in use
+	bsf		use_O2_sensor2					; ...
+	bsf		use_O2_sensor3					; ...
+	bsf		sensor1_calibrated_ok			; sensor calibration ok
+	bsf		sensor2_calibrated_ok			; ...
+	bsf		sensor3_calibrated_ok			; ...
 
 	; ISR-safe 2 byte copy of the current pressure to xB for later use
 	SMOVII	pressure_abs,xB
 
 	; check for HUD
-	btfss	s8_digital_avail				; do we have a digital S8 interface?
-	bra		calibrate_mix1					; NO  - skip HUD part
+	btfsc	ext_input_optical				; optical interface in use?
+	bra		calibrate_mix1					; YES - skip
+	TSTOSS	opt_s8_mode						; NO  - S8 interface in use?
+	bra		calibrate_mix1					;       NO  - skip HUD part
+	;bra	calibrate_mix0					;       YES - calibrate S8 HUD
 
-	; calibrate any S8-connected HUD
+	; calibrate S8-connected external electronics
+calibrate_mix0:
 	clrf	lo								; initialize checksum
-	movlw	0xAA							; start byte
+	movlw	0xAA							; load start byte
+	rcall	tx_to_HUD_chksum				; transmit to HUD
+	movlw	0x31							; load calibration command
+	rcall	tx_to_HUD_chksum				; transmit to HUD
+	movff	opt_calibration_O2_ratio,WREG	; load calibration gas %O2
+	rcall	tx_to_HUD_chksum				; transmit to HUD
+	movf	xB+0,W							; load current absolute pressure low  byte
+	rcall	tx_to_HUD_chksum				; transmit to HUD
+	movf	xB+1,W							; load current absolute pressure high byte
+	rcall	tx_to_HUD_chksum				; transmit to HUD
+	movf	lo,W							; load checksum
 	rcall	tx_to_HUD						; transmit to HUD
-	movlw	0x31							; calibration command
-	rcall	tx_to_HUD						; transmit to HUD
-	movff	opt_calibration_O2_ratio,WREG	; calibration gas %O2
-	rcall	tx_to_HUD						; transmit to HUD
-	movff	xB+0,WREG						; current absolute pressure low byte
-	rcall	tx_to_HUD						; transmit to HUD
-	movff	xB+1,WREG						; current absolute pressure high byte
-	rcall	tx_to_HUD						; transmit to HUD
-	movff	lo,WREG							; checksum
-	rcall	tx_to_HUD_cs					; transmit to HUD
-;	bra		calibrate_mix2
 
 	; calibrate internal sensors
-calibrate_mix1:								; compute %O2 * 100 * absolute pressure [mbar] / 100
-	movff	opt_calibration_O2_ratio,WREG
-	mullw	.100
-	MOVII	PROD,xA
-	call	mult16x16						; xA*xB=xC
-	MOVLI	.100,xB
+calibrate_mix1:								; compute C = %O2 * 100 * absolute pressure [mbar] / 100
+	movff	opt_calibration_O2_ratio,WREG	; load calibration gas %O2
+	mullw	.100							; multiply with 100
+	MOVII	PROD,xA							; copy result to xA
+	call	mult16x16						; xC = xA * xB
+	MOVLI	.100,xB							; prepare division by 100
 	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
 
-	; keep a copy of the result
-	movff	xC+0,mpr+0
-	movff	xC+1,mpr+1
-	movff	xC+2,mpr+2
-	movff	xC+3,mpr+3
-
 	; compute factor for sensor 1
-	MOVII	sensor1_mv,xB
+	MOVRR	xC,mpr,.4						; backup calibration value C
+	MOVII	sensor1_mv,xB					; get mV from sensor 1
 	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
 	MOVII	xC,opt_x_s1						; xC = ppO2/mV as factor for sensor 1
 
-	; restore result
-	movff	mpr+0,xC+0
-	movff	mpr+1,xC+1
-	movff	mpr+2,xC+2
-	movff	mpr+3,xC+3
-
 	; compute factor for sensor 2
-	MOVII	sensor2_mv,xB
+	MOVRR	mpr,xC,.4						; restore C
+	MOVII	sensor2_mv,xB					; get mV from sensor 2
 	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
 	MOVII	xC,opt_x_s2						; xC = ppO2/mV as factor for sensor 2
 
-	; restore result
-	movff	mpr+0,xC+0
-	movff	mpr+1,xC+1
-	movff	mpr+2,xC+2
-	movff	mpr+3,xC+3
-
 	; compute factor for sensor 3
-	MOVII	sensor3_mv,xB
+	MOVRR	mpr,xC,.4						; restore C
+	MOVII	sensor3_mv,xB					; get mV from sensor 3
 	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
 	MOVII	xC,opt_x_s3						; xC = ppO2/mV as factor for sensor 3
 
 	; check sensor 1 for min/max mV
 	MOVII	sensor1_mv,sub_a				; get mV from sensor 1
-	rcall	calibrate_mix_helper			; check mV for min/max thresholds, returns with WREG = 0 if ok, else WREG = 1
-	TSTFSZ	WREG							; sensor mV within thresholds?
-	bcf		use_O2_sensor1					; NO - clear usage flag
+	rcall	calibrate_mix_helper			; check mV for min/max boundary, returns with WREG = 0 if ok, else WREG = 1
+	TSTFSZ	WREG							; sensor mV within boundary?
+	bcf		use_O2_sensor1					; NO - revoke sensor from usage
 
 	; check sensor 2 for min/max mV
 	MOVII	sensor2_mv,sub_a				; get mV from sensor 2
-	rcall	calibrate_mix_helper			; check mV for min/max thresholds, returns with WREG = 0 if ok, else WREG = 1
-	TSTFSZ	WREG							; sensor mV within thresholds?
-	bcf		use_O2_sensor2					; NO - clear usage flag
+	rcall	calibrate_mix_helper			; check mV for min/max boundary, returns with WREG = 0 if ok, else WREG = 1
+	TSTFSZ	WREG							; sensor mV within boundary?
+	bcf		use_O2_sensor2					; NO - revoke sensor from usage
 
 	; check sensor 3 for min/max mV
 	MOVII	sensor3_mv,sub_a				; get mV from sensor 3
-	rcall	calibrate_mix_helper			; check mV for min/max thresholds, returns with WREG = 0 if ok, else WREG = 1
-	TSTFSZ	WREG							; sensor mV within thresholds?
-	bcf		use_O2_sensor3					; NO - clear usage flag
+	rcall	calibrate_mix_helper			; check mV for min/max boundary, returns with WREG = 0 if ok, else WREG = 1
+	TSTFSZ	WREG							; sensor mV within boundary?
+	bcf		use_O2_sensor3					; NO - revoke sensor from usage
 
 calibrate_mix2:
 	; check for HUD
 	btfss	hud_connection_ok				; HUD connection existing?
 	bra		calibrate_mix3					; NO - skip HUD part
 
+	; TODO: wait for HUD to complete calibration an send updated data
+
 	; copy disable flags from HUD digital input
-	btfss	sensor1_active
-	bcf		use_O2_sensor1
-	btfss	sensor2_active
-	bcf		use_O2_sensor2
-	btfss	sensor3_active
-	bcf		use_O2_sensor3
+	btfss	sensor1_active					; sensor 1 usable?
+	bcf		use_O2_sensor1					; NO - revoke sensor from usage
+	btfss	sensor2_active					; sensor 2 usable?
+	bcf		use_O2_sensor2					; NO - revoke sensor from usage
+	btfss	sensor3_active					; sensor 3 usable?
+	bcf		use_O2_sensor3					; NO - revoke sensor from usage
 
 calibrate_mix3:
-	; clear calibration flags if sensors are not found to be ok
-	btfss	use_O2_sensor1					; sensor 1 out of range?
-	bcf		sensor1_calibrated_ok			; YES - disable this sensor
-	btfss	use_O2_sensor2					; sensor 2 out of range?
-	bcf		sensor2_calibrated_ok			; YES - disable this sensor
-	btfss	use_O2_sensor3					; sensor 3 out of range?
-	bcf		sensor3_calibrated_ok			; YES - disable this sensor
+	; clear calibration flags if sensors are not usable
+	btfss	use_O2_sensor1					; sensor 1 usable?
+	bcf		sensor1_calibrated_ok			; NO  - revoke calibration
+	btfss	use_O2_sensor2					; sensor 2 usable?
+	bcf		sensor2_calibrated_ok			; NO  - revoke calibration
+	btfss	use_O2_sensor3					; sensor 3 usable?
+	bcf		sensor3_calibrated_ok			; NO  - revoke calibration
 
-	; when no sensor is found, enable all three to show error state and clear calibration factors
-	btfsc	use_O2_sensor1
-	return
-	btfsc	use_O2_sensor2
-	return
-	btfsc	use_O2_sensor3
-	return
+	; if there is no usable sensor at all, then enable all three
+	; sensors to show error state and clear calibration factors
+	btfsc	use_O2_sensor1					; sensor 1 usable?
+	return									; YES - done
+	btfsc	use_O2_sensor2					; NO  - sensor 2 usable?
+	return									;       YES - done
+	btfsc	use_O2_sensor3					;       NO  - sensor 3 usable?
+	return									;             YES - done
+	bsf		use_O2_sensor1					;             NO  - enable all sensors
+	bsf		use_O2_sensor2					;                 - ...
+	bsf		use_O2_sensor3					;                 - ...
+	CLRR	opt_x_s1,.6						;                 - clear calibration factors (3x 16 bit)
+	return									;                 - done
 
-	; enable all sensors
-	bsf		use_O2_sensor1
-	bsf		use_O2_sensor2
-	bsf		use_O2_sensor3
-	; clear calibration factors
-	banksel	opt_x_s1						; switch to bank options table
-	CLRI	opt_x_s1
-	CLRI	opt_x_s2
-	CLRI	opt_x_s3
-	banksel	common							; back to bank common
-	return
 
+;-----------------------------------------------------------------------------
+; Helper Function - Check if Sensor mV Value is within Min/Max Boundary
+;
 calibrate_mix_helper:
-	MOVLI	min_mv,sub_b					; load minimum threshold into sub_b
+	MOVLI	min_mv,sub_b					; load minimum boundary into sub_b
 	call	sub16							; sub_c = sub_a - sub_b
-	btfsc	neg_flag						; sensor mV lower than minimum threshold?
-	retlw	.1								; YES - return signaling threshold violation
-	MOVLI	max_mv,sub_b					; load maximum threshold into sub_b
+	btfsc	neg_flag						; sensor mV lower than minimum boundary?
+	retlw	.1								; YES - return signaling boundary violation
+
+	MOVLI	max_mv,sub_b					; load maximum boundary into sub_b
 	call	sub16							; sub_c = sub_a - sub_b
-	btfss	neg_flag						; sensor mV higher than maximum threshold?
-	retlw	.1								; YES - return signaling threshold violation
-	retlw	.0								; NO  - return signaling min/max ok
+	btfss	neg_flag						; sensor mV higher than maximum boundary?
+	retlw	.1								; YES - return signaling boundary violation
 
+	retlw	.0								; return signaling min/max ok
 
-	global	compute_mvolts_for_all_sensors
-compute_mvolts_for_all_sensors:				; compute mV or all sensors (S8 mode)
+ ENDIF	; _external_sensor
+
+;=============================================================================
+calibrate2	CODE
+;=============================================================================
+
+ IFDEF _external_sensor
+
+;-----------------------------------------------------------------------------
+; Compute Sensor mV from Raw Values received via S8 digital Interface
+;
+	global	compute_mvolts_from_rawdata
+compute_mvolts_from_rawdata:
+
 	; compute AD results in 100 µV steps (16 bit/sensor)
 	; 24 bit AD result is in 244.1406541 nV
 	; divide 24 bit value by 409.5999512 -> 410 with only 0.01% error
 	#DEFINE	ad2mv_factor .410
 
-	MOVLI	ad2mv_factor,xB
+	MOVLI	ad2mv_factor,xB					; load conversion factor into xB
 
 	; Sensor 1
 	SMOVTT	s8_rawdata_sensor1,xC			; ISR-safe copy of 3 bytes to xC
 	clrf	xC+3							; clear MSB of xC
 	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
-	MOVII	xC,sensor1_mv					; in 100 µV steps
+	MOVII	xC,sensor1_mv					; store result
 
 	; Sensor 2
 	SMOVTT	s8_rawdata_sensor2,xC			; ISR-safe copy of 3 bytes to xC
 	clrf	xC+3							; clear MSB of xC
 	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
-	MOVII	xC,sensor2_mv					; in 100 µV steps
+	MOVII	xC,sensor2_mv					; store result
 
 	; Sensor 3
 	SMOVTT	s8_rawdata_sensor3,xC			; ISR-safe copy of 3 bytes to xC
 	clrf	xC+3							; clear MSB of xC
 	call	div32x16						; xC:4 = xC:4 / xB:2 with xA as remainder
-	MOVII	xC,sensor3_mv					; in 100 µV steps
+	MOVII	xC,sensor3_mv					; store result
 
 	return									; done
 
  ENDIF	; _external_sensor
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 
 	END

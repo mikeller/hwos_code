@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft.asm                              combined next generation V3.08.8
+;   File tft.asm                              combined next generation V3.09.4n
 ;
 ;   low-level Display Outputs
 ;
@@ -12,11 +12,10 @@
 #include "hwos.inc"
 #include "wait.inc"
 #include "varargs.inc"
-#include "external_flash.inc"
 #include "tft_outputs.inc"
 #include "eeprom_rs232.inc"
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 ; Basic bit-level macros
 
 RD_H	macro
@@ -51,7 +50,7 @@ WR_L	macro
 		bcf tft_nwr,0
 		endm
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 ; Byte-level macros
 
 Index_out		macro low_b
@@ -66,10 +65,9 @@ Parameter_out	macro high_b, low_b
 				rcall TFT_DataWrite
 				endm
 
-
+;=============================================================================
 tft		CODE
-
-;;=============================================================================
+;=============================================================================
 
 	global	TFT_ClearScreen
 TFT_ClearScreen:
@@ -221,8 +219,6 @@ TFT_ClearScreen_display3:
 	movlw	.107				; 107 x 240 x 6 = 154080 ticks (153600 would be enough)
 	bra		TFT_ClearScreen_display2_loop0
 
-
-;=============================================================================
 
 	global	TFT_DisplayOff
 TFT_DisplayOff:
@@ -479,7 +475,6 @@ display1_config_write:				; with command in WREG
 	rcall	TFT_DataWrite			; write configuration
 	bra		display1_init_loop		; loop
 
-;=============================================================================
 
 	global	TFT_CmdWrite
 TFT_CmdWrite:
@@ -517,7 +512,7 @@ TFT_DataWrite:
 ;	return
 
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 ; Smooth lighting-up of the display:
 ;
 ; Trashes: WREG, PRODL
@@ -525,14 +520,14 @@ TFT_DataWrite:
 ;	clrf	CCPR1L					; backlight off
 ;	[draw splash screen]
 ;	call	TFT_DisplayFadeIn
-
+;
 	global	TFT_Display_FadeIn
 TFT_Display_FadeIn:
 	movlw	CCP1CON_VALUE			; get configuration
 	movwf	CCP1CON					; set configuration
 	bsf		tft_is_dimming			; TFT is dimming, ignore ambient sensor
 	btfsc	screen_type3
-	bra	TFT_Display_FadeIn_1
+	bra		TFT_Display_FadeIn_1
 	clrf	CCPR1L					; backlight off - to be sure
 	movff	max_CCPR1L,PRODL
 TFT_Display_FadeIn_0:
@@ -546,10 +541,10 @@ TFT_Display_FadeIn_1:
 	setf	CCPR1L
 	return
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 ; Smooth lighting-off of the display:
 ; Trashes: WREG, PRODL
-
+;
 	global	TFT_Display_FadeOut
 TFT_Display_FadeOut:
 	movff	max_CCPR1L,PRODL
@@ -565,8 +560,9 @@ TFT_Display_FadeOut_1:
 	clrf	CCPR1L
 	return
 
-;=============================================================================
-	; OLED brightness control
+;-----------------------------------------------------------------------------
+; OLED brightness control
+;
 TFT_display3_high:					; 0x01F8F8
 	movlw	LOW   (0x01F8F8         )
 	movwf	TBLPTRL
@@ -594,17 +590,18 @@ TFT_display3_low:					; 0x01F8D4
 	movwf	TBLPTRU
 	bra	display1_init_loop			; and return
 
-;=============================================================================
 
-	global	box_std_block, box_black_block, box_color_block
+;-----------------------------------------------------------------------------
+; colored (filled) Boxes
+;
+	global	box_std_block, box_black_block, box_color_block, box_color
 
 box_std_block:						; use white color
 	setf	WREG
-	bra		box_common
+	bra		box_color_block
 box_black_block:					; use black color
 	clrf	WREG
-box_common:
-box_color_block:
+box_color_block:					; use color from WREG
 	rcall	TFT_set_color
 	VARARGS_BEGIN
 	VARARGS_GET8 win_top
@@ -614,14 +611,20 @@ box_color_block:
 	VARARGS_END
 	bra		TFT_box
 
-;-----------------------------------------------------------------------------
-
-	global	box_frame_std, box_frame_common, box_frame_color, box_frame_color16
-
-box_frame_std:
-	setf	WREG
+box_color:							; use color from WREG and pre-set coordinates
 	rcall	TFT_set_color
-box_frame_common:
+	bra		TFT_box
+
+
+;-----------------------------------------------------------------------------
+; colored Frames
+;
+	global	box_frame_std, box_frame_color
+
+box_frame_std:						; use white color
+	setf	WREG
+box_frame_color:					; use color from WREG
+	rcall	TFT_set_color
 	VARARGS_BEGIN
 	VARARGS_GET8 win_top
 	VARARGS_GET8 win_height
@@ -629,31 +632,29 @@ box_frame_common:
 	VARARGS_GET8 win_width
 	VARARGS_END
 	bra		TFT_frame
-box_frame_color:
-	rcall	TFT_set_color
-box_frame_color16:
-	bra		box_frame_common
 
-;;=============================================================================
-;; Init for half_pixel_write
-;; Set column register on TFT device, and current color.
-;; Inputs: win_leftx2
-;; Outputs: win_color:2
-;; Trashed: WREG, PROD
-;
-;	global	init_pixel_write
-;init_pixel_write:
-;	movf	win_leftx2,W
-;	mullw	2
-;	rcall	pixel_write_col320		; start address vertical (.0 - .319)
-;	setf	WREG
-;	bra	TFT_set_color
+
+; ;-----------------------------------------------------------------------------
+; ; Init for half_pixel_write
+; ; Set column register on TFT device, and current color.
+; ; Inputs: win_leftx2
+; ; Outputs: win_color_1/_2
+; ; Trashed: WREG, PROD
+; ;
+; ;	global	init_pixel_write
+; ;init_pixel_write:
+; ;	movf	win_leftx2,W
+; ;	mullw	2
+; ;	rcall	pixel_write_col320		; start address vertical (.0 - .319)
+; ;	setf	WREG
+; ;	bra	TFT_set_color
+
 
 ;-----------------------------------------------------------------------------
-; Writes two half-pixels at position (win_top,win_leftx2)
-; Inputs: win_leftx2, win_top, win_color:2
+; Draw two half-pixels at position (win_top,win_leftx2)
+; Inputs: win_leftx2, win_top, win_color_1/_2
 ; Trashed: WREG, PROD
-
+;
 	global	pixel_write
 pixel_write:
 	movf	win_leftx2,W
@@ -726,10 +727,10 @@ pixel_write_col320_d3:
 	bra		TFT_DataWrite_PROD		; and return...
 
 ;-----------------------------------------------------------------------------
-; Writes one half-pixel at position (win_top,win_leftx2).
-; Inputs: win_leftx2, win_top, win_color:2
+; Write one half-pixel at position (win_top,win_leftx2).
+; Inputs: win_leftx2, win_top, win_color_1/_2
 ; Trashed: WREG, PROD
-
+;
 	global	half_pixel_write
 half_pixel_write:
 	movf	win_top,W					; d'0' ... d'239'
@@ -817,10 +818,10 @@ half_pixel_write_1_display3:
 	return							; done
 
 ;-----------------------------------------------------------------------------
-; Writes a vertical line of half-pixel at position (win_top,win_leftx2,win_height).
-; Inputs: win_leftx2, win_top, win_height, win_color:2
+; Draw a vertical line of half-pixel at position (win_top,win_leftx2,win_height).
+; Inputs: win_leftx2, win_top, win_height, win_color_1/_2
 ; Trashed: WREG, PROD, TABLAT, TBLPTRL
-
+;
 	global	half_vertical_line
 half_vertical_line:
 	clrf	TABLAT					; loop index
@@ -844,10 +845,10 @@ half_vertical_line_loop:
 	bra		half_vertical_line_loop
 
 ;-----------------------------------------------------------------------------
-; Writes a horizontal line of half-pixel at position (win_top,win_leftx2,win_width).
-; Inputs: win_leftx2, win_top, win_width, win_color:2
+; Draw a horizontal line of half-pixel at position (win_top,win_leftx2,win_width).
+; Inputs: win_leftx2, win_top, win_width, win_color_1/_2
 ; Trashed: WREG, PROD, TABLAT, TBLPTRL
-
+;
 	global	half_horizontal_line
 half_horizontal_line:
 	clrf	TABLAT					; loop index
@@ -868,9 +869,8 @@ half_horizontal_line_loop:
 
 
 ;-----------------------------------------------------------------------------
-; TFT Data Command via W
-
-	global	TFT_DataWrite_PROD
+; TFT Data Command
+;
 TFT_DataWrite_PROD:
 ;	RD_H								; keep high
 	RS_H								; data
@@ -928,35 +928,38 @@ TFT_CmdRead_PROD:
 	clrf	TRISH					; port H as output
 	return
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 ; Output TFT Window Address commands
 ; Inputs : win_top, win_leftx2, win_height, win_width
 ; Output : PortA/PortH commands
 ; Trashed: PROD
-
+;
 	global	TFT_box_write
 TFT_box_write:
-	movf	win_leftx2,W						; compute left = 2 * leftx2 --> PROD
-	mullw	.2									; win_leftx2 x 2 -> PRODH:PRODL
+	movf	win_leftx2,W			; compute left = 2 * leftx2 --> PROD
+	mullw	.2						; win_leftx2 x 2 -> PRODH:PRODL
 
-	btfsc	screen_type2						; screen type 2 ?
-	bra		TFT_box_write_display2				; YES
-	btfsc	screen_type3						; screen type 3 ?
-	bra		TFT_box_write_display3				; YES
+	btfsc	screen_type2			; screen type 2 ?
+	bra		TFT_box_write_display2	; YES
+	btfsc	screen_type3			; screen type 3 ?
+	bra		TFT_box_write_display3	; YES
+	btfsc	screen_type1			; screen type 1 ?
+	bra		TFT_box_write_display1	; YES
 
-	global	TFT_box_write_16bit_win_left
-TFT_box_write_16bit_win_left:					; with column in PRODL:PRODH
-	btfsc	screen_type1						; screen type 1 ?
-	bra		TFT_box_write_16bit_win_left_d1		; YES
 	; screen type 0
-	btfsc	flip_screen							; 180° rotation?
-	bra		TFT_box_flip_H						; YES
-	bra		TFT_box_write_16bit_win_left_com	; NO
-TFT_box_write_16bit_win_left_d1:				; Display1
-	btfss	flip_screen							; 180° rotation?
-	bra		TFT_box_flip_H						; NO
-TFT_box_write_16bit_win_left_com:				; YES for screen type 1, NO for type 0
+TFT_box_write_display0:
+	btfsc	flip_screen				; 180° rotation?
+	bra		TFT_box_do_flip_H		; YES
+	bra		TFT_box_no_flip_H		; NO
+
+	; screen type 1
+TFT_box_write_display1:
+	btfss	flip_screen				; 180° rotation?
+	bra		TFT_box_do_flip_H		; NO
+	;bra	TFT_box_no_flip_H		; YES
+
 	;---- Normal horizontal window ---------------------------------------
+TFT_box_no_flip_H:
 	Index_out 0x52					; window vertical start address
 	rcall	TFT_DataWrite_PROD		; output left
 	Index_out 0x21					; frame memory vertical address
@@ -972,10 +975,10 @@ TFT_box_write_16bit_win_left_com:				; YES for screen type 1, NO for type 0
 
 	Index_out 0x53					; window vertical end address
 	rcall	TFT_DataWrite_PROD
-	bra		TFT_box_noflip_H
+	bra		TFT_box_common_H
 
 	;---- Flipped horizontal window --------------------------------------
-TFT_box_flip_H:
+TFT_box_do_flip_H:
 	; calculate new coordinate
 	movf	PRODL,W					; 16 bits 319 - PROD --> PROD
 	sublw	LOW  .319				; 319 - WREG --> WREG
@@ -1001,11 +1004,13 @@ TFT_box_flip_H:
 	Index_out 0x52					; window vertical end address
 	rcall	TFT_DataWrite_PROD
 
-TFT_box_noflip_H:
+TFT_box_common_H:
 	btfss	flip_screen				; 180° rotation ?
-	bra		TFT_box_noflip_V		; NO
+	bra		TFT_box_no_flip_V		; NO
+	;bra	TFT_box_do_flip_V		; YES
 
 	;---- Flipped vertical window -----------------------------------------
+TFT_box_do_flip_V:
 	; calculate new coordinate
 	movff	win_top,PRODH			; top --> PRODH (first byte)
 	movf	win_height,W
@@ -1025,8 +1030,8 @@ TFT_box_noflip_H:
 	movf	PRODH,W
 	bra		TFT_DataWrite			; lower (and tick) and return
 
-TFT_box_noflip_V:
 	;---- Normal vertical window ----------------------------------------
+TFT_box_no_flip_V:
 	movff	win_top,PRODL
 	movf	win_height,W
 	addwf	PRODL,W
@@ -1120,7 +1125,7 @@ TFT_box_write_display3:
 	movf	win_width+1,W
 	addwfc	PRODH,F
 	decf	PRODL,F					; decrement result
-	btfss   STATUS,C
+	btfss	STATUS,C
 	decf	PRODH,F
 
 	Index_out	0x36				; write and the right border
@@ -1143,12 +1148,12 @@ TFT_box_write_display3:
 	bra		TFT_DataWrite_PROD		; and return...
 
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 ; TFT_frame : draw a frame around current box with current color
 ; Inputs:  win_top, win_leftx2, win_height, win_width, win_color1, win_color2
 ; Outputs: (none)
 ; Trashed: WREG, PROD, aa_start:2, aa_end:2
-
+;
 	global	TFT_frame
 TFT_frame:
 	movff	win_top,tft_save_top		; backup everything
@@ -1189,12 +1194,12 @@ TFT_frame:
 	movff	tft_save_width,win_width+0
 	return
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 ; TFT_box: fills current box with current color
 ; Inputs : win_top, win_leftx2, win_height, win_width, win_color1, win_color2
 ; Outputs: (none)
 ; Trashed: WREG, PROD
-
+;
 	global	TFT_box
 TFT_box:
 	;---- Define Window ------------------------------------------------------
@@ -1224,10 +1229,10 @@ TFT_box3:							; loop width times
 	bcf		INTCON,GIE
 	movff	win_color1,PORTA		; upper
 	movff	win_color2,PORTH		; lower
-	WR_L
-	WR_H							; tick
-	WR_L
-	WR_H							; tick
+	WR_L							; tick
+	WR_H							; ...
+	WR_L							; tick
+	WR_H							; ...
 	bsf		INTCON,GIE
 	decfsz	PRODL,F					; row loop finished ?
 	bra		TFT_box3				; NO - continue
@@ -1326,13 +1331,14 @@ TFT_box4_display3:
 	setf	win_bargraph			; YES - reset bargraph mode
 	return
 
-;=============================================================================
-; Convert 8 bit RGB b'RRRGGGBB' into 16 bit RGB b'RRRRRGGGGGGBBBBB'
 
+;-----------------------------------------------------------------------------
+; Convert 8 bit RGB b'RRRGGGBB' into 16 bit RGB    b'RRRRRGGGGGGBBBBB'
+;                       WREG                       win_color1 win_color2
 	global	TFT_set_color
 TFT_set_color:
 	movwf	tft_temp1				; get 8 bit RGB b'RRRGGGBB' into tft_temp1...
-	movwf	tft_temp2				; ... and tft_temp2
+	movwf	tft_temp2				;                        ... and tft_temp2
 
 	; mask bit 7,6,5,4,3,2
 	movlw	b'00000011'
@@ -1467,7 +1473,7 @@ convert_for_display2:				; convert 16 bit RGB b'RRRRRGGG GGGBBBBB' into 24 bit R
 	return
 
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 
  IFDEF _screendump
 
@@ -1649,6 +1655,6 @@ dump_screen_pixel_reset:
 
  ENDIF	; _screendump
 
-;=============================================================================
+;-----------------------------------------------------------------------------
 
 	END

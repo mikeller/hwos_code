@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;	File text_german.asm                      next combined generation V3.08.8
+;	File text_german.asm                      next combined generation V3.09.4k
 ;
 ;	German texts translation file.
 ;
@@ -41,12 +41,7 @@
 	TCODE	tDivemenu_Avg_Mkr,	"Uhr/Marker"			; Reset Avg, Set Marker (and Turn Dive)
 	TCODE	tDivemenu_ToggleGF,	"Toggle GF"				; Toggle GF
 	TCODE	tDivemenu_Marker,	"Markierung"			; Set Marker
-
- IFDEF _cave_mode
-	TCODE	tDivemenu_LostGas,	"verfügbar"				; Gas Availability
- ELSE
 	TCODE	tDivemenu_LostGas,	"Gasverlust"			; Lost Gas
- ENDIF
 
  IFDEF _ccr_pscr
 	TCODE	tDivemenu_Diluent,	"Diluents"				; Diluent (CCR)
@@ -82,7 +77,7 @@
 	TCODE	tSysSets,			"System"				; System  Settings
 	TCODE	tExit,				"Ende"					; Exit
 	TCODE	tResetMenu,			"Reset Menü"			; Reset Menu
-	TCODE	tDiveModeMenu,			"TG-Einstellungen"	; Dive Setup
+	TCODE	tDiveModeMenu,		"TG-Einstellungen"		; Dive Setup
 
 	TCODE	tDiveSetup,			"Tauchgang"				; Dive Setup
 	TCODE	tDecoSetup,			"Dekompression"			; Deco Setup
@@ -126,15 +121,12 @@
 	TCODE	tGaslistCC,			"CC Gas Liste"			; CC Diluents
 	TCODE	tGasEdit,			"Gas einstellen"
 	TCODE	tType,				"Type: "
-	TCODE	tGasDisabled,		"Deaktiviert"			; Disabled
-	TCODE	tGasFirst,			"Start"					; First
-	TCODE	tGasTravel,			"Arbeit"				; Work (Travel, Bottom)
-	TCODE	tGasDeco,			"Deko"					; Deco
-	TCODE	tDilDisabled,		"Deaktiviert"			; Disabled
-	TCODE	tDilFirst,			"Start"					; First
-	TCODE	tDilNorm,			"Normal"				; Normal
-	TCODE	tAir,				"Air  "					; Enum: values must follow (5 chars)
-	TCODE	tO2,				"O2   "					; tAir + 5
+	TCODE	tGasDisabled,		"Deaktiviert"			; | ENUM 1: Disabled
+	TCODE	tGasFirst,			"Start"					; |      2: First
+	TCODE	tGasTravel,			"Arbeit"				; |      3: Work (Travel, Bottom)
+	TCODE	tGasDeco,			"Deko"					; |      4: Deco
+	TCODE	tAir,				"Air  "					; | ENUM: values must follow (5 chars)
+	TCODE	tO2,				"O2   "					; |       tAir + 5
 	TCODE	tO2Plus,			"O2 +"
 	TCODE	tO2Minus,			"O2 -"
  IFDEF _helium
@@ -149,7 +141,7 @@
 	TCODE	tDepthReset,		"Reset auf MOD:"
 	TCODE	tSetup_GasMix,		"Mix  Einstellen"
  IFDEF _ccr_pscr
-	TCODE	tSPPlus,			"ppO2+"					; pO2+
+	TCODE	tSPPlus,			"ppO2  +"				; Setpoint ppO2 +
 	TCODE	tSensorFallback,	"Fallback:"				; Fallback:
 	TCODE	tCalculated,		"berechnet"				; calculated
 	TCODE	tppO2O2,			"ppO2(O2)"				; ppO2(O2)
@@ -163,7 +155,6 @@
 	TCODE	tCCRModeFixedSP,	" "						; target needed by option table
  ENDIF
 	TCODE	tSP,				"SP"					; SP (SetPoint)
-	TCODE	tppO2,				"ppO2:"					; ppO2:
 
 
 ; New batteries menu
@@ -239,7 +230,7 @@
 	TCODE	tExtendedStops,		"erweit. Stopps :"		; Extended Stops
 	TCODE	tLastDecostop,		"Letzt.Stop : "			; last Deco Stop Depth
 	TCODE	tDvSalinity,		"Salinität  : "			; Salinity
-	TCODE	tDepthWarn,			"Tiefenlimit: "			; Depth Warning
+	TCODE	tDepthWarn,			"Tiefenlimit:"			; Depth Warning (no space after ':' on purpose)
 	TCODE	tGasUsage,			"Gasbedarf"				; Gas Usage
 	TCODE	tSetWorkSAC,		"Arbeits-SAC:"			; SAC Work:
 	TCODE	tSetDecoSAC,		"Deko    SAC:"			; SAC Deco:
@@ -249,15 +240,16 @@
  ENDIF
 	TCODE	tGasChangeTime,		"Gaswechsel   :+"		; additional Gas Change Time
 	TCODE	tSetup_Tank,		"Tank Einstellen"		; Setup Tank
-	TCODE	tTankSize,			"Tank Größe"
-	TCODE	tTankUsablePress,	"Umkehrdruck (Aufst)"	; Tank Pressure Budget for Ascent (turn pressure) (max 19 chars)
+	TCODE	tTankSize,			"Tank Größe : "			; Tank Size 
+	TCODE	tTankUsablePress,	"Umkehrdruck: "			; Tank Pressure Budget for Ascent (turn pressure)
 	TCODE	tLiter,				" l"					; Liter as l
 	TCODE	tLiterLong,			"Liter"					; Liter as Liter
 	TCODE	t2ndDecoPlanMenu,	"2.Deko Plan"			; 2nd Deco Plan
 
  IFDEF _ccr_pscr
 	TCODE	tCCmaxFracO2,		"Loop %O2 max. : "		; max O2 percent (absolute) in the loop
-	TCODE	tDilppO2Check,		"Check Dil ppO2: "		; check ppO2 of the diluent against the setpoint
+	TCODE	tDilppO2Check,		"Prüfe Dil ppO2: "		; check ppO2 of the diluent against the setpoint
+	TCODE	tGasDensityCheck,	"..   Gasdichte: "		; check Gas Density
 	TCODE	tPSCR_O2_drop,		"pSCR O2 Abfall: "		; pSCR O2 Drop
 	TCODE	tPSCR_lungratio,	".. Lungenverh.: "		; pSCR Lung Ratio
 	TCODE	tCopyDilToOC,		"Kopiere Dil.-> OC"		; copy diluent settings to OC gas
@@ -303,7 +295,7 @@
 	TCODE	tFlip,				"Anzeige drehen: "		; Rotate Screen
 	TCODE	tColorScheme,		"Farbschema"			; Colour Scheme
 	TCODE	tVSIgraph,			"Geschw.Grafik: "		; Speed Graph
-	TCODE	tVSItext2,			"Var.   Geschw: "		; variable Speed
+	TCODE	tVSItext2,			"...   adaptiv: "		; variable Speed
 	TCODE	tShowppO2,			"ppO2 immer   : "		; always show ppO2
 	TCODE	tDepthWarning,		"Tiefe blinken: "		; Depth blinking
 	TCODE	t2ndDepth,			"2.Tiefe: "				; 2nd Depth Display Content (11 chars max)
@@ -326,17 +318,18 @@
 ; Setup Menu
 	TCODE	tSystSets,			"Konfiguration"			; System Settings
  IFDEF _compass
-	TCODE	tCompassMenu,		"Kompass-Kalibrierung"	; Compass calibration
+	TCODE	tCompassMenu,		"Kompass"				; Compass
+	TCODE	tCompassCalibration,"Kalibrierung"			; Calibration
 	TCODE	tCompassGain,		"Empfindlichkeit:"		; Compass gain:
-	TCODE	tCalX,				"Kal. X:"				; Cal X
-	TCODE	tCalY,				"Kal. Y:"				; Cal Y
-	TCODE	tCalZ,				"Kal. Z:"				; Cal Z
+	TCODE	tCalX,				"Kal. X"				; Cal X
+	TCODE	tCalY,				"Kal. Y"				; Cal Y
+	TCODE	tCalZ,				"Kal. Z"				; Cal Z
  ENDIF
 	TCODE	tMetric,			" m/°C"					; Enum menu
 	TCODE	tImperial,			"ft/°F"
 								;         111         111         111         111         111
 	; 5 rows by 12 chars each:	 123456789012123456789012123456789012123456789012123456789012
-	TCODE	tDefName,			"HW OSTC"	;"  Lese die   Anleitung,  kenne  und verstehe die  Grenzen!"
+	TCODE	tDefName,		"HW OSTC						     "
 	TCODE	tPiezo,				"Taster"				; Buttons
 	TCODE	tButtonleft,		"Taster links :"		; Left button
 	TCODE	tButtonright,		"Taster rechts:"		; Right button
@@ -372,10 +365,10 @@
 
 
 ; Decoplanner submenu
-	TCODE	tBtTm,				"Grundzeit:"			; Bot. Time: (10 chars)
+	TCODE	tBtTm,				"Grundzeit  : "			; Bot. Time: (10 chars)
 	TCODE	tBtTm_short,		"Zeit :"				; Bot. Time: (max. 6 chars)
-	TCODE	tBtDep,				"Tiefe    :"			; Max Depth: (10 chars)
-	TCODE	tIntvl,				"Intervall:"			; Interval : (10 chars)
+	TCODE	tBtDep,				"Tiefe      : "			; Max Depth: (10 chars)
+	TCODE	tIntvl,				"Intervall  : "			; Interval : (10 chars)
 	TCODE	tCalculatorSetup,	"Deko Parameter"		; Calculator Setup
 	TCODE	tDeco,				"Deko Berechnung"		; Calculate Deco
 	TCODE	tDivePlan,			"Tauchplan"				; Dive Plan (max. 10 chars)
@@ -467,11 +460,16 @@
 	TCODE	tgaschange,			"wechseln?"				; better gas found
 	TCODE	tNeed,				"Bedf."					; gas need (5 chars)
 	TCODE	tBattery,			"Batterie"				; Battery
+	TCODE	tSAT,				"Sät:"					; Sat:  (max 4 chars)
+	TCODE	tppO2,				"ppO2:"					; ppO2: (max 5 chars)
 
  IFDEF _helium
 	TCODE	tHe,				"He"					; He
-	TCODE	tIBCD,				"IBCD N2He"				; IBCD warning
-	TCODE	tGasDensity,		"Gasdichte"				; Gas Density
+	TCODE	tIBCD,				"IBCD N2He"				; IBCD warning (max. 9 chars)
+ ENDIF
+
+ IFDEF _ccr_pscr
+	TCODE	tGasDensity,		"Gasdichte"				; Gas Density  (max. 9 chars)
  ENDIF
 
  IFDEF _rx_functions
@@ -481,29 +479,28 @@
 	TCODE	tswap,				"wechseln"				; switch tank (max. 9 chars)
  ENDIF
 
- IFDEF _ccr_pscr
  IFDEF _external_sensor
 	TCODE	tDiveHudMask1,		"Sensor 1"
 	TCODE	tDiveHudMask2,		"Sensor 2"
 	TCODE	tDiveHudMask3,		"Sensor 3"
 	TCODE	tSensorDisagree,	"Sensoren!"				; Sensors disagree Warning
  ENDIF
- ENDIF
 
  IFDEF _cave_mode
-	TCODE	tGasNeedsCaveMode,	"Gas Bedarf -HÖHLE- "	; title for gas needs custom view (cave mode)		| need to be
-	TCODE	tGasNeedsAscent,	"Gas Bedarf Aufstieg"	; title for gas needs custom view (open water mode)	| same length
+	TCODE	tGasNeedsCaveMode,	"Gasbedarf -HÖHLE- "	; title for gas needs custom view (cave mode)		| need to be
+	TCODE	tGasNeedsAscent,	"Gasbedarf Aufstieg"	; title for gas needs custom view (open water mode)	| same length
 	TCODE	tCaveMode,			"Höhle"					; cave mode activated (max. 9 char)
 	TCODE	tCaveModeShutdown,	"X-Höhle-X"				; cave mode shut down (max. 9 char)
 	TCODE	tCaveTTS,			"Cave TTS"				; cave mode total time to surface
 	TCODE	tCaveStops,			"total Stops"			; cave mode total time for stops
 	TCODE	tCaveRuntime,		"total RT"				; cave mode total runtime
  ELSE
-	TCODE	tGasNeedsAscent,	"Gas Bedarf Aufstieg"	; title for gas needs custom view
+	TCODE	tGasNeedsAscent,	"Gasbedarf Aufstieg"	; title for gas needs custom view
  ENDIF
 
 
 ; Divemode menu
+	TCODE	tDiveAckn,			"Best?"					; Ackn?  (max. 5 chars)
 	TCODE	tDivePreMenu,		"Menü?"					; Menu?  (max. 5 chars)
 	TCODE	tDiveLayout,		"Layout"				; Layout (max. 6 chars)
  IFDEF _compass
@@ -520,7 +517,7 @@
 	TCODE	tCNS2,				"ZNS:"
 	TCODE	tAVG,				"Mit:"
 	TCODE	tGF2,				"GF :"
-	TCODE	tSAT,				"Sät:"					; max  4 chars
+	TCODE	tSD2,				"S/D: "
 	TCODE	tDvSalinity2,		"Salinität :"			; max 11 chars
 	TCODE	tLastDeco,			"Letzt.Stop:"			; max 11 chars
 	TCODE	tNoProfileData,		"keine Daten mehr..."	; max 21 chars
@@ -529,7 +526,8 @@
 	TCODE	tDesatTime,			"Desat:"				; amx  8 chars
 
 ; other useser
-	TCODE	tGF,				"GF:"
+	TCODE	tGF,				"GF:"					; GF Factors                (3 chars)
+	TCODE	tSD,				"S/D"					; Saturation / Desaturation (3 chars)
 
 ; Logbook units
 	TCODE	tLogTunitC,			"°C"
@@ -543,13 +541,25 @@
 
 
 ; Reset menu
+ IFDEF _firmware_recovery
+	TCODE	tReboot,			"Neustart/Backup"		; Reboot/Backup
+ ELSE
 	TCODE	tReboot,			"Neu starten"			; Reboot
+ ENDIF
 	TCODE	tResetMenu2,		"Sind Sie sicher?"		; Are you sure?
 	TCODE	tAbort,				"Abbrechen"				; Abort
 	TCODE	tResetSettings,		"Reset Einstellungen"	; Reset Settings (max. 19 chars)
 	TCODE	tResetDeco,			"Reset Deko"			; Reset Deco
 	TCODE	tResetBattery,		"neue Batterie"			; Reset Battery
 	TCODE	tResetLogbook,		"Logbuch löschen"		; Reset Logbook
+
+ IFDEF _firmware_recovery
+	TCODE	tRebootCurFirmware,	"Reboot aktuelle FW"	; Reboot current Firmware
+	TCODE	tBackupFirmware,	"Backup aktuelle FW"	; Backup current Firmware
+	TCODE	tRecoverFirmware,	"lade  "				; Recover (version will be appended)
+	TCODE	tBackingUp,			"Sicherung läuft..."	; backing up current firmware
+	TCODE	tRestoring,			"Wiederherstellung..."	; restoring  backup  firmware
+ ENDIF
 
 
 ; Set Time Menu/Set Date Menu
@@ -591,6 +601,13 @@
 	TCODE	tColorSetName1,		"Rot"					; Red
 	TCODE	tColorSetName2,		"Grün"					; Green
 	TCODE	tColorSetName3,		"Blau"					; Blue
+
+
+; Debug Stuff
+ IFDEF _comm_debug
+	TCODE	tCommTimeout,		"RX Timeout: "
+	TCODE	tCommTimeoutU,		"0 ms"
+ ENDIF
 
 
 ; Language selection

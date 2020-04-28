@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File simulator.asm                        combined next generation V3.08.8
+;   File simulator.asm                      * combined next generation V3.09.5
 ;
 ;   Deco Calculator
 ;
@@ -23,14 +23,14 @@
 #include "gaslist.inc"
 #include "surfmode.inc"
 #include "wait.inc"
+#include "colorschemes.inc"
 
 
 	extern deco_push_tissues_to_vault
 	extern deco_calc_dive_interval
 	extern deco_calc_hauptroutine
 	extern deco_pull_tissues_from_vault
-	extern TFT_decotype_logbook
-	extern do_return_demo_planner
+	extern do_return_menu_simulator_planner
 	extern convert_meter_to_feet
 	extern dive_boot_oc
 	extern get_first_gas_to_WREG
@@ -68,15 +68,25 @@
 ;									decoplan_flags,7	; --- unused
 
 
-simulator	CODE
+;---- Macro for easier Code Writing ------------------------------------------
 
-;-----------------------------------------------------------------------------
+; print a multi-lingual text at position horizontal x, vertical y in tiny font
+TEXT_SMALL macro x, y, txt
+	WIN_SMALL x,y
+	STRCPY_TEXT_PRINT txt
+	endm
+
 
 ;=============================================================================
-; Deco Calculator Main Function
+simulator	CODE
+;=============================================================================
+
+
+;-----------------------------------------------------------------------------
+; Entry Point for Deco Calculator
 ;
-	global	do_demo_planner
-do_demo_planner:
+	global	demo_planner
+demo_planner:
 	btfsc	FLAG_gauge_mode					; in gauge mode?
 	bra		do_demo_planner_exit			; YES - abort
 	btfsc	FLAG_apnoe_mode					; in apnea mode?
@@ -85,8 +95,7 @@ do_demo_planner:
 	clrf	decoplan_flags					; clear all local flags
 	bsf		simulatormode					; activate simulator mode
 	bsf		reset_timebase					; request ISR to reset the timebase
-;	btfsc	reset_timebase					; has the ISR confirmed reset of the timebase?
-;	bra		$-2								; NO - not yet, loop waiting for the ISR
+
 	call	deco_push_tissues_to_vault		; back-up the state of the real tissues (C-code)
 	banksel	common							; back to bank common
 
@@ -98,6 +107,7 @@ do_demo_planner:
 	rcall	deco_results					; NO - show results
 
 	movff	simulator_time,char_I_dive_interval	; get the deco calculator runtime
+
 	call	deco_pull_tissues_from_vault	; restore the status of the real tissues (C-code)
 	call	deco_calc_dive_interval			; catch up with tissue desaturation      (C-code)
 	call	deco_calc_desaturation_time		; calculate desaturation and no-fly/no-altitude time after catch-up (C-code)
@@ -106,8 +116,6 @@ do_demo_planner:
 	bcf		switch_left						; clear left button event (may be left over from abort/exit)
 	bcf		simulatormode					; terminate simulator mode
 	bsf		reset_timebase					; request ISR to reset the timebase
-;	btfsc	reset_timebase					; has the ISR confirmed reset of timebase?
-;	bra		$-2								; NO - not yet, loop waiting for the ISR
 
 	btfsc	divemode						; shall go into dive mode?
 	goto	restart							; YES - goto restart which will dispatch further on to dive mode
@@ -119,15 +127,16 @@ do_demo_planner:
 	goto	sleeploop						;     - goto sleep mode
 
 do_demo_planner_exit:
-	goto	do_return_demo_planner			; return to simulator menu
+	goto	do_return_menu_simulator_planner; return to simulator menu
 
 
-;=============================================================================
-; Calculate the Deco Plan
+;-----------------------------------------------------------------------------
+; Helper Function - Calculate the Deco Plan
 ;
 deco_calculate:
 	call	request_speed_fastest			; request CPU speed change to fastest speed
 	call	TFT_ClearScreen					; clear screen to show that calculator is starting up
+	FONT_COLOR_MEMO							; select default text color
 
 	; initialization of the deco engine
 	btfsc	update_surface_pressure			; is there a pending surface pressure update?
@@ -196,13 +205,11 @@ deco_calculate_0_oc:
 
 deco_calculate_0_error:
 	call	request_speed_normal			; request switch back to normal speed
-	WIN_COLOR	color_red					; select color for error message
+	FONT_COLOR	color_red					; select color for error message
 	TEXT_SMALL	.0,  .80, tNoBottomGas1		; print            error message, line 1
 	TEXT_SMALL	.0, .105, tNoBottomGas2		; print            error message, line 2
 	bsf		decoplan_abort					; set abort flag
-	call	wait_1s							; wait up to a full second
-	call	wait_1s							; wait       a full second
-	call	wait_1s							; wait another full second
+	WAITS	.2								; wait 2 seconds
 	bcf		switch_left						; clear potential button event
 	return									; return to deco calculator main function
 
@@ -272,9 +279,11 @@ deco_calculate_redo:
 
 	; show that the deco calculation is in progress
 	call		TFT_ClearScreen				; clear screen from last results
-	WIN_COLOR	color_lightblue				; select color for abort label
+
+	FONT_COLOR	color_lightblue				; select color for abort label
 	TEXT_SMALL	.1,.215, tAbort				; print abort label
-	WIN_COLOR	color_white					; select color for title and progress outputs
+
+	FONT_COLOR	color_white					; select color for title and progress outputs
 	TEXT_SMALL	.0, .40, tCalculating		; print "Calculating..."
 
 	; calculate the surface interval
@@ -295,8 +304,8 @@ deco_calculate_bottom:
 
 	; invoke the deco engine once to condition the real tissues
 	; to their pressure state at the end of the bottom segment
-	call	deco_calc_hauptroutine			; (C-code)
-	banksel	common
+	call	deco_calc_hauptroutine			; invoke the deco engine (C-code)
+	banksel	common							; back to bank common
 
  IFDEF _ccr_pscr
 	; conditional switch to bailout mode
@@ -335,13 +344,13 @@ deco_calculate_loop:
 
 deco_calculate_loop_imperial:
 	call	convert_meter_to_feet			; convert value in lo from [m] to [feet]
-	output_16_3								; print depth reached
-	STRCAT_TEXT tFeets						; print unit (feet)
+	output_999								; print depth reached
+	STRCAT_TEXT tFeets						; append unit and dump to screen
 	bra		deco_calculate_loop_0
 
 deco_calculate_loop_metric:
-	output_8								; print depth reached (in meters)
-	STRCAT_TEXT tMeters						; print unit (meters)
+	output_256								; print depth reached (in meters)
+	STRCAT_TEXT tMeters						; append unit and dump to screen
 	;bra	deco_calculate_loop_0			; continue
 
 deco_calculate_loop_0:
@@ -366,7 +375,7 @@ deco_calculate_finish:
 
 
 ;-----------------------------------------------------------------------------
-; Draw a stop of the deco plan (simulator or dive)
+; Helper Function - draw one Stop of the Deco Plan
 ; Inputs:  lo      = depth
 ;          hi      = minutes
 ;          win_top = line to draw on screen.
@@ -382,7 +391,7 @@ deco_plan_show_stop:
 	movff	PLUSW2,WREG						; get current gas and copy it to WREG for color-coding
 	call	TFT_color_code_gas				; set output color dependent on gas (1-5)
 
-	lfsr	FSR2,buffer						; set up output buffer
+	INIT_BUFFER								; initialize output buffer
 
 	TSTOSS	opt_units						; 0=Meter, 1=Feet
 	bra		deco_plan_show_nstd_stop_metric	; 0 - do metric
@@ -390,24 +399,23 @@ deco_plan_show_stop:
 	movff	hi,ul							; back-up hi (minutes)
 	WIN_LEFT .80
 	call	convert_meter_to_feet			; convert value in lo from meters to feet
-	output_16_3								; limit output to 0...999
+	output_999								; limit output to 0...999
 	STRCAT_PRINT "ft"
 	movff	ul,hi							; restore hi (minutes)
 	bra		deco_plan_show_nstd_stop_common
 
 deco_plan_show_nstd_stop_metric:
-	WIN_LEFT .85
-	output_8								; outputs into postinc2
-	STRCAT_PRINT "m"
+	WIN_LEFT .85							; set position
+	output_256								; print depth
+	PUTC_PRINT "m"							; append unit and dump buffer to screen
 
 deco_plan_show_nstd_stop_common:
-
 	; print duration
-	WIN_LEFT .135
-	lfsr	FSR2,buffer
-	movff	hi,lo
+	WIN_LEFT .135							; set position
+	INIT_BUFFER								; initialize buffer
+	movff	hi,lo							; get stop time
 	output_99dd								; stop entries are 99 minutes at max., prints double dots if duration is zero
-	STRCAT_PRINT "'"
+	PUTC_PRINT "'"							; append unit and dump buffer to screen
 
 	; draw the bar graph used for deco stops (lo = minutes)
 	incf	win_top,F
@@ -418,22 +426,22 @@ deco_plan_show_nstd_stop_common:
 	MOVLI	.16,win_width					; column max width
 	incf	lo,W							; add 1 for a minimum visible active bargraph area
 	movwf	win_bargraph					; set width of the active bargraph area
-	call	TFT_box							; draw bargraph
+	BOX										; draw bargraph
 
 	; restore win_top
-	call	TFT_standard_color
+	FONT_COLOR_MEMO							; set font color
 	decf	win_top,F						; restore win_top
-	return
+	return									; done
 
 
 ;-----------------------------------------------------------------------------
-; Display the deco plan (simulator)
+; Helper Function - Display the Deco Plan results Page
+;
 ; Inputs: char_O_deco_table (array of stop times, in minutes)
 ;         decoplan_page = page number.
 ;
 deco_results_page:
-	bcf		win_invert						; reset invert flag
-	WIN_COLOR color_greenish
+	FONT_COLOR color_greenish
  IFDEF _ccr_pscr
 	btfss	bailout_mode					; bailout results?
 	bra		deco_results_page_1				; NO
@@ -447,25 +455,24 @@ deco_results_page_2:
 	btfsc	WREG,deco_stops_norm			; are there deco stops?
 	bra		deco_plan_show_1				; YES
 
-	;---- no deco --------------------------------------------------------
-	call	TFT_standard_color
-	TEXT_SMALL .80, .25, tNoDeco
+	;---- no deco
+	FONT_COLOR_MEMO							; set color
+	TEXT_SMALL .80, .25, tNoDeco			; print "no Deco"
 
-	; output of remaining NDL time
+	; show remaining NDL time
 	WIN_SMALL .80, .50						; same line as bottom time
-	PUTC	"+"
+	PUTC	"+"								; print a plus
 	movff	int_O_NDL_norm+0,lo				; get NDL time in normal plan
-	bsf		leftbind
-	output_8
-	bcf		leftbind
-	PUTC	"'"
-	PUTC	" "
-	STRCAT_TEXT_PRINT tNDLleft				; "NDL"
+	bsf		leftbind						; align to the left
+	output_256								; print time (0-255)
+	PUTC	"'"								; append unit
+	PUTC	" "								; append a space
+	STRCAT_TEXT_PRINT tNDLleft				; append "NDL" and dump to screen
 
 	bsf		decoplan_last_stop_shown
 	return
 
-	;---- deco stops ---------------------------------------------------------
+	;---- deco stops
 deco_plan_show_1:
 	lfsr	FSR0,char_O_deco_depth			; initialize indexed addressing
 	lfsr	FSR1,char_O_deco_time			; ...
@@ -495,11 +502,11 @@ deco_plan_show_2:
 	bz		deco_plan_show_99				; depth == 0 -> done
 
 	; display the stop line
-	rcall	deco_plan_show_stop
+	rcall	deco_plan_show_stop				; draw one stop of the deco plan
 
 	; next
-	movlw	.24
-	addwf	win_top,F						; row: += 24
+	movlw	.24								; row: += 24
+	addwf	win_top,F						; ...
 	incf	decoplan_index,F				; local index += 1
 	incf	decoplan_gindex,F				; global index += 1
 
@@ -509,46 +516,47 @@ deco_plan_show_2:
 	bra		deco_plan_show_2				; NO - loop
 
 	; check if next stop is end-of-list?
-	movf	decoplan_gindex,W
+	movf	decoplan_gindex,W				; get index
 	movf	PLUSW0,W						; char_O_deco_depth[decoplan_gindex]
 	bz		deco_plan_show_99				; end of list
 
-	call	TFT_standard_color
-	WIN_SMALL .135,.212
-	STRCAT_PRINT ">>>"
-	return
+	WIN_SMALL .135,.212						; set output position
+	FONT_COLOR_MEMO							; set font color
+	STRCAT_PRINT ">>>"						; show cue for next page
+	return									; done
 
 deco_plan_show_99:
 	bsf		decoplan_last_stop_shown		; nothing more in table to display
-	call	TFT_standard_color
-	return
+	FONT_COLOR_MEMO							; set font color
+	return									; done
 
-;=============================================================================
+
+;-----------------------------------------------------------------------------
 ; Show Deco Calculation Results
 ;
 deco_results:
-	call	TFT_ClearScreen
-	call	TFT_standard_color
+	call	TFT_ClearScreen							; clear the screen
+	FONT_COLOR_MEMO									; set font color
 
 	; print interval
-	WIN_SMALL .0,.25
-	STRCPY	"Int. :"
-	movff	opt_surface_interval,lo
-	output_8
-	STRCAT_PRINT "'"
+	WIN_SMALL .0,.25								; set position
+	STRCPY	"Int. :"								; print label
+	movff	opt_surface_interval,lo					; get   value
+	output_256										; print value
+	PUTC_PRINT "'"									; append unit and dump buffer to screen
 
 	; print bottom time
-	WIN_SMALL .0,.50
-	STRCPY_TEXT tBtTm_short
-	movff	char_I_bottom_time,lo
-	output_8
-	STRCAT_PRINT "'"
+	WIN_SMALL .0,.50								; set position
+	STRCPY_TEXT tBtTm_short							; print label
+	movff	char_I_bottom_time,lo					; get   value
+	output_256										; print value
+	PUTC_PRINT "'"									; append unit and dump buffer to screen
 
 	; print bottom depth
-	WIN_SMALL .0,.75
-	STRCPY_TEXT tDepth
-	PUTC	":"
-	movff	char_I_bottom_depth,lo
+	WIN_SMALL .0,.75								; set position
+	STRCPY_TEXT tDepth								; print label
+	PUTC	":"										; append ":"
+	movff	char_I_bottom_depth,lo					; get   value
 
 	TSTOSS	opt_units								; check depth units
 	bra		deco_results_metric						; 0 - use Meters
@@ -556,58 +564,55 @@ deco_results:
 
 deco_results_imperial:
 	call	convert_meter_to_feet					; convert value in lo from [m] to [feet]
-	output_16_3										; print depth reached
-	STRCAT_TEXT tFeets								; print unit (feet)
+	output_999										; print depth reached
+	STRCAT_TEXT tFeets								; print unit and dump to screen
 	bra		deco_results_0							; continue
 
 deco_results_metric:
-	output_8										; print depth reached (in meters)
-	STRCAT_TEXT tMeters								; print unit (meters)
+	output_256										; print depth reached
+	STRCAT_TEXT tMeters								; print unit and dump to screen
 	;bra	deco_results_0							; continue
 
 deco_results_0:
-	STRCAT_PRINT ""									; finalize bottom depth output
+	PRINT											; finalize bottom depth output
 
 	; print warnings or sat/dsat factors
-	WIN_SMALL .0,.105
+	WIN_SMALL .0,.105								; set position for label
 
 	; check for stop table overflow
 	btfss	decoplan_warnings,deco_plan_incomplete	; check if deco plan is incomplete
 	bra		deco_results_0a							; NO  - skip
 
 	; display overflow warning
-	call	TFT_warning_color						; YES - show overflow warning
-	STRCAT_PRINT "incomplete"						; max 10 characters
+	FONT_COLOR_WARNING								; select warning color
+	STRCAT_PRINT "incomplete"						; show warning (max 10 characters)
 	bra		deco_results_m1							; skip displaying sat/dsat factors
 
 deco_results_0a:
-
  IFDEF _helium
 	; check for IBCD warning
 	btfss	decoplan_warnings,IBCD_warning_lock		; check if we have a locked IBCD warning
 	bra		deco_results_2b							; NO  - skip
 
 	; display IBCD warning
-	call	TFT_attention_color						; YES - show IBCD warning
+	FONT_COLOR_ATTENTION							; select attention color
 	STRCAT_PRINT "IBCD!"							; max 10 characters
 	bra		deco_results_m1							; skip displaying sat/dsat factors
  ENDIF
 
 deco_results_2b:
-
 	; display Sat/Desat factors --> omitted if there were warnings
-	STRCAT_PRINT "SD:"
-	WIN_SMALL .25,.105
-	movff	char_I_saturation_multiplier,lo
-	output_8
-	STRCAT	"/"
-	movff	char_I_desaturation_multiplier,lo
-	output_8
-	STRCAT_PRINT ""
+	STRCAT_PRINT "SD:"								; print label
+	WIN_SMALL .25,.105								; set position for values
+	movff	char_I_saturation_multiplier,lo			; get   1st value
+	output_256										; print 1st value
+	STRCAT	"/"										; print "/"
+	movff	char_I_desaturation_multiplier,lo		; get   2nd value
+	output_256										; print 2nd value
+	PRINT											; dump to screen
 
 deco_results_m1:
-
-	call	TFT_standard_color				; clean-up from warnings
+	FONT_COLOR_MEMO							; revert font color
 
 	; get model
 	movff	char_I_model,WREG				; 0: straight Buhlmann, 1: with GF
@@ -615,38 +620,34 @@ deco_results_m1:
 	bz		deco_results_m2					; NO
 
 	; display GF low/high factors
-	WIN_SMALL .0,.130
-	STRCAT_PRINT "GF:"
-	WIN_SMALL .25,.130
-	movff	char_I_GF_Low_percentage,lo
-	output_8
-	STRCAT	"/"
-	movff	char_I_GF_High_percentage,lo
-	output_8
-	STRCAT_PRINT ""
+	WIN_SMALL .0,.130						; set position for label
+	STRCAT_PRINT "GF:"						; print label
+	WIN_SMALL .25,.130						; set position for values
+	movff	char_I_GF_Low_percentage,lo		; get   1st value
+	output_256								; print 1st value
+	STRCAT	"/"								; print "/"
+	movff	char_I_GF_High_percentage,lo	; get   2nd value
+	output_256								; print value
+	PRINT									; dump to screen
 
 deco_results_m2:
-
 	; display deco mode
-	WIN_SMALL .0,.155
-	lfsr	FSR2,buffer
+	WIN_SMALL .0,.155						; set position
+	INIT_BUFFER								; load buffer base address
 	movff	opt_dive_mode,lo				; 0=OC, 1=CC, 2=Gauge, 3=Apnea, 4=pSCR
-	call	TFT_decotype_logbook
+	call	TFT_print_decotype				; print deco type (OC, CCR)
 
  IFDEF _ccr_pscr
 	btfss	FLAG_ccr_mode					; current dive mode = CCR ?
-	bra		deco_results_2c					; NO - skip
-	WIN_SMALL .25,.155
-	STRCPY	"SP:"							; output setpoint used for calculation
-	movff	opt_sim_setpoint_number,lo
-	bsf		leftbind
-	output_8
-	bcf		leftbind
-	STRCAT_PRINT ""
+	bra		deco_results_2c					; NO  - skip
+	WIN_SMALL .25,.155						; YES - set position
+	STRCPY	"SP:"							;     - print label
+	movff	opt_sim_setpoint_number,lo		;     - get setpoint used for calculation
+	output_9								;     - print setpoint number (0-9)
+	PRINT									;     - dump to screen
  ENDIF
 
 deco_results_2c:
-
 	btfss	FLAG_oc_mode					; current dive mode = OC ?
 	bra		deco_results_2d					; NO  - skip
 	TSTOSS	opt_ext_stops					; YES - extended stops activated?
@@ -657,31 +658,28 @@ deco_results_2c:
 deco_results_2d:
 
 	; display TTS result
-	WIN_SMALL .0,.180
-	STRCPY_TEXT tTTS
-	STRCAT	": "
-	MOVII	int_O_TTS_norm,mpr
-	bsf		leftbind
-	output_16
-	bcf		leftbind
-	STRCAT_PRINT "'"
+	WIN_SMALL .0,.180						; position
+	STRCPY_TEXT tTTS						; print label
+	STRCAT	": "							; append ": "
+	MOVII	int_O_TTS_norm,mpr				; get TTS value
+	bsf		leftbind						; print left-aligned
+	output_999								; print TTS (0-999)
+	PUTC_PRINT "'"							; append unit and dump to screen
 
 	; display CNS result
-	WIN_TOP	.205
-	STRCPY_TEXT tCNS2						; "CNS:"
+	WIN_TOP	.205							; position
+	STRCPY_TEXT tCNS2						; print label
 	MOVII	real_CNS,mpr					; recall real CNS from before simulated dive
 	call	TFT_color_code_cns				; color-code CNS output
-	bsf		leftbind
-	output_16_3								; limit to 999 and display only (0-999)
-	bcf		leftbind
+	bsf		leftbind						; print left-aligned
+	output_999								; limit to 999 and display only (0-999)
 	STRCAT	"%\x92"							; "->"
 	MOVII	int_O_CNS_norm,mpr				; get CNS at end of simulated dive in normal plan
 	call	TFT_color_code_cns				; color-code CNS output
-	bsf		leftbind
-	output_16_3								; limit to 999 and display only (0-999)
-	bcf		leftbind
-	STRCAT_PRINT "%"
-	call	TFT_standard_color
+	bsf		leftbind						; print left-aligned
+	output_999								; limit to 999 and display only (0-999)
+	PUTC_PRINT "%"							; append unit and print everything to screen
+	FONT_COLOR_MEMO							; back to standard color
 
 	; loop through deco plan pages
 deco_results_1:
@@ -734,7 +732,6 @@ deco_results_gas_common:
 	movlw	.25								; output row is 25 (fixed offset set here) + n*25 (line increment, see below)
 	movwf	output_row						; set fixed vertical offset for output row
 	WIN_LEFT .80							; set column
-	call	TFT_standard_color
 	clrf	gas_index						; initialize gas counter
 	bcf		is_diluent_menu					; working on OC gases
 
@@ -745,15 +742,16 @@ deco_results_gas_loop:
 	movf	gas_index,W						; copy gas index to WREG for color-coding
 	call	TFT_color_code_gas				; set output color according to gas (1-5)
 
-	lfsr	FSR2,buffer						; set base address of output buffer
-	bsf		short_gas_descriptions			; configure gaslist_strcat_gas output format
-	bsf		divemode						; configure gaslist_strcat_gas output format
-	call	gaslist_strcat_gas				; write "Nxlo", "Txlo/hi", "Air" or "O2" into output buffer
-	bcf		divemode						; cleanup above
-
 	movlw	.25								; spacing between outputs
 	addwf	output_row,F					; increase row position
 	movff	output_row,win_top				; set      row position
+
+	INIT_BUFFER								; initialize output buffer
+
+	bsf		short_gas_descriptions			; configure gaslist_strcat_gas output format
+	bsf		divemode						; configure gaslist_strcat_gas output format
+	call	gaslist_strcat_mix_PRODL		; write "Nxlo", "Txlo/hi", "Air" or "O2" into output buffer
+	bcf		divemode						; revoke dive mode
 
 	movff	POSTINC0,lo						; read gas volume low  byte
 	movff	POSTINC0,hi						;                 high byte
@@ -762,14 +760,6 @@ deco_results_gas_loop:
 
 	btfsc	decoplan_pressures_shown		; results in bar?
 	bra		deco_results_gas_volumes_1		; YES
-
-	; output of gas needs in liter
-	movf	lo,W							; check if hi:lo = 65535: copy low byte to WREG
-	andwf	hi,W							; and do a bitwise AND with the high byte
-	incfsz	WREG							; add 1, result zero now?
-	bra		deco_results_gas_volumes_2		; NO  - print volume
-	STRCAT_PRINT ">65500"					; YES - print ">65500"
-	bra		deco_results_gas_volumes_3		;     - continue checking if all gases are shown
 
 	; output of gas needs in bar
 deco_results_gas_volumes_1:
@@ -785,19 +775,20 @@ deco_results_gas_volumes_1:
 
 deco_results_gas_volumes_2:
 	PUTC	":"								; print ":"
-	output_16								; print 16 bit number
+	output_9999								; print volume or bar (0-9999)
 	movlw	'>'								; load coding of ">" sign into WREG
-	btfsc	decoplan_overflow				; overflow in result?
-	movff	WREG,buffer+.7					; YES - place ">" before number
-	STRCAT_PRINT ""							; finalize output
-	bcf		win_invert						; back to none-inverse printing
+	btfsc	decoplan_overflow				; overflow in pressure value?
+	movff	WREG,buffer+.7					; YES - place ">" in front of pressure value
+	btfsc	output_overflow					; overflow in output?
+	movff	WREG,buffer+.6					; YES - place ">" in front of volume   value
+	PRINT									; dump to screen
 
 deco_results_gas_volumes_3:
 	movlw	NUM_GAS							; 5 gases to show
 	cpfseq	gas_index						; all gases shown?
 	bra		deco_results_gas_loop			; NO - loop
 
-	WIN_COLOR color_greenish				; set color
+	FONT_COLOR color_greenish				; set color
 	TEXT_SMALL .80,.01,tGasUsage			; "Gas Usage"
 
 	btfsc	decoplan_pressures_shown		; results shown in bar?
@@ -809,7 +800,6 @@ deco_results_gas_volumes_4:
 	TEXT_SMALL .120,.25,tbar				; " bar" (with leading space)
 
 deco_results_gas_volumes_5:
-	call	TFT_standard_color				; revert to standard color
 	call	reset_timeout_surfmode			; reset timeout
 	bcf		switch_right					; clear left-over right button event
 	bcf		switch_left						; clear left-over left  button event
@@ -834,5 +824,6 @@ deco_results_gas_volumes_7:
 	lfsr	FSR0,int_O_gas_need_pres		;     - set base address of gas needs in bar
 	bra		deco_results_gas_common			;     - re-run gas needs output in pressure mode
 
+;-----------------------------------------------------------------------------
 
 	END

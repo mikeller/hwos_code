@@ -1,23 +1,24 @@
 ;=============================================================================
 ;
-;   File compass_ops.asm                      combined next generation V3.08.8
+;   File compass_ops.asm                      combined next generation V3.09.5
 ;
 ;   Compass Operations
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
 ;=============================================================================
 
-#include	"hwos.inc"
-#include	"i2c.inc"
-#include	"tft_outputs.inc"
-#include	"tft.inc"
-#include	"strings.inc"
-#include	"wait.inc"
-#include	"surfmode.inc"
-#include	"divemode.inc"
-#include	"math.inc"
-#include	"convert.inc"
-#include	"start.inc"
+#include "hwos.inc"
+#include "i2c.inc"
+#include "tft_outputs.inc"
+#include "tft.inc"
+#include "strings.inc"
+#include "wait.inc"
+#include "surfmode.inc"
+#include "divemode.inc"
+#include "math.inc"
+#include "convert.inc"
+#include "start.inc"
+#include "colorschemes.inc"
 
 
  IFDEF _compass
@@ -67,9 +68,10 @@
 	extern	option_check_and_store_all
 
 
-compass_ops	code
-
 ;=============================================================================
+compass_ops1	CODE
+;=============================================================================
+
 
 ;-----------------------------------------------------------------------------
 ; Filter compass values
@@ -116,17 +118,10 @@ compass_filter:
 	banksel	common						; back to bank common
 	return
 
-;-----------------------------------------------------------------------------
 
-compass_filter_init:
-	MOVII	compass_DX,compass_DX_f
-	MOVII	compass_DY,compass_DY_f
-	MOVII	compass_DZ,compass_DZ_f
-
-	MOVII	accel_DX,accel_DX_f
-	MOVII	accel_DY,accel_DY_f
-	MOVII	accel_DZ,accel_DZ_f
-	return
+;=============================================================================
+compass_ops2	CODE
+;=============================================================================
 
 ;-----------------------------------------------------------------------------
 ; Q15 fractional numbers: a * b / 2**16 (UNSIGNED)
@@ -215,22 +210,25 @@ compass_mul_4:
 	bsf		compass_r+1,6
 	bra		compass_mul_2
 
-;-----------------------------------------------------------------------------
 
-	global	compass_calibration_loop
-compass_calibration_loop:				; compass calibration
+;=============================================================================
+compass_ops3	CODE
+;=============================================================================
+
+	global	compass_calibration
+compass_calibration:					; compass calibration
 	bsf		block_sensor_interrupt		; disable sensor interrupts
 	call	I2C_sleep_compass			; stop compass
-	call	TFT_ClearScreen
+	call	TFT_ClearScreen				; clear the screen
 	; Mask
-	WIN_COLOR color_greenish
-	WIN_SMALL .16,.0
-	STRCPY_TEXT_PRINT tCompassMenu
-	btfss	switch_right2				; wait until button is released
+	WIN_STD .16,.0						; set position
+	FONT_COLOR color_greenish			; set font color
+	STRCPY_TEXT_PRINT tCompassCalibration
+	btfss	switch_right2				; wait until button (with a moving magnet in some OSTC!) is released
 	bra		$-2
 
-	call	TFT_standard_color
 ;	WIN_SMALL .0,.215
+;	FONT_COLOR	color_standard
 ;	STRCPY_TEXT_PRINT tExit
 	WAITMS	d'255'
 	WAITMS	d'255'
@@ -238,11 +236,11 @@ compass_calibration_loop:				; compass calibration
 	call	request_speed_fastest		; request CPU speed change to fastest speed
 
 	movlw	.7							; initialize gain
-	movff	WREG,opt_compass_gain
+	movff	WREG,opt_compass_gain		; ...
 
 	movlw	.60							; initialize timeout to 60 seconds
 	movwf	isr_timeout_reload			; copy WREG to isr_timeout_reload
-	bsf		reset_timeout				; request ISR to reset the timeout
+	bsf		restart_timeout				; request ISR to restart the timeout
 	bcf		trigger_timeout				; clear any pending timeout trigger
 compass_calibration_gainset:			; reduce the gain, set bank here!
 	banksel	opt_compass_gain			; select bank options table
@@ -250,10 +248,10 @@ compass_calibration_gainset:			; reduce the gain, set bank here!
 	btfsc	STATUS,N					; < 0 ?
 	clrf	opt_compass_gain			; YES - keep at zero
 	btfsc	STATUS,N					; < 0 ?
-	bra	compass_calibration_loop1		; YES - skip gain stuff (Would hang here in case of compass failure)
+	bra		compass_calibration_loop1	; YES - skip gain stuff (Would hang here in case of compass failure)
 	banksel	common						; bank to bank common
 
-	call	I2C_init_compass
+	call	I2C_init_compass			; initialize compass chip
 
 	btfsc	compass_type3				; compass type 3 ?
 	bra		compass_calibration_loop1	; YES - skip gain stuff
@@ -266,7 +264,7 @@ compass_calibration_gainset:			; reduce the gain, set bank here!
 	WAITMS	d'250'						; wait for first reading...
 
 	movlw	.60							; calibration shall run for 60 seconds
-	call	reset_timeout_time			; set timeout
+	call	restart_timeout_time		; restart the timeout
 
 	call	I2C_RX_compass				; read compass
 	call	I2C_RX_accelerometer		; read accelerometer
@@ -305,12 +303,12 @@ compass_calibration_loop1:				; done with gain
 compass_calibration_loop2:
 	call	I2C_RX_compass				; read compass
 	call	I2C_RX_accelerometer		; test accelerometer
-	rcall	compass_filter				; filter compass raw data
+	call	compass_filter				; filter compass raw data
 
 	; Twice
 	call	I2C_RX_compass				; read compass
 	call	I2C_RX_accelerometer		; test accelerometer
-	rcall	compass_filter				; filter compass raw data
+	call	compass_filter				; filter compass raw data
 
 ;	btfsc	compass_type1				; compass1?
 ;	bra		compass_calibration_loop3	; YES -  skip gain stuff
@@ -340,7 +338,7 @@ compass_calibration_loop2:
 	bra		$+4
 	bra		compass_calibration_gainset
 	banksel	common						; back to bank common
-;
+
 ;	; Three
 ;	call	I2C_RX_compass				; read compass
 ;	call	I2C_RX_accelerometer		; test accelerometer
@@ -373,7 +371,7 @@ compass_calibration_exit:
 
 	call	request_speed_normal		; request CPU speed change to normal speed
 
-	bsf		options_changed				; flag that option values have changed
+	bsf		option_changed				; flag that option values have changed
 	bsf		restart_fast				; request to skip logos and waits on restart
 
 	movlw	.6							; coding for surface compass view
@@ -381,85 +379,125 @@ compass_calibration_exit:
 
 	goto	restart						; done
 
+
 ;-----------------------------------------------------------------------------
+; Helper Function
+;
+compass_filter_init:
+	MOVII	compass_DX,compass_DX_f
+	MOVII	compass_DY,compass_DY_f
+	MOVII	compass_DZ,compass_DZ_f
 
+	MOVII	accel_DX,accel_DX_f
+	MOVII	accel_DY,accel_DY_f
+	MOVII	accel_DZ,accel_DZ_f
+	return
+
+;-----------------------------------------------------------------------------
+; Show Calibration Progress
+;
 TFT_compass_fast:
-	WIN_TINY .0,.50
-	STRCPY	"Cx:"
-	MOVII	compass_DX,mpr
-	call	TFT_convert_signed_16bit	; convert lo:hi into signed-short and add '-' to POSTINC2 if required
-	output_16
-	STRCAT	" Cy:"
-	MOVII	compass_DY,mpr
-	call	TFT_convert_signed_16bit	; convert lo:hi into signed-short and add '-' to POSTINC2 if required
-	output_16
-	STRCAT	" Cz:"
-	MOVII	compass_DZ,mpr
-	call	TFT_convert_signed_16bit	; convert lo:hi into signed-short and add '-' to POSTINC2 if required
-	output_16
-	STRCAT_PRINT "  "
+	WIN_TINY .0,.50					; set font and position
+	FONT_COLOR_MEMO					; set font color
 
-	WIN_TINY .0,.104
-	STRCPY	"Ax:"
-	MOVII	accel_DX,mpr
-	call	TFT_convert_signed_16bit	; convert lo:hi into signed-short and add '-' to POSTINC2 if required
-	output_16
-	STRCAT	" Ay:"
-	MOVII	accel_DY,mpr
-	call	TFT_convert_signed_16bit	; convert lo:hi into signed-short and add '-' to POSTINC2 if required
-	output_16
-	STRCAT	" Az:"
-	MOVII	accel_DZ,mpr
-	call	TFT_convert_signed_16bit	; convert lo:hi into signed-short and add '-' to POSTINC2 if required
-	output_16
-	STRCAT_PRINT "  "
+	STRCPY	"Cx:"					; print label
+	MOVII	compass_DX,mpr			; get   value
+	rcall	TFT_compass_fast_helper ; print value
+
+	STRCAT	" Cy:"					; print label
+	MOVII	compass_DY,mpr			; get   value
+	rcall	TFT_compass_fast_helper ; print value
+
+	STRCAT	" Cz:"					; print label
+	MOVII	compass_DZ,mpr			; get   value
+	rcall	TFT_compass_fast_helper ; print value
+
+	PRINT							; dump to screen
+
+	WIN_TINY .0,.104				; set font and position
+	FONT_COLOR_MEMO					; set font color
+
+	STRCPY	"Ax:"					; print label
+	MOVII	accel_DX,mpr			; get   value
+	rcall	TFT_compass_fast_helper ; print value
+
+	STRCAT	" Ay:"					; print label
+	MOVII	accel_DY,mpr			; get   value
+	rcall	TFT_compass_fast_helper ; print value
+
+	STRCAT	" Az:"					; print label
+	MOVII	accel_DZ,mpr			; get   value
+	rcall	TFT_compass_fast_helper ; print value
+
+	PRINT							; dump to screen
+	return							; done
+
+
+TFT_compass_fast_helper:
+	call	convert_signed_16bit	; convert lo:hi into unsigned-short and add '-' to POSTINC2 if required
+	btfsc	neg_flag				; is value negative?
+	bra		TFT_compass_fast_helper1; YES - print value
+	PUTC	'+'						; NO  - print a plus sign first
+TFT_compass_fast_helper1:
+	output_65535					; print value (0-65535)
 	return
 
+
+
+;-----------------------------------------------------------------------------
+; Show remaining Calibration Time
+;
 TFT_show_timeout_testmode:
-	WIN_TINY .0,.68
-	STRCPY	"T:"
-	movff	isr_timeout_timer,lo
-	bsf		leftbind
-	output_8							; display remaining time
-	bcf		leftbind
-	STRCAT_PRINT "s "
-	return
+	WIN_TINY .0,.68						; set font and position
+	FONT_COLOR_MEMO						; set font color
+	STRCPY	"T:"						; print label
+	movff	isr_timeout_timer,lo		; get remaining time
+	output_256							; print remaining time (xxx)
+	PUTC_PRINT "s"						; append unit and dump to screen
+	return								; done
 
+
+;-----------------------------------------------------------------------------
+; Show current Compass Gain
+;
 TFT_compass_show_gain:					; show the current compass gain
 ;	movff	opt_compass_gain,lo			; 0-7 (230 LSB/Gauss to 1370 LSB/Gauss)
 ;	tstfsz	lo
-;	return								; do not show unless gain=0
-	WIN_TINY .0,.86
-	STRCPY_TEXT tCompassGain
-	movff	opt_compass_gain,lo			; 0-7 (230 LSB/Gauss to 1370 LSB/Gauss)
-	bsf		leftbind
-	output_8
-	bcf		leftbind
-	STRCAT_PRINT ""
-	return
+;	return								; do not show unless gain > 0
+	WIN_TINY .0,.86						; set font and position
+	FONT_COLOR_MEMO						; set font color
+	STRCPY_TEXT tCompassGain			; print label
+	movff	opt_compass_gain,lo			; get value: 0-7 (230 LSB/Gauss to 1370 LSB/Gauss)
+	output_99							; print value (xx)
+	PRINT								; dump to screen
+	return								; done
+
+
+;=============================================================================
+compass_ops4	CODE
+;=============================================================================
 
 ;-----------------------------------------------------------------------------
-
+; Mask for Compass in Surface Mode
+;
 	global	TFT_surface_compass_mask
 TFT_surface_compass_mask:
 	WIN_SMALL surf_compass_mask_column,surf_compass_mask_row
-	call	TFT_standard_color
+	FONT_COLOR_MEMO						; set font color
 	STRCPY_TEXT_PRINT tHeading			; print "Heading:"
-	return
+	return								; done
 
 
-	global	TFT_dive_compass_mask		; draws the white box around the heading tape
-TFT_dive_compass_mask:
-	WIN_FRAME_STD dm_custom_compass_graph_row, dm_custom_compass_graph_row+dm_custom_compass_graph_height, .0, .159
-	return
-
-
+;-----------------------------------------------------------------------------
+; Compass Display in Surface Mode
+;
 	global	TFT_surface_compass_heading
 TFT_surface_compass_heading:
-	rcall	compass_heading_common
+	call	compass_heading_common		; compute heading
 	WIN_STD	surf_compass_head_column,surf_compass_head_row
-	call	TFT_standard_color
+
 TFT_surface_compass_heading_com:		; show "000° N"
+	FONT_COLOR_MEMO						; set default / dive-mode standard color
 	movff	compass_heading_new+1,WREG	; get upper byte of actual heading
 	btfsc	WREG,7						; compass calibrated?
 	bra		TFT_compass_uncalibrated	; NO
@@ -474,22 +512,15 @@ TFT_surface_compass_heading_com:		; show "000° N"
 	return								; YES - done
 	; show bearing
 	WIN_SMALL surf_compass_bear_column,surf_compass_bear_row
-	call	TFT_attention_color
+	FONT_COLOR	color_yellow			; set font color
 	MOVII	compass_bearing,mpr			; get bearing
 	;bra	TFT_compass_helper			; show number and cardinal and return
 
 TFT_compass_helper:
-	bsf		leftbind
-	output_16dp .2						; result is "0.000" in buffer
-	bcf		leftbind
-	; rearrange figures to "000"
-	movff	buffer+2,buffer+0
-	movff	buffer+3,buffer+1
-	movff	buffer+4,buffer+2
-	lfsr	FSR2,buffer+3
-	STRCAT	"° "
-	rcall	tft_compass_cardinal		; add cardinal to POSTINC2
-	STRCAT_PRINT ""						; finalize output
+	output_999							; print bearing
+	STRCAT	"° "						; append unit and a space
+	call	tft_compass_cardinal		; append cardinal buffer
+	PRINT								; dump to screen
 	return								; done
 
 TFT_compass_uncalibrated:
@@ -497,17 +528,34 @@ TFT_compass_uncalibrated:
 	return								; done
 
 
+;=============================================================================
+compass_ops5	CODE
+;=============================================================================
+
+
+;-----------------------------------------------------------------------------
+; Mask for Compass in Dive Mode
+;
+	global	TFT_dive_compass_mask		; draws the white box around the heading tape
+TFT_dive_compass_mask:
+	WIN_FRAME_STD dm_custom_compass_graph_row, dm_custom_compass_graph_row+dm_custom_compass_graph_height, .0, .159
+	return
+
+
+;-----------------------------------------------------------------------------
+; Compass Display in Dive Mode
+;
 	global	TFT_dive_compass_heading
 TFT_dive_compass_heading:
-	rcall	compass_heading_common
-	WIN_FONT FT_SMALL					; set font size
+	call	compass_heading_common		; compute heading
 
 ;	; ### for development only, hard-coding the bearing ###
 ;	; 244° : SW - W
 ;	MOVLI	.244,xA						; xA used as temp
 ;	MOVII	xA,compass_bearing			; compass_bearing is stored in bank isr_backup
 
-	MOVII	compass_heading_shown,xA
+	FONT_SIZE FT_SMALL					; set font size
+	MOVII	compass_heading_shown,xA	; get heading
 	; 160° viewing angle: add +360 offset if xA <= 292 for non-negative scale
 	MOVLI	.292,sub_a
 	MOVII	xA,  sub_b
@@ -734,14 +782,14 @@ TFT_dive_compass_ruler_loop_zz:
 	movwf	win_top						; set position for upper ticks
 	movlw	dm_custom_compass_tick_height
 	movwf	win_height					; set hight of ticks
-	call	TFT_standard_color			; set color
-	call	TFT_box						; draw tick
+	movf	pallet_color_memo,W			; select color
+	BOX_COLOR							; draw tick
 	movlw	dm_custom_compass_tick_bot_top
 	movwf	win_top						; set position for lower ticks
 	movlw	dm_custom_compass_tick_height
 	movwf	win_height					; set hight of ticks
-	call	TFT_standard_color			; color in WREG is trashed, must be set again!
-	call	TFT_box						; draw tick
+	movf	pallet_color_memo,W			; select color
+	BOX_COLOR							; draw tick
 	; 4. If D < 82 and RM > 79: means we put something over the center line,
 	;							so redraw the center line
 	movlw	d'82'
@@ -776,6 +824,7 @@ TFT_dive_compass_ruler_lend:			; loop end
 
 TFT_dive_compass_labels:
 	; done with the compass ruler, put the labels on the screen
+	FONT_COLOR_MEMO						; set dive-mode standard color
 	clrf	hi							; hi stores the display position
 	movff	hi,xHI						; bank-safe clear of xHI
 	clrf	lo							; lo stores the last item's display position
@@ -898,8 +947,7 @@ TFT_dive_compass_dir_text:
 	bra		TFT_dive_compass_text
 
 TFT_dive_compass_dir_text_2:
-	movlw	color_green
-	call	TFT_set_color
+	FONT_COLOR color_green
 	btfsc	compass_bearing_lft
 	bra		TFT_dive_compass_dir_ldir	; bearing_lft=1, print the left marker
 ;TFT_dive_compass_text_rdir:
@@ -919,9 +967,8 @@ TFT_dive_compass_text:
 	WIN_BOX_BLACK dm_custom_compass_tick_top_bot+.1,dm_custom_compass_tick_bot_top-.1,.158,.159	; top, bottom, left, right
 
 	; Text output
-	call	TFT_standard_color
 	WIN_SMALL dm_custom_compass_head_column, dm_custom_compass_head_row
-	rcall	TFT_surface_compass_heading_com	; show "xxx° N"
+	call	TFT_surface_compass_heading_com	; show "xxx° N"
 	return
 
 TFT_dive_compass_dir_lclr:
@@ -971,13 +1018,13 @@ TFT_dive_compass_label_proc:
 	rcall	TFT_dive_compass_clr_label
 TFT_dive_compass_label_proc_p:
 	; 4. print the SQ on the screen
-	call	TFT_standard_color
+	FONT_COLOR_MEMO
 	bsf		compass_show_cardinal
 ;TFT_dive_compass_label_print:
-	movlw	dm_custom_compass_label_row
-	movff	WREG,win_top
-	movff	lo,win_leftx2
-	WIN_FONT FT_SMALL
+	movlw	dm_custom_compass_label_row	; set output position
+	movff	WREG,win_top				; ...
+	movff	lo,win_leftx2				; ...
+	FONT_SIZE FT_SMALL					; set font size
 	; 6. retain the new display positions
 	movff	lo,hi
 	movff	up,WREG
@@ -1079,9 +1126,8 @@ TFT_dive_compass_mk_print_4:
 	clrf	win_width+1
 	movlw	color_green
 	btfss	compass_show_cardinal
-	movlw	color_red
-	call	TFT_set_color
-	call	TFT_box
+	movlw	color_red						; select color
+	BOX_COLOR									; draw box
 TFT_dive_compass_mk_print_5:
 	return
 
@@ -1120,9 +1166,8 @@ TFT_dive_compass_clear:
 	cpfsgt	win_width+0
 	bra		TFT_dive_compass_clear3		; do not clear a single pixel (or less)
 	movff	hi,win_leftx2
-	movlw	color_black
-	call	TFT_set_color
-	call	TFT_box
+	movlw	color_black					; select color
+	BOX_COLOR								; draw box
 TFT_dive_compass_clear3:
 	return
 
@@ -1192,8 +1237,13 @@ tft_compass_cardinal_NW:
 	STRCAT_TEXT	tNW
 	return
 
-;-----------------------------------------------------------------------------
+;=============================================================================
+compass_ops6	CODE
+;=============================================================================
 
+;-----------------------------------------------------------------------------
+; get and process heading
+;
 compass_heading_common:
 	btfss	compass_enabled				; compass enabled?
 	bra		compass_heading_common_zero	; NO
@@ -1255,7 +1305,6 @@ compass_heading_common_4:
 	call	subU16						;     - wrap decrement result around
 	bra		compass_heading_common_6	;     - store wrapped result
 
-
 compass_heading_common_5:
 	; increment compass_heading_shown towards compass_heading_new
 	rcall	compass_heading_stepsize_1	; calculate step size and put it into sub_b
@@ -1292,7 +1341,8 @@ compass_heading_stepsize_2:
 	MOVII	sub_c,sub_b					; transfer result to sub_b
 	return
 
-
  ENDIF	; _compass
+
+;-----------------------------------------------------------------------------
 
 	END

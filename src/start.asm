@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File start.asm                            combined next generation V3.09.1 fix
+;   File start.asm                          * combined next generation V3.09.5
 ;
 ;   Startup subroutines
 ;
@@ -36,7 +36,7 @@
 	extern	option_check_and_store
 	extern	option_reset
 	extern	rtc_init
-	extern	do_new_battery_select
+	extern	new_battery_select
 	extern	get_battery_data
 	extern	use_old_prior_209
 	extern	get_first_gas_to_WREG
@@ -59,29 +59,49 @@
  IFDEF _rx_update
 	extern	rx_firmware_new_major
 	extern	rx_firmware_new_minor
+	extern	dyn_show_firmware_rx
  ENDIF
-
-;-----------------------------------------------------------------------------
 
 
 ;=============================================================================
-; Reset Vector: entry point on device wake-up and hard reset
+; Reset Vector: Entry Point on Device Wake-up and hard Reset
 ;
 reset_v		CODE 0x00000
 	goto	0x1FF00							; jump to bootloader
 
 start_v		CODE 0x00004					; jump to application (cold-)start
 	goto	start
-
+;
 ;=============================================================================
 
-boot	CODE
 
 ;=============================================================================
-; Entry point after cold start
+; Firmware Identification
+;
+fingerprint	CODE 0x0000A
+	db	fw_version_major,		fw_version_minor		; major,         minor
+	db	fw_version_beta,		FW_ID					; beta/release,  firmware ID
+	db	firmware_creation_year,	firmware_creation_month	; creation year, month
+	db	firmware_creation_day,	FW_CONF 				; creation day,  firmware configuration
+	db	0x00,					0x00					; reserved for future use
+	db	0x00,					0x00					; reserved for future use
+	db	0x00,					0x00					; reserved for future use
+;
+;=============================================================================
+
+
+;=============================================================================
+boot1	CODE
+;=============================================================================
+
+
+;-----------------------------------------------------------------------------
+;
+; Entry Point after cold Start
 ;
 	global	start
 start:
+
 	; clear RAM banks 0-14
 	lfsr	FSR0,0x000						; load start address into FSR0
 	movlw	0x0F							; load end   address into WREG (actually its high byte)
@@ -90,19 +110,19 @@ start_clear_rambank:
 	cpfseq	FSR0H							; has FSR0 reached begin of bank 15, i.e. banks 0-14 done?
 	bra		start_clear_rambank				; NO - loop
 
-	; initialize hardware (ports, timers, interrupts, etc.)
+	; initialize averaging for analog buttons before IRQ gets enabled
+	movlw	.16								; set averaging span
+	movff	WREG,analog_counter				; write to counter (in bank isr_backup)
+
+	; initialize hardware (ports, timers) and start interrupts
 	call	init_ostc						; also selects bank common and sets CPU to normal speed
 
 	; flag that later restart origins from a cold start
 	bsf		cold_start
 
-	; initialize averaging for analog buttons
-	movlw	.16								; set averaging span
-	movff	WREG,analog_counter				; write to counter (in bank isr_backup)
-
 	; get button type from bootloader info
 	bsf		analog_switches					; assume analog buttons by default
-	movlw	0x7C							; address bootloader at 0x01F77C
+	movlw	0x7C							; set up read from 0x01F77C
 	movwf	TBLPTRL							; ...
 	movlw	0xF7							; ...
 	movwf	TBLPTRH							; ...
@@ -114,10 +134,14 @@ start_clear_rambank:
 	bcf		analog_switches					; NO - no analog buttons
 
 	; get screen type (2) from bootloader info
-	bsf		screen_type2
-	bsf		screen_type3
-	movlw	0x80
-	movwf	TBLPTRL							; only low byte adjustment needed, high and upper are still at 0x01F7xx
+	bsf		screen_type2					; set flags for later clear of the false one
+	bsf		screen_type3					; ...
+	movlw	0x80							; set up read from 0x01F780
+	movwf	TBLPTRL							; ...
+	;movlw	0xF7							; high and upper are still at 0x01F7xx
+	;movwf	TBLPTRH							; ...
+	;movlw	0x01							; ...
+	;movwf	TBLPTRU							; ...
 	TBLRD*+									; read configuration byte
 	movlw	0x83							; coding for screen type 2
 	cpfseq	TABLAT							; equal?
@@ -131,27 +155,21 @@ start_clear_rambank:
 
 	; initialize pressure sensor calibration
 	call	get_calibration_data			; get calibration data from pressure sensor
-	call	TFT_DisplayOff					; turn off display
 
-	; wait for calibration data to take effect
+	call	TFT_DisplayOff					; turn off display
 	bsf		LEDr							; turn on red LED
 
-	; first pass, will not have valid temperature yet
-	call	wait_1s
-	call	wait_1s
-
-	; second pass - complete sensor initialization
-	call	wait_1s
-	call	wait_1s
+	; wait for valid temperature and pressure
+	WAITS	.3								; wait 3 seconds
 
 	; sensor calibration completed, first valid pressure value is available
-	bcf		LEDr							; turn off red LED again
+	bcf		LEDr							; turn off red LED
 
-	; load surface pressure into ISR
-	; initially needs to be done twice in order to shift the current absolute pressure through the
-	; 15 minutes sampling buffer into the reference buffer from where it is loaded by the ISR
-	rcall	sample_surface_pressure			; 1st pass
-	rcall	sample_surface_pressure			; 2nd pass
+	; initial loading of the surface pressure into the ISR
+	; needs to be done twice in order to shift the current absolute pressure through
+	; the sampling buffer into the reference buffer from where it is loaded by the ISR
+	call	sample_surface_pressure			; 1st pass
+	call	sample_surface_pressure			; 2nd pass
 
 	; wait until initial surface pressure value has been loaded into the ISR
 	btfsc	update_surface_pressure			; has the ISR confirmed loading of the surface pressure?
@@ -222,18 +240,18 @@ start_check_new_firmware:
 	;bz		start_check_new_firmware_old	; YES - same  firmware as  before
 
 start_check_new_firmware_old:
-	call	show_fw_mesg_kept				; show firmware is kept message
+	call	TFT_message_fw_kept				; show firmware is kept message
 	bra		start_check_new_firmware_common	; continue with common part
 
 start_check_new_firmware_new:
-	call	show_fw_mesg_update				; show firmware update message
+	call	TFT_message_fw_update			; show firmware is updated message
 
-	; reset the pressure sensor correction to factory default
-	lfsr	FSR0,oPressureAdjust			; address pressure sensor correction
-	call	option_reset					; set correction to default
-
-	lfsr	FSR0,oPressureAdjust			; address pressure sensor correction
-	call	option_check_and_store			; update correction in EEPROM
+;	; reset the pressure sensor correction to factory default
+;	lfsr	FSR0,oPressureAdjust			; address pressure sensor correction
+;	call	option_reset					; set correction to default
+;
+;	lfsr	FSR0,oPressureAdjust			; address pressure sensor correction
+;	call	option_check_and_store			; update correction in EEPROM
 
 start_check_new_firmware_common:
 	call	TFT_Display_FadeIn				; display resulting screen
@@ -241,23 +259,61 @@ start_check_new_firmware_common:
 	call	backup_flash_page				; back-up the first 128 bytes from program flash memory to EEPROM
 	call	option_restore_and_check_all	; restore all option values from EEPROM and check them
 
-	; pause 5 seconds
-	movlw	.5								; load loop counter
-start_check_new_firmware_wait:
-	call	wait_1s							; wait <= 1 second
-	decfsz	WREG,W							; decrement loop counter, did it became zero?
-	bra		start_check_new_firmware_wait	; NO  - loop
-	;bra	restart							; YES - proceed with restart
+	WAITS	.5								; wait 5 second
+
+	goto	restart							; proceed with restart
 
 
 ;=============================================================================
-; Entry point after warm start
+boot2	CODE
+;=============================================================================
+
+
+;-----------------------------------------------------------------------------
+; Sample and store the current Surface Pressure
+; Update ISR and Deco Engine with Pressure sampled on last Invocation
+;
+	global	sample_surface_pressure
+sample_surface_pressure:
+	; make sure the ISR does not read the surface pressure reference buffer while it is updated
+	bcf		update_surface_pressure			; cancel any pending load request
+
+	; propagate the surface pressure sampled on last invocation to the reference pressure buffer
+	MOVII	pressure_abs_sampled,pressure_abs_ref
+
+	; update surface pressure in the ISR
+	bsf		update_surface_pressure			; request ISR to update its surface pressure
+
+	; update surface pressure in the deco engine
+	MOVII	pressure_abs_ref,int_I_pres_surface
+
+	; sample current absolute pressure (ISR-safe 2 byte copy)
+	SMOVII	pressure_abs,pressure_abs_sampled
+
+	; limit sampled pressure to max allowed surface pressure
+	MOVLI	max_surfpressure,    sub_a		; load upper limit    into sub_a
+	MOVII	pressure_abs_sampled,sub_b		; copy sampled pressure to sub_b
+	call	cmpU16							; sub_a - sub_b = max_surfpressure - pressure_abs_sampled
+	btfss	neg_flag						; sampled pressure > max_surfpressure ?
+	return									; NO  - below limit, done
+	MOVII	sub_a,pressure_abs_sampled		; YES - limit to max_surfpressure (still stored in sub_a)
+	return									;     - done
+
+
+;=============================================================================
+boot3	CODE
+;=============================================================================
+
+
+;-----------------------------------------------------------------------------
+; Entry Point for warm Start
 ;
 ; called on leaving sleep mode, surface menu, communication mode, and
-; when a start of a dive is detected in all modes except surface mode.
+; when a start of a dive is detected in all modes except surface mode
 ;
 	global	restart
 restart:
+
 	; for safety purpose only
 	banksel	common							; select bank common
 	clrf	STKPTR							; clear return addresses stack
@@ -271,7 +327,7 @@ restart:
 	; clear flag groups
 	clrf	HW_descriptor					; hardware - OSTC model descriptor
 	clrf	HW_flags_state1					; hardware - states
-	;										; do not clear HW_flags_state2 !
+	;										; DO NOT clear HW_flags_state2 !
 	clrf	DM_flags_sensor					; hardware - O2 sensors
 	clrf	OS_flags_ISR1					; operating system - ISR control 1
 	clrf	OS_flags_ISR2					; operating system - ISR control 2
@@ -279,13 +335,13 @@ restart:
 	clrf	DM_flags_deco					; dive deco modes
 	clrf	MS_flags_control				; menu system - control
 	clrf	MS_flags_imprint				; menu system - data imprinting
-	clrf	CVT_flags1						; convert and display functions
-	clrf	CVT_flags2						; convert and display functions
+	clrf	CVT_flags1						; control of numerical outputs 1
+	clrf	CVT_flags2						; control of numerical outputs 2
 
 	; configure the OSTC model descriptor (stored in HW_descriptor)
 	bcf		tft_power						; inverted, here needed for I2C_probe_OSTC_rx, to wake-up RX circuity
 	bsf		ambient_sensor					; set ambient light sensor as available by default
-	bsf		optical_input					; set optical input        as available by default
+	bsf		ext_input_optical				; set optical input        as available by default
 
 	call	lt2942_get_status				; check for gauge IC
 	btfss	battery_gauge_available			; OSTC 2, cR or TR?
@@ -293,7 +349,7 @@ restart:
 
 	; OSTC 2, cR or TR
 	call	lt2942_init						; initialize battery gauge IC
-	bcf		optical_input					; OSTC 2, cR and TR do not have an optical input
+	bcf		ext_input_optical				; OSTC 2, cR and TR do not have an optical input
 
 	banksel	ANCON0							; ANCON0 is outside access RAM
 	bcf		ANCON0,7						; AN7 digital input
@@ -311,21 +367,21 @@ restart:
 restart2:
  IFNDEF _hwos_sport
 	btfsc	vusb_in							; USB power detected?
-	bra		restart3						; YES - no BLE then
+	bra		restart3						; YES - no BT then
 	bcf		PORTE,0							; NO  - power up BT chip (if available)
 	WAITMS	d'5'							;     - wait 5 ms
 	btfss	vusb_in							;     - BT chip detected?
-	bra		restart3						;       NO  - no BLE then
+	bra		restart3						;       NO  - no BT then
  ENDIF
-	bsf		ble_available					;       YES - BLE available
+	bsf		ble_available					;       YES - BT available
 
 restart3:
-	bsf		PORTE,0							; power down BLE chip
-	btfsc	ble_available					; BLE available?
+	bsf		PORTE,0							; power down BT chip
+	btfsc	ble_available					; BT available?
 	bra		restart4						; YES - can't be a cR then
 	btfss	battery_gauge_available			; NO  - rechargeable?
 	bra		restart4						;       NO  - can't be a cR
-	bsf		analog_o2_input					;       YES - it's a cR, analog input available
+	bsf		ext_input_s8_ana				;       YES - it's a cR, S8/analog sensor input available
 
 restart4:
 	bsf		lv_core							; default to low voltage core
@@ -346,6 +402,17 @@ restart4:
 	cpfseq	TABLAT							;     - equal?
 restart4a:
 	bcf		lv_core							;       NO - no low voltage core then
+
+	; OSTC sport 2019 hardware does not have an optical input
+	btfsc	lv_core							; low voltage core?
+	bcf		ext_input_optical				; YES - no optical input available
+
+	; check FLASH for block-write capability
+	bsf		flash_block_write				; default to block-write capability available
+	call	ext_flash_read_jedec			; read JEDEC IDs
+	movlw	0x26							; device type 26h supports block-write
+	cpfseq	hi								; dive type = 26h ?
+	bcf		flash_block_write				; NO  - revoke capability
 
 
  IFDEF _rx_functions
@@ -391,7 +458,7 @@ restart4b:
 	btfss	ostc_rx_present					; data transfer successful and TR module up & running again?
 	bra		restart4c						; NO
 	STRCAT	"to "							; YES - print success message
-	call	TFT_print_firmware_rx			;     - print installed version
+	call	dyn_show_firmware_rx			;     - print installed version
 	STRCAT_PRINT " done"					;     - complete result message
 	bra		restart4d						;     - show message for a while
 
@@ -399,9 +466,7 @@ restart4c:
 	STRCAT_PRINT "failed"					; complete result message - failure
 
 restart4d:
-	call	wait_1s							; wait (up to)        1 second
-	call	wait_1s							; wait (another full) 1 second
-	call	wait_1s							; wait (another full) 1 second
+	WAITS	.3								; wait 3 seconds
 
  ENDIF	; _rx_update
 
@@ -417,7 +482,7 @@ restart4e:
 
 restart5:
 	; manage hardware
-	btfss	analog_o2_input					; OSTC with analog input?
+	btfss	ext_input_s8_ana				; OSTC with S8/analog input?
 	bsf		TRISB,3							; NO - shut down power supply for S8 bulkhead
 
 	btfss	battery_gauge_available			; OSTC with gauge IC?
@@ -429,14 +494,13 @@ restart5:
 	call	get_battery_data				; YES - get last battery data
 
 	; check if option values have changed and thus if the EEPROM needs to be updated
-	btfsc	options_changed					; do the options need to be stored to EEPROM ?
+	btfsc	option_changed					; do the options need to be stored to EEPROM ?
 	call	option_check_and_store_all		; YES - check and store all option values in EEPROM
-	bcf		options_changed					; clear flag
 
 	; set screen orientation
-	bcf		flip_screen						; set default screen orientation
+	bcf		flip_screen						; disable upside-down orientation by default
 	TSTOSC	opt_flip_screen					; shall show screen outputs upside down? (=1: flip the screen)
-	bsf		flip_screen						; YES - set upside-down orientation
+	bsf		flip_screen						; YES - enable upside-down orientation
 
 	; check if high-altitude mode is applicable
 	bcf		high_altitude_mode				; disable high altitude mode by default
@@ -455,39 +519,40 @@ restart5:
 	banksel	common							;     - back to bank common
 
 restart6:
-	; the dive mode flag can not be set right after cold start, must have been in surface mode before
+	call	TFT_load_std_color_pallet	; load standard color pallet
 	btfsc	divemode						; shall enter dive mode?
-	goto	diveloop						; YES
-
-	btfsc	RCON,POR						; was this a power-on reset?
-	goto	surfloop						; NO  - enter surface mode
-	bsf		RCON,POR						; YES - acknowledge detection and re-arm detector
-	goto	do_new_battery_select			;     - prompt for battery selection, will proceed to surface mode
+	goto	diveloop						; YES - enter dive mode
+	btfsc	RCON,POR						; NO  - was this a power-on reset?
+	goto	surfloop						;       NO  - enter surface mode
+	bsf		RCON,POR						;       YES - acknowledge detection and re-arm detector
+	goto	new_battery_select				;           - prompt for battery selection, will proceed to surface mode
 
 
 ;=============================================================================
-; Setup all flags and parameters for dive mode and simulator computations
+boot4	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Setup of all Flags and Parameters for Dive Mode and Simulator Computations
 ;
 ; called from divemode.asm, menu_tree.asm and surfmode.asm
 ;
 	global	restart_set_modes_and_flags
 restart_set_modes_and_flags:
-	call	disable_ir_s8					; switch off IR/S8 digital interface by default (for all compile versions!)
+	call	disable_ir_s8_analog			; switch off IR/S8/analog interface by default (for all compile versions!)
 
  IFDEF _external_sensor
-	WAITMS	d'100'							; some delay to power down S8-HUD properly
+	WAITMS	d'100'							; wait 100 ms to S8-HUD powered down properly
  ENDIF
 
-	; setup sampling rate
+	; setup sampling rate for dice data recording
 	movlw	.2								; default to 2 seconds
-	movwf	sampling_rate					; write setting
-	TSTOSS	opt_sampling_rate				; check option: 1= 10s, 0= 2s
-	bra		restart_set_modes_and_flags1	; 0 - 2 seconds selected, done
+	TSTOSC	opt_sampling_rate				; check option: 0= 2s, 1= 10s
 	movlw	.10								; 1 - change to 10 seconds
-	movwf	sampling_rate					;   - write setting
+	movwf	sampling_rate					; store selection
 
-restart_set_modes_and_flags1:
-	clrf	DM_flags_deco					; clear all deco mode flags
+	; clear all deco mode flags
+	clrf	DM_flags_deco
 
 	; initialize active_gas and active_dil for surface mode pressure display
 	call	get_first_gas_to_WREG
@@ -507,10 +572,12 @@ restart_set_modes_and_flags1:
 	movff	opt_desat_multiplier_non_gf,char_I_desaturation_multiplier	;     - ...
 
 restart_set_modes_and_flags2:
+
 	; configure GF settings, GF high is needed for color-coding the current GF (supersaturation) factor
 	movff	opt_GF_low, char_I_GF_Low_percentage
 	movff	opt_GF_high,char_I_GF_High_percentage
 
+	; dive mode specific setup
 	movff	opt_dive_mode,lo				; get dive mode: 0= OC, 1= CCR, 2= gauge, 3= apnea, 4= pSCR
 	tstfsz	lo								; OC?
 	bra		restart_set_modes_and_flags3	; NO
@@ -530,7 +597,7 @@ restart_set_modes_and_flags3:
 	call	option_cleanup_oTrMode_CCR		;     - revert TR mode from 'ind.double' to 'on'
  ENDIF	; _rx_functions
  IFDEF _external_sensor
-	call	enable_ir_s8					;     - enable IR/S8 digital interface
+	call	enable_ir_s8_analog				;     - enable IR/S8/analog interface
  ENDIF	; _external_sensor
  ENDIF	; _ccr_pscr
 	return									;     - done
@@ -564,41 +631,11 @@ restart_set_modes_and_flags6:
 	call	option_cleanup_oTrMode_no_CCR	;     - revert TR mode from 'CCR Dil+O2' to 'on'
  ENDIF	; _rx_functions
  IFDEF _external_sensor
-	call	enable_ir_s8					;     - enable IR/S8 digital interface
+	call	enable_ir_s8_analog				;     - enable IR/S8/analog interface
  ENDIF	; _external_sensor
  ENDIF	; _ccr_pscr
 	return									;     - done
 
-
-;=============================================================================
-; Sample and store the current surface pressure, update ISR and deco engine
-; with the surface pressure sampled on last invocation.
-;
-	global	sample_surface_pressure
-sample_surface_pressure:
-	; make sure the ISR does not read the surface pressure reference buffer while it is updated
-	bcf		update_surface_pressure			; cancel any pending load request
-
-	; propagate the surface pressure sampled on last invocation to the reference pressure buffer
-	MOVII	pressure_abs_sampled,pressure_abs_ref
-
-	; update surface pressure in the ISR
-	bsf		update_surface_pressure			; request ISR to update its surface pressure
-
-	; update surface pressure in the deco engine
-	MOVII	pressure_abs_ref,int_I_pres_surface
-
-	; sample current absolute pressure (ISR-safe 2 byte copy)
-	SMOVII	pressure_abs,pressure_abs_sampled
-
-	; limit sampled pressure to max allowed surface pressure
-	MOVLI	max_surfpressure,    sub_a		; load upper limit    into sub_a
-	MOVII	pressure_abs_sampled,sub_b		; copy sampled pressure to sub_b
-	call	cmpU16							; sub_a - sub_b = max_surfpressure - pressure_abs_sampled
-	btfss	neg_flag						; sampled pressure > max_surfpressure ?
-	return									; NO  - below limit, done
-	MOVII	sub_a,pressure_abs_sampled		; YES - limit to max_surfpressure (still stored in sub_a)
-	return									;     - done
-
+;-----------------------------------------------------------------------------
 
 	END
