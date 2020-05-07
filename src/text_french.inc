@@ -297,7 +297,7 @@
 	TCODE	tVSIgraph,			"Graph.Vitesse: "		; Speed Graph
 	TCODE	tVSItext2,			"Vites.Variabl: "		; adaptive Speed
 	TCODE	tShowppO2,			"Afficher PpO2: "		; always show ppO2
-	TCODE	tDepthWarning,		"Prof. Flash  : "		; Depth blinking
+	TCODE	tDepthWarning,		"Signal Prof. : "		; Depth blinking
 	TCODE	t2ndDepth,			"Choix Prof:"			; 2nd Depth Display Content (11 chars max)
 	TCODE	tTissueGraphics,	"Graphique :"			; Tissue Graphics
 	TCODE	tIBCDwarning,		"Alerte CDI: "			; IBCD Warning
@@ -500,7 +500,7 @@
 
 
 ; Divemode menu
-	TCODE	tDiveAckn,			"Conf?"					; Acknf?  (max. 5 chars) (Acknowledge)
+	TCODE	tDiveAckn,		"OkVu?"					; Acknf?  (max. 5 chars) (Acknowledge)
 	TCODE	tDivePreMenu,		"Menu?"					; Menu?  (max. 5 chars)
 	TCODE	tDiveLayout,		"Affich"				; Layout (max. 6 chars)
  IFDEF _compass

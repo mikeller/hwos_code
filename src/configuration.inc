@@ -43,8 +43,8 @@
 #endif
 
 #define firmware_creation_year	0x14
-#define firmware_creation_month	0x04
-#define firmware_creation_day	0x1C
+#define firmware_creation_month	0x05
+#define firmware_creation_day	0x07
 
 #define firmware_expire_year	0x15
 #define firmware_expire_month	0x02

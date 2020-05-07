@@ -3293,7 +3293,7 @@ static void calc_hauptroutine(void)
 		// - if a valid alternative plan TTS exists, and
 		// - if it is not a bailout plan
 		if(  (deco_status   & CALC_ALT        ) )
-		if(  (int_O_TTS_alt & INT_FLAG_INVALID) )
+		if( !(int_O_TTS_alt & INT_FLAG_INVALID) )
 		if( !(deco_status   & BAILOUT_MODE    ) )
 		{
 			if( int_O_TTS_alt < int_O_TTS_norm ) deco_info |=  DECO_ZONE;

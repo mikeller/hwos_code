@@ -758,8 +758,9 @@ deco_results_gas_loop:
 
 	bcf		decoplan_overflow				; no overflow in gas needs by default
 
-	btfsc	decoplan_pressures_shown		; results in bar?
-	bra		deco_results_gas_volumes_1		; YES
+	btfss	decoplan_pressures_shown		; results in bar?
+	bra	deco_results_gas_volumes_2		; NO - liter
+	;bra	deco_results_gas_volumes_1		; YES - bar
 
 	; output of gas needs in bar
 deco_results_gas_volumes_1:

@@ -2949,8 +2949,9 @@ TFT_display_ftts_6:
 	movff	int_O_TST_alt+1,WREG		; get high byte of the alternative total stops time
 	btfsc	WREG,int_is_zero			; total stops time = zero ?
 	bra		TFT_display_ftts_9			; YES - show "NDL"
-	btfsc	WREG,deco_zone				; NO  - fTTS <= TTS ?
-	FONT_COLOR_ADVICE					;       YES - set to advice color (green)
+	movff	char_O_deco_info,WREG				; NO  - get deco info vector
+	btfsc	WREG,deco_zone					;     - fTTS <= TTS ?
+	FONT_COLOR_ADVICE					;	YES - set to advice color (green)
 TFT_display_ftts_7:
 	bsf		leftbind					; print left-aligned
 	output_999							; print ascent time (0-999)
@@ -4715,6 +4716,7 @@ TFT_dive_tissues_sat_loop:
 	addwf	win_leftx2,F						; add to base position
 	movlw	color_yellow						; color for GF high line
 	BOX_COLOR									; draw line
+	bra	TFT_dive_tissues_4					; continue with number of leading tissue
 
  IFDEF _helium
 TFT_dive_tissues_3:

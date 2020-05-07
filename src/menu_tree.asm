@@ -2064,7 +2064,12 @@ do_new_battery_select:
 	; 0x02:                           ambient sensor                   ---> OSTC Sport (USB model)   YES    NO     1.5V  3.6V disposable  3.6V rechargeable
 	; 0x52: BLE                   and ambient sensor and low volt core ---> OSTC Sport (BLE model)   YES    NO     1.5V  3.6V disposable  3.6V rechargeable
 
-	movlw	0x11						; OSTC 2 (old model)
+	movlw	0x11						; OSTC 2 (2015 model)
+	cpfseq	HW_descriptor
+	bra		$+4
+	bra		use_18650_battery
+
+	movlw	0x91						; OSTC 2 (2015 model) with block write
 	cpfseq	HW_descriptor
 	bra		$+4
 	bra		use_18650_battery
@@ -2074,15 +2079,20 @@ do_new_battery_select:
 	bra		$+4
 	bra		use_18650_battery
 
-	movlw	0x33						; OSTC 2 TR
+	movlw	0x85						; OSTC 2 cR with block write
+	cpfseq	HW_descriptor
+	bra		$+4
+	bra		use_18650_battery
+
+	movlw	0xB3						; OSTC 2 TR
 	cpfseq	HW_descriptor
 	bra		$+4
 	bra		do_use_16650_battery
 
-;	movlw	0xXX						; OSTC 2 (new model)			TODO: define signature
-;	cpfseq	HW_descriptor
-;	bra		$+4
-;	bra		do_use_16650_battery
+	movlw	0x93						; OSTC 2 (2017 model)
+	cpfseq	HW_descriptor
+	bra		$+4
+	bra		do_use_16650_battery
 
 	movlw	0x13						; OSTC Plus						TODO: and OSTC 2 new model as of now
 	cpfseq	HW_descriptor

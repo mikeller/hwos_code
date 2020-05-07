@@ -3147,7 +3147,7 @@ diveloop_boot:
 	bsf		alt_layout_active			; YES - start with alternative layout
 
 	; configure tissue graphics
-	TSTOSS	opt_tissue_graphics			; shall show: 0= pres+sat, 1= N2+He
+	TSTOSC	opt_tissue_graphics			; shall show: 0= pres+sat, 1= N2+He
 	bsf		tissue_graphic_layout		; YES - show press+sat
 	TSTOSC	char_I_model				; GF factors enabled?
 	bsf		tissue_graphic_gf			; YES - show GF lines
