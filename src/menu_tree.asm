@@ -2089,12 +2089,7 @@ do_new_battery_select:
 	bra		$+4
 	bra		do_use_16650_battery
 
-	movlw	0x93						; OSTC 2 (2017 model)
-	cpfseq	HW_descriptor
-	bra		$+4
-	bra		do_use_16650_battery
-
-	movlw	0x13						; OSTC Plus						TODO: and OSTC 2 new model as of now
+	movlw	0x93						; OSTC Plus and OSTC 2 (2017 model)
 	cpfseq	HW_descriptor
 	bra		$+4
 	bra		do_menu_new_battery_AA_charger

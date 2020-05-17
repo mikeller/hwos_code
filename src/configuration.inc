@@ -44,7 +44,7 @@
 
 #define firmware_creation_year	0x14
 #define firmware_creation_month	0x05
-#define firmware_creation_day	0x07
+#define firmware_creation_day	0x0A
 
 #define firmware_expire_year	0x15
 #define firmware_expire_month	0x02
@@ -64,7 +64,7 @@
 ;                                                                                    122.880 max. available
 #endif
 
-#define _hwos_tech_3_cR
+#define _hwos_tech_2_TR
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -80,7 +80,7 @@
 #endif
 
 #define _language_1		en
-#define _language_2		de
+#define _language_2		none
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
