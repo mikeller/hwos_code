@@ -66,6 +66,10 @@ get_battery_voltage_1:
 	bcf		LEDr							; switch off red LED
 	bcf		TRISJ,2							; activate Chrg-Out output
 	bsf		CHRG_OUT						; start charger
+	nop ; Ignore some noise
+	nop
+	nop
+	nop
 	btfss	CHRG_IN							; charging?
 	bra		charge_cc_active				; YES - charging in CC mode
 	bcf		CHRG_OUT						; NO  - stop charger

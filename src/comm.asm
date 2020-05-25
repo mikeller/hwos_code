@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File comm.asm                           * combined next generation V3.09.5
+;   File comm.asm                           * combined next generation V3.10.0
 ;
 ;   RS232 via USB
 ;
@@ -364,7 +364,7 @@ comm_command_decode:
 	command_decode 0x78,comm_option_reset_all		; x  reset all option values to their factory default
 	command_decode 0xFF,comm_service_exit			;    exit comm mode
  IFDEF _screendump
-	command_decode 0x6C,TFT_dump_screen				; l  dump the screen contents
+	command_decode 0x6C,TFT_dump_screen_comm		; l  dump the screen contents
  ENDIF
 
 	btfss	comm_service_mode						; service mode enabled?
@@ -385,6 +385,16 @@ comm_command_decode:
  ENDIF
 
 	bra		comm_command_loop						; ignore unrecognized command, back to command loop
+
+
+;-----------------------------------------------------------------------------
+; Screendump
+;
+ IFDEF _screendump
+TFT_dump_screen_comm:
+	call	TFT_dump_screen							; dump the screen contents and set screen_dump_avail
+	;bra	comm_service_exit						; exit comm mode
+ ENDIF
 
 
 ;-----------------------------------------------------------------------------
@@ -1156,17 +1166,17 @@ comm_write_gas_dil:
 	; check validity of type
 	movlw	0x14						; last option index for gases
 	cpfsgt	lo							; received option index > end of gas range ?
-	bra		comm_write_check_dil		; YES - check type for diluents
-	;bra	comm_write_check_gas		; NO  - check type for gases
-
-comm_write_check_gas:
-	; check validity of type for a gas
-	movlw	num_gas_types				; load number of gas types
-	bra		comm_write_check_com		; continue with common part
+	bra		comm_write_check_gas		; NO  - check type for gases
+	;bra	comm_write_check_dil		; YES - check type for diluents
 
 comm_write_check_dil:
 	; check validity of type for a diluent
 	movlw	num_dil_types				; load number of diluent types
+	bra		comm_write_check_com		; continue with common part
+
+comm_write_check_gas:
+	; check validity of type for a gas
+	movlw	num_gas_types				; load number of gas types
 	;bra	comm_write_check_com		; continue with common part
 
 comm_write_check_com:

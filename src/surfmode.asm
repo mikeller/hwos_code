@@ -205,6 +205,7 @@ surfloop_2:
 	call	TFT_Display_FadeIn			; show resulting surface screen
 
  IFDEF _screendump
+ extern	enable_rs232
 	btfsc	screen_dump_avail			; screen dump function enabled?
 	call	enable_rs232				; YES - activate RS232 (also sets CPU to normal speed)
  ENDIF

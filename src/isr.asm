@@ -288,6 +288,12 @@ isr_tmr7:
 	movlw	.248						; reload timer 7, high byte (8x256 ticks -> 62.5 ms)
 	movwf	TMR7H						; ...                       (keep low byte running )
 
+	btfss	update_surface_pressure				; shall update the surface pressure?
+	bra	isr_tmr7_0					; NO  - skip
+	bcf	update_surface_pressure				; YES - clear request flag
+	MOVII	pressure_abs_ref,pressure_surf		;     - update surface pressure
+
+isr_tmr7_0:	
 	call	get_analog_switches			; get analog readings - bank-safe, but CAUTION: returns in bank common
 	banksel	isr_backup					; back to ISR default bank
 
@@ -344,23 +350,14 @@ isr_tmr7_1a:
  ENDIF
 
 isr_tmr7_2:
-	btfsc	block_sensor_interrupt				; sensor interrupts disabled?
-	bra		sensor_int_state_exit				; YES - goto exit
 
-isr_sensor_state2:
+;isr_sensor_state2:
 	btfss	sensor_state_counter,0				; every 1/4 second
 	bsf		trigger_quarter_second				; set flag
 
 	btfss	speed_is_normal						; CPU running on normal speed?
 	rcall	isr_set_speed_to_normal				; NO - set CPU speed to normal
 
-	; update surface pressure
-	btfss	update_surface_pressure				; shall update the surface pressure?
-	bra		isr_sensor_state2_1					; NO
-	bcf		update_surface_pressure				; YES - clear request flag
-	MOVII	pressure_abs_ref,pressure_surf		;     - update surface pressure
-
-isr_sensor_state2_1:
 	incf	sensor_state_counter,F				; counts to eight for state machine
 
 ; State 1: clear flags and average registers, get temperature (51 us) and start pressure integration (73.5 us)

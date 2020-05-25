@@ -1482,7 +1482,6 @@ convert_for_display2:				; convert 16 bit RGB b'RRRRRGGG GGGBBBBB' into 24 bit R
 ;
 	global	TFT_dump_screen_check
 TFT_dump_screen_check:
-	return
 	btfss	vusb_in					; USB (still) plugged in?
 	bcf		screen_dump_avail		; NO - disable screen dump function
 

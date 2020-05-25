@@ -469,7 +469,7 @@
  ENDIF
 
  IFDEF _ccr_pscr
-	TCODE	tGasDensity,		"G.Density"				; Gas Density   (max. 9 chars)	## pending translation
+	TCODE	tGasDensity,		"G.Densité"				; Gas Density   (max. 9 chars)
  ENDIF
 
  IFDEF _rx_functions
