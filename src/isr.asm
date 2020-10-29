@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File isr.asm                            * combined next generation V3.09.5
+;   File isr.asm                            * combined next generation V3.11.1
 ;
 ;   INTERUPT subroutines
 ;
@@ -40,6 +40,8 @@ HighInt:
 	; serve buttons
 	btfsc	PIR1,TMR1IF					; timer 1 interrupt (button hold-down timer)?
 	rcall	timer1int					; YES - reset timer
+	btfsc	PIR5,TMR4IF				; timer 4 interrupt (button debounce)
+	rcall	timer4int				; YES, serve the interrupt
 	btfsc	INTCON,INT0IF				; right button activity?
 	rcall	isr_switch_right			; YES - check right switch
 	btfsc	INTCON3,INT1IF				; left button activity?
@@ -107,18 +109,12 @@ isr_set_speed_to_fastest:
 	movwf	OSCCON						; set prescaler
 	bsf		OSCTUNE,6					; switch on  x4 PLL -> 64 MHz on high voltage core, 32 MHz on low voltage core
 	movlw	T2CON_FASTEST				; PWM1 dimming factor for speed 'fastest'
-	;bra	isr_adjust_speed_exit
-
-isr_adjust_speed_exit:
-	movwf	T2CON						; adjust PWM1 for LED dimming
-	btfss	OSCCON,HFIOFS				; PLL stabilized?
-	bra		isr_adjust_speed_exit		; NO  - loop to give it some more time
-	return								; YES - done
+	bra	isr_adjust_speed_exit
 
 	; Attention: fill-up the gap between the end of this section
 	;            and the next section which starts at 0x00080 !!
-	;nop
-
+	nop
+	
 block_0_code_end:						; marker to find end of code in block 0 in linker report file
 
 
@@ -137,6 +133,12 @@ restore_flash_0x00080:
 isr_handler	CODE	0x00084
 ;=============================================================================
 
+isr_adjust_speed_exit:
+	movwf	T2CON						; adjust PWM1 for LED dimming
+	btfss	OSCCON,HFIOFS				; PLL stabilized?
+	bra		isr_adjust_speed_exit		; NO  - loop to give it some more time
+	return								; YES - done
+	
 ;-----------------------------------------------------------------------------
 ; Handle digitally-attached external Sensors
 ;
@@ -277,6 +279,39 @@ compute_IR_S8_checksum_loop:
 
  ENDIF	; _external_sensor
 
+ 
+;-----------------------------------------------------------------------------
+; Timer 4 - Button debounce (For new digital piezo circuit)
+ 
+timer4int:
+	bcf	PIR5,TMR4IF
+	decfsz	debounce_counter,F
+	return
+	bcf 	T4CON,TMR4ON		; Stop timer 4
+	clrf	TMR4			; reset
+	
+	movff	opt_cR_button_right,WREG		; 20-100; mH: opt_cR_button_right will also affect left button 
+	bcf	STATUS,C						; clear carry bit
+	rrcf	WREG							; /2 -> 10-50
+	bcf	STATUS,C						; clear carry bit
+	rrcf	WREG							; /2 -> 5-25
+	decf	WREG,W							; -1
+	decf	WREG,W							; -1
+	decf	WREG,W							; -1 -> 2-22
+	
+;	movlw   .5			; initial delay
+	movwf	debounce_counter	; multiples of 16ms 
+	return
+
+timer4_restart:
+	movlw   .5			; extra delay
+	movwf	debounce_counter
+	clrf	TMR4			; reset
+	bcf	INTCON3,INT1IF		; clear ext. int 1 request
+	bcf	INTCON,INT0IF		; clear ext. int 0 request
+	bsf		INTCON,INT0IE	; enable INT0 IRQ
+	bsf		INTCON3,INT1IE	; enable INT1 IRQ
+	return
 
 ;-----------------------------------------------------------------------------
 ; Tasks every 62.5 ms: Buttons, Dimming, Pressure/Temperature Sensor and CPU Speed
@@ -288,45 +323,49 @@ isr_tmr7:
 	movlw	.248						; reload timer 7, high byte (8x256 ticks -> 62.5 ms)
 	movwf	TMR7H						; ...                       (keep low byte running )
 
-	btfss	update_surface_pressure				; shall update the surface pressure?
-	bra	isr_tmr7_0					; NO  - skip
-	bcf	update_surface_pressure				; YES - clear request flag
-	MOVII	pressure_abs_ref,pressure_surf		;     - update surface pressure
+	btfss	update_surface_pressure			; shall update the surface pressure?
+	bra		isr_tmr7_1						; NO  - skip
+	bcf		update_surface_pressure			; YES - clear request flag
+	MOVII	pressure_abs_ref,pressure_surf	;     - update surface pressure
 
-isr_tmr7_0:	
+isr_tmr7_1:
 	call	get_analog_switches			; get analog readings - bank-safe, but CAUTION: returns in bank common
 	banksel	isr_backup					; back to ISR default bank
 
 	btfss	INTCON3,INT1IE				; external IRQ 1 enabled?
-	bra		isr_tmr7_a					; NO  - skip next
+	bra		isr_tmr7_2					; NO  - skip next
 	btfsc	analog_sw2_pressed			; YES - analog switch 2 pressed?
 	rcall	isr_switch_left				;       NO - get digital readings of left switch
-isr_tmr7_a:
+
+isr_tmr7_2:
 	btfss	INTCON,INT0IE				; external IRQ 0 enabled?
-	bra		isr_tmr7_b					; NO  - skip next
+	bra		isr_tmr7_3					; NO  - skip next
 	btfsc	analog_sw1_pressed			; YES - analog switch 1 pressed?
 	rcall	isr_switch_right			;       NO - get digital readings of right switch
-isr_tmr7_b:
-	btfss	block_sensor_interrupt		; sensor interrupts disabled?
-	bra		isr_tmr7_c					; NO  - continue
+
+isr_tmr7_3:
+	btfsc	block_sensor_interrupt		; sensor interrupts disabled?
 	bra		sensor_int_state_exit		; YES - goto exit
-isr_tmr7_c:
+	;bra	isr_tmr7_4					; NO  - continue
+
+isr_tmr7_4:
 	movf	max_CCPR1L,W				; dim value
 	cpfseq	CCPR1L						; = current PWM value?
 	rcall	isr_dimm_tft				; NO - adjust until max_CCPR1L = CCPR1L
 
  IFDEF _external_sensor
+
 	decfsz	ir_s8_timeout,F				; decrement IR/S8 timeout counter, became zero?
-	bra		isr_tmr7_2					; NO  - continue
+	bra		isr_sensor_state2			; NO  - continue with sensor
 	movlw	ir_timeout_value			; YES - get timeout value (in multiples of 62.5 ms)
 	movwf	ir_s8_timeout				;     - reload timeout timer
 	btfsc	ext_input_optical			;     - optical input in use?
-	bra		isr_tmr7_1a					;       YES - clear data
+	bra		isr_tmr7_5					;       YES - clear data
 	TSTOSS	opt_s8_mode					;       NO  - S8 input in use?
-	bra		isr_tmr7_2					;             NO  - must be analog interface in use, keep data
-	;bra	isr_tmr7_1a					;             YES - clear data
+	bra		isr_sensor_state2			;             NO  - must be analog interface in use, keep data
+	;bra	isr_tmr7_5					;             YES - clear data
 
-isr_tmr7_1a:
+isr_tmr7_5:
 	clrf	hud_status_byte				; S8/IR timeout clears all analog input readings to zero -> fallback will be triggered when in sensor mode
 	CLRI	hud_battery_mv				; clear battery voltage
 
@@ -347,11 +386,10 @@ isr_tmr7_1a:
 	banksel	isr_backup					; back to ISR default bank
 
 	bsf		trigger_S8_data_update		; signal a data update
- ENDIF
 
-isr_tmr7_2:
+ ENDIF	; _external_sensor
 
-;isr_sensor_state2:
+isr_sensor_state2:
 	btfss	sensor_state_counter,0				; every 1/4 second
 	bsf		trigger_quarter_second				; set flag
 
@@ -851,7 +889,14 @@ isr_rtcc_convert_BCD_DEC:
 ; Check Buttons
 ;
 isr_switch_right:
-	bcf		INTCON,INT0IE				; clear external interrupt 0
+	bcf		INTCON,INT0IE				; disable external interrupt 0
+	
+	btfsc	button_hold_down_allowed,A	; ignore for mechanical push buttons
+	bra	isr_switch_right2
+	btfsc	T4CON,TMR4ON					; Timer4 running?
+	bra	timer4_restart					; Yes, restart
+isr_switch_right2:
+    
 	btfss	flip_screen					; 180° flipped?
 	bsf		switch_right				; NO  - set flag for right button
 	btfsc	flip_screen					; 180° flipped?
@@ -859,7 +904,14 @@ isr_switch_right:
 	bra		isr_switch_common			; continue with common part
 
 isr_switch_left:
-	bcf		INTCON3,INT1IE				; clear external interrupt 1
+	bcf		INTCON3,INT1IE				; disable external interrupt 1
+
+	btfsc	button_hold_down_allowed,A	; ignore for mechanical push buttons
+	bra	isr_switch_left2
+	btfsc	T4CON,TMR4ON					; Timer4 running?
+	bra	timer4_restart					; Yes, restart
+isr_switch_left2:
+    
 	btfss	flip_screen					; 180° flipped?
 	bsf		switch_left					; NO  - set flag for left button
 	btfsc	flip_screen					; 180° flipped?
@@ -867,14 +919,17 @@ isr_switch_left:
 	;bra	isr_switch_common			; continue with common part
 
 isr_switch_common:
+	btfss	button_hold_down_allowed,A	; ignore for mechanical push buttons
+	bsf 	T4CON,TMR4ON			; Start timer 4
+    
 	btfsc	tmr5_preemtion_allowed		; timer 5 preemption allowed?
 	bsf		PIR5,TMR5IF					; YES - preempt timer 5
 	movlw	TMR1H_VALUE_FIRST			; load timer 1 (in steps of 7.8125 ms)
 	movwf	TMR1H						; ...
 	clrf	TMR1L						; ...
 	bsf		T1CON,TMR1ON				; start timer 1
-	bcf		INTCON3,INT1IF				; clear timer 1 IRQ request
-	bcf		INTCON,INT0IF				; clear timer 0 IRQ request
+	bcf		INTCON3,INT1IF				; clear ext. int 1 request
+	bcf		INTCON,INT0IF				; clear ext. int 0 request
 	return								; done
 
 
@@ -883,8 +938,8 @@ isr_switch_common:
 ;
 timer1int:
 	bcf		PIR1,TMR1IF					; clear timer 1 IRQ request
-	bcf		INTCON,INT0IF				; clear timer 0 IRQ request
-	bcf		INTCON3,INT1IF				; clear timer 1 IRQ request
+	bcf		INTCON,INT0IF				; clear ext. int 0 request
+	bcf		INTCON3,INT1IF				; clear ext. int 1 request
 
 	; digital
 	btfss	switch_left1				; left button hold-down?

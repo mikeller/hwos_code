@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;	File text_italian.asm                     next combined generation V3.09.4k
+;	File text_italian.asm                     next combined generation V3.12.3
 ;
 ;	Italian texts translation file.
 ;
@@ -26,9 +26,9 @@
 	TCODE	tHeading,			"Direzione:"			; Heading:
 	TCODE	tLastDive,			"UltimaImm."			; Last Dive (Max 10 chars)
 
-	TCODE	tFTTSSurf,			"TTS Futuro :"			; Future TTS
-	TCODE	tLastDecostopSurf,	"UltimaTappa:"			; last deco stop surface custom view
-	TCODE	tDvSalinitySurf,	"Salinita'  :"			; Salinity
+	TCODE	tFTTSSurf,			"TTS Futuro  :"			; Future TTS
+	TCODE	tLastDecostopSurf,	"Ultima Tappa:"			; last deco stop surface custom view
+	TCODE	tDvSalinitySurf,	"Salinita'   :"			; Salinity
 
  IFDEF _external_sensor
 	TCODE	tSensorMilliVolt,	"Sensori mV"			; Sensors mV
@@ -91,8 +91,8 @@
 	TCODE	tDiluentSetup,		"Imposta Diluente"		; Diluent Setup
  ENDIF
 	TCODE	tFixedSetpoints,	"Setpoints Fissi"		; Fixed Setpoints
-	TCODE	tBack,				"indietro"					; back
-	TCODE	tGas6,				"Gas extra"				; edit & select Gas 6
+	TCODE	tBack,				"indietro"				; back
+	TCODE	tGas6,				"Gas extr"				; edit & select Gas 6
 
  IFDEF _rx_functions
 	TCODE	tTrSettings,		"Display Press.ni"		; Pressure Display
@@ -104,7 +104,7 @@
  ENDIF
 
  IFDEF _external_sensor
-	TCODE	tCCRSensor,			"Sensori CCR"			; CCR Sensor
+;	TCODE	tCCRSensor,			"Sensori CCR"			; CCR Sensor
 	TCODE	tCalibrateMenu,		"Calibrazione"			; Calibration
 	TCODE	tCalibrationGas,	"Cal. Gas O2:"			; Cal. Gas O2:
 	TCODE	tCalibrate,			"Calibra"				; Calibrate
@@ -165,8 +165,8 @@
 	TCODE	tNewBattNew36,		"3,6V monouso    (T1)"	; new 3.6V disposable
 	TCODE	tNewBattNew15,		"1,5V monouso    (T0)"	; new 1.5V disposable
 	TCODE	tNewBattAccu,		"3,7V ricaricab. (T2)"	; new 3.7V rechargeable
-	TCODE	tNew18650,			"OSTC 2 o cR     (T3)"	; internal battery on 2 (old) / cR
-	TCODE	tNew16650,			"OSTC 2 o TR     (T4)"	; internal battery on 2 (new) / TR
+	TCODE	tNew18650,		"OSTC 2(2015), cR(T3)"	; internal battery on 2 (old) / cR
+	TCODE	tNew16650,		"OSTC 2(2017), TR(T4)"	; internal battery on 2 (new) / TR
 	TCODE	tConfirmChargeable1,"Conferma:"				; safety question, line 1
 	TCODE	tConfirmChargeable2,"la batteria inserita"	; safety question, line 2
 	TCODE	tConfirmChargeable3,"è ricaricabile"		; safety question, line 3
@@ -222,6 +222,7 @@
 	TCODE	tSaturationMult,	"Saturazione  : "
 	TCODE	tDesaturationMult,	"Desaturazione: "
 	TCODE	tGFMenu,			"Menu GF"				; GF Settings
+	TCODE	tSDMenu,			"Menu SD"				; SD Settings
 	TCODE	taGF_low,			"aGF Basso:"			; aGF low
 	TCODE	taGF_high,			"aGF Alto :"			; aGF high
 	TCODE	taGFenable,			"aGF Selezionabile:"	; aGF Selectable
@@ -231,7 +232,7 @@
 	TCODE	tLastDecostop,		"Ultima Tappa  : "		; last Deco Stop Depth
 	TCODE	tDvSalinity,		"Salinita'     : "		; Salinity
 	TCODE	tDepthWarn,			"Depth Warning :"		; Depth Warning (no space after ':' on purpose)
-	TCODE	tGasUsage,			"Utilizzo"			; Gas Usage
+	TCODE	tGasUsage,			"Utilizzo"				; Gas Usage
 	TCODE	tSetWorkSAC,		"SAC Fondo: "			; SAC Work: (space)
 	TCODE	tSetDecoSAC,		"SAC Deco : "			; SAC Deco: (space)
 	TCODE	tCalcGasNeeds,		"Calc.Gas(B/O): "		; Calculate  Gas (Bail Out) Needs
@@ -329,8 +330,10 @@
 	TCODE	tImperial,			"ft/°F"
 								;         111         111         111         111         111
 	; 5 rows by 12 chars each:	 123456789012123456789012123456789012123456789012123456789012
-	TCODE	tDefName,		"HW OSTC						     "
+	TCODE	tDefName,			"HW OSTC"	;"  Read the  Manual, know& understandthe inherentLimitations!"
 	TCODE	tPiezo,				"Bottone"				; Buttons
+	TCODE	tButtonExplain1,	"Less % is"			; Less % is 
+	TCODE	tButtonExplain2,	"more sensitive."		; more sensitive.
 	TCODE	tButtonleft,		"Bottone Sx:"			; Left  Button
 	TCODE	tButtonright,		"Bottone Dx:"			; Right Button
 	TCODE	tAltMode,			"Attesa   :"			; Waiting Time
@@ -450,7 +453,7 @@
 	TCODE	tCNSfTTS,			"CNS fTTS"				;
 	TCODE	tCNSBO,				"CNS B/O"				;
 	TCODE	tCNSnow,			"CNS ora"				;
-	TCODE	tCNSeod,			"CNS fin."			;
+	TCODE	tCNSeod,			"CNS fin."				;
  IFDEF _cave_mode
 	TCODE	tCNScave,			"CNS Cave"				;
  ENDIF

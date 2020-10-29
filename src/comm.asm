@@ -246,8 +246,9 @@ comm_command_timeout:
 comm_command_error:
 	WIN_SMALL comm_status4_column, comm_status4_row	; select font and output position
 	FONT_COLOR_WARNING								; set warning color
-	STRCPY_PRINT "Parameter Error"					; print failure message
+	STRCPY_PRINT "Unknown Parameter"					; print failure message
 	FONT_COLOR_MEMO									; back to standard color
+	bra	comm_service_exit							; abort
 	;bra	comm_drain_rx_queue						; continue with draining the RX queue
 
 

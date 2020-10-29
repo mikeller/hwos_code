@@ -351,6 +351,7 @@ enable_rs232:
 enable_rs232_1:
 	btfss	speed_is_normal				; speed = normal?
 	bra		enable_rs232_1				; NO  - loop waiting for ISR to have adjusted the speed
+	bsf	TRISC,7
 	bcf		PORTE,0						; YES - switch port to comm
 	bsf		PORTJ,2						;     - /Reset (required for very old OSTC sport)
 	movlw	b'00100100'					;     - TX configuration: TX enabled, async, high speed
@@ -389,6 +390,8 @@ disable_rs232:
 	bcf		PORTC,6						; switch TX pin hard to GND
 	bsf		PORTE,0						; power down BT chip
 	bcf		PORTJ,2						; /Reset (required for very old OSTC sport)
+	bcf	TRISC,7
+	bcf		PORTC,7						; switch RX pin hard to GND
 	return
 
 

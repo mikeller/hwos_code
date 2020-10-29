@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File menu_processor.asm                 * combined next generation V3.09.5
+;   File menu_processor.asm                 * combined next generation V3.12.1
 ;
 ;   Routines to handle all hwOS graphic/text menus.
 ;
@@ -69,14 +69,14 @@ menu_processor:
 	VARARGS_GET8	menu_item_count			; get number of items
 	VARARGS_GET8	menu_vertical_start		; get vertical start position of 1st menu item
 
-	movf	menu_vertical_start,W			; excite flags
-	bz		menu_processor_no_title			; no menu title text -> skip reading menu title text address
+	movf	menu_vertical_start,W			; excite flags, vertical start = 0, i.e. no menu title text?
+	bz		menu_processor_no_title			; YES - skip reading menu title text address
 
 	VARARGS_GET16	menu_title_addr			; get address of menu title text
 
 menu_processor_no_title:
 
-	movff	TBLPTRL, menu_item_data_start+0	; store base address for menu_read_menu_item_data
+	movff	TBLPTRL, menu_item_data_start+0	; store base address of menu items for menu_read_menu_item_data
 	movff	TBLPTRH, menu_item_data_start+1	; ...
 	movff	TBLPTRU, menu_item_data_start+2	; ...
 
@@ -95,8 +95,11 @@ menu_processor_no_title:
 
 menu_processor_menu_title:
 	; prepare screen
+	btfsc	screen_type3			; screen type 3 ?
+	bra	menu_processor_menu_title1	; YES - screen type 3 has no backlight
 	clrf	CCP1CON							; stop PWM
 	bcf		PORTC,2							; fade out backlight
+menu_processor_menu_title1:	
 	call	TFT_ClearScreen					; clear screen
 
 	; draw menu title
@@ -252,14 +255,15 @@ menu_vertical_loop:
 	movf	item_funct_addr+0,W				; check if execute function call address is NULL
 	iorwf	item_funct_addr+1,W				; ...
 	bz		next_line_menu					; YES - not selectable, step cursor to next menu item
-	btfss	divemode						; NO  - in dive mode?
+	btfsc	divemode						; NO  - in dive mode?
+	bra		menu_line_loop_pre1				;       YES - skip next
 	rcall	menu_draw_cursor_surf			;       NO  - draw the cursor (main menu style)
-	btfss	imprint_time_date				;     - currently imprinting the current time & date?
-	bra		menu_line_loop_pre1				;       NO  - skip
-	btfss	switch_right					;       YES - right button pressed, i.e. time or date changed?
+	btfss	imprint_time_date				;           - currently imprinting the current time & date?
 	bra		menu_line_loop_pre1				;             NO  - skip
-	call	TFT_imprint_time_date_fast		;             YES - show a fast response on the screen (may momentarily show an illegal day/month combination)
-	call	rtc_set_rtc						;                 - update time and date on RTC module (corrects illegal day/month combinations)
+	btfss	switch_right					;             YES - right button pressed, i.e. time or date changed?
+	bra		menu_line_loop_pre1				;                   NO  - skip
+	call	TFT_imprint_time_date_fast		;                   YES - show a fast response on the screen (may momentarily show an illegal day/month combination)
+	call	rtc_set_rtc						;                       - update time and date on RTC module (corrects illegal day/month combinations)
 
 menu_line_loop_pre1:
 	bcf		switch_right					; clear left-over right button event
@@ -269,21 +273,22 @@ menu_line_loop_pre2:
 	btfsc	divemode						; in dive mode?
 	goto	divemode_option_divemenu_return	; YES - return to it
 	call	reset_timeout_surfmode			; NO  - reset timeout
+	;bra	menu_line_loop					;     - operate menu HMI
 
 menu_line_loop:
-	call	housekeeping					;     - handle data imprinting, screen dump request, timeout and entering dive mode
-	btfsc	switch_right					;     - right button pressed?
-	bra		do_line_menu					;       YES - execute menu item function
-	btfss	switch_left						;       NO  - left button pressed?
-	bra		menu_line_loop					;             NO  - loop
-next_line_menu:								;             YES - step cursor to next menu item
-	bcf		switch_left						;                 - clear button event
-	incf	selected_item,F					;                 - increment cursor position to next item
-	movf	selected_item,W					;                 - copy new item number to WREG
-	cpfseq	menu_item_count					;                 - new item number beyond number of menu items?
-	bra		menu_vertical_loop				;                   NO  - redraw cursor
-	clrf	selected_item					;                   YES - reset cursor position to first item
-	bra		menu_vertical_loop				;                       - redraw cursor
+	call	housekeeping					; handle data imprinting, screen dump request, timeout and entering dive mode
+	btfsc	switch_right					; right button pressed?
+	bra		do_line_menu					; YES - execute menu item function
+	btfss	switch_left						; NO  - left button pressed?
+	bra		menu_line_loop					;       NO  - loop
+next_line_menu:								;       YES - step cursor to next menu item
+	bcf		switch_left						;           - clear button event
+	incf	selected_item,F					;           - increment cursor position to next item
+	movf	selected_item,W					;           - copy new item number to WREG
+	cpfseq	menu_item_count					;           - new item number beyond number of menu items?
+	bra		menu_vertical_loop				;             NO  - redraw cursor
+	clrf	selected_item					;             YES - reset cursor position to first item
+	bra		menu_vertical_loop				;                 - redraw cursor
 
 
 ;-----------------------------------------------------------------------------
@@ -334,12 +339,25 @@ menu_draw_menu_items:
 
 	global	menu_draw_lines_divemode
 menu_draw_lines_divemode:
-	movlw	dm_menu_item1_row				; get row    position for 1st item
-	movwf	win_top							; set vertical  output position
-	movlw	dm_menu_item1_column			; get column position for 1st item
-	movwf	win_leftx2						; set horizontal output position
+	movff	menu_item_count,menu_pos_max	; copy number of item in menu block to menu_pos_max (used by divemode instead of menu_item_count for no reason)
+
+ IFDEF _big_divemenu
+
+	btfss	alt_layout_active				; big menu selected?
+	bra		menu_draw_lines_divemode_small	; NO
+	;bra	menu_draw_lines_divemode_big	; YES
+
+menu_draw_lines_divemode_big:
+	WIN_STD dm_menu_item1_column+.16,dm_menu_item1_row+.22
+	decf	menu_pos_cur,W					; get selected item as 0..5 into WREG
+	movwf	menu_item_start					; set first item to draw = selected item
+	bra		menu_draw_menu_items_common		; continue with common part
+
+ ENDIF	; _big_divemenu
+
+menu_draw_lines_divemode_small:
+	WIN_SMALL dm_menu_item1_column,dm_menu_item1_row
 	clrf	menu_item_start					; set first item in menu block as first item to draw
-	movff	menu_item_count,menu_pos_max	; copy number of item in menu block to menu_pos_max
 	bra		menu_draw_menu_items_common		; continue with common part
 
 menu_draw_lines_surfmode:
@@ -351,7 +369,7 @@ menu_draw_lines_surfmode:
 	; does the menu have more than 7 item ?
 	movf	menu_item_count,W				; get number of menu items
 	addlw	-(MENU_LINES_MAX+1)				; more than 7 item?
-	bn		menu_draw_menu_items_common		; NO - continue with common part
+	bn		menu_draw_menu_items_common		; NO  - continue with common part
 	movf	selected_item,W					; YES - compute first item to be drawn as current cursor position - 6
 	addlw	-(MENU_LINES_MAX-1)				;     - ...
 	btfsc	STATUS,N						;     - is this < 0 ?
@@ -361,14 +379,14 @@ menu_draw_lines_surfmode:
 
 menu_draw_menu_items_common:
 	movff	menu_item_start,menu_item_curr	; initialize menu item counter
-	FONT_SIZE FT_SMALL						; set font size
 
 menu_draw_menu_items_loop:
-	FONT_COLOR_MEMO							; set default font color (may be changed by dynamic titles)
+	FONT_COLOR_MEMO							; set default font color (may had been changed by a dynamic title)
+	REINIT_BUFFER							; initialize output buffer again
 	movf	menu_item_curr,W				; get menu item to draw
 	rcall	menu_read_menu_item_data		; read menu item data
 	movf	item_type,W						; switch on menu item type:
-	bz		 menu_draw_menu_item_dynamic 	; -> 0: call with dynamic title
+	bz		menu_draw_menu_item_dynamic		; -> 0: call with dynamic title
 	dcfsnz	WREG							;
 	bra		menu_draw_menu_item_call		; -> 1: call with fixed   title
 	dcfsnz	WREG							;
@@ -376,26 +394,24 @@ menu_draw_menu_items_loop:
 	bra		menu_draw_menu_item_print		; no output in case of illegal type
 
 menu_draw_menu_item_dynamic:
-
 	movf	item_title_addr+0,W				; check if call address is NULL
 	iorwf	item_title_addr+1,W				; ...
 	btfsc	STATUS,Z						; is null?
-	bra		menu_draw_menu_item_no_print	; YES - no printing on this menu line
-	INIT_BUFFER								; NO  - initialize buffer
-	movff	menu_item_curr,PRODL			;     - pass menu item position to call function
+	bra		menu_draw_menu_item_after_print	; YES - no printing on this menu line
+	movff	menu_item_curr,PRODL			; NO  - pass menu item position to call function
 	rcall	menu_text_call					;     - call dynamic title function
 	bra		menu_draw_menu_item_print		;     - print menu item
 
 menu_draw_menu_item_call:
 	movff	item_title_addr+0,FSR1L			; point to multi-lingual text
 	movff	item_title_addr+1,FSR1H			; ...
-	call	strcpy_text_FSR					; copy translated text to buffer
+	call	strcat_text_FSR					; copy translated text to buffer
 	bra		menu_draw_menu_item_print		; print menu item
 
 menu_draw_menu_item_option:
 	movff	item_title_addr+0,FSR1L			; point to multi-lingual text
 	movff	item_title_addr+1,FSR1H			; ...
-	call	strcpy_text_FSR					; copy translated text to buffer
+	call	strcat_text_FSR					; copy translated text to buffer
 	movff	option_addr+0,FSR0L				; hand over address of option definition data
 	movff	option_addr+1,FSR0H				; ...
 	btfsc	option_addr+1,6					; is the selected option an  option group member?
@@ -410,41 +426,49 @@ menu_draw_menu_item_print:
 	movlw	MAX_LINE_LENGTH_DIVE			; YES - replace with maximum length for a dive mode menu item
 	call	TFT_buffer_trim_length			; fill up or cut buffer to max length
 	PRINT									; print menu item to screen
-	;bra	menu_draw_menu_item_no_print	; continue with after-print actions
+	;bra	menu_draw_menu_item_after_print	; continue with after-print actions
 
-menu_draw_menu_item_no_print:
-	movlw	MENU_HEIGHT_SURF				; get menu items     vertical spacing for surface mode
-	btfsc	divemode						; in dive mode?
-	movlw	MENU_HEIGHT_DIVE				; YES - replace with vertical spacing for dive    mode
-
-	addwf	win_top,F						; adjust vertical output position
-	incf	menu_item_curr,F				; go to next menu item
-
+menu_draw_menu_item_after_print:
 	btfss	divemode						; in dive mode?
-	bra		menu_draw_menu_item_surfmode	; NO
+	bra		menu_draw_menu_item_common		; NO
 	;bra	menu_draw_menu_item_divemode	; YES
 
 menu_draw_menu_item_divemode:
-	movlw	.3								; load a 3
-	cpfseq	menu_item_curr					; just done menu item 3 ?
+ IFDEF _big_divemenu
+	btfsc	alt_layout_active				; big menu selected?
+	return									; YES - done
+ ENDIF
+
+	movlw	.2								; load a 2
+	cpfseq	menu_item_curr					; just done menu item 2 (last item in left column) ?
 	bra		menu_draw_menu_item_common		; NO  - continue with common part
 	movlw	dm_menu_item4_row				; YES - set vertical   position for 2nd column
 	movff	WREG,win_top					;     - ...
 	movlw	dm_menu_item4_column			;     - set horizontal position for 2nd column
 	movff	WREG,win_leftx2					;     - ...
-	bra		menu_draw_menu_item_common		;     - continue with common part
-
-menu_draw_menu_item_surfmode:
- IFDEF scrolling_menu_enabled
-	movf	menu_item_start,W				; get the number of the menu item that menu drawing started with
-	subwf	menu_item_curr,W				; compute how many item have been drawn already
-	xorlw	MENU_LINES_MAX					; compare with how max item fit the screen
-	btfsc	STATUS,Z						; screen full?
-	return									; YES - done
-	;bra	menu_draw_menu_item_common		; NO  - continue with common part
- ENDIF	; scrolling_menu_enabled
+	bra		menu_draw_menu_item_common_1	;     - continue in common part
 
 menu_draw_menu_item_common:
+	movlw	MENU_HEIGHT_SURF				; get menu items     vertical spacing for surface mode
+	btfsc	divemode						; in dive mode?
+	movlw	MENU_HEIGHT_DIVE				; YES - replace with vertical spacing for dive    mode
+	addwf	win_top,F						; adjust vertical output position
+
+menu_draw_menu_item_common_1:
+	incf	menu_item_curr,F				; increment menu item number
+
+ IFDEF scrolling_menu_enabled
+	btfsc	divemode						; in dive mode?
+	bra		menu_draw_menu_item_common_2	; YES - skip
+	movf	menu_item_start,W				; NO  - get the number of the menu item that menu drawing started with
+	subwf	menu_item_curr,W				;     - compute how many item have been drawn already
+	xorlw	MENU_LINES_MAX					;     - compare with how max item fit the screen
+	btfsc	STATUS,Z						;     - screen full?
+	return									;     - YES - done
+	;bra	menu_draw_menu_item_common_2	;       NO  - continue
+ ENDIF	; scrolling_menu_enabled
+
+menu_draw_menu_item_common_2:
 	movf	menu_item_curr,W				; get current menu item
 	xorwf	menu_item_count,W				; compare with total number of menu items, more item to do?
 	bnz		menu_draw_menu_items_loop		; YES - loop
@@ -465,7 +489,7 @@ menu_text_call:
 ; Draw the Cursor (Main Menu Style)
 ;
 menu_draw_cursor_surf:
-	WIN_LEFT 	MENU_LEFT-8					; set horizontal  start of cursor column
+	WIN_LEFT	MENU_LEFT-8					; set horizontal  start of cursor column
 	WIN_WIDTH	.6							; set width             of cursor column
 	WIN_HEIGHT	.223						; set preliminary hight of cursor column
 
@@ -476,6 +500,8 @@ menu_draw_cursor_surf:
 	clrf	WREG							; set color to black
 	BOX_COLOR								; clear cursor area
 
+	FONT_SIZE FT_SMALL						; set font size
+
 	movf	menu_item_start,W				; get number of menu item that is on the first line
 	subwf	selected_item,W					; compute line number of current menu item
 
@@ -483,7 +509,7 @@ menu_draw_cursor_surf:
 	movf	PRODL,W							; get computed vertical offset
 	addwf	menu_vertical_start,W			; add offset to vertical start position
 	movwf	win_top							; set final vertical position
-	bra		menu_draw_cursor_common			; print cursor and return
+	bra		menu_draw_cursor_common			; print cursor
 
 
 ;-----------------------------------------------------------------------------
@@ -491,9 +517,22 @@ menu_draw_cursor_surf:
 ;
 	global	menu_draw_cursor_dive
 menu_draw_cursor_dive:
+ IFDEF _big_divemenu
+	btfss	alt_layout_active				; big menu selected?
+	bra		menu_draw_cursor_dive_small		; NO
+	;bra	menu_draw_cursor_dive_big		; YES
+
+menu_draw_cursor_dive_big:
+	WIN_STD dm_menu_item1_column,dm_menu_item1_row+.20
+	bra		menu_draw_cursor_common			; print cursor
+ ENDIF	; _big_divemenu
+
+menu_draw_cursor_dive_small:
 	; clear cursor areas
 	WIN_BOX_BLACK dm_menu_row+.1, dm_menu_lower-.1, dm_menu_item1_column-.8, dm_menu_item1_column-.1
 	WIN_BOX_BLACK dm_menu_row+.1, dm_menu_lower-.1, dm_menu_item4_column-.8, dm_menu_item4_column-.1
+
+	FONT_SIZE FT_SMALL						; set font size
 
 	movlw	dm_menu_item1_column-.8			; load position of left column
 	btfsc	menu_pos_cur,2					; cursor at menu item 4..6 ?
@@ -504,19 +543,18 @@ menu_draw_cursor_dive:
 	btfsc	menu_pos_cur,2					; cursor at menu item 4..6 ?
 	addlw	-.3								; YES - subtract 3 to get line number in right column
 
-	mullw	MENU_HEIGHT_DIVE				; multiply line number with vertical menu items spacing
+	mullw	MENU_HEIGHT_DIVE				; multiply line number (0..2) with vertical menu items spacing
 	movf	PRODL,W							; get computed vertical offset
 	addlw	dm_menu_item1_row				; add offset to vertical start position
 	movwf	win_top							; set final vertical position
-	;bra	menu_draw_cursor_common			; print cursor and return
+	;bra	menu_draw_cursor_common			; print cursor
 
 
 ;-----------------------------------------------------------------------------
 ; Helper Function - common Part of drawing the Cursor
 ;
 menu_draw_cursor_common:
-	FONT_COLOR_MEMO							; set font color
-	FONT_SIZE FT_SMALL						; set font size
+	FONT_COLOR_MEMO							; set font color (may have changed in-between)
 	STRCPY_PRINT "\xb7"						; print cursor
 	return									; done
 

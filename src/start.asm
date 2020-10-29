@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File start.asm                          * combined next generation V3.09.5
+;   File start.asm                          * combined next generation V3.11.1
 ;
 ;   Startup subroutines
 ;
@@ -319,9 +319,6 @@ restart:
 	clrf	STKPTR							; clear return addresses stack
 	call	request_speed_normal			; request CPU speed change to normal speed
 
-	; switch off backlight
-	clrf	CCP1CON							; stop PWM
-	bcf		PORTC,2							; pull PWM out to GND
 	bsf		tft_is_dimming					; ignore ambient sensor
 
 	; clear flag groups
@@ -384,7 +381,27 @@ restart3:
 	bsf		ext_input_s8_ana				;       YES - it's a cR, S8/analog sensor input available
 
 restart4:
-	bsf		lv_core							; default to low voltage core
+    ; Do the check for BLE-cR
+   IFDEF _external_sensor
+    bsf		mcp_power					; power-up instrumentation amp (used by S8 and analog input)
+    banksel	BAUDCON2					; select bank for IO register access
+    movlw	b'00000000'					; speed generator configuration: BRG16=0, normal for S8
+    movwf	BAUDCON2					; ...
+    movlw	b'00100000'					; TX configuration: BRGH=0, SYNC=0
+    movwf	TXSTA2						; ...
+    movlw	.25							; speed configuration: SPBRGH:SPBRG = .25 : 9615 BAUD @ 16 MHz
+    movwf	SPBRG2						; ...
+    movlw	b'10010000'					; RX configuration
+    movwf	RCSTA2						; ...
+    banksel	common						; back to bank common
+    call	get_analog_inputs
+    movff	sensor1_mv+1,lo
+    movlw	.58			    ; ~ >1,500V
+    cpfslt	lo			    ; >58 on the high byte -> confident that there is cR circuity
+    bsf		ext_input_s8_ana				;       YES - it's a cR, S8/analog sensor input available
+    call	disable_ir_s8_analog				; power-down circuity again
+   ENDIF
+   	bsf		lv_core							; default to low voltage core
 	movlw	0x80							; point to 0x1F780
 	movwf	TBLPTRL							; ...
 	movlw	0xF7							; ...
@@ -406,6 +423,8 @@ restart4a:
 	; OSTC sport 2019 hardware does not have an optical input
 	btfsc	lv_core							; low voltage core?
 	bcf		ext_input_optical				; YES - no optical input available
+	btfsc	lv_core							; low voltage core?
+	bcf		ext_input_s8_ana				; YES - can't be a cR, S8/analog sensor input disabled
 
 	; check FLASH for block-write capability
 	bsf		flash_block_write				; default to block-write capability available
@@ -481,6 +500,12 @@ restart4e:
 
 
 restart5:
+	; configure button_hold_down_allowed flag
+	btfsc	lv_core
+	bsf	button_hold_down_allowed,A		; OSTC sport mod. 2019
+	btfsc	ext_input_optical
+	bsf	button_hold_down_allowed,A		; OSTC3/old sport
+	
 	; manage hardware
 	btfss	ext_input_s8_ana				; OSTC with S8/analog input?
 	bsf		TRISB,3							; NO - shut down power supply for S8 bulkhead
@@ -519,7 +544,15 @@ restart5:
 	banksel	common							;     - back to bank common
 
 restart6:
-	call	TFT_load_std_color_pallet	; load standard color pallet
+	btfsc	ext_input_s8_ana					; analog sensor input available?
+	bra	restart7						; Yes, continue
+	; no sensors, reconfigure TRIS and ANSEL bits for AN8
+	bcf	TRISF,3
+	banksel	0xF16				; addresses F16h ... F5Fh are not part of the access RAM
+	bcf	ANCON1,0			; ANSEL1: AN8 -> no analog input
+	banksel	common				; back to bank common
+
+restart7:    
 	btfsc	divemode						; shall enter dive mode?
 	goto	diveloop						; YES - enter dive mode
 	btfsc	RCON,POR						; NO  - was this a power-on reset?

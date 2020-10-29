@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File divemenu_tree.asm                  * combined next generation V3.09.5
+;   File divemenu_tree.asm                  * combined next generation V3.12.3
 ;
 ;   OSTC dive mode menu
 ;
@@ -149,7 +149,7 @@ main_divemenu_pscr_no_sensors:
 main_divemenu_pscr_sensors:
 	MENU_BEGIN_DIVE	.6
 		MENU_CALL		tDiveBailout,		do_divemode_gaslist_bail
-		MENU_CALL		tCCRSensor,			do_divemode_setpoint_pscr
+		MENU_CALL		tCCRModeSensor,		do_divemode_setpoint_pscr
 		MENU_CALL		tDivemenu_Premix,	do_divemode_gaslist
 		MENU_CALL		tDivemenu_Avg_Mkr,	do_reset_avg_set_mkr
 		MENU_DYNAMIC	dyn_toggle_gf,		do_toggle_gf
@@ -172,9 +172,9 @@ do_divemode_gaslist_bail:
 ;
 do_switch_sp_calc:
 	bcf		warn_det_sensors_lost		; clear fallback condition (revoke all sensors lost warning)
-	clrf	WREG						; switch to fixed SP
-	movff	WREG,opt_ccr_mode			; =0: Fixed SP (CCR) / calculated (pSCR), =1: Sensor, =2: Auto SP
-	movff	WREG,char_I_const_ppO2		; set setpoint to 0, this forces deco engine to take the computed ppO2
+	clrf	dive_ccr_mode				; switch to fixed SP
+	clrf	WREG						; set setpoint to 0, this forces deco engine to take the computed ppO2
+	movff	WREG,char_I_const_ppO2		; ...
 	bra		do_switch_sp_com			; continue with common part
 
  ENDIF	; _ccr_pscr
@@ -526,7 +526,7 @@ do_gas6_switch:
 do_divemode_splist:
 	bsf		short_gas_descriptions		; do not show "SP" etc.
 	movlw	.1							; default to first menu item
-	movff	opt_ccr_mode,lo				; get CCR mode (0: Fixed SP, 1: Sensor, 2: Auto SP)
+	movff	dive_ccr_mode,lo			; get CCR mode (0: Fixed SP, 1: Sensor, 2: Auto SP)
 	dcfsnz	lo,F						; mode = sensor ?
 	movlw	.6							; YES - load menu item number for 'sensor'
 	btfsc	warn_det_sensors_lost		; all sensors lost?
@@ -541,12 +541,13 @@ do_divemode_splist:
  ENDIF	; _external_sensor
 
 do_divemode_splist_no_sensor:
-	MENU_BEGIN_DIVE	.5
+	MENU_BEGIN_DIVE	.6
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
+		MENU_CALL		tCCRModeAutoSP,				do_switch_auto
 	MENU_END
 
 
@@ -559,7 +560,7 @@ do_divemode_splist_sensor:
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
-		MENU_CALL		tCCRSensor,					do_divemode_sensor
+		MENU_CALL		tCCRModeSensor,				do_divemode_sensor
 	MENU_END
 
  ENDIF	; _external_sensor
@@ -583,8 +584,19 @@ do_switch_sp:
 	call	transmit_setpoint			; transmit current setpoint from WREG (in cbar) to external electronics
  ENDIF
 	bcf		warn_det_sensors_lost		; clear fallback condition (revoke all sensors lost warning)
-	clrf	WREG						; switch to fixed SP
-	movff	WREG,opt_ccr_mode			; =0: Fixed SP (CCR) / calculated (pSCR), =1: Sensor, =2: Auto SP
+	clrf	dive_ccr_mode				; switch to fixed SP
+	bra		do_switch_sp_com			; continue with common part
+
+
+;-----------------------------------------------------------------------------
+; Call Function - switch to Auto-SP (CCR)
+;
+do_switch_auto:
+	movff	opt_setpoint_cbar+0,char_I_const_ppO2	; selected 1st setpoint
+	bcf		warn_det_sensors_lost		; clear fallback condition
+	movlw	.2							; switch to auto SP
+	movwf	dive_ccr_mode				; =0: fixed SP (CCR) / calculated (pSCR), =1: Sensor, =2: auto SP
+	bsf		restart_auto_sp				; restart auto SP selection
 	;bra	do_switch_sp_com			; continue with common part
 
 
@@ -595,7 +607,7 @@ do_switch_sp_com:						; common part
 	bsf		event_occured				; set global   event byte
 	bsf		event_SP_change				; set setpoint event flag
 
-	; Clear some flags in case we were in bailout before...
+	; clear some flags in case we were in bailout before...
 	bcf		bailout_mode				; end bailout mode
 	bcf		better_gas_available		; =1: a better gas is available and a gas change is advised in dive mode
 	bcf		better_dil_available		; =1: a better diluent is available and a gas change is advised in dive mode
@@ -658,7 +670,7 @@ do_divemode_setpoint_pscr:
 ;
 do_switch_sensor:
 	movlw	.1							; switch to sensor (0: fixed/ calculated SP, 1: Sensor, 2: AutoSP)
-	movff	WREG,opt_ccr_mode			; ...
+	movwf	dive_ccr_mode				; ...
 
 	; check for external HUD/ppO2 Monitor
 	btfss	ext_input_optical			; do we have an optical input?

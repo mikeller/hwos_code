@@ -1,5 +1,5 @@
 // ***************************************************************************
-// p2_deco.c                                  combined next generation V3.09.4
+// p2_deco.c                                  combined next generation V3.12.1
 //
 //  Created on: 12.05.2009
 //  Author: heinrichs weikamp, contributions by Ralph Lembcke and others
@@ -879,7 +879,7 @@ static void load_tmr5(void)
 #ifndef CROSS_COMPILE
 	_asm
 		movff	0x601,0xF7D		// bank-safe load TMR5H from C variable tmr5_value first
-		movff	0x600,0xF7C		// bank-safe load TMR5L from c variable tmr5_value thereafter
+		movff	0x600,0xF7C		// bank-safe load TMR5L from C variable tmr5_value thereafter
 		bcf		0xFBA,1,0		// clear timer 5 overrun flag (0xFBA = PIR5, bit 1 = TMR5IF)
 	_endasm
 #else
@@ -1794,10 +1794,19 @@ void calc_alveolar_pressures(void)
 	{
 		//---- simulated tissues ------------------------------------------------------
 
-		// correct sim_pres_respiration if shallower than calculated stop depth
-		calc_pres_respiration = ( real_pres_respiration < sim_pres_respiration ) ? real_pres_respiration : sim_pres_respiration;
+#ifdef _cave_mode
+		// in cave mode?
+		if( !(main_status & CAVE_MODE) )
+		{
+#endif
 
-		// +++ pressure surcharge if outside deco stops area yet ???
+			// (NO) - correct sim_pres_respiration if shallower than calculated stop depth
+			calc_pres_respiration = ( real_pres_respiration < sim_pres_respiration ) ? real_pres_respiration : sim_pres_respiration;
+
+#ifdef _cave_mode
+		}
+#endif
+
 
 		status                = deco_status;
 		calc_O2_ratio         = sim_O2_ratio;

@@ -1003,12 +1003,25 @@ lt2942_init:
 	movlw	0x01						; point to control reg B
 	rcall	I2C_TX_GAUGE				; send byte to the LT2942 gauge IC
 	movlw	b'11111000'					; automatic conversion every two seconds
-	movff	WREG,SSP1BUF				; data byte										TODO: movwf ??
+	movwf	SSP1BUF				    ; data byte
 	rcall	WaitMSSP					; wait for TX to complete
 	rcall	I2C_Check_ACK				; check for acknowledge by receiver
 	bsf		SSP1CON2,PEN				; stop condition
 	bra		WaitMSSP					; wait for TX to complete and return
 
+;-----------------------------------------------------------------------------
+; Sleep Gauge IC
+;
+	global	lt2942_sleep
+lt2942_sleep:
+	movlw	0x01						; point to control reg B
+	rcall	I2C_TX_GAUGE				; send byte to the LT2942 gauge IC
+	movlw	b'00111000'					; sleep
+	movwf	SSP1BUF				    ; data byte
+	rcall	WaitMSSP					; wait for TX to complete
+	rcall	I2C_Check_ACK				; check for acknowledge by receiver
+	bsf		SSP1CON2,PEN				; stop condition
+	bra		WaitMSSP					; wait for TX to complete and return	
 
 ;-----------------------------------------------------------------------------
 ; Read Gauge IC - Status Register
@@ -1083,12 +1096,23 @@ lt2942_get_temperature:					; read battery temperature
 	btfss	cc_active					; in CC charging mode?
 	return								; NO  - not charging, done
 
+	; ignore false readings (>125°C)
+	movlw	LOW	.3307
+	movwf	sub_a+0
+	movlw	HIGH	.3307
+	movwf	sub_a+1
+	MOVII	battery_temperature,    sub_b
+	call	cmpU16						; sub_a - sub_b (with UNSIGNED values)
+	btfsc	neg_flag					; result negative?
+	return							; YES  - temperature > 125°C, not possible here. Skip test.
+	
 	; check for over-temperature while charging
 	MOVLI	max_battery_charge_temp,sub_a
 	MOVII	battery_temperature,    sub_b
 	call	cmpU16						; sub_a - sub_b (with UNSIGNED values)
 	btfss	neg_flag					; result negative?
 	return								; NO  - temperature <= threshold, ok, done
+	return
 										; YES - too hot, disable charging circuitry
 	bsf		charge_disable				;     - set      charging-inhibit signal
 	bcf		charge_enable				;     - activate charging-inhibit signal

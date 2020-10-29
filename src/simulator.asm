@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File simulator.asm                      * combined next generation V3.09.5
+;   File simulator.asm                      * combined next generation V3.11.1
 ;
 ;   Deco Calculator
 ;
@@ -60,7 +60,7 @@
 
 #define decoplan_abort				decoplan_flags,0	; =1: deco calculations were aborted
 #define decoplan_last_stop_shown	decoplan_flags,1	; =1: last deco stop is shown
-#define decoplan_pressures_shown	decoplan_flags,2	; =1: show gas volumes in bar as per tank sizes
+#define decoplan_show_pressures		decoplan_flags,2	; =1: show bar, =0: show liters
 #define decoplan_overflow			decoplan_flags,3	; =1: result > 999
 #define decoplan_toggleflag			decoplan_flags,4	; used to show calculation progress
 ;									decoplan_flags,5	; --- unused
@@ -684,7 +684,7 @@ deco_results_2d:
 	; loop through deco plan pages
 deco_results_1:
 	clrf	decoplan_page					; start from first page
-	bcf		decoplan_pressures_shown		; when showing the gas needs, start with volumes (liter)
+	bcf		decoplan_show_pressures			; start with showing volumes (liter)
 deco_results_1a:
 	WIN_BOX_BLACK .0, .239, .80, .159		; clear the complete right part of the result column (top, bottom, left, right)
 	rcall	deco_results_page				; show a results page
@@ -758,9 +758,9 @@ deco_results_gas_loop:
 
 	bcf		decoplan_overflow				; no overflow in gas needs by default
 
-	btfss	decoplan_pressures_shown		; results in bar?
-	bra	deco_results_gas_volumes_2		; NO - liter
-	;bra	deco_results_gas_volumes_1		; YES - bar
+	btfss	decoplan_show_pressures			; shall show pressures?
+	bra		deco_results_gas_volumes_2		; NO  - volume   in liter
+	;bra	deco_results_gas_volumes_1		; YES - pressure in bar
 
 	; output of gas needs in bar
 deco_results_gas_volumes_1:
@@ -774,6 +774,7 @@ deco_results_gas_volumes_1:
 	bcf		hi,int_invalid_flag				; clear flag for invalid data
 	bcf		hi,int_is_zero					; clear flag for zero
 
+	; common part for liter and bar
 deco_results_gas_volumes_2:
 	PUTC	":"								; print ":"
 	output_9999								; print volume or bar (0-9999)
@@ -792,13 +793,17 @@ deco_results_gas_volumes_3:
 	FONT_COLOR color_greenish				; set color
 	TEXT_SMALL .80,.01,tGasUsage			; "Gas Usage"
 
-	btfsc	decoplan_pressures_shown		; results shown in bar?
-	bra		deco_results_gas_volumes_4		; YES
-	TEXT_SMALL .120,.25,tLiterLong			; NO  - in Liter then
-	bra		deco_results_gas_volumes_5		;     - continue with initialization of housekeeping
+	btfsc	decoplan_show_pressures			; showing pressures in bar?
+	bra		deco_results_gas_volumes_4b		; YES - bar
+	;bra	deco_results_gas_volumes_4a		; NO  - liter
 
-deco_results_gas_volumes_4:
-	TEXT_SMALL .120,.25,tbar				; " bar" (with leading space)
+deco_results_gas_volumes_4a:
+	TEXT_SMALL .120,.25,tLiterLong			; print "Liter"
+	bra		deco_results_gas_volumes_5		; continue with initialization of housekeeping
+
+deco_results_gas_volumes_4b:
+	TEXT_SMALL .120,.25,tbar				; print " bar" (with leading space)
+	;bra	deco_results_gas_volumes_5		; continue with initialization of housekeeping
 
 deco_results_gas_volumes_5:
 	call	reset_timeout_surfmode			; reset timeout
@@ -819,9 +824,9 @@ deco_results_gas_volumes_6:
 	return									; YES
 
 deco_results_gas_volumes_7:
-	btfsc	decoplan_pressures_shown		; results shown in bar?
-	bra		deco_results_1					; YES - show deco stops again
-	bsf		decoplan_pressures_shown		; NO  - but now
+	btfsc	decoplan_show_pressures			; showing pressures in bar?
+	bra		deco_results_1					; YES - restart with deco stops again
+	bsf		decoplan_show_pressures			; NO  - but now
 	lfsr	FSR0,int_O_gas_need_pres		;     - set base address of gas needs in bar
 	bra		deco_results_gas_common			;     - re-run gas needs output in pressure mode
 

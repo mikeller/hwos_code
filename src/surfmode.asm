@@ -219,7 +219,7 @@ surfloop_2:
 	rcall	reset_timeout_surfmode		; reset timeout
 
 surfloop_loop:
-;	call	TFT_debug_output			; optional debug output
+	call	TFT_debug_output			; optional debug output
 
 	call	test_switches_surfmode		; check switches
 

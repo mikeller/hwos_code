@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File hwos.inc                           * combined next generation V3.09.5
+;   File hwos.inc                           * combined next generation V3.12.3
 ;
 ;   OSTC Platform Definitions
 ;
@@ -182,9 +182,10 @@
 
 ; ---- End-of-Dive Timeouts
 #DEFINE simulator_timeout_normal		.90			; [min] timeout simulator mode
-#DEFINE simulator_timeout_cave			.240		; [min] timeout simulator mode (cave mode)
-#DEFINE apnoe_timeout					.15			; [min] timeout at surface in apnoe mode
-#DEFINE simulator_timeout				.15			; [s]   timeout at surface in simulator mode
+#DEFINE simulator_timeout_cave			.240			; [min] timeout simulator mode (cave mode)
+#DEFINE apnoe_timeout				.15			; [min] timeout at surface in apnoe mode
+#DEFINE simulator_timeout			.15			; [s]   timeout at surface in simulator mode
+#DEFINE	divetime_less_1min_timeout		.5			; [s]   timeout at surface for very short dives
 
 
 ; ---- other Timeouts
@@ -193,7 +194,7 @@
 
 ; ---- Surface Mode Thresholds and Limits
 #DEFINE high_altitude_threshold			.880		; [mbar] ambient pressure at which to switch into high altitude mode
-#DEFINE max_surfpressure				.1030		; [mbar] maximum value for internal surface pressure
+#DEFINE max_surfpressure				.1060		; [mbar] maximum value for internal surface pressure
 #DEFINE pressure_noise_threshold		.10			; [mbar] deltaP threshold for start of fast display updating
 #DEFINE pressure_noise_lag_time			.6			; [1/4 secs] lag time of display updating after deltaP < threshold again
 
@@ -293,17 +294,17 @@
 
 
 ; Gauge IC
-#DEFINE capacity_saft					.281		; 2.4Ah/0.085mAh/100 [%]
-#DEFINE offset_saft						.37300		; 65536-(2.4Ah/0.085mAh)
+#DEFINE capacity_saft					.271		; 2.3Ah/0.085mAh/100 [%]
+#DEFINE offset_saft					.38477		; 65536-(2.3Ah/0.085mAh)
 
-#DEFINE capacity_panasonic				.94			; 0.8Ah/0.085mAh/100 [%]
+#DEFINE capacity_panasonic				.94		; 0.8Ah/0.085mAh/100 [%]
 #DEFINE offset_panasonic				.56124		; 65536-(0.8Ah/0.085mAh)
 
 #DEFINE capacity_ncr18650				.364		; 3.1Ah/0.085mAh/100 [%]
 #DEFINE offset_ncr18650					.29065		; 65536-(3.1Ah/0.085mAh)
 
-#DEFINE capacity_ur16650				.271		; 2.3Ah/0.085mAh/100 [%]
-#DEFINE offset_ur16650					.38477		; 65536-(2.3Ah/0.085mAh)
+#DEFINE capacity_ur16650				.235		; 2.0Ah/0.085mAh/100 [%]
+#DEFINE offset_ur16650					.42006		; 65536-(2.0Ah/0.085mAh)
 
 
 ; ---- Power Consumption Values
@@ -532,7 +533,7 @@
 #DEFINE count_divetime			OS_flags_ISR2,2		; =1: request ISR to count the dive time
 #DEFINE sensor_override_request	OS_flags_ISR2,3		; =1: request ISR to override the pressure sensor with a simulated depth
 #DEFINE tmr5_preemtion_allowed	OS_flags_ISR2,4		; =1: allow preemption of timeout counter
-;								OS_flags_ISR2,5		; --- unused
+#DEFINE button_hold_down_allowed OS_flags_ISR2,5	; =1: OSTC uses mechanical push buttons
 #DEFINE sensor_override_active	OS_flags_ISR2,6		; =1: ISR output:    switch to override-mode confirmed
 #DEFINE divetime_longer_1min	OS_flags_ISR2,7		; =1: ISR output:    dive time is >= one minute
 
@@ -577,7 +578,7 @@
 #DEFINE backtrack_entire_full	DM_flags_state,6	; =1: the backtracking storage is entirely full           (cave mode)
 #DEFINE backtrack_shutdown		DM_flags_state,7	; =1: the backtracking has shut down due to entirely full (cave mode)
 
-;---- Dive Mode - O2 Sensors
+;---- Dive Mode - O2 Sensors & Setpoint
 #DEFINE use_O2_sensor1			DM_flags_sensor,0	; =1: sensor 1 shall be used
 #DEFINE use_O2_sensor2			DM_flags_sensor,1	; =1: sensor 2 shall be used
 #DEFINE use_O2_sensor3			DM_flags_sensor,2	; =1: sensor 3 shall be used
@@ -585,7 +586,7 @@
 #DEFINE voting_logic_sensor2	DM_flags_sensor,4	; =1: sensor 2 is within the voting logic threshold
 #DEFINE voting_logic_sensor3	DM_flags_sensor,5	; =1: sensor 3 is within the voting logic threshold
 ;								DM_flags_sensor,6	; --- unused
-;								DM_flags_sensor,7	; --- unused
+#DEFINE restart_auto_sp			DM_flags_sensor,7	; =1: re-run the auto SP selection from 1st SP
 
 ;---- Dive Mode - User Requests / General
 #DEFINE request_gas_change		DM_flags_request,0	; =1: request to change the gas
@@ -1187,8 +1188,10 @@ button_polarity					res 1		; 0xFF (both normal), 0x00 (both inverted), 0x01 (lef
 pressure_rel_min_trip			res 2		; resettable minimum relative pressure
 pressure_rel_max_trip			res 2		; resettable maximum relative pressure
  ENDIF
+ 
+debounce_counter			res 1		; multiples of 16ms 
 
-; 143 byte used, 17 byte free
+; 144 byte used, 16 byte free
 
 
 ;-----------------------------------------------------------------------------
@@ -1292,6 +1295,7 @@ dive_timeout_timer				res 2		; timeout timer for leaving dive mode after surfaci
 gaslist_gas						res 1		; used for transfer between gaslist.asm and menu_tree.asm
 best_gas_number					res 1		; number of the "best gas": 0= none found, 1-5= gases 1-5, 255= not computed
 active_gas						res 1		; the currently used OC/bailout gas (1-5)
+dive_ccr_mode					res 1		; working copy of opt_ccr_mode while the dive
 
  IFDEF _ccr_pscr
 best_dil_number					res 1		; number of the "best dil": 0= none found, 1-5= dils  1-5, 255= not computed
@@ -1431,7 +1435,7 @@ wait_counter					res 1
 pressure_update_lag_counter		res 1		; lag time counter for fast surface pressure display updating
 
 
-; 200 byte used, 8 byte free (208 byte total)
+; 201 byte used, 7 byte free (208 byte total)
 
 
 ;-----------------------------------------------------------------------------

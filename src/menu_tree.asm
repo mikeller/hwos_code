@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File menu_tree.asm                      * combined next generation V3.09.5
+;   File menu_tree.asm                      * combined next generation V3.12.2
 ;
 ;   OSTC Surface Menus
 ;
@@ -783,7 +783,7 @@ do_menu_simulator_more:
 ;
 do_return_menu_dive:
 	call	menu_processor_double_pop	; drop exit line and back to last line
-	;bra	do_menu_dive			; continue
+	;bra	do_menu_dive				; continue
 
 ;-----------------------------------------------------------------------------
 ; Dive Settings Menu - 1st Layer
@@ -803,7 +803,7 @@ do_menu_dive:
 ;
 do_menu_dive_dive:
  IFDEF _cave_mode
-	MENU_BEGIN	tDiveModeMenu, .6
+	MENU_BEGIN	tDiveSetup, .6
 		MENU_OPT_INC	tDvMode,					oDiveMode				; dive mode
 		MENU_OPT_INC	tCvMode,					oCaveMode				; cave mode
 		MENU_OPT_INC	tFTTSMenu,					oExtraTime				; fTTS/delay
@@ -812,7 +812,7 @@ do_menu_dive_dive:
 		MENU_CALL		tBack,						do_return_menu_dive
 	MENU_END
  ELSE
-	MENU_BEGIN	tDiveModeMenu, .5
+	MENU_BEGIN	tDiveSetup, .5
 		MENU_OPT_INC	tDvMode,					oDiveMode				; dive mode
 		MENU_OPT_INC	tFTTSMenu,					oExtraTime				; fTTS/delay
 		MENU_OPT_INC	tTimeoutDive,				oDiveTimeout			; dive timeout
@@ -827,20 +827,42 @@ do_menu_dive_dive:
 ;
 do_return_menu_dive_deco:
 	call	menu_processor_double_pop	; drop exit line and back to last line
-	;bra	do_menu_dive_deco				; continue
+	;bra	do_menu_dive_deco			; continue
 
 
 ;-----------------------------------------------------------------------------
 ; Dive Settings Menu - 2nd Layer - Deco Mode
 ;
 do_menu_dive_deco:
-	MENU_BEGIN	tDecoSetup, .6
+	MENU_BEGIN	tDecoSetup, .5
 		MENU_OPT_INC	tDkMode,					oDecoMode					; ZH-L16 /GF
-		MENU_OPT_INC	tSaturationMult,			osatmultgf					; saturation
-		MENU_OPT_INC	tDesaturationMult,			odesatmultgf				; desaturation
-		MENU_OPT_INC	tAltMode,					oAltMode					; altitude mode
+		MENU_CALL		tSDMenu,					do_menu_dive_deco_SD		; SD settings
 		MENU_CALL		tGFMenu,					do_menu_dive_deco_GF		; GF settings
+		MENU_OPT_INC	tAltMode,					oAltMode					; altitude mode
 		MENU_CALL		tBack,						do_return_menu_dive
+	MENU_END
+
+
+;-----------------------------------------------------------------------------
+; Dive Settings Menu - 3nd Layer - Deco Mode - SD Settings
+;
+do_menu_dive_deco_SD:
+	TSTOSS	char_I_model				; in GF mode?
+	bra		do_menu_dive_deco_SD_noGF	; NO
+	;bra	do_menu_dive_deco_SD_GF		; YES
+
+do_menu_dive_deco_SD_GF:
+	MENU_BEGIN	tSDMenu, .3
+		MENU_OPT_INC	tSaturationMult,			osatmultgf					; saturation   GF mode
+		MENU_OPT_INC	tDesaturationMult,			odesatmultgf				; desaturation GF mode
+		MENU_CALL		tBack,						do_return_menu_dive_deco
+	MENU_END
+
+do_menu_dive_deco_SD_noGF:
+	MENU_BEGIN	tSDMenu, .3
+		MENU_OPT_INC	tSaturationMult,			osatmult					; saturation   non-GF mode
+		MENU_OPT_INC	tDesaturationMult,			odesatmult					; desaturation non-GF mode
+		MENU_CALL		tBack,						do_return_menu_dive_deco
 	MENU_END
 
 
@@ -1809,7 +1831,9 @@ do_logoffset_common:
 ; Settings Menu - 3rd Layer - System Settings - adjust Piezo Buttons
 ;
 do_menu_piezo:
-	MENU_BEGIN	tPiezo, .3
+	MENU_BEGIN	tPiezo, .5
+		MENU_CALL	tButtonExplain1,				0
+		MENU_CALL	tButtonExplain2,				0
 		MENU_OPT_INC	tButtonleft,				ocR_button_left				; left  button sensitivity
 		MENU_OPT_INC	tButtonright,				ocR_button_right			; right button sensitivity
 		MENU_CALL		tBack,						do_return_menu_syssets_piezo
@@ -2032,6 +2056,7 @@ do_menu_reset_battery:
 	global	new_battery_select
 new_battery_select:
 	call	TFT_boot					; initialize TFT (includes clear screen)
+	call	TFT_load_std_color_pallet		; load standard color pallet
 	call	TFT_Display_FadeIn			; dim up the display
 	call	menu_processor_reset		; reset menu stack
 	;bra	do_new_battery_select		; enter menu system
@@ -2056,6 +2081,7 @@ do_new_battery_select:
 	; -------------------------------------------------------------------------------------------------------------------------------------------------------
 	; 0x11: BLE                                      and battery gauge ---> OSTC 2     (old  model)  NO     YES    internal 18650
 	; 0x05:         analog  input                    and battery gauge ---> OSTC 2 cR                NO     YES    internal 18650
+	; 0x15: BLE and analog  input                    and battery gauge ---> OSTC 2 cR (2020 model)   NO     YES    internal 18650
 	; 0x33: BLE and RX module     and ambient sensor and battery gauge ---> OSTC 2 TR                NO     YES    internal 16650
 	; 0x13: BLE                   and ambient sensor and battery gauge -+-> OSTC 2     (new  model)  NO     YES    internal 16650
 	;                                                                   +-> OSTC Plus                YES    YES    1.5V  ----- NO! -----  3.6V rechargeable
@@ -2079,6 +2105,12 @@ do_new_battery_select:
 	bra		$+4
 	bra		use_18650_battery
 
+	movlw	0x15						; OSTC 2 cR (2020 model)
+	cpfseq	HW_descriptor
+	bra		$+4
+	bra		use_18650_battery
+
+	
 	movlw	0x85						; OSTC 2 cR with block write
 	cpfseq	HW_descriptor
 	bra		$+4
@@ -2094,32 +2126,33 @@ do_new_battery_select:
 	bra		$+4
 	bra		do_menu_new_battery_AA_charger
 
-	movlw	0x13						; OSTC Plus and OSTC 2 (2017 model), w/o blockwrite
+	movlw	0x13						; OSTC Plus and OSTC 2 (2017 model), w/o block write
 	cpfseq	HW_descriptor
 	bra		$+4
 	bra		do_menu_new_battery_AA_charger
 
-	; movlw	0x0A						; OSTC 3 (USB model)
-	; cpfseq	HW_descriptor
-	; bra		$+4
-	; bra		do_menu_new_battery_AA_no_charge
 
-	; movlw	0x1A						; OSTC 3 (BLE model)
-	; cpfseq	HW_descriptor
-	; bra		$+4
-	; bra		do_menu_new_battery_AA_no_charge
+	movlw	0x0A						; OSTC 3 (USB model)
+	cpfseq	HW_descriptor
+	bra		$+4
+	bra		do_menu_new_battery_AA_no_charge
 
-	; movlw	0x02						; OSTC Sport (USB model)
-	; cpfseq	HW_descriptor
-	; bra		$+4
-	; bra		do_menu_new_battery_AA_no_charge
+	movlw	0x1A						; OSTC 3 (BLE model)
+	cpfseq	HW_descriptor
+	bra		$+4
+	bra		do_menu_new_battery_AA_no_charge
 
-	; movlw	0x52						; OSTC Sport (BLE model)
-	; cpfseq	HW_descriptor
-	; bra		$+4
-	; bra		do_menu_new_battery_AA_no_charge
+	movlw	0x02						; OSTC Sport (USB model)
+	cpfseq	HW_descriptor
+	bra		$+4
+	bra		do_menu_new_battery_AA_no_charge
 
-	bra		do_menu_new_battery_AA_no_charge	; any other model
+	movlw	0x52						; OSTC Sport (BLE model)
+	cpfseq	HW_descriptor
+	bra		$+4
+	bra		do_menu_new_battery_AA_no_charge
+
+	bra		do_menu_new_battery_other_model	; any other model
 
 
 ;-----------------------------------------------------------------------------
@@ -2128,6 +2161,19 @@ do_new_battery_select:
 do_return_menu_new_bat_AA_chrg:
 	call	menu_processor_double_pop		; drop exit line and back to last line
 	;bra	do_menu_new_battery_AA_charger	; continue
+
+;-----------------------------------------------------------------------------
+; Battery Selection for OSTC (Full selection)
+	
+do_menu_new_battery_other_model:	
+	MENU_BEGIN	tNewBattTitle, .6
+		MENU_CALL		tNewBattOld,				do_use_old_battery			; load data of old battery
+		MENU_CALL		tNewBattNew15,				do_use_15V_disposable			; not rechargeable
+		MENU_CALL		tNewBattNew36,				do_use_36V_disposable			; not rechargeable 
+		MENU_CALL		tNewBattAccu,				do_menu_new_battery_36V_charge		; rechargeable      -> goto safety question
+		MENU_CALL		tNew16650,				do_use_16650_battery			; OSTC 2 new model
+		MENU_CALL		tNew18650,				use_18650_battery			; OSTC 2 (2015 model)
+	MENU_END
 
 ;-----------------------------------------------------------------------------
 ; Battery Selection for OSTC Plus (charging function)								TODO: and OSTC 2 new model as of now

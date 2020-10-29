@@ -119,6 +119,7 @@ deepsleep_pre:
 	bcf		PIE1,TMR1IE						; disable timer 1 interrupt
 	bcf		PIE2,TMR3IE						; disable timer 2 interrupt
 	bcf		PIE5,TMR7IE						; disable timer 7 interrupt
+	bcf		PIE5,TMR4IE						; disable timer 4 interrupt
 	bcf		INTCON, INT0IE					; disable INT0    interrupt
 	bcf		INTCON3,INT1IE					; disable INT1    interrupt
 
@@ -155,6 +156,7 @@ deepsleep_loop_exit:
 	bsf		PIE1,TMR1IE						; enable timer 1 interrupt
 	bsf		PIE2,TMR3IE						; enable timer 2 interrupt
 	bsf		PIE5,TMR7IE						; enable timer 7 interrupt
+	bsf		PIE5,TMR4IE						; enable timer 4 interrupt
 	bsf		INTCON, INT0IE					; enable INT0    interrupt
 	bsf		INTCON3,INT1IE					; enable INT1    interrupt
 

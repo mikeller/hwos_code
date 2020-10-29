@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;	File text_english.asm                     next combined generation V3.09.4k
+;	File text_english.asm                     next combined generation V3.12.3
 ;
 ;	English texts reference file.
 ;
@@ -77,7 +77,7 @@
 	TCODE	tSysSets,			"System  Settings"		; System  Settings
 	TCODE	tExit,				"Exit"					; Exit
 	TCODE	tResetMenu,			"Reset Menu"			; Reset Menu
-	TCODE	tDiveModeMenu,		"Dive Setup"			; Dive Setup
+	TCODE	tDiveModeMenu,		"Dive/Deco Setup"			; Dive Setup
 
 	TCODE	tDiveSetup,			"Dive Setup"			; Dive Setup
 	TCODE	tDecoSetup,			"Deco Setup"			; Deco Setup
@@ -104,7 +104,7 @@
  ENDIF
 
  IFDEF _external_sensor
-	TCODE	tCCRSensor,			"Sensor"				; CCR/pSCR Sensor
+;	TCODE	tCCRSensor,			"Sensor"				; CCR/pSCR Sensor
 	TCODE	tCalibrateMenu,		"Calibration"			; Calibration
 	TCODE	tCalibrationGas,	"Cal. Gas O2:"			; Cal. Gas O2:
 	TCODE	tCalibrate,			"Calibrate"				; Calibrate
@@ -165,8 +165,8 @@
 	TCODE	tNewBattNew36,		"3.6V disposable (T1)"	; new 3.6V disposable
 	TCODE	tNewBattNew15,		"1.5V disposable (T0)"	; new 1.5V disposable
 	TCODE	tNewBattAccu,		"3.7V chargeable (T2)"	; new 3.7V rechargeable
-	TCODE	tNew18650,			"OSTC 2 or cR    (T3)"	; internal battery on 2 (old) / cR
-	TCODE	tNew16650,			"OSTC 2 or TR    (T4)"	; internal battery on 2 (new) / TR
+	TCODE	tNew18650,		"OSTC 2(2015), cR(T3)"	; internal battery on 2 (old) / cR
+	TCODE	tNew16650,		"OSTC 2(2017), TR(T4)"	; internal battery on 2 (new) / TR
 	TCODE	tConfirmChargeable1,"Confirm:"				; safety question, line 1
 	TCODE	tConfirmChargeable2,"inserted Battery"		; safety question, line 2
 	TCODE	tConfirmChargeable3,"is rechargeable"		; safety question, line 3
@@ -198,7 +198,7 @@
  ENDIF
 	TCODE	tFTTSMenu,			"fTTS/Delay  : "		; Future TTS / Ascent Delay
 	TCODE	tTimeoutDive,		"Dive Timeout: "		; Dive Timeout
-	TCODE	tStoreApnoeDive,	"Store Apnoe : "		; Store Apnoe Dives
+	TCODE	tStoreApnoeDive,	"Store Apnea : "		; Store Apnoe Dives
 	TCODE	tDvOC,				"OC"					; 0 | keep order, enum!
 	TCODE	tDvCCR,				"CCR"					; 1 |
 	TCODE	tDvGauge,			"Gauge"					; 2 |
@@ -222,12 +222,13 @@
 	TCODE	tSaturationMult,	"Saturation  : "
 	TCODE	tDesaturationMult,	"Desaturation: "
 	TCODE	tGFMenu,			"GF Settings"			; GF Settings
+	TCODE	tSDMenu,			"SD Settings"			; SD Settings
 	TCODE	taGF_low,			"aGF low :"				; aGF low
 	TCODE	taGF_high,			"aGF high:"				; aGF high
 	TCODE	taGFenable,			"aGF selectable:"		; aGF Selectable
 	TCODE	tDiveaGF_active,	"using aGF"				; using aGF
 	TCODE	tSafetyStop,		"Safety Stop  : "		; Safety Stop:  (max. 16 chars)
-	TCODE	tExtendedStops,		"extended Stop: "		; Extended Stops
+	TCODE	tExtendedStops,		"Extended Stop: "		; Extended Stops
 	TCODE	tLastDecostop,		"Last Deco    : "		; last Deco Stop Depth
 	TCODE	tDvSalinity,		"Salinity     : "		; Salinity
 	TCODE	tDepthWarn,			"Depth Warning:"		; Depth Warning (no space after ':' on purpose)
@@ -238,7 +239,7 @@
  IFDEF _gas_contingency
 	TCODE	tGasContingencyDive,"Swap on empty: "		; swap tank on becoming empty
  ENDIF
-	TCODE	tGasChangeTime,		"Gas Change   :+"		; additional Gas Change Time
+	TCODE	tGasChangeTime,		"Gas change time:+"		; additional Gas Change Time
 	TCODE	tSetup_Tank,		"Setup Tank"			; Setup Tank
 	TCODE	tTankSize,			"Tank Size: "			; Tank Size
 	TCODE	tTankUsablePress,	"Turn Pres: "			; Tank Pressure Budget for Ascent (turn pressure)
@@ -329,8 +330,10 @@
 	TCODE	tImperial,			"ft/°F"					; 1
 								;         111         111         111         111         111
 	; 5 rows by 12 chars each:	 123456789012123456789012123456789012123456789012123456789012
-	TCODE	tDefName,		"HW OSTC						     "
+	TCODE	tDefName,			"HW OSTC"				; "  Read the  Manual, know& understandthe inherentLimitations!"
 	TCODE	tPiezo,				"Buttons"				; Buttons
+	TCODE	tButtonExplain1,	"Less % is"			; Less % is 
+	TCODE	tButtonExplain2,	"more sensitive."		; more sensitive.
 	TCODE	tButtonleft,		"Left  Button:"			; Left  Button
 	TCODE	tButtonright,		"Right Button:"			; Right Button
 	TCODE	tAltMode,			"Waiting Time:"
@@ -375,7 +378,7 @@
 	TCODE	tNoDeco,			"No Deco"				; No Deco
 	TCODE	tMore,				"more"					; more
 	TCODE	tSelectSetpoint,	"Setpoint : "			; Setpoint
-	TCODE	tuseAGF,			"use aGF  : "			; use alternative Grdient Factors
+	TCODE	tuseAGF,			"Use aGF  : "			; use alternative Grdient Factors
  IFDEF _gas_contingency
 	TCODE	tGasContingencySim,	"Gas Cont.: "			; Gas Contingency
  ENDIF

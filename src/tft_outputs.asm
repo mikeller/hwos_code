@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File tft_outputs.asm                    * combined next generation V3.09.5
+;   File tft_outputs.asm                    * combined next generation V3.12.3
 ;
 ;   high-level Display Outputs
 ;
@@ -71,12 +71,12 @@ pallet_table	CODE_PACK 0x09800		; must be at 0x***00
 
 
 pallet_table:
-    ;    mask         disabled          memo advice          attention     warning   ; pallet
-    ;    ------------ ----------------- ---------------- --------------- ------------- --------- ----------
-    DB   color_green, color_lightblue,  color_white, color_green,    color_yellow, color_red ; standard
-    DB   color_red,   color_dark_red,   color_orange, color_greenish, color_pink,   color_red ; reddish
-    DB   color_cyan,  color_dark_green, color_green, color_green,    color_cyan,   color_red ; greenish
-    DB   color_blue,  color_deepblue,   color_lightblue, color_greenish, color_orange, color_red ; blueish
+	;	mask			disabled			memo			advice			attention		warning			; pallet
+	;	---------------	-------------------	---------------	---------------	---------------	---------------	  --------
+	DB	color_green,	color_lightblue,	color_white,	color_green,	color_yellow,	color_red		; standard
+	DB	color_red,		color_dark_red,		color_orange,	color_greenish,	color_pink,		color_red		; reddish
+	DB	color_cyan,		color_dark_green,	color_green,	color_green,	color_cyan,		color_red		; greenish
+	DB	color_blue,		color_deepblue,		color_lightblue,color_greenish,	color_orange,	color_red		; blueish
 
 
 ;=============================================================================
@@ -927,7 +927,7 @@ TFT_surfmode_startgas_5:
 
 	; Helper Function - set font color
 TFT_surfmode_startgas_helper:
-	movf	pallet_color_disabled,W
+	movf	pallet_color_disabled,W		; set default color
 	tstfsz	hi							; gas not disabled?
 	movf	pallet_color_memo,W			; YES - change to memo color
 	movwf	font_color					; set font color
@@ -2017,8 +2017,8 @@ TFT_active_sp_label_1:
 
  IFDEF _external_sensor
 
-	movff	opt_ccr_mode,WREG			; get setpoint mode =0: Fixed SP, =1: Sensor, =2: Auto SP
-	sublw	.1							; opt_ccr_mode = 1 (Sensor) ?
+	movf	dive_ccr_mode,W				; get setpoint mode =0: Fixed SP, =1: Sensor, =2: Auto SP
+	sublw	.1							; dive_ccr_mode = 1 (Sensor) ?
 	bnz		TFT_active_sp_label_2		; NO  - skip
 	btfsc	alt_layout_active			; YES - in alternative layout?
 	bra		TFT_active_sp_label_2		;       YES - no space available for the "*"
@@ -2949,9 +2949,9 @@ TFT_display_ftts_6:
 	movff	int_O_TST_alt+1,WREG		; get high byte of the alternative total stops time
 	btfsc	WREG,int_is_zero			; total stops time = zero ?
 	bra		TFT_display_ftts_9			; YES - show "NDL"
-	movff	char_O_deco_info,WREG				; NO  - get deco info vector
-	btfsc	WREG,deco_zone					;     - fTTS <= TTS ?
-	FONT_COLOR_ADVICE					;	YES - set to advice color (green)
+	movff	char_O_deco_info,WREG		; NO  - get deco info vector
+	btfsc	WREG,deco_zone				;     - fTTS <= TTS ?
+	FONT_COLOR_ADVICE					;       YES - set to advice color (green)
 TFT_display_ftts_7:
 	bsf		leftbind					; print left-aligned
 	output_999							; print ascent time (0-999)
@@ -4716,7 +4716,7 @@ TFT_dive_tissues_sat_loop:
 	addwf	win_leftx2,F						; add to base position
 	movlw	color_yellow						; color for GF high line
 	BOX_COLOR									; draw line
-	bra	TFT_dive_tissues_4					; continue with number of leading tissue
+	bra		TFT_dive_tissues_4					; continue with number of leading tissue
 
  IFDEF _helium
 TFT_dive_tissues_3:
@@ -6040,20 +6040,46 @@ TFT_debug_output:
 
  ELSE
 
-	btfsc	alt_layout_active					; alternative layout active?
-	return										; YES - abort
+;	btfsc	alt_layout_active					; alternative layout active?
+;	return										; YES - abort
 
 	WIN_TINY .100,.30							; surface mode: fits under the textual logo in the upper right corner
 ;	WIN_TINY  .35, .0							; dive    mode: fits to the right side of the depth label
 ;	WIN_TINY   .0, .		0					; dive    mode: overwrites depth label
 	FONT_COLOR_MEMO								; set color
-
-	movff	analog_sw1,mpr
-	output_256
-	PUTC	','
-	movff	analog_sw2,mpr
-	output_256
 	
+	movff	max_CCPR1L,lo
+	output_256
+	PUTC	","
+	movff	analog_sw2,lo; left
+	output_256
+	PUTC	","
+	movff	analog_sw1,lo; right
+	output_256
+
+;	; deco engine scheduling performance
+;	MOVII	int_O_profiling_overrun,mpr			; runtime +/- versus target
+;	btfss	mpr+1,7								; overrun?
+;	bra		TFT_debug_output_1					; YES
+;	bcf		mpr+1,7								; NO - clear flag
+;	PUTC	"-"									;    - print a minus
+;	bra		TFT_debug_output_2					;    - continue
+;TFT_debug_output_1:
+;	PUTC	" "									; print a space instead of the minus
+;TFT_debug_output_2:
+;	output_999									; print time (0-999)
+;	PUTC	"."									; print a dot as separator
+;	MOVII	int_O_profiling_overrun_max,mpr		; get max runtime so far
+;	output_999									; print (0-999)
+;	PUTC	"."									; print a dot as separator
+;	movff	char_O_profiling_overrun_phase,WREG	; get calculation phase causing the max runtime
+;	output_hex									; print a hex
+;	PUTC	"."									; print a dot as separator
+;	movff	char_O_profiling_runs_norm,mpr		; get runs/cycle normal plan
+;	output_99									; print (0-99)
+;	PUTC	"."									; print a dot as separator
+;	movff	char_O_profiling_runs_alt,mpr		; get runs/cycle alternative plan
+;	output_99									; print (0-99)
 	PRINT										; dump to screen
 	return										; done
 

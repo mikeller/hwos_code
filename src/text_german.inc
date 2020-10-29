@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;	File text_german.asm                      next combined generation V3.09.4k
+;	File text_german.asm                      next combined generation V3.12.3
 ;
 ;	German texts translation file.
 ;
@@ -70,8 +70,8 @@
 	TCODE	tMainMenu,			"Hauptmenü"				; MainMenu
 	TCODE	tLogbook,			"Logbuch"				; Logbook
 	TCODE	tGasSetup,			"OC Gas Setup"			; OC Gas Setup
-	TCODE	tSetTime,			"Zeit  stellen"			; Set Time
-	TCODE	tSetDate,			"Datum stellen"			; Set Date
+	TCODE	tSetTime,			"Zeit einstellen"			; Set Time
+	TCODE	tSetDate,			"Datum einstellen"			; Set Date
 	TCODE	tSetTimeDate,		"Datum & Uhrzeit"		; Time & Date
 	TCODE	tDispSets,			"Anzeige"				; Display Settings
 	TCODE	tSysSets,			"System"				; System  Settings
@@ -81,13 +81,13 @@
 
 	TCODE	tDiveSetup,			"Tauchgang"				; Dive Setup
 	TCODE	tDecoSetup,			"Dekompression"			; Deco Setup
-	TCODE	tSACSetup,			"SAC Einstellung"		; SAC Setup
+	TCODE	tSACSetup,			"AMV Einstellung"		; SAC Setup
 	TCODE	tppO2Setup,			"O2 Partialdruck"		; ppO2 Setup
 	TCODE	tStopsSetup,		"Stopps & Tiefen"		; Stops & Depths
 
 	TCODE	tInfoMenu,			"Informationen"			; Information
  IFDEF _ccr_pscr
-	TCODE	tCCRSetup,			"CCR/pSCR Menü"			; CCR/pSCR Setup
+	TCODE	tCCRSetup,			"CCR/pSCR Setup"			; CCR/pSCR Setup
 	TCODE	tDiluentSetup,		"Diluent Menü"			; Diluent Setup
  ENDIF
 	TCODE	tFixedSetpoints,	"CCR Setpoints"			; Fixed Setpoints
@@ -104,7 +104,7 @@
  ENDIF
 
  IFDEF _external_sensor
-	TCODE	tCCRSensor,			"Sensor"				; CCR/pSCR Sensor
+;	TCODE	tCCRSensor,			"Sensor"				; CCR/pSCR Sensor
 	TCODE	tCalibrateMenu,		"Kalibrierung"			; Calibration
 	TCODE	tCalibrationGas,	"Kal. Gas O2:"			; Cal. Gas O2:
 	TCODE	tCalibrate,			"Kalibrieren"			; Calibrate
@@ -120,7 +120,7 @@
 	TCODE	tGaslist,			"OC Gas Liste"
 	TCODE	tGaslistCC,			"CC Gas Liste"			; CC Diluents
 	TCODE	tGasEdit,			"Gas einstellen"
-	TCODE	tType,				"Type: "
+	TCODE	tType,				"Typ: "
 	TCODE	tGasDisabled,		"Deaktiviert"			; | ENUM 1: Disabled
 	TCODE	tGasFirst,			"Start"					; |      2: First
 	TCODE	tGasTravel,			"Arbeit"				; |      3: Work (Travel, Bottom)
@@ -139,7 +139,7 @@
 	TCODE	tDepthPlus,			"Tiefe +"
 	TCODE	tDepthMinus,		"Tiefe -"
 	TCODE	tDepthReset,		"Reset auf MOD:"
-	TCODE	tSetup_GasMix,		"Mix  Einstellen"
+	TCODE	tSetup_GasMix,		"Mix einstellen"
  IFDEF _ccr_pscr
 	TCODE	tSPPlus,			"ppO2  +"				; Setpoint ppO2 +
 	TCODE	tSensorFallback,	"Fallback:"				; Fallback:
@@ -148,7 +148,7 @@
 	TCODE	tppO2Dil,			"ppO2(Dil)"				; ppO2(Dil)
 	TCODE	tppO2Mix,			"ppO2(Mix)"				; ppO2(Mix)
 	TCODE	tCCRMode,			"Modus: "				; CCR/pSCR Mode
-	TCODE	tCCRModeFixedSP,	"fixe SP"				; 0 fixed for CCR / calculated for pSCR  | ENUM group
+	TCODE	tCCRModeFixedSP,	"FesterSP"				; 0 fixed for CCR / calculated for pSCR  | ENUM group
 	TCODE	tCCRModeSensor,		"Sensor"				; 1 Sensor                               |
 	TCODE	tCCRModeAutoSP,		"Auto SP"				; 2 Auto SP                              |
  ELSE
@@ -165,8 +165,8 @@
 	TCODE	tNewBattNew36,		"3,6V Einweg    (T1)"	; new 3.6V disposable
 	TCODE	tNewBattNew15,		"1,5V Einweg    (T0)"	; new 1.5V disposable
 	TCODE	tNewBattAccu,		"3,7V aufladbar (T2)"	; new 3.7V rechargeable
-	TCODE	tNew18650,			"OSTC 2 oder cR (T3)"	; internal battery on 2 (old) / cR
-	TCODE	tNew16650,			"OSTC 2 oder TR (T4)"	; internal battery on 2 (new) / TR
+	TCODE	tNew18650,		"OSTC 2(2015), cR(T3)"	; internal battery on 2 (old) / cR
+	TCODE	tNew16650,		"OSTC 2(2017), TR(T4)"	; internal battery on 2 (new) / TR
 	TCODE	tConfirmChargeable1,"Bestätigung:"			; safety question, line 1
 	TCODE	tConfirmChargeable2,"eingelegte Batterie"	; safety question, line 2
 	TCODE	tConfirmChargeable3,"ist wiederaufladbar"	; safety question, line 3
@@ -205,7 +205,7 @@
 	TCODE	tDvApnea,			"Apnoe"					; 3 |
 	TCODE	tDvPSCR,			"pSCR"					; 4 |
 	TCODE	tDvCC,				"CC"
-	TCODE	tDkMode,			"Decotype: ZH-L16"
+	TCODE	tDkMode,			"Decotyp: ZH-L16"
 	TCODE	tZHL16,				" "						; keep order, enum from here...
 	TCODE	tZHL16GF,			"+GF"					; ...up to here!
 	TCODE	tPPO2Max,			"Max. Arbeit:"
@@ -222,6 +222,7 @@
 	TCODE	tSaturationMult,	"Sättigung   : "
 	TCODE	tDesaturationMult,	"Entsättigung: "
 	TCODE	tGFMenu,			"GF Parameter"			; GF Settings
+	TCODE	tSDMenu,			"SD Parameter"			; SD Settings
 	TCODE	taGF_low,			"aGF low :"				; aGF low
 	TCODE	taGF_high,			"aGF high:"				; aGF high
 	TCODE	taGFenable,			"aGF wählbar:"			; aGF Selectable
@@ -232,15 +233,15 @@
 	TCODE	tDvSalinity,		"Salinität  : "			; Salinity
 	TCODE	tDepthWarn,			"Tiefenlimit:"			; Depth Warning (no space after ':' on purpose)
 	TCODE	tGasUsage,			"Gasbedarf"				; Gas Usage
-	TCODE	tSetWorkSAC,		"Arbeits-SAC:"			; SAC Work:
-	TCODE	tSetDecoSAC,		"Deko    SAC:"			; SAC Deco:
+	TCODE	tSetWorkSAC,		"Arbeits AMV:"			; SAC Work:
+	TCODE	tSetDecoSAC,		"Deko    AMV:"			; SAC Deco:
 	TCODE	tCalcGasNeeds,		"Gasmenge(B/O): "		; Calculate  Gas (Bail Out) Needs
  IFDEF _gas_contingency
 	TCODE	tGasContingencyDive,"Swap on empty: "		; swap tank on becoming empty
  ENDIF
-	TCODE	tGasChangeTime,		"Gaswechsel   :+"		; additional Gas Change Time
-	TCODE	tSetup_Tank,		"Tank Einstellen"		; Setup Tank
-	TCODE	tTankSize,			"Tank Größe : "			; Tank Size 
+	TCODE	tGasChangeTime,		"Gaswechselzeit:+"		; additional Gas Change Time
+	TCODE	tSetup_Tank,		"Flasche"		; Setup Tank
+	TCODE	tTankSize,			"Flaschengröße:"			; Tank Size 
 	TCODE	tTankUsablePress,	"Umkehrdruck: "			; Tank Pressure Budget for Ascent (turn pressure)
 	TCODE	tLiter,				" l"					; Liter as l
 	TCODE	tLiterLong,			"Liter"					; Liter as Liter
@@ -329,11 +330,13 @@
 	TCODE	tImperial,			"ft/°F"
 								;         111         111         111         111         111
 	; 5 rows by 12 chars each:	 123456789012123456789012123456789012123456789012123456789012
-	TCODE	tDefName,		"HW OSTC						     "
-	TCODE	tPiezo,				"Taster"				; Buttons
+	TCODE	tDefName,		"HW OSTC"
+	TCODE	tPiezo,			"Taster"				; Buttons
+	TCODE	tButtonExplain1,	"Weniger % ist"			; Less % is 
+	TCODE	tButtonExplain2,	"empfindlicher."		; more sensitive.
 	TCODE	tButtonleft,		"Taster links :"		; Left button
 	TCODE	tButtonright,		"Taster rechts:"		; Right button
-	TCODE	tAltMode,			"Wartezeit:"
+	TCODE	tAltMode,		"Wartezeit:"
 	TCODE	tAltModeFly,		"Fliegen"
 	TCODE	tAltMode1000,		"1000m"
 	TCODE	tAltMode2000,		"2000m"

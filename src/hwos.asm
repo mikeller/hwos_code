@@ -173,7 +173,7 @@ init_ostc:
 	movwf	cpu_speed_request	; store CPU shall run with normal speed
 	movwf	cpu_speed_state		; store CPU does  run with normal speed
 
-	;bcf	RCON,SBOREN			; brown-out off (not needed here, is handled in bootloader)
+	bcf	RCON,SBOREN			; brown-out off (not needed here, is handled in bootloader)
 	bcf		RCON,IPEN			; priority interrupts off
 
 	banksel	WDTCON
@@ -196,8 +196,7 @@ init_ostc:
 	movwf	ANCON0				; ...
 	movlw	b'00000111'			; ANSEL1: AN8, AN9, AN10 -> analog input
 	movwf	ANCON1				; ...
-	movlw	b'00000010'			; ANSEL2: AN17           -> analog input
-	movwf	ANCON2				; ...
+	clrf	ANCON2
 
 	banksel	common				; back to bank common
 
@@ -231,7 +230,7 @@ init_ostc:
 ;	movlw	b'00000000'			; init port
 	clrf	PORTF				; ...
 
-	movlw	b'00001110'			; 1= input, <7:6> not implemented, RG0 -> TX3_PIEZO_CFG, , RG1 -> TX2, RG2 -> RX2, RG3 -> AN17_RSSI, RG4 -> SOSC_OUT, RG5 -> /RESET
+	movlw	b'00000110'			; 1= input, <7:6> not implemented, RG0 -> TX3_PIEZO_CFG, , RG1 -> TX2, RG2 -> RX2, RG3 -> AN17_RSSI, RG4 -> SOSC_OUT, RG5 -> /RESET
 	movwf	TRISG				; ...
 	movlw	b'00000001'			; init port
 	movwf	PORTG				; ...
@@ -315,7 +314,7 @@ init_ostc:
 	movwf	ADCON0				; ...
 	movlw	b'00100000'			; 2.048V Vref+
 	movwf	ADCON1				; ...
-	movlw	b'10111010'			; right aligned, 20 x T_AD acquisition time, FOSC/32 -> max. 40 MHz device clock speed
+	movlw	b'10001111'			; right aligned, 2 x T_AD acquisition time, clock derived from A/D RC oscillator (To be CPU-clock independent)
 	movwf	ADCON2				; ...
 
 
@@ -398,15 +397,19 @@ init_ostc:
 								; 32768 Hz clock source, 1:1 prescaler -> timer counts at 30.51757813 µs/bit
 	movwf	T5CON				; ...
 
-
+; Timer 4 for debounce of new digital piezo circuity
+	movlw	b'01111011'			; 1:8 Postscale, Prescale = 1, Timer 4 OFF
+	movwf	T4CON
+	setf	PR4
+	
 ; turn off unused Timers
-	;banksel 0xF16				; addresses F16h...F5Fh are not part of the access RAM
+	banksel 0xF16				; addresses F16h...F5Fh are not part of the access RAM
 	movlw	b'11000000'			; disable ECCP3 and ECCP2
 	movwf	PMD0				; ...
  IFDEF _external_sensor
-	movlw	b'11010001'			; disable PSP, CTMU, Timer 4 and EMB
+	movlw	b'11000001'			; disable PSP, CTMU and EMB
  ELSE
-	movlw	b'11011001'			; disable PSP, CTMU, Timer 4, Timer 3 and EMB
+	movlw	b'11001001'			; disable PSP, CTMU, Timer 3 and EMB
  ENDIF
 	movwf	PMD1				; ...
 	movlw	b'11010111'			; disable timer 10, timer 8, timer 6 and comparators 1-3
@@ -442,7 +445,7 @@ init_ostc:
 	movwf	PIE5				; ...
 	movlw	b'00000001'			; enable RTCC IRQ
 	movwf	PIE3				; ...
-	movlw	b'00001000'			; enable timer 7 IRQ
+	movlw	b'00001001'			; enable timer 7 and timer 4 IRQ
 	movwf	PIE5				; ...
 
 ; Release RESET from RX Circuitry

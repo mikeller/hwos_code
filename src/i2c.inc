@@ -13,6 +13,7 @@
 	extern	I2C_sleep_compass
 
 	extern	lt2942_init						; init gauge IC
+	extern	lt2942_sleep					; sleep gauge IC
 	extern	lt2942_get_status				; read gauge IC status
 	extern	lt2942_get_voltage				; read battery voltage registers
 	extern	lt2942_get_temperature			; read battery temperature

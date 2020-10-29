@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File logbook.asm                        * combined next generation V3.09.5
+;   File logbook.asm                        * combined next generation V3.12.2
 ;
 ;   Logbook
 ;
@@ -1387,22 +1387,22 @@ logbook_decomodel_2:
 	; deco model GF version
 	STRCAT_PRINT "ZH-L16+GF"						; print model label
 	WIN_SMALL .5,.90								; set position
-	STRCPY_TEXT tSD2								; print label
-	MOVII	header_buffer+index_gf_lo_hi,mpr		; get  GF factors
+	STRCPY_TEXT tGF2								; print label "GF :"
+	MOVII	header_buffer+index_gf_lo_hi,mpr		; get GF factors
 	bra		logbook_decomodel_com					; continue with common part
 
 logbook_decomodel_1:
 	; deco model none-GF version
 	STRCAT_PRINT "ZH-L16"							; print model label
 	WIN_SMALL .5,.90								; set position
-	STRCPY_TEXT tGF2								; print label
+	STRCPY_TEXT tSD2								; print label "S/D:"
 	MOVII	header_buffer+index_factor_sat_desat,mpr; get both factors
 	;bra	logbook_decomodel_com					; continue with common part
 
 logbook_decomodel_com:
-	output_256										; print saturation factor
+	output_256										; print GF low  / saturation   factor
 	STRCAT	"%/"
-	movff	hi,lo									; print desaturation factor
+	movff	hi,lo									; print GF high / desaturation factor
 	output_256										; ...
 	PUTC_PRINT "%"									; append unit and dump buffer to screen
 

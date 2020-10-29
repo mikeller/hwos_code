@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;	File text_french.sm                       next combined generation V3.09.4k
+;	File text_french.sm                       next combined generation V3.12.3
 ;
 ;	French texts translation file.
 ;
@@ -73,7 +73,7 @@
 	TCODE	tSetTime,			"Réglage Heure"			; Set Time
 	TCODE	tSetDate,			"Réglage Date"			; Set Date
 	TCODE	tSetTimeDate,		"Date & Heure"			; Time & Date
-	TCODE	tDispSets,			"Préfér. Réglages"		; Display Settings
+	TCODE	tDispSets,			"Préfér. Ecran"		; Display Settings
 	TCODE	tSysSets,			"Préfér. Système"		; System  Settings
 	TCODE	tExit,				"Sortie"				; Exit
 	TCODE	tResetMenu,			"Menu RaZ"				; Reset Menu
@@ -104,7 +104,7 @@
  ENDIF
 
  IFDEF _external_sensor
-	TCODE	tCCRSensor,			"Cellules CCR"			; CCR Sensor
+;	TCODE	tCCRSensor,			"Cellules CCR"			; CCR Sensor
 	TCODE	tCalibrateMenu,		"Calibration"			; Calibration
 	TCODE	tCalibrationGas,	"Cal. Gaz O2:"			; Cal. Gas O2:
 	TCODE	tCalibrate,			"Calibrate"				; Calibrate
@@ -165,8 +165,8 @@
 	TCODE	tNewBattNew36,		"3,6V jetable    (T1)"	; new 3.6V disposable
 	TCODE	tNewBattNew15,		"1,5V jetable    (T0)"	; new 1.5V disposable
 	TCODE	tNewBattAccu,		"3,7V chargeable (T2)"	; new 3.7V rechargeable
-	TCODE	tNew18650,			"OSTC 2 ou cR    (T3)"	; internal battery on 2 (old) / cR
-	TCODE	tNew16650,			"OSTC 2 ou TR    (T4)"	; internal battery on 2 (new) / TR
+	TCODE	tNew18650,		"OSTC 2(2015), cR(T3)"	; internal battery on 2 (old) / cR
+	TCODE	tNew16650,		"OSTC 2(2017), TR(T4)"	; internal battery on 2 (new) / TR
 	TCODE	tConfirmChargeable1,"Confirmer:"			; safety question, line 1
 	TCODE	tConfirmChargeable2,"La pile insérée"		; safety question, line 2
 	TCODE	tConfirmChargeable3,"est rechargeable"		; safety question, line 3
@@ -222,12 +222,13 @@
 	TCODE	tSaturationMult,	"Saturation  : "		; Saturation
 	TCODE	tDesaturationMult,	"Désaturation: "		; Desaturation
 	TCODE	tGFMenu,			"Menu GF"				; GF Settings
+	TCODE	tSDMenu,			"Menu SD"				; SD Settings
 	TCODE	taGF_low,			"aGF Bas : "			; aGF Low
 	TCODE	taGF_high,			"aGF Haut: "			; aGF High
 	TCODE	taGFenable,			"aGF Possible: "		; aGF Selectable
 	TCODE	tDiveaGF_active,	"aGF Actif"				; using aGF
 	TCODE	tSafetyStop,		"Palier Sécurité:"		; Safety Stop:  (max. 16 chars)
-	TCODE	tExtendedStops,		"Paliers + Longs:"		; Extended Stops
+	TCODE	tExtendedStops,		"Chang. gaz libre:"		; Extended Stops
 	TCODE	tLastDecostop,		"Dern.Palier : "		; last DecoStop Depth
 	TCODE	tDvSalinity,		"Salinité    : "		; Salinity
 	TCODE	tDepthWarn,			"Alerte Prof.:"			; Depth Warning (no space after ':' on purpose)
@@ -329,8 +330,10 @@
 	TCODE	tImperial,			"ft/°F"
 								;         111         111         111         111         111
 	; 5 rows by 12 chars each:	 123456789012123456789012123456789012123456789012123456789012
-	TCODE	tDefName,		"HW OSTC						     "
+	TCODE	tDefName,			"HW OSTC"	;"Lire la doc.Connaitre etComprendre  les limites de l'OSTC ! "
 	TCODE	tPiezo,				"Bouton"				; Buttons
+	TCODE	tButtonExplain1,	"Less % is"			; Less % is 
+	TCODE	tButtonExplain2,	"more sensitive."		; more sensitive.
 	TCODE	tButtonleft,		"Bouton gauche:"		; Left button
 	TCODE	tButtonright,		"Bouton droit :"		; Right button
 	TCODE	tAltMode,			"Temps Attente:"		; Waiting Time
@@ -500,7 +503,7 @@
 
 
 ; Divemode menu
-	TCODE	tDiveAckn,		"OkVu?"					; Acknf?  (max. 5 chars) (Acknowledge)
+	TCODE	tDiveAckn,			"OkVu?"					; Ackn?  (max. 5 chars) (Acknowledge)
 	TCODE	tDivePreMenu,		"Menu?"					; Menu?  (max. 5 chars)
 	TCODE	tDiveLayout,		"Affich"				; Layout (max. 6 chars)
  IFDEF _compass

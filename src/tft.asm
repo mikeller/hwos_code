@@ -231,8 +231,8 @@ TFT_DisplayOff:
 	clrf	PORTH
 	RD_L							; LOW
 	RS_L							; LOW
-	bcf		tft_nwr
-	bcf		tft_cs
+	WR_L
+	NCS_L
 	bcf		tft_nreset
 	bsf		tft_power				; inverted...
 	return
@@ -550,7 +550,7 @@ TFT_Display_FadeOut:
 	movff	max_CCPR1L,PRODL
 	bsf		tft_is_dimming			; TFT is dimming, ignore ambient sensor
 	btfsc	screen_type3
-	bra	TFT_Display_FadeOut_1
+	return					; Do not fade out screen type 3
 TFT_Display_FadeOut_0:
 	movff	PRODL,CCPR1L			; duty cycle
 	WAITMS	d'1'

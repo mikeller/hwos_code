@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File divemode.asm                       * combined next generation V3.09.5
+;   File divemode.asm                       * combined next generation V3.12.3
 ;
 ;   Dive Mode
 ;
@@ -311,12 +311,6 @@ diveloop_loop_3:
 	call	div16x16					; xC = xA / xB = depth in full meters
 	movff	xC+0,depth_meter			; store result as depth in [m], only low byte needed
 
- IFDEF _ccr_pscr
-	; adjust auto-setpoint
-	btfsc	FLAG_ccr_mode				; in CCR mode?
-	call	check_dive_autosp			; YES - check for Auto-SP
- ENDIF
-
 	; check for new max pressure
 	btfss	trigger_pres_max_changed	; has the max pressure changed?
 	bra		diveloop_loop_4				; NO  - continue with tasks every 1/1 second
@@ -326,6 +320,12 @@ diveloop_loop_3:
 
 diveloop_loop_4:
 	; continue tasks every 1/1 second
+
+ IFDEF _ccr_pscr
+	; adjust auto-setpoint
+	btfsc	FLAG_ccr_mode				; in CCR mode?
+	call	check_dive_autosp			; YES - check for Auto-SP
+ ENDIF
 
  IFDEF _external_sensor
 	btfsc	FLAG_ccr_mode				; in CCR mode?
@@ -1161,7 +1161,7 @@ check_sensor_avg_compute:
 										;       it will be overwritten if we have a usable sensor reading
 	btfsc	bailout_mode				; check if we are in bailout
 	bra		check_sensor_vote			; YES - no sensor data transfer to char_I_const_ppO2 in this case
-	movff	opt_ccr_mode,WREG			; NO  - get mode (0: Fixed SP, 1: Sensor, 2: Auto SP)
+	movf	dive_ccr_mode,W				; NO  - get mode (0: Fixed SP, 1: Sensor, 2: Auto SP)
 	sublw	.1							;     - in sensor mode?
 	bnz		check_sensor_vote			;       NO  - not in sensor mode - no transfer of sensor data to char_I_const_ppO2
 	tstfsz	xB+0						;       YES - check if we have found at least one usable sensor
@@ -1207,7 +1207,7 @@ check_sensor_vote:
 check_warn_sensor_0:					; we are in CCR or pSCR mode
 	btfsc	bailout_mode				; check if we are in bailout
 	bra		check_warn_sensor_done		; YES - no warning in this case
-	movff	opt_ccr_mode,WREG			; get mode (0: Fixed SP, 1: Sensor, 2: Auto SP)
+	movf	dive_ccr_mode,W				; get mode (0: Fixed SP, 1: Sensor, 2: Auto SP)
 	sublw	.1							; in sensor mode?
 	bnz		check_warn_sensor_done		; NO - not in sensor mode - no warning in this case
 
@@ -1805,10 +1805,10 @@ timeout_divemode_1:
 	call	menuview_toggle_reset		;       YES - terminate the pre-menu
 
 timeout_divemode_2:
-	btfss	divetime_longer_1min		; does the dive already last for longer than one minute?
-	return								; NO  - suspend timeout
-
 	INCI	dive_timeout_timer			; increment timeout timer
+	
+	btfss	divetime_longer_1min		; does the dive already last for longer than one minute?
+	bra	timeout_divemode_sub_1min	; NO  - use a short timeout to achieve some extra hysteris when starting the dive
 
 	btfsc	FLAG_apnoe_mode				; in apnoe mode?
 	bra		timeout_divemode_apnoe		; YES - use apnoe timeout
@@ -1829,6 +1829,10 @@ timeout_divemode_sim:
 	MOVLI	simulator_timeout,sub_a		; get simulator timeout in seconds directly into sub_a
 	bra		timeout_divemode_com_sec	; continue with common part for seconds
 
+timeout_divemode_sub_1min:
+	MOVLI	divetime_less_1min_timeout,sub_a ; use a short timeout as an extra hysteresis during the descent
+	bra		timeout_divemode_com_sec	; continue with common part for seconds
+	
 timeout_divemode_com_min:
 	mullw	.60							; multiply with 60 to convert minutes in WREG to seconds
 	MOVII	PRODL,sub_a					; copy resulting seconds to sub_a
@@ -1953,9 +1957,9 @@ check_dive_modes_comm:
 
 check_dive_modes_shallow:
 	bcf		count_divetime						; stop counting dive time
-	btfss	divetime_longer_1min				; diving > one minute?
-	bcf		divemode							; NO  - quit dive mode as this was no real dive
-	return										; done
+;	btfss	divetime_longer_1min				; diving > one minute?
+;	bcf		divemode							; NO  - quit dive mode as this was no real dive
+	return										; done mH
 
 
 ;-----------------------------------------------------------------------------
@@ -2719,20 +2723,30 @@ check_gas_best_common6:
 ; Check for Auto-SP
 ;
 check_dive_autosp:
-	movff	opt_ccr_mode,WREG			; =0: Fixed SP, =1: Sensor, =2: Auto SP
-	sublw	.2							; opt_ccr_mode = 2 (Auto SP)?
+	movf	dive_ccr_mode,W				; =0: Fixed SP, =1: Sensor, =2: Auto SP
+	sublw	.2							; dive_ccr_mode = 2 (Auto SP)?
 	bz		check_dive_autosp2			; YES - check
 	return								; NO  - return for sensor or fixed mode
 
 check_dive_autosp2:
+	; check for restart request
+	btfss	restart_auto_sp				; shall restart from 1st SP?
+	bra		check_dive_autosp2a			; NO  - skip next
+	bcf		restart_auto_sp				; YES - clear request flag
+	bcf		FLAG_SP2_used				;     - flag SP 2, ...
+	bcf		FLAG_SP3_used				;     - flag SP 3, ...
+	bcf		FLAG_SP4_used				;     - flag SP 4, ...
+	bcf		FLAG_SP5_used				;     - flag SP 5 as unused so far
+
+check_dive_autosp2a:
 	; check SP2
 	btfsc	FLAG_SP2_used				; SP 2 used so far?
 	bra		check_dive_autosp3			; YES - continue with SP 3
 	movff	opt_setpoint_change+1,lo	; NO  - get depth in m
 	tstfsz	lo							;     - SP change depth = 0 ?
-	bra		check_dive_autosp2a			;       NO  - continue
+	bra		check_dive_autosp2b			;       NO  - continue
 	bra		check_dive_autosp3			;       YES - continue with SP 3
-check_dive_autosp2a:
+check_dive_autosp2b:
 	decf	lo,W						; SP change depth -1 -> WREG
 	cpfsgt	depth_meter					; current depth > change depth - 1 ?
 	bra		check_dive_autosp3			; NO  - continue with SP 3
@@ -3096,11 +3110,10 @@ dive_boot_cc_part2_1:
 	; In case we still have 3 (auto SP) selected out of previous CCR mode, we reset to 0.
 	btfss	FLAG_pscr_mode				; in pSCR mode?
 	bra		dive_boot_cc_part2_2		; NO
-	movff	opt_ccr_mode,WREG			; YES - get mode (=0: Fixed SP (CCR) / calculated SP (pSCR), =1: Sensor, =2: Auto SP)
-	sublw	.2							; opt_ccr_mode = 1 (Auto SP)?
+	movf	dive_ccr_mode,W				; YES - get mode (=0: Fixed SP (CCR) / calculated SP (pSCR), =1: Sensor, =2: Auto SP)
+	sublw	.2							; dive_ccr_mode = 1 (Auto SP)?
 	bnz		dive_boot_cc_part2_2		; NO  - ok
-	movlw	.0							; YES - revert to calculated SP
-	movff	WREG,opt_ccr_mode			; ...
+	clrf	dive_ccr_mode				; YES - revert to calculated SP
 
 dive_boot_cc_part2_2:
 	bsf		event_SP_change				; set setpoint event flag
@@ -3154,6 +3167,10 @@ diveloop_boot:
 
 	; reset max relative pressure (max depth)
 	bsf		reset_max_pressure			; request ISR to reset the max pressure
+
+	; make working copy of opt_ccr_mode
+	movff	opt_ccr_mode,dive_ccr_mode	; copy option setting
+
 
  IFDEF _min_depth_option
 	; reset the resettable min/max relative pressure (trip-wise min/max depth)

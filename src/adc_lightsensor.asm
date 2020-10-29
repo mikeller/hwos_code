@@ -1,6 +1,6 @@
 ;=============================================================================
 ;
-;   File adc_lightsensor.asm                * combined next generation V3.09.4e
+;   File adc_lightsensor.asm                * combined next generation V3.11.1
 ;
 ;
 ;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
@@ -66,10 +66,10 @@ get_battery_voltage_1:
 	bcf		LEDr							; switch off red LED
 	bcf		TRISJ,2							; activate Chrg-Out output
 	bsf		CHRG_OUT						; start charger
-	nop ; Ignore some noise
-	nop
-	nop
-	nop
+	nop										; ignore some noise
+	nop										; ...
+	nop										; ...
+	nop										; ...
 	btfss	CHRG_IN							; charging?
 	bra		charge_cc_active				; YES - charging in CC mode
 	bcf		CHRG_OUT						; NO  - stop charger
@@ -256,7 +256,7 @@ get_ambient_level:
 	btfsc	sleepmode						; in sleep mode?
 	return									; YES - done
 	btfsc	adc_is_running					; NO  - ADC in use?
-	return									;       YES - return
+	return									;       YES - abort
 	banksel	HW_descriptor					;       NO  - select bank where hardware descriptor is stored
 	btfsc	ambient_sensor					;           - ambient sensor available?
 	bra		get_ambient_level1				;             YES - use sensor
@@ -283,19 +283,6 @@ get_ambient_level1:							; using ambient sensor
 	; ambient_light:2 is between 4096 (direct sunlight) and about 200 (darkness)
 	; first: divide by 16
 
-	; bcf	STATUS,C						; old /16 code
-	; rrcf	ambient_light+1
-	; rrcf	ambient_light+0
-	; bcf	STATUS,C
-	; rrcf	ambient_light+1
-	; rrcf	ambient_light+0
-	; bcf	STATUS,C
-	; rrcf	ambient_light+1
-	; rrcf	ambient_light+0
-	; bcf	STATUS,C
-	; rrcf	ambient_light+1
-	; rrcf	ambient_light+0
-
 	movlw	.4								; divide by 2^4 = 16
 get_ambient_level1_loop:
 	bcf		STATUS,C						; clear carry
@@ -318,11 +305,6 @@ get_ambient_level1_loop:
 	movwf	ambient_light+0					; avoid ADC clipping
 
 get_ambient_level2:
-;	movlw	.10
-;	subwf	ambient_light+0,F				; subtract 10 (ADC Offset)
-;	btfsc	STATUS,N
-;	movwf	ambient_light+0					; avoid clipping
-
 	movff	opt_brightness,isr_lo			; get brightness setting
 
 	btfsc	RCSTA1,7						; UART module on?
@@ -330,13 +312,12 @@ get_ambient_level2:
 
 	incf	isr_lo,F						; adjust 0-2 to 1-3
 
-	movlw	ambient_light_max_high_cr		; cR and 2 hardware brightest setting
-
-	banksel	HW_descriptor					; select bank where hardware descriptor and model variant is stored
-	btfss	battery_gauge_available
-	movlw	ambient_light_max_high_15V		; 1.5V battery brightest setting
+	banksel	HW_descriptor					; select bank where hardware descriptor and model variant are stored
+	movlw	ambient_light_max_high_cr		; default to cR and 2 hardware brightest setting
+	btfss	battery_gauge_available			; battery gauge available?
+	movlw	ambient_light_max_high_15V		; NO  - change to 1.5V battery brightest setting
 	btfsc	battery_is_36v					; 3.6V battery in use?
-	movlw	ambient_light_max_high_36V		; YES - 3.6V battery brightest setting
+	movlw	ambient_light_max_high_36V		; YES - change to 3.6V battery brightest setting
 	banksel	isr_backup						; back to ISR default bank
 
 	dcfsnz	isr_lo,F						; eco setting?
@@ -375,9 +356,12 @@ get_ambient_level2:
 	global	get_analog_inputs
 get_analog_inputs:
 	bsf		adc_is_running					; =1: the ADC is in use
+	btfsc	screen_type3						; display 3 ?
+	bra	get_analog_inputs2					; yes, skip here
 	btfsc	TFT_PWM							; PWM active?
 	bra		get_analog_inputs				; YES - wait for PWM low
 
+get_analog_inputs2:
 	movlw	b'00100000'						; 2.048V Vref+ -> 1 LSB = 500 µV
 	movwf	ADCON1							; ...
 
@@ -527,6 +511,10 @@ get_analog_switches_1:
 	bra		get_analog_switches0			;       YES - abort (and clear both flags)
 
 get_analog_switches_2:
+    ; reset the latch register in case it's externally pulled down. mH This is a test
+	bsf	power_sw1			; switch on power supply for switch 1
+	bsf	power_sw2			; switch on power supply for switch 2
+    
 	bsf		adc_is_running					; flag that ADC is in use
 	bcf		ADCON2,ADFM						; left justified
 	clrf	ADCON1							;
