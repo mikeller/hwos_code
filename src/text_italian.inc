@@ -26,9 +26,9 @@
 	TCODE	tHeading,			"Direzione:"			; Heading:
 	TCODE	tLastDive,			"UltimaImm."			; Last Dive (Max 10 chars)
 
-	TCODE	tFTTSSurf,			"TTS Futuro  :"			; Future TTS
-	TCODE	tLastDecostopSurf,	"Ultima Tappa:"			; last deco stop surface custom view
-	TCODE	tDvSalinitySurf,	"Salinita'   :"			; Salinity
+	TCODE	tFTTSSurf,			"TTS Futuro:"			; Future TTS
+	TCODE	tLastDecostopSurf,	"UltimaTappa:"			; last deco stop surface custom view
+	TCODE	tDvSalinitySurf,	"Salinita':"			; Salinity
 
  IFDEF _external_sensor
 	TCODE	tSensorMilliVolt,	"Sensori mV"			; Sensors mV
@@ -228,9 +228,9 @@
 	TCODE	taGFenable,			"aGF Selezionabile:"	; aGF Selectable
 	TCODE	tDiveaGF_active,	"Usa aGF"				; using aGF
 	TCODE	tSafetyStop,		"Tappa Sicurezza:"		; Safety Stop:  (max. 16 chars)
-	TCODE	tExtendedStops,		"Anticipa Tappa :"		; Extended Stops
-	TCODE	tLastDecostop,		"Ultima Tappa  : "		; last Deco Stop Depth
-	TCODE	tDvSalinity,		"Salinita'     : "		; Salinity
+	TCODE	tExtendedStops,		"Anticipa Tappa:"		; Extended Stops
+	TCODE	tLastDecostop,		"Ultima Tappa: "		; last Deco Stop Depth
+	TCODE	tDvSalinity,		"Salinita': "		; Salinity
 	TCODE	tDepthWarn,			"Depth Warning :"		; Depth Warning (no space after ':' on purpose)
 	TCODE	tGasUsage,			"Utilizzo"				; Gas Usage
 	TCODE	tSetWorkSAC,		"SAC Fondo: "			; SAC Work: (space)

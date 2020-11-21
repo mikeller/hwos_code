@@ -147,7 +147,7 @@ option_table_begin:
 	OPTION_UINT8    oaGF_low,           .10,                 .100,                .30,      tPercent,        0x023,    0x27,  opt_aGF_low					; alternative GF low
 	OPTION_UINT8    oaGF_high,          .45,                 .110,                .85,      tPercent,        0x024,    0x28,  opt_aGF_high					; alternative GF high
 	OPTION_BOOL     oEnable_aGF,         .0,                                                                 0x025,    0x29,  opt_enable_aGF				; =1: aGF can be selected underwater
-	OPTION_UINT8    oCompassGain,        .0,                   .7,                 .6,      tMinutes,        0x026,    0x34,  opt_compass_gain				; 0-7 (230 LSB/Gauss to 1370LSB/Gauss)
+	OPTION_UINT8    oCompassGain,        .0,                   .7,                 .5,      tMinutes,        0x026,    0x34,  opt_compass_gain				; 0-7 (230 LSB/Gauss to 1370LSB/Gauss)
 	OPTION_ENUM8    oSamplingRate,       .2,                                       .0,      tSetSeconds,     0x027,    0x2F,  opt_sampling_rate				; =1: 10s, =0: 2s
 
 	; Managing Settings

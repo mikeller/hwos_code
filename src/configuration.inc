@@ -24,8 +24,8 @@
 #endif
 
 #define fw_version_major		0x03
-#define fw_version_minor		0x0D
-#define fw_version_beta			0x00
+#define fw_version_minor		0x0E
+#define fw_version_beta			0x01
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -64,7 +64,7 @@
 ;                                                                                    122.880 max. available
 #endif
 
-#define _hwos_tech_3_cR
+#define _hwos_tech_2_TR
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -79,8 +79,8 @@
 ; 
 #endif
 
-#define _language_1		de
-#define _language_2		en
+#define _language_1		en
+#define _language_2		none
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

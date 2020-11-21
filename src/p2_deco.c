@@ -1575,7 +1575,7 @@ static void gas_take_current(void)
 //
 static unsigned char gas_find_best(void)
 {
-	overlay unsigned char switch_depth = 255;
+	overlay unsigned char switch_depth = sim_gas_current_depth;
 	overlay unsigned char switch_gas   =   0;
 
 
