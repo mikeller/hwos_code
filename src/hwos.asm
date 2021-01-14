@@ -173,7 +173,7 @@ init_ostc:
 	movwf	cpu_speed_request	; store CPU shall run with normal speed
 	movwf	cpu_speed_state		; store CPU does  run with normal speed
 
-	bcf	RCON,SBOREN			; brown-out off (not needed here, is handled in bootloader)
+	;bcf	RCON,SBOREN			; brown-out off (not needed here, is handled in bootloader)
 	bcf		RCON,IPEN			; priority interrupts off
 
 	banksel	WDTCON
