@@ -147,7 +147,7 @@ option_table_begin:
 	OPTION_UINT8    oaGF_low,           .10,                 .100,                .30,      tPercent,        0x023,    0x27,  opt_aGF_low					; alternative GF low
 	OPTION_UINT8    oaGF_high,          .45,                 .110,                .85,      tPercent,        0x024,    0x28,  opt_aGF_high					; alternative GF high
 	OPTION_BOOL     oEnable_aGF,         .0,                                                                 0x025,    0x29,  opt_enable_aGF				; =1: aGF can be selected underwater
-	OPTION_UINT8    oCompassGain,        .0,                   .7,                 .6,      tMinutes,        0x026,    0x34,  opt_compass_gain				; 0-7 (230 LSB/Gauss to 1370LSB/Gauss)
+	OPTION_UINT8    oCompassGain,        .0,                   .5,                 .5,      tMinutes,        0x026,    0x34,  opt_compass_gain				; 0-7 (230 LSB/Gauss to 1370LSB/Gauss)
 	OPTION_ENUM8    oSamplingRate,       .2,                                       .0,      tSetSeconds,     0x027,    0x2F,  opt_sampling_rate				; =1: 10s, =0: 2s
 
 	; Managing Settings
@@ -318,8 +318,8 @@ option_table_begin:
 	OPTION_ENUM8    oTissueGraphics, tissue_graphics_options,                      .0,      tTissuePresSat,  0x0FB,    0x88,  opt_tissue_graphics			; =0: show pressures and saturations, =1: show N2 and He pressures
 	OPTION_ENUM8    oLayout,             .2,                                       .0,      tLayoutNormal,   0x0FC,    0x8A,  opt_layout					; initial layout of dive mode screen =0: normal, =1: big
 	OPTION_BOOL     oExtendedStops,                                                .1,                       0x0FD,    0x8B,  opt_ext_stops					; =1: place gas switches also below 1st stop depth
-	OPTION_UINT8    oGasDensityAtt,     .40,                  .80,                .60,      nounit,          0x0FE,    0x8C,  char_I_gas_density_att		; threshold for gas density attention [0.1 grams/l]
-	OPTION_UINT8    oGasDensityWarn,    .40,                  .80,                .65,      nounit,          0x0FF,    0x8D,  char_I_gas_density_warn		; threshold for gas density warning   [0.1 grams/l]
+	OPTION_UINT8    oGasDensityAtt,     .40,                  .80,                .52,      nounit,          0x0FE,    0x8C,  char_I_gas_density_att		; threshold for gas density attention [0.1 grams/l]
+	OPTION_UINT8    oGasDensityWarn,    .40,                  .80,                .63,      nounit,          0x0FF,    0x8D,  char_I_gas_density_warn		; threshold for gas density warning   [0.1 grams/l]
 	OPTION_BOOL     oDilppO2Check,                                                .1,                        0x100,    0x8E,  char_I_dil_check				; =1: check ppO2 of the pure diluent against current setpoint
 	OPTION_UINT8    oFirmwareMajor,  fw_version_major,  fw_version_major, fw_version_major, nounit,          0x101,  nocomm,  opt_fw_version_major			; firmware version, major | use as read-only,
 	OPTION_UINT8    oFirmwareMinor,  fw_version_minor,  fw_version_minor, fw_version_minor, nounit,          0x102,  nocomm,  opt_fw_version_minor			; firmware version, minor | do not change eeprom index number!

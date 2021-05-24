@@ -90,7 +90,7 @@ main_divemenu_OC:
 	;bra	main_divemenu_OC_cave		; YES - use version with    cave mode entry
 
 main_divemenu_OC_cave:
-	MENU_BEGIN_DIVE	.6
+	MENU_BEGIN_DIVE	tMainMenu,  .6
 		MENU_CALL		tDivemenu_Gaslist,	do_divemode_gaslist
 		MENU_CALL		tDivemenu_ResetAvg,	do_reset_average
 		MENU_DYNAMIC	dyn_toggle_gf,		do_toggle_gf
@@ -101,7 +101,7 @@ main_divemenu_OC_cave:
  ENDIF	; _cave_mode
 
 main_divemenu_OC_nocave:
-	MENU_BEGIN_DIVE	.5
+	MENU_BEGIN_DIVE	tMainMenu,  .5
 		MENU_CALL		tDivemenu_Gaslist,	do_divemode_gaslist
 		MENU_CALL		tDivemenu_ResetAvg,	do_reset_average
 		MENU_DYNAMIC	dyn_toggle_gf,		do_toggle_gf
@@ -117,7 +117,7 @@ main_divemenu_loop:
 	btfsc	FLAG_pscr_mode				; in pSCR mode?
 	bra		main_divemenu_pscr			; YES - show pSCR menu
 
-	MENU_BEGIN_DIVE	.6
+	MENU_BEGIN_DIVE	tMainMenu,  .6
 		MENU_CALL		tDiveBailout,		do_divemode_gaslist_bail
 		MENU_CALL		tDivemenu_Setpoint,	do_divemode_splist
 		MENU_CALL		tDivemenu_Diluent,	do_divemode_gaslist
@@ -136,7 +136,7 @@ main_divemenu_pscr:
  ENDIF	; _external_sensor
 
 main_divemenu_pscr_no_sensors:
-	MENU_BEGIN_DIVE	.6
+	MENU_BEGIN_DIVE	tMainMenu,  .6
 		MENU_CALL		tDiveBailout,		do_divemode_gaslist_bail
 		MENU_CALL		tDivemenu_Premix,	do_divemode_gaslist
 		MENU_CALL		tBackToLoop,		do_switch_sp_calc
@@ -147,7 +147,7 @@ main_divemenu_pscr_no_sensors:
 
  IFDEF _external_sensor
 main_divemenu_pscr_sensors:
-	MENU_BEGIN_DIVE	.6
+	MENU_BEGIN_DIVE	tMainMenu,  .6
 		MENU_CALL		tDiveBailout,		do_divemode_gaslist_bail
 		MENU_CALL		tCCRModeSensor,		do_divemode_setpoint_pscr
 		MENU_CALL		tDivemenu_Premix,	do_divemode_gaslist
@@ -214,7 +214,7 @@ do_toggle_gf_1:
 	movlw	.1							; set to first option in dive mode menu
 	movwf	menu_pos_cur				; ...
 
-	MENU_BEGIN_DIVE	.2
+	MENU_BEGIN_DIVE	tDivemenu_ToggleGF,  .2
 		MENU_CALL		tDivemenu_ToggleGF,	do_toggle_gf_toggle
 		MENU_CALL		tExit,				do_exit_divemode_menu
 	MENU_END
@@ -254,7 +254,7 @@ do_reset_avg_set_mkr:
 	movlw	.1							; set to first option in dive mode menu
 	movwf	menu_pos_cur				; ...
 
-	MENU_BEGIN_DIVE	.3
+	MENU_BEGIN_DIVE	tDivemenu_Marker,   .3
 		MENU_CALL		tDivemenu_ResetAvg,	do_reset_average
 		MENU_CALL		tDivemenu_Marker,	do_set_marker
 		MENU_CALL		tBack,				do_return_main_divemenu		; return to main menu
@@ -303,7 +303,7 @@ do_divemode_gaslist:
 do_divemode_gaslist_1:
 	movwf	menu_pos_cur				; position cursor to best gas/dil (or first option if none avail)
 
-	MENU_BEGIN_DIVE	.6
+	MENU_BEGIN_DIVE	tDivemenu_Gaslist,  .6
 		MENU_DYNAMIC	dyn_strcat_gas_prodl,	do_switch_gas
 		MENU_DYNAMIC	dyn_strcat_gas_prodl,	do_switch_gas
 		MENU_DYNAMIC	dyn_strcat_gas_prodl,	do_switch_gas
@@ -367,7 +367,7 @@ do_lost_gas_common:
 	bcf		better_gas_hint				; do not mark the best gas/diluent
 	bcf		color_code_gases			; do not color-code the gases/diluents by their ppO2
 
-	MENU_BEGIN_DIVE	.6
+	MENU_BEGIN_DIVE	tDivemenu_LostGas,  .6
 		MENU_DYNAMIC	dyn_strcat_gas_prodl,	do_toggle_staged_lost
 		MENU_DYNAMIC	dyn_strcat_gas_prodl,	do_toggle_staged_lost
 		MENU_DYNAMIC	dyn_strcat_gas_prodl,	do_toggle_staged_lost
@@ -473,7 +473,7 @@ do_gas6_or_exit:
 
 
  IFDEF _helium
-	MENU_BEGIN_DIVE .6
+	MENU_BEGIN_DIVE tGas6,	.6
 		MENU_OPT_INCS	tO2Plus,				oGas6O2
 		MENU_OPT_DECS	tO2Minus,				oGas6O2
 		MENU_OPT_INCS	tHePlus,				oGas6He
@@ -482,7 +482,7 @@ do_gas6_or_exit:
 		MENU_CALL		tExit,					do_exit_divemode_menu
 	MENU_END
  ELSE
-	MENU_BEGIN_DIVE .4
+	MENU_BEGIN_DIVE tGas6,	.4
 		MENU_OPT_INCS	tO2Plus,				oGas6O2
 		MENU_OPT_DECS	tO2Minus,				oGas6O2
 		MENU_DYNAMIC	dyn_show_gas6,			do_gas6_switch
@@ -541,7 +541,7 @@ do_divemode_splist:
  ENDIF	; _external_sensor
 
 do_divemode_splist_no_sensor:
-	MENU_BEGIN_DIVE	.6
+	MENU_BEGIN_DIVE	tFixedSetpoints,    .6
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
@@ -554,7 +554,7 @@ do_divemode_splist_no_sensor:
  IFDEF _external_sensor
 
 do_divemode_splist_sensor:
-	MENU_BEGIN_DIVE	.6
+	MENU_BEGIN_DIVE	tFixedSetpoints,    .6
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
 		MENU_DYNAMIC	dyn_strcat_setpoint_prodl,	do_switch_sp
@@ -642,7 +642,7 @@ do_divemode_sensor:
 	movwf	menu_pos_cur				; ...
 
 do_return_divemode_common:
-	MENU_BEGIN_DIVE	.6
+	MENU_BEGIN_DIVE	tDivemenu_UseSensor,.6
 		MENU_CALL		tDivemenu_UseSensor,	do_switch_sensor
 		MENU_CALL		tBack,					do_divemode_splist
 		MENU_CALL		tExit,					do_exit_divemode_menu
@@ -655,7 +655,7 @@ do_divemode_setpoint_pscr:
 	movlw	.1
 	movwf	menu_pos_cur				; set to 1st option: use calculated ppO2
 
-	MENU_BEGIN_DIVE	.6
+	MENU_BEGIN_DIVE	tDivemenu_UseSensor,.6
 		MENU_CALL		tCalculated,			do_switch_sp_calc
 		MENU_CALL		tDivemenu_UseSensor,	do_switch_sensor
 		MENU_CALL		tExit,					do_exit_divemode_menu
@@ -735,7 +735,7 @@ do_main_cavemenu_common:
 	movwf	active_customview					; set  custom view number
 	call	dive_customview_callup				; draw custom view
 
-	MENU_BEGIN_DIVE	.6
+	MENU_BEGIN_DIVE	tCaveMode,  .6
 		MENU_DYNAMIC	dyn_waypoint_set,		do_waypoint_set			; 1
 		MENU_DYNAMIC	dyn_turndive_toggle,	do_turndive_toggle		; 2
 		MENU_CALL		tDivemenu_off_on,		do_cavemode_toggle		; 3

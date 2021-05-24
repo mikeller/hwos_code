@@ -128,6 +128,9 @@
 #define BAR_TO_METER				10.19716	// conversion factor (1 bar            = 10.19716 m  )
 #define SURFACE_DESAT_FACTOR		 0.70420	// surface desaturation safety factor
 #define HYST						 1.0E-06	// threshold for tissue graphics on-gassing / off-gassing visualization
+#define GAS_DENSITY_He_FACTOR          17.64    // in multiples of 0.01 grams per liter
+#define GAS_DENSITY_N2_FACTOR         123.46    // in multiples of 0.01 grams per liter
+#define GAS_DENSITY_O2_FACTOR         141.02    // in multiples of 0.01 grams per liter
 
 // thresholds
 #define CNS_LIMIT_WARNING				100		// threshold for CNS  warning
@@ -136,9 +139,10 @@
 #define PRESSURE_LIMIT_ATTENTION		500		// threshold for pressure reading attention: 50.0 bar
 #define GAS_NEEDS_ATTENTION				  0.7	// threshold for gas needs attention [1 = 100%]
 #define O2_CONSUMPTION_LIMIT_ATTENTION	 20		// threshold for O2 "SAC"         attention:  2.0 l/min
-#define ppO2_GAP_TO_SETPOINT			 10		// gap between setpoint and max. ppO2 of the pure diluent [cbar]
+#define ppO2_GAP_TO_SETPOINT			 20		// gap between setpoint and max. ppO2 of the pure diluent [cbar]
 #define ppO2_MARGIN_ON_MAX				  3		// [cbar] margin on ppO2 max to compensate for surface pressures > 1.000 mbar
 #define STOP_CHAINING_LIMIT				  3		// max. number of chained stop table entries before deco calculation is aborted
+
 
 
 // deco engine states and modes - (char_O_)main_status: controls current tissue and deco status calculation (as-is situation)
@@ -1575,7 +1579,7 @@ static void gas_take_current(void)
 //
 static unsigned char gas_find_best(void)
 {
-	overlay unsigned char switch_depth = 255;
+	overlay unsigned char switch_depth = sim_gas_current_depth;
 	overlay unsigned char switch_gas   =   0;
 
 
@@ -1943,7 +1947,7 @@ void calc_alveolar_pressures(void)
 		overlay unsigned char temp;
 
 		// compute gas density of current mix in multiples of 0.01 grams per liter
-		int_O_gas_density = (unsigned int)( 17.9 * ppHe + 125.1 * ppN2 + 142.8 * ppO2 );
+		int_O_gas_density = (unsigned int)( GAS_DENSITY_He_FACTOR * ppHe + GAS_DENSITY_N2_FACTOR * ppN2 + GAS_DENSITY_O2_FACTOR * ppO2 );
 
 		// convert gas density into an 8 bit integer, scaling 0.1 grams per liter
 		temp = (unsigned char)( (int_O_gas_density + 9) / 10 );

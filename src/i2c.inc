@@ -35,3 +35,9 @@
  IFDEF _compass
 	extern	I2C_RX_compass
  ENDIF
+    
+	extern	I2C_probe_pressure_sensor			; Probe the type of sensor, set/clear press_sensor_type
+	extern	I2C_get_calib_MS5837				; Read C1 to C6 
+	extern	I2C_get_press_val_MS5837
+	extern	I2C_get_temp_val_MS5837
+	extern	check_i2c_error

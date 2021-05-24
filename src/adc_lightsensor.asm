@@ -25,6 +25,7 @@ adc_light	CODE
 ;
 ; bank safe
 ;
+    global	wait_adc
 wait_adc:
 	movwf	ADCON0							; select ADC channel
 	nop										; wait a short moment
@@ -278,11 +279,12 @@ get_ambient_level1:							; using ambient sensor
 	movlw	b'00011101'						; power on ADC, select AN7
 	rcall	wait_adc
 	MOVII	ADRESL,ambient_light
-	bcf		ADCON0,0						; power off ADC
+	bcf	ADCON0,0						; power off ADC
 
+	btfsc	ambient_light+1,7					; result negative?
+	return								; Yes, skip this measurement
 	; ambient_light:2 is between 4096 (direct sunlight) and about 200 (darkness)
 	; first: divide by 16
-
 	movlw	.4								; divide by 2^4 = 16
 get_ambient_level1_loop:
 	bcf		STATUS,C						; clear carry
@@ -299,7 +301,7 @@ get_ambient_level1_loop:
 	movwf	ambient_light+0					; YES - avoid ADC clipping
 
 	incfsz	ambient_light+0,W				; = 255 ?
-	bra		get_ambient_level2				; NO - continue
+	bra	get_ambient_level2				; NO - continue
 
 	movlw	.254
 	movwf	ambient_light+0					; avoid ADC clipping

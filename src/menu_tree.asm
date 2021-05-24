@@ -1338,7 +1338,11 @@ dyn_show_sensor_calib:
 	output_hex							; print C5, high byte
 	movff	C5+0,WREG					; get   C5, low  byte
 	output_hex							; print C5, low  byte
-	return								; done
+	btfss	press_sensor_type				; =1: pressure sensor MS5837, =0: Pressure sensor MS5541
+	return								; MS5541, done
+	PUTC	"*"
+	return								; MS5837, done
+	
 
 
 ;-----------------------------------------------------------------------------

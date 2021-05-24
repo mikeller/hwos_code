@@ -323,6 +323,15 @@ isr_tmr7:
 	movlw	.248						; reload timer 7, high byte (8x256 ticks -> 62.5 ms)
 	movwf	TMR7H						; ...                       (keep low byte running )
 
+	banksel	isr_backup					; back to ISR default bank
+	decfsz	isr_tmr7_helper,F				; decreased every 62,5ms
+	bra	isr_tmr7_0
+	movlw	.4						; 62,5ms * 4 = 1/4 second
+	movwf	isr_tmr7_helper
+	bsf	trigger_quarter_second				; set flag (In access RAM)
+
+	
+isr_tmr7_0:	
 	btfss	update_surface_pressure			; shall update the surface pressure?
 	bra		isr_tmr7_1						; NO  - skip
 	bcf		update_surface_pressure			; YES - clear request flag
@@ -390,9 +399,6 @@ isr_tmr7_5:
  ENDIF	; _external_sensor
 
 isr_sensor_state2:
-	btfss	sensor_state_counter,0				; every 1/4 second
-	bsf		trigger_quarter_second				; set flag
-
 	btfss	speed_is_normal						; CPU running on normal speed?
 	rcall	isr_set_speed_to_normal				; NO - set CPU speed to normal
 
@@ -429,15 +435,17 @@ isr_sensor_state2:
 	call	calculate_compensation				; calculate temperature compensated pressure (27 us)
 
 	; build average for pressure
-	bcf		STATUS,C							; clear carry bit
-	rrcf	pressure_abs_avg+1					; divide by 2
+	;bcf		STATUS,C							; clear carry bit - not needed since we don't use the +2 register later
+	rrcf	pressure_abs_avg+2					; divide by 2
+	rrcf	pressure_abs_avg+1					; ...
 	rrcf	pressure_abs_avg+0					; ...
-	bcf		STATUS,C							; clear carry bit
-	rrcf	pressure_abs_avg+1					; divide by 2, again
+	;bcf		STATUS,C							; clear carry bit - not needed since we don't use the +2 register later
+	rrcf	pressure_abs_avg+2					; divide by 2, again
+	rrcf	pressure_abs_avg+1					; ...
 	rrcf	pressure_abs_avg+0					; ...
 
 	; export averaged pressure
-	MOVII	pressure_abs_avg,pressure_abs		; export result
+	MOVII	pressure_abs_avg,pressure_abs		; export result (Which is 16 bit for all depths < 262m)
 
 	; build average for temperature
 	bcf		STATUS,C							; clear carry bit by default
@@ -541,11 +549,13 @@ isr_sensor_state2_6c:
 	bra		sensor_int_state_exit					; done
 
 sensor_int_state1_plus_restart:
-	CLRI	pressure_abs_avg			; clear average register for pressure
+    	clrf	pressure_abs_avg+0			; clear pressure    average register
+	clrf	pressure_abs_avg+1
+	clrf	pressure_abs_avg+2
 	CLRI	temperature_avg				; clear average register for temperature
 
 sensor_int_state1:
-	call	get_temperature_value		; state 1: get temperature...
+	call	get_temperature_value		; state 1: get temperature... 
 	call	get_pressure_start			; ...and start pressure integration
 	bra		sensor_int_state_exit
 
@@ -891,7 +901,7 @@ isr_rtcc_convert_BCD_DEC:
 isr_switch_right:
 	bcf		INTCON,INT0IE				; disable external interrupt 0
 	
-	btfsc	button_hold_down_allowed,A	; ignore for mechanical push buttons
+	btfsc	button_hold_down_allowed	; ignore for mechanical push buttons
 	bra	isr_switch_right2
 	btfsc	T4CON,TMR4ON					; Timer4 running?
 	bra	timer4_restart					; Yes, restart
@@ -906,7 +916,7 @@ isr_switch_right2:
 isr_switch_left:
 	bcf		INTCON3,INT1IE				; disable external interrupt 1
 
-	btfsc	button_hold_down_allowed,A	; ignore for mechanical push buttons
+	btfsc	button_hold_down_allowed	; ignore for mechanical push buttons
 	bra	isr_switch_left2
 	btfsc	T4CON,TMR4ON					; Timer4 running?
 	bra	timer4_restart					; Yes, restart
@@ -919,7 +929,7 @@ isr_switch_left2:
 	;bra	isr_switch_common			; continue with common part
 
 isr_switch_common:
-	btfss	button_hold_down_allowed,A	; ignore for mechanical push buttons
+	btfss	button_hold_down_allowed	; ignore for mechanical push buttons
 	bsf 	T4CON,TMR4ON			; Start timer 4
     
 	btfsc	tmr5_preemtion_allowed		; timer 5 preemption allowed?

@@ -44,11 +44,13 @@ ac_ram		udata_acs	ac_ram				; access RAM data
 
 ;---- Flags - Hardware Descriptors
 HW_descriptor					res 1		; OSTC - model descriptor (cleared & rebuilt in restart)
-HW_variants						res 1		; OSTC - model variants   (NOT cleared in restart)
-
+HW_variants					res 1		; OSTC - model variants   (NOT cleared in restart)
+HW_variants2					res 1		; OSTC - more model variants   (NOT cleared in restart)
+						
 ;---- Flags - Hardware States
 HW_flags_state1					res 1		; hardware - states 1
 HW_flags_state2					res 1		; hardware - states 2
+HW_flags_state3					res 1		; hardware - states 3
 
 ;--- Flags - Operating System
 OS_flags_persist				res 1		; system - persistent settings (NOT cleared in restart)
@@ -107,17 +109,19 @@ gauge_status_byte				res 1		; gauge IC status byte
 
 
 
-; 40 byte user data
+; 44 byte user data
 ; 32 byte tmp  data placed by C compiler
 ; 20 byte variables placed by math library
 ; ==
-; 92 byte used, 4 byte free (96 byte total available)
+; 96 byte used, 0 byte free (96 byte total available)
 
 
 	global	HW_descriptor
 	global	HW_variants
+	global	HW_variants2
 	global	HW_flags_state1
 	global	HW_flags_state2
+	global	HW_flags_state3
 	global	OS_flags_persist
 	global	OS_flags_ISR1
 	global	OS_flags_ISR2
@@ -366,7 +370,7 @@ init_ostc:
 	movlw	b'00101000'			; set up I2C to master mode
 	movwf	SSP1CON1			; ...
 	clrf	SSP1CON2			; ...
-	movlw	0x9C				; select speed 100kHz @ 64MHz Fosc
+	movlw	i2c_speed_value
 	movwf	SSP1ADD				; ...
 
 
@@ -441,8 +445,6 @@ init_ostc:
 	movwf	PIE1				; ...
 	movlw	b'00000010'			; enable timer 3 IRQ
 	movwf	PIE2				; ...
-	movlw	b'00000000'			; enable timer 5 IRQ
-	movwf	PIE5				; ...
 	movlw	b'00000001'			; enable RTCC IRQ
 	movwf	PIE3				; ...
 	movlw	b'00001001'			; enable timer 7 and timer 4 IRQ

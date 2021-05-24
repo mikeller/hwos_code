@@ -346,6 +346,9 @@ isr_unsigned_mult16x16:
 	addwfc	isr_xC+3,F					; ...
 	return								; done
 
+;=============================================================================
+math12	CODE
+;=============================================================================
 
 ;-----------------------------------------------------------------------------
 ; Multiply two   SIGNED 16 Bit Integers: isr_xC = isr_xA * isr_xB
@@ -355,7 +358,7 @@ isr_unsigned_mult16x16:
 	global	isr_signed_mult16x16
 isr_signed_mult16x16:
 	; do an unsigned multiplication first
-	rcall	isr_unsigned_mult16x16
+	call	isr_unsigned_mult16x16
 
 	; manage sign extension of operand B
 	btfss	isr_xB+1,7					; is B negative ?
@@ -364,7 +367,7 @@ isr_signed_mult16x16:
 	subwf	isr_xC+2,F					;     - ...
 	movf	isr_xA+1,W					;     - ...
 	subwfb	isr_xC+3,F					;     - ...
-isr_signed_mult_checkA					; manage sign extension of operand B
+isr_signed_mult_checkA:					; manage sign extension of operand B
 	btfss	isr_xA+1,7					; is A negative ?
 	return								; NO  - done
 	movf	isr_xB+0,W					; YES - add -65536 * B
@@ -373,6 +376,237 @@ isr_signed_mult_checkA					; manage sign extension of operand B
 	subwfb	isr_xC+3,F					;     - ...
 	return								;     - done
 
+;=============================================================================
+math13	CODE
+;=============================================================================
+
+;-----------------------------------------------------------------------------
+; Multiply two UNSIGNED 24 Bit Integers: isr_xC = isr_xA * isr_xB
+;
+; trashes PRODL, PRODH, WREG
+;
+	global	isr_unsigned_mult24x24
+isr_unsigned_mult24x24:
+	call	isr_unsigned_mult16x16				; Do the 16x16 first
+	clrf	isr_xC+4
+	clrf	isr_xC+5					; clear upper 16 bit
+	; do the remaining three multiplications
+	movf	isr_xA+0,W					; multiply a[0] * b[2]
+	mulwf	isr_xB+2					; ...
+	movf	PRODL,W						; add cross product to c[4]:c[3]:c[2]
+	addwf	isr_xC+2,F					; ...
+	movf	PRODH,W						; ...
+	addwfc	isr_xC+3,F					; propagate carry
+	clrf	WREG						; ...
+	addwfc	isr_xC+4,F					; ...
+	addwfc	isr_xC+5,F					; ...
+
+	movf	isr_xA+2,W					; multiply a[2] * b[0]
+	mulwf	isr_xB+0					; ...
+	movf	PRODL,W						; add cross product to c[4]:c[3]:c[2]
+	addwf	isr_xC+2,F					; ...
+	movf	PRODH,W						; ...
+	addwfc	isr_xC+3,F					; propagate carry
+	clrf	WREG						; ...
+	addwfc	isr_xC+4,F					; ...
+	addwfc	isr_xC+5,F					; ...
+	; isr_xC[2] done.
+	
+	movf	isr_xA+2,W					; multiply a[2] * b[1]
+	mulwf	isr_xB+1					; ...
+	movf	PRODL,W						; add cross product to c[5]:c[4]:c[3]
+	addwf	isr_xC+3,F					; ...
+	movf	PRODH,W						; ...
+	addwfc	isr_xC+4,F					; propagate carry
+	clrf	WREG						; ...
+	addwfc	isr_xC+5,F					; ...
+
+	movf	isr_xA+1,W					; multiply a[1] * b[2]
+	mulwf	isr_xB+2					; ...
+	movf	PRODL,W						; add cross product to c[5]:c[4]:c[3]
+	addwf	isr_xC+3,F					; ...
+	movf	PRODH,W						; ...
+	addwfc	isr_xC+4,F					; propagate carry
+	clrf	WREG						; ...
+	addwfc	isr_xC+5,F					; ...
+	; isr_xC[3] done.
+
+	movf	isr_xA+2,W					; multiply a[2] * b[2]
+	mulwf	isr_xB+2					; ...
+	movf	PRODL,W						; add cross product to c[5]:c[4]
+	addwf	isr_xC+4,F					; ...
+	movf	PRODH,W						; ...
+	addwfc	isr_xC+5,F					; propagate carry
+	; isr_xC[4] done.
+	; isr_xC[5] done.
+	
+	return							; done
+
+;=============================================================================
+math14	CODE
+;=============================================================================
+	
+;-----------------------------------------------------------------------------
+; Multiply two UNSIGNED Integers (32 and 24 Bit): isr_xC = isr_xA * isr_xB
+;
+; trashes PRODL, PRODH, WREG
+;
+	global	isr_unsigned_mult32x24
+isr_unsigned_mult32x24:
+	call	isr_unsigned_mult24x24				; Do the 24x24 first
+	clrf	isr_xC+6					; clear upper 8 bit
+	; do the remaining three multiplications
+	movf	isr_xA+3,W					; multiply a[3] * b[0]
+	mulwf	isr_xB+0					; ...
+	movf	PRODL,W						; add cross product to c[5]:c[4]:c[3]
+	addwf	isr_xC+3,F					; ...
+	movf	PRODH,W						; ...
+	addwfc	isr_xC+4,F					; propagate carry
+	clrf	WREG						; ...
+	addwfc	isr_xC+5,F					; ...
+	addwfc	isr_xC+6,F					; ...
+	; isr_xC[3] done.
+	
+	movf	isr_xA+3,W					; multiply a[3] * b[1]
+	mulwf	isr_xB+1					; ...
+	movf	PRODL,W						; add cross product to c[5]:c[4]
+	addwf	isr_xC+4,F					; ...
+	movf	PRODH,W						; ...
+	addwfc	isr_xC+5,F					; propagate carry
+	clrf	WREG						; ...
+	addwfc	isr_xC+6,F					; ...
+	; isr_xC[4] done.
+
+	movf	isr_xA+3,W					; multiply a[3] * b[2]
+	mulwf	isr_xB+2					; ...
+	movf	PRODL,W						; add cross product to c[5]:c[4]
+	addwf	isr_xC+5,F					; ...
+	movf	PRODH,W						; ...
+	addwfc	isr_xC+6,F					; propagate carry
+	; isr_xC[5] done.
+	; isr_xC[6] done.
+	return							; done
+	
+	
+;=============================================================================
+math15	CODE
+;=============================================================================
+	
+;-----------------------------------------------------------------------------
+; Multiply two   SIGNED 24 Bit Integers: isr_xC = isr_xA * isr_xB
+;
+; trashes PRODL, PRODH, WREG
+;
+	global	isr_signed_mult24x24
+isr_signed_mult24x24:
+	; do an unsigned multiplication first
+	call	isr_unsigned_mult24x24
+
+	; manage sign extension of operand B
+	btfss	isr_xB+2,7					; is B negative ?
+	bra		isr_signed24_mult_checkA		; NO  - continue checking operand A
+	movf	isr_xA+0,W					; YES - add -16777216 * A
+	subwf	isr_xC+3,F					;     - ...
+	movf	isr_xA+1,W					;     - ...
+	subwfb	isr_xC+4,F					;     - ...
+	movf	isr_xA+2,W					;     - ...
+	subwfb	isr_xC+5,F					;     - ...
+isr_signed24_mult_checkA:					; manage sign extension of operand B
+	btfss	isr_xA+2,7					; is A negative ?
+	return								; NO  - done
+	movf	isr_xB+0,W					; YES - add -16777216 * B
+	subwf	isr_xC+3,F					;     - ...
+	movf	isr_xB+1,W					;     - ...
+	subwfb	isr_xC+4,F					;     - ...
+	movf	isr_xB+2,W					;     - ...
+	subwfb	isr_xC+5,F					;     - ...
+	return						
+	
+;=============================================================================
+math16	CODE
+;=============================================================================
+	
+;-----------------------------------------------------------------------------
+; Divide two UNSIGNED 16 Bit Integers:  isr_xC:2 = isr_xA:2 / isr_xB:2 with xA as remainder
+;
+; trashes WREG
+;
+	global	isr_div16x16
+isr_div16x16:
+	movlw		.16						; process 16 bits ...
+	movwf		isr_math_loop				; ... initialize loop counter
+	movff		isr_xA+0,isr_xC+0				; copy isr_xA to isr_xC
+	movff		isr_xA+1,isr_xC+1				; ...
+	clrf		isr_xA+0					; clear isr_xA, will now be used to hold the remainder
+	clrf		isr_xA+1					; ...
+isr_div16x16_1:
+	bcf			STATUS,C				; clear carry flag to shift in a zero bit
+	rlcf		isr_xC+0,F					; shift left isr_xC
+	rlcf		isr_xC+1,F					; ... shifting MSB out of isr_xC...
+	rlcf		isr_xA+0,F					; ... and into LSB of     isr_xA
+	rlcf		isr_xA+1,F					; ...
+	btfsc		STATUS,C				; did the remainder overflow (carry set)?
+	bra			isr_div16x16_2				; YES - directly generate a result bit = 1
+	movf		isr_xB+0,W					; NO  - compute remainder - divisor = isr_xA - isr_xB, trash result to WREG
+	subwf		isr_xA+0,W					;     - ...
+	movf		isr_xB+1,W					;     - ...
+	subwfb		isr_xA+1,W					;     - ...
+	btfss		STATUS,C				;     - remainder < divisor (-> borrow flag set, equals carry flag cleared) ?
+	bra			isr_div16x16_3				;       YES - result bit = 0, keep LSB of isr_xC+0 being 0
+isr_div16x16_2:
+	bsf			isr_xC+0,0					;       NO  - result bit = 1, set  LSB of isr_xC+0 to 1
+	movf		isr_xB+0,W					;           - subtract divisor from remainder "for real": isr_xA = isr_xA - isr_xB
+	subwf		isr_xA+0,F					;           - ...
+	movf		isr_xB+1,W					;           - ...
+	subwfb		isr_xA+1,F					;           - ...
+isr_div16x16_3:
+	decfsz		isr_math_loop,F				; decrement loop counter, all bits done?
+	bra			isr_div16x16_1				; NO  - loop
+	return								; YES - done
+
+;=============================================================================
+math17	CODE
+;=============================================================================
+	
+;-----------------------------------------------------------------------------
+; Divide a 32 Bit Integer by a 16 Bit Integer: isr_xC:4 = isr_xC:4 / isr_xB:2 with isr_xA as remainder
+;
+; trashes WREG
+;
+	global	isr_div32x16
+isr_div32x16:
+	movlw		.32						; process 32 bits ...
+	movwf		isr_math_loop				; ... initialize loop counter
+	clrf		isr_xA+0					; clear isr_xA, will be used to hold the remainder
+	clrf		isr_xA+1					; ...
+isr_div32x16_1:
+	bcf			STATUS,C				; clear carry flag to shift in a zero bit
+	rlcf		isr_xC+0,F					; shift left isr_xC
+	rlcf		isr_xC+1,F					; ...
+	rlcf		isr_xC+2,F					; ...
+	rlcf		isr_xC+3,F					; ... shifting MSB out of isr_xC...
+	rlcf		isr_xA+0,F					; ... and into LSB of     isr_xA
+	rlcf		isr_xA+1,F					; ...
+	btfsc		STATUS,C				; did the remainder overflow (carry set)?
+	bra		isr_div32x16_2				; YES - directly generate a result bit = 1
+	movf		isr_xB+0,W					; NO  - compute remainder - divisor = isr_xA - isr_xB, trash result to WREG
+	subwf		isr_xA+0,W					;     - ...
+	movf		isr_xB+1,W					;     - ...
+	subwfb		isr_xA+1,W					;     - ...
+	btfss		STATUS,C				;     - remainder < divisor (-> borrow flag set, equals carry flag cleared) ?
+	bra		isr_div32x16_3				;       YES - result bit = 0, keep LSB of isr_xC+0 being 0
+isr_div32x16_2:
+	bsf		isr_xC+0,0					;       NO  - result bit = 1, set  LSB of isr_xC+0 to 1
+	movf		isr_xB+0,W					;           - subtract divisor from remainder "for real": isr_xA = isr_xA - isr_xB
+	subwf		isr_xA+0,F					;           - ...
+	movf		isr_xB+1,W					;           - ...
+	subwfb		isr_xA+1,F					;           - ...
+isr_div32x16_3:
+	decfsz		isr_math_loop,F				; decrement loop counter, all bits done?
+	bra		isr_div32x16_1				; NO  - loop
+	return								; YES - done
+	
+	
 ;-----------------------------------------------------------------------------
 
 	END

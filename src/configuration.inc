@@ -24,7 +24,7 @@
 #endif
 
 #define fw_version_major		0x03
-#define fw_version_minor		0x0D
+#define fw_version_minor		0x0F
 #define fw_version_beta			0x00
 
 
@@ -42,11 +42,11 @@
 ;
 #endif
 
-#define firmware_creation_year	0x14
-#define firmware_creation_month	0x0A
-#define firmware_creation_day	0x1C
+#define firmware_creation_year	0x15
+#define firmware_creation_month	0x05
+#define firmware_creation_day	0x15
 
-#define firmware_expire_year	0x16
+#define firmware_expire_year	0x17
 #define firmware_expire_month	0x0A
 #define firmware_expire_day	0x1C
 
@@ -79,8 +79,8 @@
 ; 
 #endif
 
-#define _language_1		de
-#define _language_2		en
+#define _language_1		en
+#define _language_2		de
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -146,7 +146,7 @@
 #define _gas_contingency
 #define NOT_INCLUDED_external_sensor
 #define NOT_INCLUDED_cave_mode
-#define NOT_INCLUDED_big_divemenu
+#define _big_divemenu
 #define _firmware_recovery
 #define NOT_INCLUDED_min_depth_option
 #define NOT_INCLUDED_screendump
@@ -166,7 +166,7 @@
 #define _gas_contingency
 #define NOT_INCLUDED_external_sensor
 #define _cave_mode
-#define NOT_INCLUDED_big_divemenu
+#define _big_divemenu
 #define _firmware_recovery
 #define NOT_INCLUDED_min_depth_option
 #define NOT_INCLUDED_screendump
@@ -186,7 +186,7 @@
 #define _external_sensor
 #define _gas_contingency
 #define NOT_INCLUDED_cave_mode
-#define NOT_INCLUDED_big_divemenu
+#define _big_divemenu
 #define _firmware_recovery
 #define NOT_INCLUDED_min_depth_option
 #define _screendump
@@ -206,7 +206,7 @@
 #define _external_sensor
 #define _gas_contingency
 #define _cave_mode
-#define NOT_INCLUDED_big_divemenu
+#define _big_divemenu
 #define _firmware_recovery
 #define NOT_INCLUDED_min_depth_option
 #define NOT_INCLUDED_screendump
@@ -226,7 +226,7 @@
 #define _rx_update
 #define NOT_INCLUDED_external_sensor
 #define NOT_INCLUDED_cave_mode
-#define NOT_INCLUDED_big_divemenu
+#define _big_divemenu
 #define _firmware_recovery
 #define NOT_INCLUDED_min_depth_option
 #define NOT_INCLUDED_screendump

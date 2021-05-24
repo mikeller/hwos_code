@@ -114,6 +114,10 @@ start_clear_rambank:
 	movlw	.16								; set averaging span
 	movff	WREG,analog_counter				; write to counter (in bank isr_backup)
 
+	; initialize 1/4 second counting register
+	movlw	.4						; 62,5ms * 4 = 1/4 second
+	movff	WREG,isr_tmr7_helper
+
 	; initialize hardware (ports, timers) and start interrupts
 	call	init_ostc						; also selects bank common and sets CPU to normal speed
 
@@ -154,13 +158,25 @@ start_clear_rambank:
 	EEPROM_CC_READ eeprom_button_polarity,button_polarity
 
 	; initialize pressure sensor calibration
+	call	I2C_probe_pressure_sensor		; Probe the type of sensor, set/clear press_sensor_type
 	call	get_calibration_data			; get calibration data from pressure sensor
 
 	call	TFT_DisplayOff					; turn off display
 	bsf		LEDr							; turn on red LED
 
 	; wait for valid temperature and pressure
-	WAITS	.3								; wait 3 seconds
+	btfsc	press_sensor_type			; New sensor found?
+	call	I2C_get_temp_val_MS5837			; (Will set ms5837_state)
+	WAITMS	.250
+	btfsc	press_sensor_type			; New sensor found?
+	call	I2C_get_press_val_MS5837		; (Will clear ms5837_state)
+	WAITMS	.250
+	btfsc	press_sensor_type			; New sensor found?
+	call	I2C_get_temp_val_MS5837			; (Will set ms5837_state)
+	WAITMS	.250
+	btfsc	press_sensor_type			; New sensor found?
+	call	I2C_get_press_val_MS5837		; (Will clear ms5837_state)
+	WAITMS	.250
 
 	; sensor calibration completed, first valid pressure value is available
 	bcf		LEDr							; turn off red LED
@@ -325,6 +341,7 @@ restart:
 	clrf	HW_descriptor					; hardware - OSTC model descriptor
 	clrf	HW_flags_state1					; hardware - states
 	;										; DO NOT clear HW_flags_state2 !
+	;										; DO NOT clear HW_flags_state3 !
 	clrf	DM_flags_sensor					; hardware - O2 sensors
 	clrf	OS_flags_ISR1					; operating system - ISR control 1
 	clrf	OS_flags_ISR2					; operating system - ISR control 2
@@ -384,6 +401,9 @@ restart4:
     ; Do the check for BLE-cR
    IFDEF _external_sensor
     bsf		mcp_power					; power-up instrumentation amp (used by S8 and analog input)
+    btfss	mcp_power					; power-up completed?
+    bra		$-4						; NO - loop
+    WAITMS	.1
     banksel	BAUDCON2					; select bank for IO register access
     movlw	b'00000000'					; speed generator configuration: BRG16=0, normal for S8
     movwf	BAUDCON2					; ...
@@ -394,13 +414,21 @@ restart4:
     movlw	b'10010000'					; RX configuration
     movwf	RCSTA2						; ...
     banksel	common						; back to bank common
-    call	get_analog_inputs
-    movff	sensor1_mv+1,lo
-    movlw	.58			    ; ~ >1,500V
-    cpfslt	lo			    ; >58 on the high byte -> confident that there is cR circuity
+    WAITMS	.1
+    ; Check sensor 1 input with no limits
+    movlw	b'00000000'					; AVDD Vref+
+    movwf	ADCON1						; ...
+    ; set to read Sensor 1
+    extern	wait_adc
+    movlw	b'00100001'					; power on ADC, select AN8
+    call	wait_adc					; wait for ADC
+    movlw	.10			    ; ~ >1,900V
+    cpfslt	ADRESH			    ; >10 on the high byte -> confident that there is cR circuity
     bsf		ext_input_s8_ana				;       YES - it's a cR, S8/analog sensor input available
     call	disable_ir_s8_analog				; power-down circuity again
    ENDIF
+   
+   
    	bsf		lv_core							; default to low voltage core
 	movlw	0x80							; point to 0x1F780
 	movwf	TBLPTRL							; ...
@@ -502,9 +530,9 @@ restart4e:
 restart5:
 	; configure button_hold_down_allowed flag
 	btfsc	lv_core
-	bsf	button_hold_down_allowed,A		; OSTC sport mod. 2019
+	bsf	button_hold_down_allowed		; OSTC sport mod. 2019
 	btfsc	ext_input_optical
-	bsf	button_hold_down_allowed,A		; OSTC3/old sport
+	bsf	button_hold_down_allowed		; OSTC3/old sport
 	
 	; manage hardware
 	btfss	ext_input_s8_ana				; OSTC with S8/analog input?

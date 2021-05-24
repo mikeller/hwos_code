@@ -235,7 +235,7 @@ compass_calibration:					; compass calibration
 
 	call	request_speed_fastest		; request CPU speed change to fastest speed
 
-	movlw	.7							; initialize gain
+	movlw	.5							; initialize gain
 	movff	WREG,opt_compass_gain		; ...
 
 	movlw	.60							; initialize timeout to 60 seconds

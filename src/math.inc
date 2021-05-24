@@ -90,12 +90,31 @@
 ;
 	extern	isr_unsigned_mult16x16	; isr_xC = isr_xA * isr_xB
 									; trashes PRODL, PRODH, WREG
-
-
+;-----------------------------------------------------------------------------
+; MULTIPLICATION with UNSIGNED values
+;
+	extern	isr_unsigned_mult24x24	; isr_xC = isr_xA * isr_xB
+									; trashes PRODL, PRODH, WREG
+	extern	isr_unsigned_mult32x24	; isr_xC = isr_xA * isr_xB
+									; trashes PRODL, PRODH, WREG
+									
 ;-----------------------------------------------------------------------------
 ; MULTIPLICATION with SIGNED   values
 ;
 	extern	isr_signed_mult16x16	; isr_xC = isr_xA * isr_xB
 									; trashes PRODL, PRODH, WREG
+										
+	extern	isr_signed_mult24x24
 
 ;-----------------------------------------------------------------------------
+									
+; DIVISION       with UNSIGNED values
+;
+	extern	isr_div16x16				; isr_xC:2 = isr_xA:2 / isr_xB:2 with isr_xA as remainder
+									; trashes xB, WREG
+
+;-----------------------------------------------------------------------------
+; DIVISION       with UNSIGNED values
+;
+
+	extern	isr_div32x16				; isr_xC:4 = isr_xC:4 / isr_xB:2 with isr_xA as remainder
