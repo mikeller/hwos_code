@@ -1571,6 +1571,10 @@ TFT_depth_metric:
 	; depth in meters and decimeters
 	btfsc	cur_depth_greater_100m		; was the depth >= 100 meter during last call?
 	rcall	TFT_depth_box_black			; YES - clear depth area
+
+	btfsc	cur_depth_greater_100m		; was the depth >= 100 meter during last call?
+	rcall	TFT_depth_position_m_ft		; re-set output position for full meters/feet
+
 	bcf		cur_depth_greater_100m		; current depth is now < 100 meter
 	PRINT								; dump full meters to screen
 
@@ -1596,6 +1600,10 @@ TFT_depth_metric_100m:
 	; full meters only
 	btfss	cur_depth_greater_100m		; was the depth >= 100 meter during last call?
 	rcall	TFT_depth_box_black			; NO - clear depth area
+	
+	btfss	cur_depth_greater_100m		; was the depth >= 100 meter during last call?
+	rcall	TFT_depth_position_m_ft		; re-set output position for full meters/feet
+	
 	bsf		cur_depth_greater_100m		; depth is >= 100 meter now
 	REINIT_BUFFER						; re-initialize the output buffer
 	bsf		omit_digit_2				; print depth in full meters, i.e. do not print 1st and 2nd digit
@@ -2833,6 +2841,21 @@ TFT_clear_message_window_surf_2:
 	WIN_BOX_BLACK surf_warning2_row, surf_warning2_row+.24, surf_warning2_column, surf_warning2_column+.76	; top, bottom, left, right
 	return									; done
 
+;-----------------------------------------------------------------------------
+; Surface Mode - Message - when "I2CFail" was triggered
+;
+	global	TFT_message_i2c_error
+TFT_message_i2c_error:	
+	rcall	TFT_message_open			; set row and column for the message
+	tstfsz	WREG						; is there room for the message?
+	return								; NO - skip message in this cycle
+	STRCPY	"I2C "						; print "I2C Error:"
+	movff	i2c_error_vault+0,WREG				; last device adress
+	output_hex
+	PUTC	" "
+	movff	i2c_error_vault+1,WREG				; last data byte 
+	output_hex
+	bra		TFT_message_close			; finalize message output
 
 ;-----------------------------------------------------------------------------
 ; Surface Mode - Message - Desaturation
@@ -6030,7 +6053,6 @@ TFT_print_decotype_5:
 tft_out16	CODE
 ;=============================================================================
 
-
 	global	TFT_debug_output
 TFT_debug_output:
 
@@ -6048,14 +6070,14 @@ TFT_debug_output:
 ;	WIN_TINY   .0, .		0					; dive    mode: overwrites depth label
 	FONT_COLOR_MEMO								; set color
 	
-	movff	max_CCPR1L,lo
+	movff	ambient_light+0,lo
 	output_256
 	PUTC	","
-	movff	analog_sw2,lo; left
-	output_256
-	PUTC	","
-	movff	analog_sw1,lo; right
-	output_256
+	movff	ambient_light+0,lo
+	movff	ambient_light+1,hi
+	output_65535
+
+	
 
 ;	; deco engine scheduling performance
 ;	MOVII	int_O_profiling_overrun,mpr			; runtime +/- versus target

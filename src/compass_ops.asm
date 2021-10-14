@@ -235,7 +235,7 @@ compass_calibration:					; compass calibration
 
 	call	request_speed_fastest		; request CPU speed change to fastest speed
 
-	movlw	.7							; initialize gain
+	movlw	.5							; initialize gain
 	movff	WREG,opt_compass_gain		; ...
 
 	movlw	.60							; initialize timeout to 60 seconds
@@ -313,6 +313,10 @@ compass_calibration_loop2:
 ;	btfsc	compass_type1				; compass1?
 ;	bra		compass_calibration_loop3	; YES -  skip gain stuff
 
+	banksel	opt_compass_gain			; select bank options table
+	tstfsz	opt_compass_gain			; =0?
+	bra		$+4				; No
+	bra	compass_calibration_loop3		; YES -  skip gain stuff 
 	; Test all axes for +4096 (Hi byte=16)
 	banksel	compass_DX					; select bank common2
 	movlw	.16
@@ -337,19 +341,9 @@ compass_calibration_loop2:
 	cpfseq	compass_DZ+1
 	bra		$+4
 	bra		compass_calibration_gainset
-	banksel	common						; back to bank common
-
-;	; Three
-;	call	I2C_RX_compass				; read compass
-;	call	I2C_RX_accelerometer		; test accelerometer
-;	call	compass_filter				; filter compass raw data
-;
-;	; Four times to get cleaner values
-;	call	I2C_RX_compass				; read compass
-;	call	I2C_RX_accelerometer		; test accelerometer
-;	call	compass_filter				; filter compass raw data
 
 compass_calibration_loop3:
+	banksel	common						; back to bank common
 	; and register only one value out of four:
 	call	compass_add_calibration		; check and store new max/min values (C-code)
 	banksel	common						; back to bank common

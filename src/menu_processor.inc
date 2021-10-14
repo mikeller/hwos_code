@@ -53,7 +53,7 @@
 ;
 ; nb_items         number of menu items that will follow
 ;
-MENU_BEGIN_DIVE	MACRO nb_items
+MENU_BEGIN_DIVE	MACRO title_text_addr, nb_items
 
 items_target set nb_items
 items_count  set 0
@@ -67,12 +67,13 @@ items_count  set 0
 	ENDIF
 
 	; store code for menu execution
+	extern	title_text_addr			; 2 byte address of multi-lingual title text
 	extern	menu_processor
 	call	menu_processor
 
 	; store menu header data
 	db	nb_items,				0x00					; number of items, encoding for no menu titel
-
+	db	low(title_text_addr),	high(title_text_addr)	; address of multi-lingual title text
 	ENDM
 
 

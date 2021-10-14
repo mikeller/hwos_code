@@ -11,7 +11,8 @@
 
 #include "hwos.inc"						; Mandatory header
 #include "math.inc"						; Math routines
-
+#include "i2c.inc"
+#include "shared_definitions.h"				; mailbox from/to p2_deco.c
 
 ms5541	CODE
 
@@ -30,6 +31,9 @@ ms5541	CODE
 	global calculate_compensation
 calculate_compensation:
 	banksel	isr_backup					; select bank ISR data
+
+	btfsc	press_sensor_type			; New sensor found?
+	bra 	press_comp_ms5837			; Yes, use MS5837
 
 	;---- pressure sensor compensation
 
@@ -131,7 +135,7 @@ calc_loop_1:
 
 	MOVII	SENS,isr_xB					; sens --> B
 	call	isr_signed_mult16x16		; C = A*B
-	movlw	.13							; 12 * 256 = 3328
+	movlw	.15							; 15 * 256 = 3840
 	cpfslt	C1+1						; C1 > 3328 ?
 	bra		isr_shift_ms5541_30			; YES - MS5541-30
 	movlw	.12-.8						; NO  - MS5541: 12 bit shift = 1 byte + 4 bits
@@ -144,7 +148,144 @@ isr_shift_ms5541_common:
 	addwf	isr_xC+1,F					; ...
 	movlw	HIGH .1000					; ...
 	addwfc	isr_xC+2,F					; ...
+	bra	press_comp_done_common
 
+press_comp_ms5837:
+ 	; xdT = D2 - C5*2^8
+	movlw	.0		; Low
+	subwf	D2+0,W
+	movwf	xdT+0
+	movf	C5+0,W		; High
+	subwfb	D2+1,W
+	movwf	xdT+1
+	movf	C5+1,W		; Upper
+	subwfb	D2+2,W
+	movwf	xdT+2
+	; xdT equals D2 - (C5*2^8)
+	
+	; Calculate OFF = C2*2^16+(C4*xdT)/2^7
+	movff	C4+0,isr_xA+0
+	movff	C4+1,isr_xA+1
+	clrf	isr_xA+2
+	movff	xdT+0,isr_xB+0
+	movff	xdT+1,isr_xB+1
+	movff	xdT+2,isr_xB+2
+	call	isr_signed_mult24x24		; C = A*B
+	; isr_xC:6 equals (C4*xdT)
+	rlcf	isr_xC+0,F
+	rlcf	isr_xC+1,F
+	rlcf	isr_xC+2,F
+	rlcf	isr_xC+3,F
+	rlcf	isr_xC+4,F
+	rlcf	isr_xC+5,F
+	movff	isr_xC+1,OFF+0
+	movff	isr_xC+2,OFF+1
+	movff	isr_xC+3,OFF+2
+	movff	isr_xC+4,OFF+3
+	; OFF equals (C4*xdT)/2^7
+	movf	C2+0,W
+	addwf	OFF+2,F
+	movf	C2+1,W
+	addwfc	OFF+3,F
+	; OFF equals C2*2^16+((C4*xdT)/2^7)
+	
+	; Calculate SENS = C1*2^15 + (C3*xdT)/2^8
+	MOVII	C1,isr_xA
+	movlw	LOW	(.32768)
+	movwf	isr_xB+0
+	movlw	HIGH	(.32768)
+	movwf	isr_xB+1
+	call	isr_unsigned_mult16x16		; C = A*B
+	movff	isr_xC+0,SENS+0
+	movff	isr_xC+1,SENS+1
+	movff	isr_xC+2,SENS+2
+	movff	isr_xC+3,SENS+3			; 32bit copy
+	; SENS equals C1*2^15
+	movff	C3+0,isr_xA+0
+	movff	C3+1,isr_xA+1
+	clrf	isr_xA+2
+	movff	xdT+0,isr_xB+0
+	movff	xdT+1,isr_xB+1
+	movff	xdT+2,isr_xB+2
+	call	isr_signed_mult24x24		; C = A*B
+	; isr_xC:6 equals (C3*xdT)
+	movf	isr_xC+1,W
+	addwf	SENS+0,F
+	movf	isr_xC+2,W
+	addwfc	SENS+1,F
+	movf	isr_xC+3,W
+	addwfc	SENS+2,F
+	movf	isr_xC+4,W
+	addwfc	SENS+3,F
+	; SENS equals C1*2^15 + (C3*xdT)/2^8
+
+	; Calculate PRESSURE = ((D1 * SENS) / 2^21) - OFF) / 2^13
+	movff	SENS+0,isr_xA+0
+	movff	SENS+1,isr_xA+1
+	movff	SENS+2,isr_xA+2
+	movff	SENS+3,isr_xA+3
+	movff	D1+0,isr_xB+0
+	movff	D1+1,isr_xB+1
+	movff	D1+2,isr_xB+2
+	call	isr_unsigned_mult32x24		; C = A*B
+	; isr_xC:7 equals D1*SENS
+
+	; devide isr_xC:7 / 2^21 -> shift right 21 times
+	movlw	.21
+press_comp_ms5837_2:
+	bcf	STATUS,C					; clear carry, needed for MS5837 use
+	rrcf	isr_xC+6,F
+	rrcf	isr_xC+5,F
+	rrcf	isr_xC+4,F
+	rrcf	isr_xC+3,F
+	rrcf	isr_xC+2,F
+	rrcf	isr_xC+1,F
+	rrcf	isr_xC+0,F
+	decfsz	WREG						; decrement loop counter, done?
+	bra	press_comp_ms5837_2			; NO  - loop		
+	; isr_xC:6 equals (D1*SENS)/2^21
+	
+	; Calculate isr_xC:6-OFF
+	movf	OFF+0,W	    ; Low
+	subwf	isr_xC+0,F
+	movf	OFF+1,W	    ; High
+	subwfb	isr_xC+1,F
+	movf	OFF+2,W	    ; Upper
+	subwfb	isr_xC+2,F
+	movf	OFF+3,W	    ; Extra
+	subwfb	isr_xC+3,F
+	movlw	.0	    ; ultra
+	subwfb	isr_xC+4,F
+	movlw	.0	    ; Hyper
+	subwfb	isr_xC+5,F
+	; isr_xC:5 is now isr_xC:4-OFF
+	
+	; devide by 2^13
+	; devide isr_xC:6 / 2^13 -> shift right 13 times
+	movlw	.13
+press_comp_ms5837_3:
+	bcf	STATUS,C					; clear carry
+	rrcf	isr_xC+5,F
+	rrcf	isr_xC+4,F
+	rrcf	isr_xC+3,F
+	rrcf	isr_xC+2,F
+	rrcf	isr_xC+1,F
+	rrcf	isr_xC+0,F
+	decfsz	WREG						; decrement loop counter, done?
+	bra	press_comp_ms5837_3			; NO  - loop		
+	; isr_xC:4 equals pressure in .1 mbar
+
+	movlw	.10
+	movwf	isr_xB+0
+	clrf	isr_xB+1
+	call	isr_div32x16				; isr_xC:4 = isr_xC:4 / isr_xB:2 with isr_xA as remainder
+	; isr_xC:2 equals pressure in 1mbar
+
+	; copy for compatibility of the next routines
+	movff	isr_xC+1,isr_xC+2
+	movff	isr_xC+0,isr_xC+1
+	
+press_comp_done_common:						; continue here even with MS5837
 	; add opt_pressure_adjust to result (SIGNED!)
 	clrf	isr_xC+0					; prepare high byte for adjustment
 	movff	opt_pressure_adjust,WREG	; get     low  byte for adjustment (signed)
@@ -256,9 +397,14 @@ calc_compensation_add_avg:
 	addwf	pressure_abs_avg+0,F		; pressure_abs_avg += current pressure,   low  byte
 	movf	isr_xC+2,W					; copy current absolute pressure to WREG, high byte
 	addwfc	pressure_abs_avg+1,F		; pressure_abs_avg += current pressure,   high byte
+	movlw	.0
+	addwfc	pressure_abs_avg+2,F		; pressure_abs_avg += current pressure,   upper byte
 
 	;---- temperature sensor compensation
 
+    	btfsc	press_sensor_type			; New sensor found?
+	bra	temp_comp_ms5837			; Yes, use MS5837
+	
 	; calculate temp = 200 + dT*(C6+100)/2^11
 	movlw	LOW(.100)					; C6 + 100 --> A
 	addwf	C6+0,W						; ...
@@ -276,7 +422,71 @@ calc_compensation_add_avg:
 	addwf	isr_xC+1,F					; ...
 	movlw	HIGH(.200)					; ...
 	addwfc	isr_xC+2,F					; ...
+	bra	temp_comp_done_common
 
+temp_comp_ms5837:
+    	; TEMP = 2000+((xdT * C6) / 2^23)
+	
+	; xdT * C6 -> isr_xC:6
+	movff	C6+0,isr_xA+0
+	movff	C6+1,isr_xA+1
+	clrf	isr_xA+2
+	movff	xdT+0,isr_xB+0
+	movff	xdT+1,isr_xB+1
+	movff	xdT+2,isr_xB+2
+	call	isr_signed_mult24x24		; A*B
+	
+	; devide isr_xC:6 / 2^23 -> shift right 23 times
+	; a special variant (again): We loose isr_xC+0 and isr_xC+1 anyway 
+	; and do not care about the inserted carry since we won't use isr_xC+5 
+	; and we shift less then 8 bytes
+	movlw	.23-.16	    
+temp_comp_ms5837_2:
+	rrcf	isr_xC+5,F					; 
+        rrcf	isr_xC+4,F					; 
+	rrcf	isr_xC+3,F					; 
+	rrcf	isr_xC+2,F					; ...
+	decfsz	WREG						; decrement loop counter, done?
+	bra	temp_comp_ms5837_2			; NO  - loop	
+
+	; only use +2 and +3
+	movlw	LOW(.2000)					; add 2000
+	addwf	isr_xC+2,F					; ...
+	movlw	HIGH(.2000)					; ...
+	addwfc	isr_xC+3,F					; ...
+
+	; devide by 10 for .1°C resolution
+	movlw	.10
+	movwf	isr_xB+0
+	clrf	isr_xB+1
+	movff	isr_xC+2,isr_xA+0
+	movff	isr_xC+3,isr_xA+1
+
+	btfss	isr_xC+3,7		    ; check sign bit
+	bra	temp_comp_ms5837_3	    ; not negative...
+	; negate isr_xA:2 to make it positive
+	comf	isr_xA+1		    ; 16 bit sign change
+	negf	isr_xA+0
+	btfsc	STATUS,C		    ; - carry to propagate?
+	incf	isr_xA+1,F		    ;  YES - do it
+
+temp_comp_ms5837_3:
+	call	isr_div16x16					; isr_xC:2 = isr_xA:2 / isr_xB:2
+
+	btfss	isr_xC+3,7		    ; check sign bit again
+	bra	temp_comp_ms5837_4	    ; not negative...
+	; negate result isr_xC:2 to make it negative again
+	comf	isr_xC+1		    ; 16 bit sign change
+	negf	isr_xC+0
+	btfsc	STATUS,C		    ;- carry to propagate?
+	incf	isr_xC+1,F		    ; YES - do it
+	
+temp_comp_ms5837_4:	
+	; copy for compatibility of the next routines
+	movff	isr_xC+1,isr_xC+2
+	movff	isr_xC+0,isr_xC+1
+	
+temp_comp_done_common:						; continue here even with MS5837	
 	; add opt_temperature_adjust to result (SIGNED!)
 	clrf	isr_xC+0					; prepare high byte for adjustment
 	movff	opt_temperature_adjust,WREG	; get     low  byte for adjustment (signed)
@@ -309,12 +519,13 @@ calc_temperature_add_avg:
 ;
 	global	get_pressure_start
 get_pressure_start:
+       	btfsc	press_sensor_type			; New sensor found?
+	return						; Yes, ignore routine
 	rcall	reset_MS5541				; reset the chip
 	movlw	b'10100000'					; +3*high as start and 1+low as stop
 	movwf	dbuffer						; ....
 	movlw	d'12'						; send start command
-	rcall	send_data_MS5541			; ...
-	return								; done
+	bra 	send_data_MS5541				; ... (And return)
 
 
 ;-----------------------------------------------------------------------------
@@ -324,6 +535,8 @@ get_pressure_start:
 ;
 	global get_pressure_value
 get_pressure_value:
+       	btfsc	press_sensor_type			; New sensor found?
+	bra	get_pressure_value2
 	btfsc	MS5541_miso					; conversion done?
 	return								; NO  - abort
 	rcall	get_2bytes_MS5541			; YES - read result
@@ -331,6 +544,14 @@ get_pressure_value:
 	movff	dLSB,D1+0					; ...                low  byte second
 	return								; done
 
+get_pressure_value2:	
+	btfsc	i2c_busy_pressure			; currently updating pressure?
+	return						; Yes, skip update...
+	movff	D1_buffer+0,D1+0
+	movff	D1_buffer+1,D1+1
+	movff	D1_buffer+2,D1+2
+	return
+	
 
 ;-----------------------------------------------------------------------------
 ; Start Temperature Measurement
@@ -339,12 +560,13 @@ get_pressure_value:
 ;
 	global	get_temperature_start
 get_temperature_start:
+       	btfsc	press_sensor_type			; New sensor found?
+	return						; Yes, ignore routine
 	rcall	reset_MS5541				; reset chip
 	movlw	b'10010000'					; +3*high as start and 1+low as stop
 	movwf	dbuffer						; ...
 	movlw	d'12'						; send start command
-	rcall	send_data_MS5541			; ...
-	return								; done
+	bra	send_data_MS5541				; ... (And return)
 
 
 ;-----------------------------------------------------------------------------
@@ -354,6 +576,8 @@ get_temperature_start:
 ;
 	global	get_temperature_value
 get_temperature_value:
+	btfsc	press_sensor_type			; New sensor found?
+	bra	get_temperature_value2
 	btfsc	MS5541_miso					; conversion done?
 	return								; NO - done
 	rcall	get_2bytes_MS5541			; YES - read result
@@ -361,6 +585,14 @@ get_temperature_value:
 	movff	dLSB,D2+0					; ...                low  byte second
 	return								; done
 
+get_temperature_value2:
+	btfsc	i2c_busy_temperature			; currently updating temperature?
+	return						; Yes, skip update...
+	movff	D2_buffer+0,D2+0
+	movff	D2_buffer+1,D2+1
+	movff	D2_buffer+2,D2+2
+	return
+	
 
 ;-----------------------------------------------------------------------------
 ; Retrieve Calibration Data
@@ -370,8 +602,32 @@ get_temperature_value:
 	global	get_calibration_data
 get_calibration_data:
 	banksel	isr_backup					; select bank ISR data
-	bsf		block_sensor_interrupt		; disable sensor interrupts
+	bsf	    block_sensor_interrupt		; disable sensor interrupts
 
+	btfsc	press_sensor_type			; New sensor found?
+	call	I2C_get_calib_MS5837			; Yes, read C1 to C6
+	banksel	isr_backup					; select bank ISR data
+	; double-check sensor type
+	movlw	0xED
+	cpfseq	C1+0
+	bra	get_calibration_data1			; Not 0xED (I2C address false reading)
+	movlw	0xED
+	cpfseq	C1+1
+	bra	get_calibration_data1			; Not 0xED (I2C address false reading)
+	movlw	0xED
+	cpfseq	C5+0
+	bra	get_calibration_data1			; Not 0xED (I2C address false reading)
+	movlw	0xED
+	cpfseq	C5+1
+	bra	get_calibration_data1			; Not 0xED (I2C address false reading)
+	
+	; C1 and C5 are 0xEDED -> NOT Sensor 1
+	bcf	press_sensor_type
+	
+get_calibration_data1:	
+	btfsc	press_sensor_type			; New sensor found?
+	bra	get_calibration_data2			; Yes, skip to the end
+	
 	rcall	reset_MS5541				; reset chip
 
 	movlw	b'01010100'					; +3*high as start and 1+low as stop
@@ -545,6 +801,7 @@ get_calibration_data:
 	movff	ir_s8_buffer+6,C6+0
 	bcf		C6+0,7
 
+get_calibration_data2:
 	clrf	sensor_state_counter		; reset state counter
 	bcf		block_sensor_interrupt		; re-enable sensor interrupts
 	banksel	common						; back to bank common

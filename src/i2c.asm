@@ -37,6 +37,16 @@
 ;   -----------
 ;   RX Circuity read address  (8-Bit):  0x51
 ;   RX Circuity write address (8-Bit):  0x50
+;    
+;   Battery gauge    
+;   -------------
+;   LTC2942 read address  (8-Bit): 0xC9   
+;   LTC2942 write address (8-Bit): 0xC8 
+;
+;   Alternative pressure sensor
+;   -----------
+;   MS5837 read address  (8-Bit):  0xED
+;   MS5837 write address (8-Bit):  0xEC
 ;
 ;
 
@@ -49,20 +59,12 @@
 #include "wait.inc"
 #include "math.inc"
 #include "eeprom_rs232.inc"
-
+    
 
 ;=============================================================================
 i2c		CODE
 ;=============================================================================
 
-
-;-----------------------------------------------------------------------------
-; Helper Function - send 1 Byte, wait for end of transmission and check ackn
-;
-I2C_TX:
-	movwf	SSP1BUF						; put byte to be sent into TX buffer
-	rcall	WaitMSSP					; wait for TX to complete
-	bra		I2C_Check_ACK				; check for acknowledge by receiver and return
 
 
 ;-----------------------------------------------------------------------------
@@ -117,10 +119,11 @@ I2C_RX_accelerometer:
 	bra		I2C_RX_accelerometer_compass1	; YES
 	;bra	I2C_RX_accelerometer_compass0	; NO  - compass0 then
 
-I2C_RX_accelerometer_compass0:
+;I2C_RX_accelerometer_compass0:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x38						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x00						; ??
 	rcall	I2C_TX						; send byte
@@ -178,13 +181,15 @@ I2C_RX_accelerometer3:
 	incf	hi,F						; YES - do it
 	MOVII	mpr,accel_DZ				; copy result to accel_DZ
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall		WaitMSSP				; wait for TX to complete
+	return
 
 
 I2C_RX_accelerometer_compass1:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	b'10101000'					; 0x28 with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
@@ -274,6 +279,7 @@ I2C_RX_accelerometer_compass2:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x32						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	b'10101000'					; 0x28 with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
@@ -286,6 +292,7 @@ I2C_RX_accelerometer_compass3:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3A						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x28						; 0x28 (OUT_X_L_A)
 	rcall	I2C_TX						; send byte
@@ -320,10 +327,11 @@ I2C_RX_compass:
 	bra		I2C_RX_compass1				; YES
 	;bra	I2C_RX_compass0				; NO  - compass 0 then
 
-I2C_RX_compass0:
+;I2C_RX_compass0:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x03						; ??
 	rcall	I2C_TX						; send byte
@@ -395,6 +403,7 @@ I2C_RX_compass1:						; compass type 1
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	b'10001000'					; 0x08 with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
@@ -440,14 +449,17 @@ I2C_RX_compass1_2:
 	movff	SSP1BUF,hi					; data byte
 	rcall	I2C_TwoBytesRX_div8			; divide hi, lo by 8 (signed)
 	MOVII	mpr,compass_DZ				; copy result
-	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; ... and return
+	bsf	SSP1CON2,PEN				; stop condition
+	rcall	WaitMSSP
+	return								; done
+
 
 
 I2C_RX_compass2:						; compass type 2
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0xE8						; 0x68 with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
@@ -492,13 +504,16 @@ I2C_RX_compass2_2:
 ;	rcall	I2C_TwoBytesRX_div8			; divide hi, lo by 8 (signed)
 	MOVII	mpr,compass_DZ				; copy result
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; ...and return
+	rcall	WaitMSSP					
+	return								; done
+
 
 
 I2C_RX_compass3:						; compass type 3
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0xA8						; 0x28 with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
@@ -524,6 +539,7 @@ I2C_init_compass:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3A						; address byte + write bit
+	movff	WREG,i2c_error_vault+0				; Store address
 	movwf	SSP1BUF						; control byte
 	rcall	WaitMSSP					; wait for TX to complete
 	btfss	SSP1CON2,ACKSTAT			; ACK received?
@@ -538,6 +554,7 @@ I2C_init_compass:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x32						; address byte + write bit
+	movff	WREG,i2c_error_vault+0				; Store address
 	movwf	SSP1BUF						; control byte
 	rcall	WaitMSSP					; wait for TX to complete
 	btfss	SSP1CON2,ACKSTAT			; ACK received?
@@ -553,6 +570,7 @@ I2C_init_compass:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x0F						; ??
 	rcall	I2C_TX						; send byte
@@ -579,6 +597,7 @@ I2C_init_compass0:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x00						; ??
 	rcall	I2C_TX						; send byte
@@ -602,6 +621,7 @@ I2C_init_compass0:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x38						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x0E						; XYZ_DATA_CFG
 	rcall	I2C_TX						; send byte
@@ -633,13 +653,16 @@ I2C_init_compass0:
 	movlw	b'00110101'					; CTRL_REG1: 160 ms data rate, standby mode, reduced noise mode, active Mode
 	rcall	I2C_TX						; send byte
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
+
 
 
 I2C_init_compass1:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x9F						; 1F with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
@@ -675,7 +698,8 @@ I2C_init_compass1:
 	movlw	b'00000000'					; CTRL7 Continuous Mode
 	rcall	I2C_TX						; send byte
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
 
 	; accelerometer initializes along with magnetic sensor
 
@@ -685,6 +709,7 @@ I2C_init_compass2:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0xE0						; 0x60 with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
@@ -701,6 +726,7 @@ I2C_init_compass2:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x32						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x9F						; 1F with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
@@ -717,7 +743,8 @@ I2C_init_compass2:
 ;	movlw	b'00000000'					; CTRL_REG5_A
 ;	rcall	I2C_TX						; send byte
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
 
 
 I2C_init_compass3:
@@ -725,16 +752,17 @@ I2C_init_compass3:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0xA0						; 0x20 with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
-	movlw	b'01110000'					; CTRL_REG1_M (10Hz) 0x20
+	movlw	b'01110000'					; CTRL_REG1_M (10Hz, X and Y in Ultra-high performance mode) 0x20
 	rcall	I2C_TX						; send byte
 	movlw	b'01100000'					; CTRL_REG2_M (Full-scale: +/- 16gauss) 0x21
 	rcall	I2C_TX						; send byte
 	movlw	b'01000000'					; CTRL_REG3_M (Continuous) 0x22
 	rcall	I2C_TX						; send byte
-	movlw	b'00000000'					; CTRL_REG4_M (Z in Low-power mode) 0x23
+	movlw	b'00001100'					; CTRL_REG4_M (Z in Ultra-high performance mode) 0x23
 	rcall	I2C_TX						; send byte
 	movlw	b'00000000'					; CTRL_REG5_M 0x24
 	rcall	I2C_TX						; send byte
@@ -747,6 +775,7 @@ I2C_init_compass3:
 	bsf	SSP1CON2,SEN					; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3A						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x20
 	rcall	I2C_TX						; send byte
@@ -759,8 +788,16 @@ I2C_init_compass3:
 	movlw	b'11001100'					; CTRL_REG4_A 0x23
 	rcall	I2C_TX						; send byte
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
 
+;-----------------------------------------------------------------------------
+; Helper Function - send 1 Byte, wait for end of transmission and check ackn
+;
+I2C_TX:
+	movwf	SSP1BUF						; put byte to be sent into TX buffer
+	rcall	WaitMSSP					; wait for TX to complete
+	bra		I2C_Check_ACK				; check for acknowledge by receiver and return
 
 ;-----------------------------------------------------------------------------
 ; Deactivate Compass / Accelerometer
@@ -784,6 +821,7 @@ I2C_sleep_compass0:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x00						; ??
 	rcall	I2C_TX						; send byte
@@ -801,19 +839,22 @@ I2C_sleep_accelerometer0:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x38						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x2A						; CTRL_REG1
 	rcall	I2C_TX						; send byte
 	movlw	b'00000000'					; standby mode
 	rcall	I2C_TX						; send byte
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
 
 
 I2C_sleep_compass1:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x20						; CTRL_REG1
 	rcall	I2C_TX						; send byte
@@ -830,7 +871,8 @@ I2C_sleep_compass1:
 	movlw	b'00000010'					; data for CTRL_REG7: magnetic sensor power-down mode
 	rcall	I2C_TX						; send byte
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
 
 	; accelerometer sleeps with magnetic sensor
 
@@ -840,6 +882,7 @@ I2C_sleep_compass2:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0xE0						; 0x60 with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
@@ -858,6 +901,7 @@ I2C_sleep_compass2:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x32						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x9F						; 1F with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
@@ -866,7 +910,8 @@ I2C_sleep_compass2:
 	movlw	b'00000000'					; CTRL_REG1_A     0x20 (all off)
 	rcall	I2C_TX						; send byte
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
 
 
 I2C_sleep_compass3:
@@ -874,6 +919,7 @@ I2C_sleep_compass3:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3C						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0xA2						; 0x22 with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
@@ -886,19 +932,22 @@ I2C_sleep_compass3:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x3A						; address
+	movff	WREG,i2c_error_vault+0				; Store address
 	rcall	I2C_TX						; send byte
 	movlw	0x20
 	rcall	I2C_TX						; send byte
 	movlw	b'00000000'					; CTRL_REG1_A (100Hz, x,y,z = OFF) 0x20
 	rcall	I2C_TX						; send byte
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
 
 
 ;-----------------------------------------------------------------------------
 ; Helper Function - wait for TX to complete
 ;
 WaitMSSP:
+	movff	SSP1BUF,i2c_error_vault+1
 	clrf	i2c_temp1					; wait for max 256 loops
 WaitMSSP_loop:
 	decfsz	i2c_temp1,F					; decrement loop counter, timeout?
@@ -929,6 +978,8 @@ I2CFail:
 	bcf		PIR1,SSP1IF					; clear TX completion flag
 	bsf		i2c_error_flag				; set error flag
 	bcf		active_reset_ostc_rx		; release reset from RX circuitry
+;	bcf	i2c_busy_temperature
+;	bcf	i2c_busy_pressure
 	return								; done
 
 
@@ -972,7 +1023,7 @@ I2CReset_2:
 	movwf	SSP1CON1					; ...
 	movlw	b'00000000'					; ...
 	movwf	SSP1CON2					; ...
-	movlw	0x9C						; ...
+	movlw	i2c_speed_value
 	movwf	SSP1ADD						; ...
 	return								; done
 
@@ -1007,7 +1058,8 @@ lt2942_init:
 	rcall	WaitMSSP					; wait for TX to complete
 	rcall	I2C_Check_ACK				; check for acknowledge by receiver
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
 
 ;-----------------------------------------------------------------------------
 ; Sleep Gauge IC
@@ -1021,7 +1073,8 @@ lt2942_sleep:
 	rcall	WaitMSSP					; wait for TX to complete
 	rcall	I2C_Check_ACK				; check for acknowledge by receiver
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return	
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
 
 ;-----------------------------------------------------------------------------
 ; Read Gauge IC - Status Register
@@ -1032,11 +1085,18 @@ lt2942_get_status:
 	movlw	0x00						; point to status register
 	rcall	I2C_TX_GAUGE				; send    byte to   the LT2942 gauge IC
 	rcall	I2C_RX_GAUGE				; receive byte from the LT2942 Gauge IC
+
+	bsf		SSP1CON2,ACKDT				; set ACKDT flag
+	bsf		SSP1CON2,ACKEN				; master NOT acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+	bcf		SSP1CON2,ACKDT				; reset ACKDT flag
+
 	movff	SSP1BUF,WREG				; copy received byte to WREG
 	btfss	WREG,7						; 2942 found?
 	bsf		battery_gauge_available		; YES - set flag
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
 
 
 ;-----------------------------------------------------------------------------
@@ -1053,9 +1113,14 @@ lt2942_get_voltage:
 	bsf		SSP1CON2,RCEN				; enable receive mode
 	rcall	WaitMSSP					; wait for TX to complete
 	movff	SSP1BUF,xA+0				; copy received byte to xA+0
+	bsf		SSP1CON2,ACKDT				; set ACKDT flag
+	bsf		SSP1CON2,ACKEN				; master NOT acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+	bcf		SSP1CON2,ACKDT				; reset ACKDT flag
+
 	bsf		SSP1CON2,PEN				; stop condition
 	rcall	WaitMSSP					; wait for TX to complete
-
+	
 	; convert voltage from raw value to Volt
 	MOVLI	.6000,xB					; load conversion multiplicand into xB
 	call	mult16x16					; xC = xA * xB -> multiply raw value in xA with conversion multiplicand
@@ -1074,14 +1139,19 @@ lt2942_get_voltage:
 	global	lt2942_get_temperature
 lt2942_get_temperature:					; read battery temperature
 	movlw	0x0C						; point to temperature register
-	call	I2C_TX_GAUGE				; send    byte to   the LT2942 gauge IC
-	call	I2C_RX_GAUGE				; receive byte from the LT2942 Gauge IC
+	rcall	I2C_TX_GAUGE				; send    byte to   the LT2942 gauge IC
+	rcall	I2C_RX_GAUGE				; receive byte from the LT2942 Gauge IC
 	bsf		SSP1CON2,ACKEN				; master acknowledge
 	rcall	WaitMSSP					; wait for TX to complete
 	movff	SSP1BUF,xA+1				; store raw temperature, high byte
 	bsf		SSP1CON2,RCEN				; enable receive mode
 	rcall	WaitMSSP					; wait for TX to complete
 	movff	SSP1BUF,xA+0				; store raw temperature, low byte
+	bsf		SSP1CON2,ACKDT				; set ACKDT flag
+	bsf		SSP1CON2,ACKEN				; master NOT acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+	bcf		SSP1CON2,ACKDT				; reset ACKDT flag
+
 	bsf		SSP1CON2,PEN				; stop condition
 	rcall	WaitMSSP					; wait for TX to complete
 
@@ -1147,12 +1217,16 @@ lt2942_get_accumulated_charge:			; read accumulated charge and compute percent
 	bsf		SSP1CON2,RCEN				; enable receive mode
 	rcall	WaitMSSP					; wait for TX to complete
 	movff	SSP1BUF,sub_a+0				; copy received byte to sub_a+0
+	bsf		SSP1CON2,ACKDT				; set ACKDT flag
+	bsf		SSP1CON2,ACKEN				; master NOT acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+	bcf		SSP1CON2,ACKDT				; reset ACKDT flag
+
 	bsf		SSP1CON2,PEN				; stop condition
 	rcall	WaitMSSP					; wait for TX to complete
 
 	btfsc	gauge_status_byte,0			; UVLO event ?
 	rcall	lt2942_init_again			; YES - do an re-initialization
-
 	MOVII	sub_a,battery_accumulated_charge	; save raw value
 
 	; Compute batt_percent = (charge - battery_offset) / 365
@@ -1182,7 +1256,8 @@ lt2942_set_to_zero_percent:
 	rcall	WaitMSSP					; wait for TX to complete
 	rcall	I2C_Check_ACK				; check for acknowledge by receiver
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
 
 
 ;-----------------------------------------------------------------------------
@@ -1199,7 +1274,8 @@ lt2942_charge_done:
 	rcall	WaitMSSP					; wait for TX to complete
 	rcall	I2C_Check_ACK				; check for acknowledge by receiver
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
 
 
 ;-----------------------------------------------------------------------------
@@ -1209,7 +1285,8 @@ I2C_TX_GAUGE:
 	movwf	i2c_temp2					; save data byte to be sent
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
-	movlw	b'11001000'					; address byte + Write bit
+	movlw	0xC8						; address byte + Write bit
+	movff	WREG,i2c_error_vault+0				; Store address
 	movwf	SSP1BUF						; control byte
 	rcall	WaitMSSP					; wait for TX to complete
 	rcall	I2C_Check_ACK				; check for acknowledge by receiver
@@ -1221,9 +1298,10 @@ I2C_TX_GAUGE:
 ; Helper Function - receive 1 Byte from the LT2942 Gauge IC
 ;
 I2C_RX_GAUGE:
-	bsf		SSP1CON2,SEN				; start condition
+	bsf		SSP1CON2,RSEN				; repeated start condition
 	rcall	WaitMSSP					; wait for TX to complete
-	movlw	b'11001001'					; address byte + Read bit
+	movlw	0xC9	    					; address byte + Read bit
+	movff	WREG,i2c_error_vault+0				; Store address
 	movwf	SSP1BUF						; control byte
 	rcall	WaitMSSP					; wait for TX to complete
 	rcall	I2C_Check_ACK				; check for acknowledge by receiver
@@ -1280,6 +1358,7 @@ I2C_probe_OSTC_rx_1:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x50						; address byte + write bit
+	movff	WREG,i2c_error_vault+0				; Store address
 	movwf	SSP1BUF						; control byte
 	rcall	WaitMSSP					; wait for TX to complete
 	btfss	SSP1CON2,ACKSTAT			; ACK received?
@@ -1290,7 +1369,6 @@ I2C_probe_OSTC_rx_1:
 	return								; NO  - done
 
 	WAITMS	.1							; wait 1 ms
-
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x50						; address byte + write bit
@@ -1327,7 +1405,7 @@ I2C_probe_OSTC_rx_1:
 	bcf		SSP1CON2,ACKDT				; reset ACKDT flag
 	bsf		SSP1CON2,PEN				; stop condition
 	rcall	WaitMSSP					; wait for TX to complete
-
+	
 	; wait for TR module becoming ready
 	movff	rx_firmware_cur_minor,i2c_temp1	; copy minor firmware version to bank common
 	movlw	.147							; code for not ready, minor
@@ -1356,6 +1434,7 @@ I2C_get_tankdata:
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x50						; address byte + write bit
+	movff	WREG,i2c_error_vault+0				; Store address
 	movwf	SSP1BUF						; control byte
 	rcall	WaitMSSP					; wait for TX to complete
 	rcall	I2C_Check_ACK				; check for acknowledge by receiver
@@ -1396,7 +1475,9 @@ I2C_get_tankdata_loop_read:
 	rcall	WaitMSSP					; wait for TX to complete
 	bcf		SSP1CON2,ACKDT				; reset ACKDT flag
 	bsf		SSP1CON2,PEN				; stop condition
-	bra		WaitMSSP					; wait for TX to complete and return
+	rcall	WaitMSSP					; wait for TX to complete
+	return							; done
+
 
 
 ;-----------------------------------------------------------------------------
@@ -1415,6 +1496,7 @@ I2C_update_OSTC_rx:						; transfer 64 byte to RX co-processor
 	bsf		SSP1CON2,SEN				; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0x50						; address byte + write bit
+	movff	WREG,i2c_error_vault+0				; Store address
 	movwf	SSP1BUF						; control byte
 	rcall	WaitMSSP					; wait for TX to complete
 	rcall	I2C_Check_ACK				; check for acknowledge by receiver
@@ -1489,7 +1571,224 @@ I2C_update_OSTC_loop_read:
  ENDIF	; _rx_update
 
  ENDIF	; _rx_functions
-
+ 
 ;-----------------------------------------------------------------------------
+; Probe for MS5837 sensor
+;
+ 	global	I2C_probe_pressure_sensor	; Do not call from ISR!
+I2C_probe_pressure_sensor:						; Probe the type of sensor, set/clear press_sensor_type
+	bcf	press_sensor_type				; MS5541 as default
+	bsf	SSP1CON2,SEN					; start condition
+	rcall	WaitMSSP					; wait for TX to complete
+	movlw	0xEC						; address byte + write bit
+	movff	WREG,i2c_error_vault+0				; Store address
+	movwf	SSP1BUF						; control byte
+	rcall	WaitMSSP					; wait for TX to complete
+	btfss	SSP1CON2,ACKSTAT				; ACK received?
+	bsf	press_sensor_type				; MS5837 sensor found
+	bsf	SSP1CON2,PEN					; stop condition
+	rcall	WaitMSSP					; wait for TX to complete
+	return
+ 
+;--------------------------------------------------------------------
+; Helper Function - get the calibration parameter from # WREG address
+; Do not call from ISR!
+I2C_get_calib_parameter:
+	movwf	lo						; store address
+	bsf	SSP1CON2,SEN					; start condition
+	rcall	WaitMSSP					; wait for TX to complete
+	movlw	0xEC						; address byte + write bit
+	movff	WREG,i2c_error_vault+0				; Store address
+	rcall	I2C_TX						; send byte
+	movf	lo,W						; Point to calibration register
+	rcall	I2C_TX						; send byte
+	bsf	SSP1CON2,PEN					; stop condition
+	rcall	WaitMSSP					; wait for TX to complete
+	
+	bsf	SSP1CON2,SEN				; start condition
+	rcall	WaitMSSP				; wait for TX to complete
+	movlw	0xED					; address byte + read bit
+	movff	WREG,i2c_error_vault+0				; Store address
+	movwf	SSP1BUF					; control byte
+	rcall	WaitMSSP				; wait for TX to complete
+	rcall	I2C_Check_ACK				; check for acknowledge by receiver
+	bsf	SSP1CON2,RCEN				; enable receive mode
+	rcall	WaitMSSP				; wait for reception and return
+	movff	SSP1BUF,dMSB				; High byte
+	bsf	SSP1CON2,ACKEN					; master acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+	
+	bsf	SSP1CON2,RCEN					; enable receive mode
+	rcall	WaitMSSP					; wait for reception
+	movff	SSP1BUF,dLSB				; Low byte
+;	bsf	SSP1CON2,ACKDT					; set ACKDT flag
+	bsf	SSP1CON2,ACKEN					; master acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+;	bcf	SSP1CON2,ACKDT					; reset ACKDT flag
+	bsf	SSP1CON2,PEN					; stop condition
+	bra	WaitMSSP					; wait for TX to complete (And return)
+    
+	
+	global	I2C_get_calib_MS5837 ; Do not call from ISR!
+I2C_get_calib_MS5837:	
+	banksel	common
+	; first, send a reset
+	bsf	SSP1CON2,SEN					; start condition
+	rcall	WaitMSSP					; wait for TX to complete
+	movlw	0xEC						; address byte + write bit
+	movff	WREG,i2c_error_vault+0				; Store address
+	rcall	I2C_TX						; send byte
+	movlw	0x1E
+	rcall	I2C_TX						; send byte
+	bsf	SSP1CON2,PEN					; stop condition
+	rcall	WaitMSSP					; wait for TX to complete
+	WAITMS	.5						; 2.8ms according to datasheet
+	
+	movlw	0xA2						; Point to C1
+	rcall	I2C_get_calib_parameter				; returns calibration value in lo and hi
+    	movff	dLSB,C1+0						; store calib
+	movff	dMSB,C1+1						; store calib
 
+	movlw	0xA4						; Point to C2
+	rcall	I2C_get_calib_parameter				; returns calibration value in lo and hi
+    	movff	dLSB,C2+0						; store calib
+	movff	dMSB,C2+1						; store calib
+
+	movlw	0xA6						; Point to C3
+	rcall	I2C_get_calib_parameter				; returns calibration value in lo and hi
+    	movff	dLSB,C3+0						; store calib
+	movff	dMSB,C3+1						; store calib
+
+	movlw	0xA8						; Point to C4
+	rcall	I2C_get_calib_parameter				; returns calibration value in lo and hi
+    	movff	dLSB,C4+0						; store calib
+	movff	dMSB,C4+1						; store calib
+
+	movlw	0xAA						; Point to C5
+	rcall	I2C_get_calib_parameter				; returns calibration value in lo and hi
+    	movff	dLSB,C5+0						; store calib
+	movff	dMSB,C5+1						; store calib
+
+	movlw	0xAC						; Point to C6
+	rcall	I2C_get_calib_parameter				; returns calibration value in lo and hi
+    	movff	dLSB,C6+0						; store calib
+	movff	dMSB,C6+1						; store calib
+	
+	return
+
+	global	I2C_get_press_val_MS5837
+I2C_get_press_val_MS5837:
+    	bsf	i2c_busy_pressure				; reading new pressure
+	
+	bsf	SSP1CON2,SEN					; start condition
+	rcall	WaitMSSP					; wait for TX to complete
+	movlw	0xEC						; address byte + write bit
+	movff	WREG,i2c_error_vault+0				; Store address
+	rcall	I2C_TX						; send byte
+	movlw	0x00						; command byte (0x00, read ADC)
+	rcall	I2C_TX						; send byte
+	
+	bsf	SSP1CON2,RSEN				; repeated start condition
+	rcall	WaitMSSP				; wait for TX to complete
+	movlw	0xED					; address byte + read bit
+	movff	WREG,i2c_error_vault+0				; Store address
+	movwf	SSP1BUF					; control byte
+	rcall	WaitMSSP				; wait for TX to complete
+	rcall	I2C_Check_ACK				; check for acknowledge by receiver
+
+	bsf	SSP1CON2,RCEN				; enable receive mode
+	rcall	WaitMSSP				; wait for reception and return
+	movff	SSP1BUF,D1_buffer+2					; Upper byte
+	bsf	SSP1CON2,ACKEN					; master acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+	bsf	SSP1CON2,RCEN					; enable receive mode
+	rcall	WaitMSSP					; wait for reception
+	movff	SSP1BUF,D1_buffer+1					; high byte
+	bsf	SSP1CON2,ACKEN					; master acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+	bsf	SSP1CON2,RCEN					; enable receive mode
+	rcall	WaitMSSP					; wait for reception
+	movff	SSP1BUF,D1_buffer+0					; Low byte
+	bsf	SSP1CON2,ACKEN					; master acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+	bsf	SSP1CON2,PEN					; stop condition
+	rcall	WaitMSSP					; wait for TX to complete
+
+	; Start temperature measurement
+	bsf	SSP1CON2,SEN					; start condition
+	rcall	WaitMSSP					; wait for TX to complete
+	movlw	0xEC						; address byte + write bit
+	rcall	I2C_TX						; send byte
+	movlw	0x58						; OSR=4096, type=D2
+	rcall	I2C_TX						; send byte
+	bsf	SSP1CON2,PEN					; stop condition
+	rcall	WaitMSSP					; wait for TX to complete
+	bcf	ms5837_state					; =0: result of temperature will be in the ADC
+	bcf	i2c_busy_pressure				; reading new pressure
+    	return
+	
+	global	I2C_get_temp_val_MS5837	
+I2C_get_temp_val_MS5837:
+	bsf	i2c_busy_temperature				; reading new temperature
+
+	bsf	SSP1CON2,SEN					; start condition
+	rcall	WaitMSSP					; wait for TX to complete
+	movlw	0xEC						; address byte + write bit
+	movff	WREG,i2c_error_vault+0				; Store address
+	rcall	I2C_TX						; send byte
+	movlw	0x00						; command byte (0x00, read ADC)
+	rcall	I2C_TX						; send byte
+	
+	bsf	SSP1CON2,RSEN				; repeated start condition
+	rcall	WaitMSSP				; wait for TX to complete
+	movlw	0xED					; address byte + read bit
+	movff	WREG,i2c_error_vault+0				; Store address
+	movwf	SSP1BUF					; control byte
+	rcall	WaitMSSP				; wait for TX to complete
+	rcall	I2C_Check_ACK				; check for acknowledge by receiver
+
+	bsf	SSP1CON2,RCEN				; enable receive mode
+	rcall	WaitMSSP				; wait for reception and return
+	movff	SSP1BUF,D2_buffer+2					; Upper byte
+	bsf	SSP1CON2,ACKEN					; master acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+	bsf	SSP1CON2,RCEN					; enable receive mode
+	rcall	WaitMSSP					; wait for reception
+	movff	SSP1BUF,D2_buffer+1					; high byte
+	bsf	SSP1CON2,ACKEN					; master acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+	bsf	SSP1CON2,RCEN					; enable receive mode
+	rcall	WaitMSSP					; wait for reception
+	movff	SSP1BUF,D2_buffer+0					; Low byte
+	bsf	SSP1CON2,ACKEN					; master acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+	bsf	SSP1CON2,PEN					; stop condition
+	rcall	WaitMSSP					; wait for TX to complete
+
+	; Start pressure measurement
+	bsf	SSP1CON2,SEN					; start condition
+	rcall	WaitMSSP					; wait for TX to complete
+	movlw	0xEC						; address byte + write bit
+	rcall	I2C_TX						; send byte
+	movlw	0x48						; OSR=4096, type=D1
+	rcall	I2C_TX						; send byte
+	bsf	SSP1CON2,PEN					; stop condition
+	rcall	WaitMSSP					; wait for TX to complete
+	bsf	ms5837_state					; =0: result of pressure will be in the ADC
+	bcf	i2c_busy_temperature				; reading new temperature
+	return
+	
+	
+;-----------------------------------------------------------------------------
+; I2C Bus error checker 
+;
+	global	check_i2c_error
+	extern TFT_message_i2c_error
+check_i2c_error:
+	btfss	i2c_error_flag
+	return
+	incf	message_counter,F				; increase message counter
+	goto	TFT_message_i2c_error				; show message for battery low (battery percent) and return
+
+;-----------------------------------------------------------------------------	
 	END

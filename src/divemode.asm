@@ -233,7 +233,29 @@ diveloop_1:
 ; Dive Mode Mail Loop
 ;
 diveloop_loop:
-	btfsc	trigger_full_second			; new 1/1 second?
+	btfss	trigger_quarter_second			; new 1/4 second?
+	bra		diveloop_loop_0				;       No - continue
+
+	;---- tasks any new 1/4 second -----
+	bcf		trigger_quarter_second		; YES - clear flag
+
+	movlw	.4					; 62,5ms * 4 = 1/4 second
+	movff	WREG,isr_tmr7_helper			; to make sure at least 1/4 will pass before trigger_quarter_second is re-set
+
+	btfss	press_sensor_type			; New sensor found?
+	bra 	diveloop_loop_0				;       No - continue
+
+	; Handle new pressure sensor every 1/4 second
+	btfsc	ms5837_state				; =0: result of temperature is in the ADC
+	bra	diveloop_loop_quarter_2
+	call	I2C_get_temp_val_MS5837			; (Will set ms5837_state)
+	bra	diveloop_loop_0				;  Done.
+diveloop_loop_quarter_2:
+	call	I2C_get_press_val_MS5837		; (Will clear ms5837_state)
+	;---- tasks any new 1/4 second done -----
+
+diveloop_loop_0:	
+        btfsc	trigger_full_second			; new 1/1 second?
 	bra		diveloop_loop_2				; YES - continue with tasks every 1/1 second
 	btfsc	trigger_half_second			; NO  - new 1/2 second?
 	bra		diveloop_loop_1				;       YES - continue with tasks every 1/2 second
@@ -465,7 +487,7 @@ diveloop_menu_exit:
 
 
 diveloop_loop_12:
-	bsf		FLAG_TFT_active_gas_divemode; redraw gas and setpoint (eventually needed to restore the "Bailout" text)
+    	bsf		FLAG_TFT_active_gas_divemode; redraw gas and setpoint (eventually needed to restore the "Bailout" text)
 
 	btfsc	request_next_custview		; shall show next custom view?
 	call	dive_customview_toggle		; YES - show next custom view
@@ -532,7 +554,7 @@ update_divemode60:
 	movwf	alarm_type					;     - copy to alarm register
 	bsf		event_occured				;     - set event flag
 	movlw	.0							;     - coding of brightness level ECO
-	movff	WREG,opt_brightness			;     - set brightness to ECO
+	movff	WREG,opt_brightness_divemode			;     - set brightness to ECO
 
 update_divemode60_1:
 	; max allowed runtime in simulator is 254 minutes in
@@ -1951,11 +1973,16 @@ check_dive_modes_comm:
 	bra		check_dive_modes_shallow			; NO  - shallower than threshold
 	btfsc	divetime_longer_1min				; YES - diving > one minute?
 	CLRI	dive_timeout_timer					;       YES - reset timeout counter
+	decfsz	dive_threshold_debounce,F				    ; debounce counter
+	return
+	incf	dive_threshold_debounce,F				
 	bsf		divemode							;     - set dive mode flag
 	bsf		count_divetime						;     - count dive time
 	return										;     - done
 
 check_dive_modes_shallow:
+	movlw	.5								; load debounce counter
+	movwf	dive_threshold_debounce
 	bcf		count_divetime						; stop counting dive time
 ;	btfss	divetime_longer_1min				; diving > one minute?
 ;	bcf		divemode							; NO  - quit dive mode as this was no real dive

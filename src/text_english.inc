@@ -287,7 +287,8 @@
 
 
 ; Display settings
-	TCODE	tBright,			"Brightness: "			; Brightness
+	TCODE	tBright,			"Brightness"			; Brightness
+	TCODE	tBrightsurface,			"Surface Mode: "		; Surface Mode: 
 	TCODE	tLayout,			"Layout    : "			; Layout
 	TCODE	tUnits,				"Units     : "			; Units
  IF _language_2!=none

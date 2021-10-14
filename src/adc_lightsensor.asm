@@ -25,6 +25,7 @@ adc_light	CODE
 ;
 ; bank safe
 ;
+    global	wait_adc
 wait_adc:
 	movwf	ADCON0							; select ADC channel
 	nop										; wait a short moment
@@ -261,7 +262,7 @@ get_ambient_level:
 	btfsc	ambient_sensor					;           - ambient sensor available?
 	bra		get_ambient_level1				;             YES - use sensor
 	banksel	isr_backup						;             NO  - back to ISR default bank
-	movff	opt_brightness,isr_lo			;                 - get brightness selection
+	movff	brightness,isr_lo			;                 - get brightness selection
 	incf	isr_lo,F						;                 - 0-2 -> 1-3
 	movlw	ambient_light_max_high_cr		;                 - default selection to brightest setting
 	dcfsnz	isr_lo,F						;                 - level 0 (eco) selected?
@@ -278,11 +279,12 @@ get_ambient_level1:							; using ambient sensor
 	movlw	b'00011101'						; power on ADC, select AN7
 	rcall	wait_adc
 	MOVII	ADRESL,ambient_light
-	bcf		ADCON0,0						; power off ADC
+	bcf	ADCON0,0						; power off ADC
 
+	btfsc	ambient_light+1,7					; result negative?
+	return								; Yes, skip this measurement
 	; ambient_light:2 is between 4096 (direct sunlight) and about 200 (darkness)
 	; first: divide by 16
-
 	movlw	.4								; divide by 2^4 = 16
 get_ambient_level1_loop:
 	bcf		STATUS,C						; clear carry
@@ -299,13 +301,13 @@ get_ambient_level1_loop:
 	movwf	ambient_light+0					; YES - avoid ADC clipping
 
 	incfsz	ambient_light+0,W				; = 255 ?
-	bra		get_ambient_level2				; NO - continue
+	bra	get_ambient_level2				; NO - continue
 
 	movlw	.254
 	movwf	ambient_light+0					; avoid ADC clipping
 
 get_ambient_level2:
-	movff	opt_brightness,isr_lo			; get brightness setting
+	movff	brightness,isr_lo			; get brightness setting
 
 	btfsc	RCSTA1,7						; UART module on?
 	clrf	isr_lo							; YES - set temporary to eco mode
@@ -329,7 +331,7 @@ get_ambient_level2:
 	cpfslt	ambient_light+0					; smaller than WREG?
 	movwf	ambient_light+0					; NO - set to max.
 
-	movff	opt_brightness,isr_lo			; get brightness setting
+	movff	brightness,isr_lo			; get brightness setting
 	incf	isr_lo,F						; adjust 0-2 to 1-3
 	movlw	ambient_light_min_high			; default to highest setting
 	dcfsnz	isr_lo,F						; eco setting?

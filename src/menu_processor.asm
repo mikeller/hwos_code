@@ -69,12 +69,12 @@ menu_processor:
 	VARARGS_GET8	menu_item_count			; get number of items
 	VARARGS_GET8	menu_vertical_start		; get vertical start position of 1st menu item
 
-	movf	menu_vertical_start,W			; excite flags, vertical start = 0, i.e. no menu title text?
-	bz		menu_processor_no_title			; YES - skip reading menu title text address
-
+;	movf	menu_vertical_start,W			; excite flags, vertical start = 0, i.e. no menu title text?
+;	bz		menu_processor_no_title			; YES - skip reading menu title text address
+;
 	VARARGS_GET16	menu_title_addr			; get address of menu title text
 
-menu_processor_no_title:
+;menu_processor_no_title:
 
 	movff	TBLPTRL, menu_item_data_start+0	; store base address of menu items for menu_read_menu_item_data
 	movff	TBLPTRH, menu_item_data_start+1	; ...
@@ -91,7 +91,30 @@ menu_processor_no_title:
 	; draw a frame around the dive mode menu
 	movf	pallet_color_mask,W				; get mask color into WREG
 	WIN_FRAME_COLOR dm_menu_row, dm_menu_lower, dm_menu_left ,dm_menu_right	; top, bottom, left, right
-	bra		menu_processor_menu_body		; the dive mode menu has no menu title and footer
+
+	btfss	alt_layout_active				; big menu selected?
+	bra	menu_processor_menu_body			; No, the normal dive mode menu has no title and footer
+	
+	; draw menu title
+	WIN_BOX_BLACK   dm_menu_row+.2,dm_menu_row+.26,dm_menu_left+.2,dm_menu_right-.2	; clear menu title area
+	WIN_SMALL .2, dm_menu_row+.2							; set menu title font and position
+	FONT_COLOR color_greenish				; set menu title font color
+	movff	menu_title_addr+0,FSR1L			; point to multi-lingual menu title text
+	movff	menu_title_addr+1,FSR1H			; ...
+	call	strcpy_text_FSR					; copy translated text into the buffer
+	movf	FSR2L,W							; get title text length
+	mullw	.7								; compute title length in pixels_x2
+	bcf		STATUS,C						; divide by 2
+	rrcf	PRODL							; ...
+	movf	PRODL,W							; get result into WREG
+	sublw	.80								; compute 80 (screen center position) - half title width in pixel_x2
+	movwf	win_leftx2						; set result as horizontal start position
+	movlw	MAX_LINE_LENGTH_TITLE			; load max allowed length of a menu title
+	movwf	FSR2L							; set buffer pointer to end of max length
+	clrf	INDF2							; terminate string          at max length
+	PRINT									; output menu title
+	
+	bra		menu_processor_menu_body		; the dive mode menu has no footer
 
 menu_processor_menu_title:
 	; prepare screen
@@ -348,7 +371,7 @@ menu_draw_lines_divemode:
 	;bra	menu_draw_lines_divemode_big	; YES
 
 menu_draw_lines_divemode_big:
-	WIN_STD dm_menu_item1_column+.16,dm_menu_item1_row+.22
+	WIN_STD dm_menu_item1_column+.16,dm_menu_item1_row+.28
 	decf	menu_pos_cur,W					; get selected item as 0..5 into WREG
 	movwf	menu_item_start					; set first item to draw = selected item
 	bra		menu_draw_menu_items_common		; continue with common part
@@ -523,7 +546,7 @@ menu_draw_cursor_dive:
 	;bra	menu_draw_cursor_dive_big		; YES
 
 menu_draw_cursor_dive_big:
-	WIN_STD dm_menu_item1_column,dm_menu_item1_row+.20
+	WIN_STD dm_menu_item1_column,dm_menu_item1_row+.26
 	bra		menu_draw_cursor_common			; print cursor
  ENDIF	; _big_divemenu
 

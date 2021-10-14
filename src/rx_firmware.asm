@@ -21,7 +21,7 @@ rx_firmware_storage		code	0x18000
 	global	rx_firmware_storage
 rx_firmware_storage:
 
-#include	"rx_firmware-1-40.inc"
+#include	"rx_firmware-1-41.inc"
 
 	global	rx_firmware_new_major
 rx_firmware_new_major:

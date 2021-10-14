@@ -322,6 +322,10 @@ surfmode_check_warnings:
 	; warnings for all modes
 	call	check_battery				; check if the battery level should be displayed/warned
 
+ IFDEF _debug_output
+	call	check_i2c_error				; check for an I2C error (For debugging purposes only)
+ ENDIF
+ 
 	btfsc	FLAG_apnoe_mode				; done for Apnoe or Gauge mode
 	bra		surfmode_check_warnings2
 	btfsc	FLAG_gauge_mode				; done for Apnoe or Gauge mode
@@ -426,6 +430,15 @@ housekeeping:
 	call	TFT_surfmode_batt			;           - update displayed battery voltage
 	btfss	timebase_1sec,0				;           - on even second?
 	call	surfmode_check_warnings		;             YES - check for warnings and display/update them
+	
+	btfsc	trigger_temp_changed		;           - temperature changed?
+	call	TFT_surfmode_temp			;             YES - display temperature
+	bcf	trigger_temp_changed		;           - clear flag (anyhow)
+
+	btfsc	trigger_pres_cur_changed	;       YES - pressure changed?
+	call	TFT_surfmode_pres_fast		;             YES - display surface pressure, but only if change > threshold
+	bcf	trigger_pres_cur_changed	;           - clear flag (anyhow)
+
 
  IFDEF _rx_functions
 	btfss	tr_functions_activated		;           - TR functions activated?
@@ -442,11 +455,12 @@ housekeeping:
 
 housekeeping_0:
 	bsf		restart_fast				; default to doing a fast restart (no logos)
+	btfsc	divemode					; NO  - need to enter dive mode?
+	bra	housekeeping_0b					; YES - but check again, to filter potential glitches (New sensor)
+housekeeping_0a:
 	call	check_dive_modes_surf		; check if dive mode needs to be entered, will set dive mode flag if yes
 	btfsc	simulatormode				; in simulator mode?
 	bra		housekeeping_1				; YES - can't restart or go to sleep without prior cleanup
-	btfsc	divemode					; NO  - need to enter dive mode?
-	goto	restart						;       YES - restart, will proceed to dive mode
 	btfss	trigger_timeout				;       NO  - timeout?
 	bra		housekeeping_1				;             NO
 	btfsc	surfmode_menu				;             YES - in surface menus?
@@ -454,22 +468,36 @@ housekeeping_0:
 	bcf		restart_fast				;                   NO  - set next restart to be done slow, i.e. with logos
 	goto	sleeploop					;                       - goto sleep mode
 
+housekeeping_0b:	
+	call	check_dive_modes_surf		; check if dive mode needs to be entered, will set dive mode flag if yes
+	btfsc	divemode					; NO  - really need to enter dive mode?
+	goto	restart						; YES
+	bra	housekeeping_0a					; No, continue above
+		
 housekeeping_1:
 	btfss	trigger_quarter_second		; new 1/4 second begun?
 	bra		housekeeping_2				; NO
 
 	;---- tasks any new 1/4 second -----
-
 	bcf		trigger_quarter_second		; YES - clear flag
+	
+	btfss	press_sensor_type			; New sensor found?
+	bra 	housekeeping_1aa			; No
+	
+	btfsc	ms5837_state				; =0: result of temperature is in the ADC
+	bra	housekeeping_1ab
+	call	I2C_get_temp_val_MS5837			; (Will set ms5837_state)
+	bra	housekeeping_1aa			; Done.
+housekeeping_1ab:
+	call	I2C_get_press_val_MS5837		; (Will clear ms5837_state)
+housekeeping_1aa:	
  IFDEF _external_sensor
 	btfsc	imprint_sensor_mv			;     - shall imprint sensor mV data?
 	call	TFT_imprint_menu_mV			;       YES - imprint sensor mV data
  ENDIF	; _external_sensor
 	btfss	imprint_surfmode_data		;     - shall imprint all surface mode data?
 	bra		housekeeping_2				;       NO
-	btfsc	trigger_pres_cur_changed	;       YES - pressure changed?
-	call	TFT_surfmode_pres_fast		;             YES - display surface pressure, but only if change > threshold
-	bcf		trigger_pres_cur_changed	;           - clear flag (anyhow)
+
  IFDEF _compass
 	movf	active_customview,W			;           - get current custom view
 	xorlw	.6							;           - coding of compass custom view
@@ -521,10 +549,6 @@ housekeeping_2b:
 	btfss	imprint_surfmode_data		;     - shall imprint all surface mode data?
 	bra		housekeeping_3				;       NO
 	call	TFT_surfmode_date			;       YES - update displayed date
-
-	btfsc	trigger_temp_changed		;           - temperature changed?
-	call	TFT_surfmode_temp			;             YES - display temperature
-	bcf		trigger_temp_changed		;           - clear flag (anyhow)
 
 	movf	active_customview,W			;           - get current custom view
 	xorlw	.5							;           - coding of tissue custom view

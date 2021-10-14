@@ -79,6 +79,8 @@ sleeploop:
 	bsf		sleepmode						; flag being in sleep mode
 	bsf		block_sensor_interrupt			; suspend ISR from executing sensor interrupts
 
+	bcf	    i2c_error_flag			; clear any I2C errors
+	
 	call	disable_ir_s8_analog			; power-down IR/S8/analog interface
 	call	mcp_sleep						; power-down RX power supply
 
@@ -233,6 +235,16 @@ one_sec_sleep_2:
 	btfsc	trigger_full_hour				; one hour in sleep?
 	rcall	one_hour_sleep					; YES - do the every hour tasks
 
+	; sleepmode pressure sampling for new sensor is done here
+	btfss	press_sensor_type				; New sensor found?
+	return							; No, done.
+
+	btfsc	ms5837_state					; =0: result of temperature is in the ADC
+	bra	one_sec_sleep_3
+	call	I2C_get_temp_val_MS5837				; (Will set ms5837_state)
+	return
+one_sec_sleep_3:
+	call	I2C_get_press_val_MS5837			; (Will clear ms5837_state)
 	return									; done
 
 
@@ -394,7 +406,10 @@ deepsleep_get_accel:
 pressuretest_sleep_fast:
 	banksel	isr_backup						; select bank ISR data
 
-	CLRI	pressure_abs_avg				; clear pressure    average register
+	clrf	pressure_abs_avg+0				; clear pressure    average register
+	clrf	pressure_abs_avg+1
+	clrf	pressure_abs_avg+2
+	
 	CLRI	temperature_avg					; clear temperature average register
 
 	call	get_temperature_start			; start temperature integration (73.5 us)
@@ -402,13 +417,15 @@ pressuretest_sleep_fast:
 	rcall	sleepmode_sleep					; sleep for 62.5...125 ms
 	rcall	sleepmode_sleep					; sleep for 62.5...125 ms
 
-	call	get_temperature_value			; state 1: get temperature
+	call	get_temperature_value				; get temperature... (May return in bank common)
+	banksel	isr_backup						; select bank ISR data
 	call	get_pressure_start				; start pressure integration
 
 	rcall	sleepmode_sleep					; sleep for 62.5...125 ms
 	rcall	sleepmode_sleep					; sleep for 62.5...125 ms
 
-	call	get_pressure_value				; state2: get pressure (51 us)
+	call	get_pressure_value				; state2: get pressure (51 us)(May return in bank common)
+	banksel	isr_backup						; select bank ISR data
 	call	calculate_compensation			; calculate temperature compensated pressure (27 us)
 
 	MOVII	pressure_abs_avg,pressure_abs	; get result, bypassing the averaging

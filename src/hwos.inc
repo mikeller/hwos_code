@@ -12,7 +12,7 @@
 
 
 ; ---- Hardware Configuration
-	LIST P=18F87K22							; compiler  settings, if changed change also: Configure -> SelectDevice in MPLAB
+    LIST P=18F87K22							; compiler  settings, if changed change also: Configure -> SelectDevice in MPLAB
 #include "p18f87k22.inc"					; processor definitions
 #include "ports.inc"						; port map  definitions
 
@@ -70,6 +70,8 @@
 #DEFINE speed_is_normal			cpu_speed_state,1	; =1: CPU is running at normal  speed
 #DEFINE speed_is_fastest		cpu_speed_state,2	; =1: CPU is running at fastest speed
 
+; ---- I2C speed
+#DEFINE	i2c_speed_value	    0x27		;0x9C = 100kHz @ 64MHz Fosc, 0x27 = 100kHz @ 16MHz Fosc 
 
 ; ---- Divemode Custom View Indexes - Attention: these numbers need to be in line with the jump tables in customview.asm!
 #DEFINE index_blank						 .0			; blank view
@@ -444,7 +446,7 @@
 #DEFINE timebase_0sec			timebase,0			; counting timebase, 1/2 sec bit
 #DEFINE timebase_1sec			timebase,1			; counting timebase,  1  sec bit
 #DEFINE timebase_2sec			timebase,2			; counting timebase,  2  sec bit
-#DEFINE trigger_quarter_second	timebase,3			; =1: a new 1/4 second has begun (not synced with the other time flags, not generated while block_sensor_interrupt is set)
+#DEFINE trigger_quarter_second	timebase,3			; =1: a new 1/4 second has begun (not synced with the other time flags)
 #DEFINE trigger_half_second		timebase,4			; =1: a new 1/2 second has begun
 #DEFINE trigger_full_second		timebase,5			; =1: a new 1/1 second has begun
 #DEFINE trigger_full_minute		timebase,6			; =1: a new     minute has begun
@@ -484,6 +486,15 @@
 #DEFINE analog_switches			HW_variants,6		; =1: analog switches available
 #DEFINE battery_is_36v			HW_variants,7		; =1: a 3.6 Volt battery is detected
 
+ ;---- Hardware - OSTC Model Variants2 (stored in access RAM, NOT cleared in restart)
+#DEFINE press_sensor_type		HW_variants2,0		; =1: pressure sensor MS5837, =0: Pressure sensor MS5541
+;					HW_variants2,1		; --- unused
+;					HW_variants2,2		; --- unused
+;					HW_variants2,3		; --- unused
+;					HW_variants2,4		; --- unused
+;					HW_variants2,5		; --- unused
+;					HW_variants2,6		; --- unused
+;					HW_variants2,7		; --- unused
 
 ;---- Hardware - States 1 (stored in access RAM, cleared on restart)
 #DEFINE analog_sw1_pressed		HW_flags_state1,0	; =1: analog switch 1 pressed
@@ -503,9 +514,18 @@
 #DEFINE battery_low_condition	HW_flags_state2,4	; =1: low battery condition detected
 #DEFINE flash_wrap_around		HW_flags_state2,5	; =1: address wrap-around control / signalling
 #DEFINE flash_wait				HW_flags_state2,6	; =1: wait for flash write operation to complete
-;								HW_flags_state2,7	; --- unused
+#DEFINE	i2c_busy_temperature			HW_flags_state2,7	; =1: Currently updating temperature from MS5837
 
-
+ ;---- Hardware - States 3 (stored in access RAM, NOT cleared on restart)
+#DEFINE ms5837_state			HW_flags_state3,0	; =1: result of pressure is in the ADC
+#DEFINE	i2c_busy_pressure		HW_flags_state3,1	; =1: Currently updating pressure from MS5837
+;					HW_flags_state3,2	; --- unused
+;					HW_flags_state3,3	; --- unused
+;					HW_flags_state3,4	; --- unused
+;					HW_flags_state3,5	; --- unused
+;					HW_flags_state3,6	; --- unused
+;					HW_flags_state3,7	; --- unused
+ 
 ;---- Operating System - persistent Settings (stored in access RAM, NOT cleared in restart)
 #DEFINE sensor1_calibrated_ok	OS_flags_persist,0	; =1: sensor 1 calibration ok
 #DEFINE sensor2_calibrated_ok	OS_flags_persist,1	; =1: sensor 2 calibration ok
@@ -840,13 +860,13 @@
 
 TSTOSS	macro opt_reg				; TeST Option Skip next instruction if Set (not zero)
 	movff	opt_reg,EEDATA			; Attention: destroys EEDATA!
-	tstfsz	EEDATA,A				; Attention: must be followed by a plain machine
+	tstfsz	EEDATA				; Attention: must be followed by a plain machine
 	bra		$+4						;            command, do not let follow a macro!
 	endm							;
 
 TSTOSC	macro opt_reg				; TeST Option Skip next instruction if Clear (zero)
 	movff	opt_reg,EEDATA			; Attention: destroys EEDATA!
-	tstfsz	EEDATA,A				; Attention: must be followed by a plain machine
+	tstfsz	EEDATA				; Attention: must be followed by a plain machine
 	endm							;            command, do not let follow a macro!
 
 
@@ -1013,9 +1033,11 @@ retry:
 
 	extern	HW_descriptor
 	extern	HW_variants
+	extern	HW_variants2
 
 	extern	HW_flags_state1
 	extern	HW_flags_state2
+	extern	HW_flags_state3
 
 	extern	OS_flags_persist
 	extern	OS_flags_ISR1
@@ -1116,18 +1138,18 @@ dLSB							res 1		; pressure sensor interface, LSB
 dMSB							res 1		; pressure sensor interface, MSB
 dbuffer							res 1		; pressure sensor interface, RX/TX buffer
 
-C1								res 2		; decoded calibration data
-C2								res 2		; decoded calibration data
-C3								res 2		; decoded calibration data
-C4								res 2		; decoded calibration data, here C4-250
-C5								res 2		; decoded calibration data, here reference temperature UT1 = 8*C5 + 10000 (u16 range 10.000 .. +42.760)
-C6								res 2		; decoded calibration data
-D1								res 2		; raw pressure
-D2								res 2		; raw temperature
-xdT								res 2
+C1							res 2		; decoded calibration data
+C2							res 2		; decoded calibration data
+C3							res 2		; decoded calibration data
+C4							res 2		; decoded calibration data, here C4-250
+C5							res 2		; decoded calibration data, here reference temperature UT1 = 8*C5 + 10000 (u16 range 10.000 .. +42.760)
+C6							res 2		; decoded calibration data
+D1							res 3		; raw pressure
+D2							res 3		; raw temperature
+xdT							res 3
 xdT2							res 2
-OFF								res 2
-SENS							res 2
+OFF							res 4
+SENS							res 4
 
 temperature_cur					res 2		; current  temperature
 temperature_min					res 2		; minimum  temperature (operated by divemode.asm)
@@ -1135,7 +1157,7 @@ temperature_avg					res 2		; internal register used for averaging
 temperature_last				res 2		; internal register used for detecting changes
 
 pressure_abs					res 2		; current  absolute pressure
-pressure_abs_avg				res 2		; internal register used for averaging
+pressure_abs_avg				res 3		; internal register used for averaging
 pressure_abs_last				res 2		; internal register used for detecting pressure changes
 
 pressure_abs_sampled			res 2		; sampled   surface pressure, sampled in sleep mode every 15 minutes
@@ -1147,9 +1169,10 @@ pressure_rel_max				res 2		; maximum relative pressure
 pressure_rel_sim				res 2		; simulated relative pressure (simulator mode)
 
 ;---- Data for ISR Math Subroutines
-isr_xA							res 2		; multiplicand 1
-isr_xB							res 2		; multiplicand 2
-isr_xC							res 4		; resulting product
+isr_xA							res 4		; multiplicand 1
+isr_xB							res 3		; multiplicand 2
+isr_xC							res 7		; resulting product
+isr_math_loop						res 1		; loop counter
 
 ;---- Display Brightness
 ambient_light					res 2		; ambient light level
@@ -1190,8 +1213,9 @@ pressure_rel_max_trip			res 2		; resettable maximum relative pressure
  ENDIF
  
 debounce_counter			res 1		; multiples of 16ms 
-
-; 144 byte used, 16 byte free
+isr_tmr7_helper				res 1		; used for 1/4 second trigger
+			
+; 158 byte used, 2 byte free
 
 
 ;-----------------------------------------------------------------------------
@@ -1296,7 +1320,8 @@ gaslist_gas						res 1		; used for transfer between gaslist.asm and menu_tree.as
 best_gas_number					res 1		; number of the "best gas": 0= none found, 1-5= gases 1-5, 255= not computed
 active_gas						res 1		; the currently used OC/bailout gas (1-5)
 dive_ccr_mode					res 1		; working copy of opt_ccr_mode while the dive
-
+dive_threshold_debounce				res 1		; Countdown for entering dive mode
+					
  IFDEF _ccr_pscr
 best_dil_number					res 1		; number of the "best dil": 0= none found, 1-5= dils  1-5, 255= not computed
 active_dil						res 1		; the currently used diluent (1-5)
@@ -1567,7 +1592,12 @@ time_last_1st					res 2		; last pressure reading time       in seconds    |
 time_last_2nd					res 2		; last pressure reading time       in seconds    |
  ENDIF
 
-; 156 byte used, 100 byte free
+i2c_error_vault					res 2		; Store last used device ID and data byte
+D1_buffer					res 3		; Buffer of D1 (Sensor raw data)
+D2_buffer					res 3		; Buffer of D2 (Sensor raw data)					
+
+brightness					res 1		; =0: Eco, =1:Medium, =2:Full
+; 157 byte used, 92 byte free
 
 
 ;-----------------------------------------------------------------------------
@@ -1633,7 +1663,8 @@ opt_fw_version_major			res 1		; firmware version, major | use read-only!
 opt_fw_version_minor			res 1		; firmware version, minor |
 opt_fw_version_beta				res 1		; firmware version, beta  |
 opt_surface_interval			res 1		; surface interval, used by deco calculator
-opt_brightness					res 1		; =0: Eco, =1:Medium, =2:Full
+opt_brightness_divemode				res 1		; =0: Eco, =1:Medium, =2:Full
+opt_brightness_surface				res 1		; =0: Eco, =1:Medium, =2:Full
 opt_salinity					res 1		; 0-5%
 opt_language					res 1		; current language: 0=EN, 1=DE, 2=FR, 3=SP
 opt_units						res 1		; 0:m/°C, 1:ft/°F

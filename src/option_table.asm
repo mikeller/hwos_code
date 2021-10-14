@@ -147,12 +147,12 @@ option_table_begin:
 	OPTION_UINT8    oaGF_low,           .10,                 .100,                .30,      tPercent,        0x023,    0x27,  opt_aGF_low					; alternative GF low
 	OPTION_UINT8    oaGF_high,          .45,                 .110,                .85,      tPercent,        0x024,    0x28,  opt_aGF_high					; alternative GF high
 	OPTION_BOOL     oEnable_aGF,         .0,                                                                 0x025,    0x29,  opt_enable_aGF				; =1: aGF can be selected underwater
-	OPTION_UINT8    oCompassGain,        .0,                   .7,                 .6,      tMinutes,        0x026,    0x34,  opt_compass_gain				; 0-7 (230 LSB/Gauss to 1370LSB/Gauss)
+	OPTION_UINT8    oCompassGain,        .0,                   .5,                 .5,      tMinutes,        0x026,    0x34,  opt_compass_gain				; 0-7 (230 LSB/Gauss to 1370LSB/Gauss)
 	OPTION_ENUM8    oSamplingRate,       .2,                                       .0,      tSetSeconds,     0x027,    0x2F,  opt_sampling_rate				; =1: 10s, =0: 2s
 
 	; Managing Settings
 	OPTION_UINT8    oExtraTime,          .0,                   .9,                 .0,      tMinutes,        0x028,    0x24,  char_I_extra_time				; extra bottom time for future TTS calculation
-	OPTION_ENUM8    oBrightness,         .3,                                       .0,      tEco,            0x029,    0x2D,  opt_brightness				; =0: Eco, =1:Medium, =2:Full
+	OPTION_ENUM8    oBrightness_dive,    .3,                                       .0,      tEco,            0x029,    0x2D,  opt_brightness_divemode				; =0: Eco, =1:Medium, =2:Full
 	OPTION_UINT8    oDiveSalinity,   salinity_min,      salinity_max,              .0,      tPercent,        0x02A,    0x30,  opt_salinity					; 0-4%
 	OPTION_ENUM8    oCCRMode,            .3,                                       .0,      tCCRModeFixedSP, 0x02B,    0x1F,  opt_ccr_mode					; =0: Fixed SP, =1: Sensor, =2: Auto SP
 	OPTION_ENUM8    oLanguage,           .2,                                       .0,      tLang1,          0x02C,    0x32,  opt_language					; language selection
@@ -274,7 +274,7 @@ option_table_begin:
 	OPTION_UINT8    oPressureAdjust,     .0,                 .255,                 .0,      nounit,          0x0A5,    0x35,  opt_pressure_adjust			; pressure sensor correction, SIGNED int (clipped to -20/+20 mbar in code)
 	OPTION_BOOL     oSafetyStop,                                                   .0,                       0x0A6,    0x36,  opt_safetystop				; =1: show safety stops
 	OPTION_UINT8    oCalGasO2,          .21,                 .100,                .21,      tPercent,        0x0A7,    0x37,  opt_calibration_O2_ratio		; calibration gas %O2 (do not move in EEPROM, must stay at .149!)
-	;                                                                                                        0x0A8											; not used any more (ex opt_sensor_fallback)
+	OPTION_ENUM8    oBrightness_surface, .3,                                       .2,      tEco,            0x0A8,    0x38,  opt_brightness_surface			; =0: Eco, =1:Medium, =2:Full
 	OPTION_BOOL     oFlipScreen,                                                   .0,                       0x0A9,    0x39,  opt_flip_screen				; =1: flip the screen
 	OPTION_UINT8p10 ocR_button_left,    .20,                  .80,                .40,      tPercent,        0x0AA,    0x3A,  opt_cR_button_left			; left  button sensitivity
 	OPTION_UINT8p10 ocR_button_right,   .20,                  .80,                .40,      tPercent,        0x0AB,    0x3B,  opt_cR_button_right			; right button sensitivity
@@ -318,8 +318,8 @@ option_table_begin:
 	OPTION_ENUM8    oTissueGraphics, tissue_graphics_options,                      .0,      tTissuePresSat,  0x0FB,    0x88,  opt_tissue_graphics			; =0: show pressures and saturations, =1: show N2 and He pressures
 	OPTION_ENUM8    oLayout,             .2,                                       .0,      tLayoutNormal,   0x0FC,    0x8A,  opt_layout					; initial layout of dive mode screen =0: normal, =1: big
 	OPTION_BOOL     oExtendedStops,                                                .1,                       0x0FD,    0x8B,  opt_ext_stops					; =1: place gas switches also below 1st stop depth
-	OPTION_UINT8    oGasDensityAtt,     .40,                  .80,                .60,      nounit,          0x0FE,    0x8C,  char_I_gas_density_att		; threshold for gas density attention [0.1 grams/l]
-	OPTION_UINT8    oGasDensityWarn,    .40,                  .80,                .65,      nounit,          0x0FF,    0x8D,  char_I_gas_density_warn		; threshold for gas density warning   [0.1 grams/l]
+	OPTION_UINT8    oGasDensityAtt,     .40,                  .80,                .52,      nounit,          0x0FE,    0x8C,  char_I_gas_density_att		; threshold for gas density attention [0.1 grams/l]
+	OPTION_UINT8    oGasDensityWarn,    .40,                  .80,                .63,      nounit,          0x0FF,    0x8D,  char_I_gas_density_warn		; threshold for gas density warning   [0.1 grams/l]
 	OPTION_BOOL     oDilppO2Check,                                                .1,                        0x100,    0x8E,  char_I_dil_check				; =1: check ppO2 of the pure diluent against current setpoint
 	OPTION_UINT8    oFirmwareMajor,  fw_version_major,  fw_version_major, fw_version_major, nounit,          0x101,  nocomm,  opt_fw_version_major			; firmware version, major | use as read-only,
 	OPTION_UINT8    oFirmwareMinor,  fw_version_minor,  fw_version_minor, fw_version_minor, nounit,          0x102,  nocomm,  opt_fw_version_minor			; firmware version, minor | do not change eeprom index number!
