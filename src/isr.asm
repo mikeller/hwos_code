@@ -657,6 +657,7 @@ isr_rtcc_2:
 	rcall	isr_update_uptime			; increment overall OSTC uptime
 	rcall	isr_update_timeout			; process the timeout timer
 
+	movff	opt_brightness_surface,brightness	; copy brightness - will be overwritten with opt_brightness_dive if in dive mdoe
 	btfsc	divemode					; in dive mode?
 	rcall	isr_divemode_1sec			; YES - do the every second dive mode tasks
 
@@ -814,6 +815,7 @@ isr_battery_gauge7:
 ; Every Second Tasks while in Dive Mode
 ;
 isr_divemode_1sec:
+	movff	opt_brightness_divemode,brightness	; copy brightness for dive mode
 	decfsz	sampling_timer,F			; decrement sampling timer, became zero?
 	bra		isr_divemode_1sec_1			; NO
 	bsf		trigger_sample_divedata		; YES - set trigger flag for sampling dive data
@@ -866,6 +868,7 @@ isr_divemode_1sec_3a:
 	return								;     - done
 
 isr_divemode_1sec_4:					; at surface
+    	movff	opt_brightness_surface,brightness	; copy brightness
 	btfss	FLAG_apnoe_mode				; in apnoe mode?
 	return								; NO  - done
 	bsf		apnoe_at_surface			; YES - memorize been at the surface

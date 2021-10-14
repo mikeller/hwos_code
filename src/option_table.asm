@@ -152,7 +152,7 @@ option_table_begin:
 
 	; Managing Settings
 	OPTION_UINT8    oExtraTime,          .0,                   .9,                 .0,      tMinutes,        0x028,    0x24,  char_I_extra_time				; extra bottom time for future TTS calculation
-	OPTION_ENUM8    oBrightness,         .3,                                       .0,      tEco,            0x029,    0x2D,  opt_brightness				; =0: Eco, =1:Medium, =2:Full
+	OPTION_ENUM8    oBrightness_dive,    .3,                                       .0,      tEco,            0x029,    0x2D,  opt_brightness_divemode				; =0: Eco, =1:Medium, =2:Full
 	OPTION_UINT8    oDiveSalinity,   salinity_min,      salinity_max,              .0,      tPercent,        0x02A,    0x30,  opt_salinity					; 0-4%
 	OPTION_ENUM8    oCCRMode,            .3,                                       .0,      tCCRModeFixedSP, 0x02B,    0x1F,  opt_ccr_mode					; =0: Fixed SP, =1: Sensor, =2: Auto SP
 	OPTION_ENUM8    oLanguage,           .2,                                       .0,      tLang1,          0x02C,    0x32,  opt_language					; language selection
@@ -274,7 +274,7 @@ option_table_begin:
 	OPTION_UINT8    oPressureAdjust,     .0,                 .255,                 .0,      nounit,          0x0A5,    0x35,  opt_pressure_adjust			; pressure sensor correction, SIGNED int (clipped to -20/+20 mbar in code)
 	OPTION_BOOL     oSafetyStop,                                                   .0,                       0x0A6,    0x36,  opt_safetystop				; =1: show safety stops
 	OPTION_UINT8    oCalGasO2,          .21,                 .100,                .21,      tPercent,        0x0A7,    0x37,  opt_calibration_O2_ratio		; calibration gas %O2 (do not move in EEPROM, must stay at .149!)
-	;                                                                                                        0x0A8											; not used any more (ex opt_sensor_fallback)
+	OPTION_ENUM8    oBrightness_surface, .3,                                       .2,      tEco,            0x0A8,    0x38,  opt_brightness_surface			; =0: Eco, =1:Medium, =2:Full
 	OPTION_BOOL     oFlipScreen,                                                   .0,                       0x0A9,    0x39,  opt_flip_screen				; =1: flip the screen
 	OPTION_UINT8p10 ocR_button_left,    .20,                  .80,                .40,      tPercent,        0x0AA,    0x3A,  opt_cR_button_left			; left  button sensitivity
 	OPTION_UINT8p10 ocR_button_right,   .20,                  .80,                .40,      tPercent,        0x0AB,    0x3B,  opt_cR_button_right			; right button sensitivity

@@ -262,7 +262,7 @@ get_ambient_level:
 	btfsc	ambient_sensor					;           - ambient sensor available?
 	bra		get_ambient_level1				;             YES - use sensor
 	banksel	isr_backup						;             NO  - back to ISR default bank
-	movff	opt_brightness,isr_lo			;                 - get brightness selection
+	movff	brightness,isr_lo			;                 - get brightness selection
 	incf	isr_lo,F						;                 - 0-2 -> 1-3
 	movlw	ambient_light_max_high_cr		;                 - default selection to brightest setting
 	dcfsnz	isr_lo,F						;                 - level 0 (eco) selected?
@@ -307,7 +307,7 @@ get_ambient_level1_loop:
 	movwf	ambient_light+0					; avoid ADC clipping
 
 get_ambient_level2:
-	movff	opt_brightness,isr_lo			; get brightness setting
+	movff	brightness,isr_lo			; get brightness setting
 
 	btfsc	RCSTA1,7						; UART module on?
 	clrf	isr_lo							; YES - set temporary to eco mode
@@ -331,7 +331,7 @@ get_ambient_level2:
 	cpfslt	ambient_light+0					; smaller than WREG?
 	movwf	ambient_light+0					; NO - set to max.
 
-	movff	opt_brightness,isr_lo			; get brightness setting
+	movff	brightness,isr_lo			; get brightness setting
 	incf	isr_lo,F						; adjust 0-2 to 1-3
 	movlw	ambient_light_min_high			; default to highest setting
 	dcfsnz	isr_lo,F						; eco setting?

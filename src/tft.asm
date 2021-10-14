@@ -430,7 +430,7 @@ TFT_boot_screen3:
 	rcall	TFT_ClearScreen
 	setf	CCPR1L					; duty cycle, 255 is required for OLED
 	; Set brightness
-	movff	opt_brightness,PRODL	; =0: Eco, =1:Medium, =2:Full
+	movff	brightness,PRODL	; =0: Eco, =1:Medium, =2:Full
 	incf	PRODL,F					; +1
 	dcfsnz	PRODL,F
 	rcall	TFT_display3_low

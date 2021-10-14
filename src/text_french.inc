@@ -287,7 +287,8 @@
 
 
 ; Display Settings
-	TCODE	tBright,			"Luminosité: "			; Brightness
+	TCODE	tBright,			"Luminosité"			; Brightness
+	TCODE	tBrightsurface,			"Mode Surface: "		; ...Surface
 	TCODE	tLayout,			"Affichage : "			; Layout
 	TCODE	tUnits,				"Unités    : "			; Units
  IF _language_2!=none
@@ -332,8 +333,8 @@
 	; 5 rows by 12 chars each:	 123456789012123456789012123456789012123456789012123456789012
 	TCODE	tDefName,			"HW OSTC"	;"Lire la doc.Connaitre etComprendre  les limites de l'OSTC ! "
 	TCODE	tPiezo,				"Bouton"				; Buttons
-	TCODE	tButtonExplain1,	"Less % is"			; Less % is 
-	TCODE	tButtonExplain2,	"more sensitive."		; more sensitive.
+	TCODE   tButtonExplain1,		"% plus faible"            ; Less % is
+	TCODE   tButtonExplain2,		"= plus sensible."        ; more sensitive. 
 	TCODE	tButtonleft,		"Bouton gauche:"		; Left button
 	TCODE	tButtonright,		"Bouton droit :"		; Right button
 	TCODE	tAltMode,			"Temps Attente:"		; Waiting Time

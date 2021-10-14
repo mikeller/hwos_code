@@ -287,7 +287,8 @@
 
 
 ; Display Settings
-	TCODE	tBright,			"Luminosita': "			; Brightness
+	TCODE	tBright,			"Luminosita'"			; Brightness
+	TCODE	tBrightsurface,			"Superficie  : "		; ...Surface
 	TCODE	tLayout,			"Layout     : "			; Layout
 	TCODE	tUnits,				"Unita'     : "			; Units
  IF _language_2!=none

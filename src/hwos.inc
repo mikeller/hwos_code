@@ -1320,7 +1320,8 @@ gaslist_gas						res 1		; used for transfer between gaslist.asm and menu_tree.as
 best_gas_number					res 1		; number of the "best gas": 0= none found, 1-5= gases 1-5, 255= not computed
 active_gas						res 1		; the currently used OC/bailout gas (1-5)
 dive_ccr_mode					res 1		; working copy of opt_ccr_mode while the dive
-
+dive_threshold_debounce				res 1		; Countdown for entering dive mode
+					
  IFDEF _ccr_pscr
 best_dil_number					res 1		; number of the "best dil": 0= none found, 1-5= dils  1-5, 255= not computed
 active_dil						res 1		; the currently used diluent (1-5)
@@ -1594,8 +1595,9 @@ time_last_2nd					res 2		; last pressure reading time       in seconds    |
 i2c_error_vault					res 2		; Store last used device ID and data byte
 D1_buffer					res 3		; Buffer of D1 (Sensor raw data)
 D2_buffer					res 3		; Buffer of D2 (Sensor raw data)					
-					
-; 156 byte used, 93 byte free
+
+brightness					res 1		; =0: Eco, =1:Medium, =2:Full
+; 157 byte used, 92 byte free
 
 
 ;-----------------------------------------------------------------------------
@@ -1661,7 +1663,8 @@ opt_fw_version_major			res 1		; firmware version, major | use read-only!
 opt_fw_version_minor			res 1		; firmware version, minor |
 opt_fw_version_beta				res 1		; firmware version, beta  |
 opt_surface_interval			res 1		; surface interval, used by deco calculator
-opt_brightness					res 1		; =0: Eco, =1:Medium, =2:Full
+opt_brightness_divemode				res 1		; =0: Eco, =1:Medium, =2:Full
+opt_brightness_surface				res 1		; =0: Eco, =1:Medium, =2:Full
 opt_salinity					res 1		; 0-5%
 opt_language					res 1		; current language: 0=EN, 1=DE, 2=FR, 3=SP
 opt_units						res 1		; 0:m/°C, 1:ft/°F

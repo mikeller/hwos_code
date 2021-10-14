@@ -6070,30 +6070,11 @@ TFT_debug_output:
 ;	WIN_TINY   .0, .		0					; dive    mode: overwrites depth label
 	FONT_COLOR_MEMO								; set color
 	
-	movff	D1+2,lo
+	movff	ambient_light+0,lo
 	output_256
 	PUTC	","
-	movff	D1+0,lo
-	movff	D1+1,hi
-	output_65535
-	PRINT
-	WIN_TINY .100,.45							; surface mode: fits under the textual logo in the upper right corner
-	movff	D2+2,lo
-	output_256
-	PUTC	","
-	movff	D2+0,lo
-	movff	D2+1,hi
-	output_65535
-	PRINT
-	WIN_TINY .100,.60							; surface mode: fits under the textual logo in the upper right corner
-;	movf	HW_flags_state3,W
-;	output_hex
-;	PUTC	","
-	movff	max_CCPR1L,lo
-	output_256
-	PUTC	","
-	movff	divesecs_avg_trip+0,lo
-	movff	divesecs_avg_trip+1,hi
+	movff	ambient_light+0,lo
+	movff	ambient_light+1,hi
 	output_65535
 
 	
