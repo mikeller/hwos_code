@@ -422,13 +422,19 @@ option_write_serial_loop:
 	retlw	.1								;       YES - option not found, abort
 
 option_write_serial_execute:
-	rcall	option_check_loaded				; check if new value is valid
-	btfss	option_value_ok					; value valid?
-	retlw	.2								; NO  - value not valid, abort
-	movff	hi,INDF1						; YES - take new value
-	btfss	opt_eeprom_bank,7				;     - volatile option?
-	bsf		option_changed					;       NO  - flag that EEPROM needs to be updated
-	retlw	.0								;     - done
+	rcall    option_check_loaded                ; check if new value is valid
+        btfss    option_value_ok                    ; value valid?
+        bra      option_write_serial_invalid        ; NO
+        movff    hi,INDF1                           ; YES - take new value
+        btfss    opt_eeprom_bank,7                  ;     - volatile option?
+        bsf        option_changed                   ;       NO  - flag that EEPROM needs to be updated
+        retlw    .0                                 ;     - done
+
+option_write_serial_invalid:
+	movlw    0x32                               ; load serial id of the language option (oLanguage)
+	cpfseq    lo                                ; option to write = language option ?
+	retlw    .2                                 ; NO  - value not valid, abort
+	retlw    .0                                 ; YES - value not valid, but silently ignore
 
 
 ;-----------------------------------------------------------------------------

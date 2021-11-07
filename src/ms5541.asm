@@ -281,12 +281,6 @@ press_comp_ms5837_3:
 	call	isr_div32x16				; isr_xC:4 = isr_xC:4 / isr_xB:2 with isr_xA as remainder
 	; isr_xC:2 equals pressure in 1mbar
 
-	; subtract 20mbar from the final result
-	movlw	.20
-	subwf	isr_xC+0,F
-	movlw	.0
-	subwfb	isr_xC+1,F
-
 	; copy for compatibility of the next routines
 	movff	isr_xC+1,isr_xC+2
 	movff	isr_xC+0,isr_xC+1
@@ -613,7 +607,24 @@ get_calibration_data:
 	btfsc	press_sensor_type			; New sensor found?
 	call	I2C_get_calib_MS5837			; Yes, read C1 to C6
 	banksel	isr_backup					; select bank ISR data
+	; double-check sensor type
+	movlw	0xED
+	cpfseq	C1+0
+	bra	get_calibration_data1			; Not 0xED (I2C address false reading)
+	movlw	0xED
+	cpfseq	C1+1
+	bra	get_calibration_data1			; Not 0xED (I2C address false reading)
+	movlw	0xED
+	cpfseq	C5+0
+	bra	get_calibration_data1			; Not 0xED (I2C address false reading)
+	movlw	0xED
+	cpfseq	C5+1
+	bra	get_calibration_data1			; Not 0xED (I2C address false reading)
 	
+	; C1 and C5 are 0xEDED -> NOT Sensor 1
+	bcf	press_sensor_type
+	
+get_calibration_data1:	
 	btfsc	press_sensor_type			; New sensor found?
 	bra	get_calibration_data2			; Yes, skip to the end
 	

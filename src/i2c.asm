@@ -756,13 +756,13 @@ I2C_init_compass3:
 	rcall	I2C_TX						; send byte
 	movlw	0xA0						; 0x20 with auto-increment (MSB=1)
 	rcall	I2C_TX						; send byte
-	movlw	b'01110000'					; CTRL_REG1_M (10Hz) 0x20
+	movlw	b'01110000'					; CTRL_REG1_M (10Hz, X and Y in Ultra-high performance mode) 0x20
 	rcall	I2C_TX						; send byte
 	movlw	b'01100000'					; CTRL_REG2_M (Full-scale: +/- 16gauss) 0x21
 	rcall	I2C_TX						; send byte
 	movlw	b'01000000'					; CTRL_REG3_M (Continuous) 0x22
 	rcall	I2C_TX						; send byte
-	movlw	b'00000000'					; CTRL_REG4_M (Z in Low-power mode) 0x23
+	movlw	b'00001100'					; CTRL_REG4_M (Z in Ultra-high performance mode) 0x23
 	rcall	I2C_TX						; send byte
 	movlw	b'00000000'					; CTRL_REG5_M 0x24
 	rcall	I2C_TX						; send byte

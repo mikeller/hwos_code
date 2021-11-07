@@ -554,7 +554,7 @@ update_divemode60:
 	movwf	alarm_type					;     - copy to alarm register
 	bsf		event_occured				;     - set event flag
 	movlw	.0							;     - coding of brightness level ECO
-	movff	WREG,opt_brightness			;     - set brightness to ECO
+	movff	WREG,opt_brightness_divemode			;     - set brightness to ECO
 
 update_divemode60_1:
 	; max allowed runtime in simulator is 254 minutes in
@@ -1973,11 +1973,16 @@ check_dive_modes_comm:
 	bra		check_dive_modes_shallow			; NO  - shallower than threshold
 	btfsc	divetime_longer_1min				; YES - diving > one minute?
 	CLRI	dive_timeout_timer					;       YES - reset timeout counter
+	decfsz	dive_threshold_debounce,F				    ; debounce counter
+	return
+	incf	dive_threshold_debounce,F				
 	bsf		divemode							;     - set dive mode flag
 	bsf		count_divetime						;     - count dive time
 	return										;     - done
 
 check_dive_modes_shallow:
+	movlw	.5								; load debounce counter
+	movwf	dive_threshold_debounce
 	bcf		count_divetime						; stop counting dive time
 ;	btfss	divetime_longer_1min				; diving > one minute?
 ;	bcf		divemode							; NO  - quit dive mode as this was no real dive

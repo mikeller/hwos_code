@@ -1537,7 +1537,7 @@ do_return_dispsets_menu:
 do_menu_dispsets:
  IF _language_2!=none
 	MENU_BEGIN	tDispSets, .7
-		MENU_OPT_INC	tBright,					oBrightness
+		MENU_CALL	tBright,					do_menu_Brightness
 		MENU_OPT_INC	tLayout,					oLayout
 		MENU_OPT_INC	tUnits,						oUnits
 		MENU_OPT_INC	tLanguage,					oLanguage
@@ -1547,7 +1547,7 @@ do_menu_dispsets:
 	MENU_END
  ELSE
 	MENU_BEGIN	tDispSets, .6
-		MENU_OPT_INC	tBright,					oBrightness
+		MENU_CALL	tBright,					do_menu_Brightness
 		MENU_OPT_INC	tLayout,					oLayout
 		MENU_OPT_INC	tUnits,						oUnits
 		MENU_OPT_INC	tFlip,						oFlipScreen
@@ -1556,7 +1556,17 @@ do_menu_dispsets:
 	MENU_END
  ENDIF
 
+;-----------------------------------------------------------------------------
+; Settings Menu - 3rd Layer - Display Settings - Brightness
+;
+do_menu_Brightness: 
+    	MENU_BEGIN	tBright, .3
+		MENU_OPT_INC	tDvMode,					oBrightness_dive
+		MENU_OPT_INC	tBrightsurface,					oBrightness_surface
+		MENU_CALL	tBack,						do_return_dispsets_menu
+	MENU_END
 
+ 
 ;-----------------------------------------------------------------------------
 ; Settings Menu - 3rd Layer - Display Settings - Color Schemes
 ;

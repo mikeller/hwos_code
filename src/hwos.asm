@@ -181,7 +181,7 @@ init_ostc:
 	bcf		RCON,IPEN			; priority interrupts off
 
 	banksel	WDTCON
-	movlw	b'10000000'			; setup watchdog
+	movlw	b'00010000'			; setup watchdog, put VCORE Reg into Ultra Low-Power mode in Sleep
 	movwf	WDTCON				; ...
 
 

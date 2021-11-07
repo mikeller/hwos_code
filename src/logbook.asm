@@ -1575,12 +1575,15 @@ logbook_page2a:
 	call	TFT_surf_cv_tissues
 
 	; calculate time/date of the end of the dive
-	MOVTT	header_buffer+index_date,      rtc_latched_year		; get start    of the dive - year, month, day
-	MOVII	header_buffer+index_time,      rtc_latched_hour		; get start    of the dive - hour, minute
-	MOVCC	header_buffer+index_divetime+2,rtc_latched_secs		; get duration of the dive - seconds
-	MOVII	header_buffer+index_divetime+0,mpr					; get duration of the dive - minutes
-	call	rtc_add_minutes										; add minutes in mpr to time/date in rtc_latched
-
+        MOVTT    header_buffer+index_date,rtc_latched_year    ; get start of the dive - year, month, day
+        MOVII    header_buffer+index_time,rtc_latched_hour    ; get start of the dive - hour, minute
+        MOVII    header_buffer+index_total_seconds,mpr        ; get total dive duration in seconds into hi:lo
+        call     convert_time                                 ; convert seconds (in hi:lo) into minutes (in up:hi) and seconds (in lo)
+        MOVCC    lo,rtc_latched_secs                          ; set duration of the dive - seconds
+        MOVCC    hi,lo                                        ; set duration of the dive - minutes, low  byte
+        MOVCC    up,hi                                        ; set duration of the dive - minutes, high byte
+	call     rtc_add_minutes                              ; add minutes in hi:lo to time/date in rtc_latched 
+	
 	; print time/date of the end of the dive
 	WIN_SMALL .8,.193									; select font and output position
 	MOVTT	rtc_latched_year,mpr						; get computed end-of-dive date
