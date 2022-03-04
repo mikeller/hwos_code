@@ -158,7 +158,11 @@ color_image_pixel:
 	bra		color_image_display2	; YES
 	btfsc	screen_type3			; display type 3 ?
 	bra		color_image_display3	; YES
-
+	
+	; Screen 1
+	btfsc	less_io_cpu			; less I/O CPU?
+	bra	color_image_pixel1_loop_less_io ; YES
+	    
 	movff	PRODH,PORTA				; NO  - move color high byte to PORTA
 	movff	PRODL,PORTH				;     - move color low  byte to PORTH
 
@@ -171,6 +175,19 @@ color_image_pixel1_loop:
 	bra		color_image_pixel1_loop	; loop if not zero
 	bra		color_image_pixel_com	; all pixels transmitted
 
+color_image_pixel1_loop_less_io:	
+    	movff	PRODH,PORTA				; NO  - move color high byte to PORTA
+	bcf		tft_nwr					; toggle write signal
+	bsf		tft_nwr					; ...
+	movff	PRODL,PORTA				;     - move color low  byte to PORTH
+	bcf		tft_nwr					; toggle write signal
+	bsf		tft_nwr					; ...
+	decfsz	pixel_count+0			; decrement pixel counter, low  byte
+	bra		color_image_pixel1_loop_less_io	; loop if not zero
+	decfsz	pixel_count+1			; decrement pixel counter, high byte
+	bra		color_image_pixel1_loop_less_io	; loop if not zero
+	bra		color_image_pixel_com	; all pixels transmitted
+	
 color_image_display2:
 	call	convert_for_display2	; convert 16 bit RGB b'RRRRRGGG GGGBBBBB'
 									; into    24 bit RGB b'RRRRRR00 GGGGGG00 BBBBBB00'

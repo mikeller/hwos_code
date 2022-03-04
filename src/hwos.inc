@@ -473,7 +473,7 @@
 #DEFINE ext_input_optical		HW_descriptor,3		; =1: OSTC has optical   input
 #DEFINE ble_available			HW_descriptor,4		; =1: OSTC has an BT module
 #DEFINE ostc_rx_present			HW_descriptor,5		; =1: OSTC has RX module
-#DEFINE lv_core					HW_descriptor,6		; =1: OSTC has low-voltage core (2.7V)
+#DEFINE lv_core				HW_descriptor,6		; =1: OSTC has low-voltage core (2.7V)
 #DEFINE flash_block_write		HW_descriptor,7		; =1: OSTC has FLASH with block-write capability
 
 ;---- Hardware - OSTC Model Variants (stored in access RAM, NOT cleared in restart)
@@ -488,7 +488,7 @@
 
  ;---- Hardware - OSTC Model Variants2 (stored in access RAM, NOT cleared in restart)
 #DEFINE press_sensor_type		HW_variants2,0		; =1: pressure sensor MS5837, =0: Pressure sensor MS5541
-;					HW_variants2,1		; --- unused
+#DEFINE	less_io_cpu			HW_variants2,1		; =1: OSTC has a CPU with less I/O pins
 ;					HW_variants2,2		; --- unused
 ;					HW_variants2,3		; --- unused
 ;					HW_variants2,4		; --- unused

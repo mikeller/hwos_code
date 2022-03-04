@@ -1313,15 +1313,18 @@ dyn_show_config:
 	STRCAT_TEXT tHardware				; print  text
 	call	I2C_init_compass			; start compass to get compass configuration
 	movf	HW_descriptor,W				; copy hardware descriptor to WREG
-	output_hex							; print as hex
+	output_hex					; print as hex
 	movf	HW_variants,W				; copy hardware variants   to WREG
-	output_hex							; print as hex
-	PUTC	"-"							; print a separator
-	movlw	FW_CONF						; get firmware configuration
-	output_hex							; print as hex
+	output_hex					; print as hex
+	PUTC	"-"					; print a separator
+	movlw	FW_CONF					; get firmware configuration
+	output_hex					; print as hex
 	call	get_cpu_version				; get CPU version
-	output_hex							; print as hex
-	return								; done
+	output_hex					; print as hex
+	btfss	less_io_cpu				; =1: OSTC has a CPU with less I/O pins
+	return						; Done.
+	PUTC	"*"
+	return						; Less I/O CPU done.
 
 
 ;-----------------------------------------------------------------------------
@@ -1858,13 +1861,14 @@ do_menu_piezo:
 ; Settings Menu - 3rd Layer - System Settings - Reset Menus
 ;
 do_menu_reset:
-	MENU_BEGIN	tResetMenu, .6
+	MENU_BEGIN	tResetMenu, .7
 		MENU_CALL		tBack,						do_return_menu_syssets_more
 		MENU_CALL		tReboot,					do_menu_reset_reboot	; confirm
 		MENU_CALL		tResetDeco,					do_menu_reset_deco		; confirm
 		MENU_CALL		tResetSettings,				do_menu_reset_settings	; confirm
 		MENU_CALL		tResetLogbook,				do_menu_reset_logbook	; confirm
 		MENU_CALL		tResetBattery,				do_menu_reset_battery	; confirm
+		MENU_CALL		tResetBLE2,				do_menu_reset_ble2	; Configure the new BLE module
 	MENU_END
 
 
@@ -2062,6 +2066,14 @@ do_menu_reset_battery:
 		MENU_CALL		tAbort,						do_return_menu_syssets_more_more
 		MENU_CALL		tYes,						do_new_battery_select
 	MENU_END
+	
+;-----------------------------------------------------------------------------
+; Settings Menu - 4th Layer - System Settings - Reset - Reset BLE2
+;
+do_menu_reset_ble2:
+ 	call	TFT_ClearScreen					; clear screen to show start of activity
+        call    ble2_configure
+	goto	surfloop					; restart into surface mode
 
 
 ;-----------------------------------------------------------------------------

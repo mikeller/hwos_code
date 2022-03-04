@@ -44,6 +44,7 @@
 	extern	oFirmwareMajor
 	extern	oFirmwareMinor
 	extern	oPressureAdjust
+	extern	get_cpu_version
 
  IFDEF _ccr_pscr
 	extern	option_cleanup_oCCRMode_pSCR
@@ -120,6 +121,9 @@ start_clear_rambank:
 
 	; initialize hardware (ports, timers) and start interrupts
 	call	init_ostc						; also selects bank common and sets CPU to normal speed
+	
+	; get CPU type and set less_io_cpu bit
+	call	get_cpu_version
 
 	; flag that later restart origins from a cold start
 	bsf		cold_start
@@ -160,7 +164,7 @@ start_clear_rambank:
 	; initialize pressure sensor calibration
 	call	I2C_probe_pressure_sensor		; Probe the type of sensor, set/clear press_sensor_type
 	call	get_calibration_data			; get calibration data from pressure sensor
-
+	
 	call	TFT_DisplayOff					; turn off display
 	bsf		LEDr							; turn on red LED
 
@@ -379,6 +383,8 @@ restart:
 	bsf		lightsen_power					; power-up ambient light sensor again
 
 restart2:
+    	btfsc	less_io_cpu						; Less I/O CPU found?
+	bsf	ble_available						; Yes, must have BLE (old or new)
  IFNDEF _hwos_sport
 	btfsc	vusb_in							; USB power detected?
 	bra		restart3						; YES - no BT then

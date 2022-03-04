@@ -432,6 +432,10 @@ aa_decode_3:
 	btfsc	screen_type3			; display 3 ?
 	bra		aa_decode_3_display3	; YES
 
+	; Screen 1 or 0
+	btfsc	less_io_cpu				; less I/O CPU?
+	bra	aa_decode_3_display0and1_less_io	; YES
+
 	movff	PRODH,PORTA				; move high byte to PORTA
 	movff	PRODL,PORTH				; move low  byte to PORTH
 aa_decode_3_display0and1:
@@ -441,6 +445,17 @@ aa_decode_3_display0and1:
 	bra		aa_decode_3_display0and1; NO  - loop
 	bra		aa_decode_3_done		; YES -  done
 
+aa_decode_3_display0and1_less_io:
+	movff	PRODH,PORTA				; move high byte to PORTA
+	bcf		tft_nwr					; tick
+	bsf		tft_nwr					; ...
+	movff	PRODL,PORTA				; move low  byte to PORTA
+	bcf		tft_nwr					; tick
+	bsf		tft_nwr					; ...
+	decfsz	aa_bitlen,F				; decrement length counter, became zero?
+	bra		aa_decode_3_display0and1_less_io; NO  - loop
+	bra		aa_decode_3_done		; YES -  done
+	
 aa_decode_3_display2:
 	movff	win_color5,PORTH		; move high byte to PORTH (display is big endian)
 	bcf		tft_nwr					; tick

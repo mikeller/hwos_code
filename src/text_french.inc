@@ -556,6 +556,7 @@
 	TCODE	tResetDeco,			"RaZ Déco"				; Reset Deco
 	TCODE	tResetBattery,		"RaZ Batterie"			; Reset Battery
 	TCODE	tResetLogbook,		"RaZ Carnet"			; Reset Logbook
+	TCODE	tResetBLE2,		"RaZ Bluetooth"		; Reset Bluetooth
 
  IFDEF _firmware_recovery
 	TCODE	tRebootCurFirmware,	"Reboot  current FW"	; Reboot current Firmware

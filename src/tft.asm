@@ -94,7 +94,11 @@ TFT_ClearScreen:
 	RD_H							; not read
 	RS_H							; data
 	NCS_L							; not CS
-	clrf	PORTH					; data lower
+
+	btfsc	less_io_cpu			; less I/O CPU?
+	clrf	PORTA				; YES, data lower
+	btfss	less_io_cpu			; less I/O CPU?
+	clrf	PORTH				; NO, data lower
 
 	movlw	d'10'
 	movwf	tft_temp3
@@ -107,6 +111,15 @@ TFT_ClearScreen3:
 TFT_ClearScreen4:
 	WR_L
 	WR_H							; tick
+	btfss	less_io_cpu			; less I/O CPU?
+	bra	TFT_ClearScreen5		; NO
+	WR_L
+	WR_H							; tick
+	WR_L
+	WR_H							; tick
+	WR_L
+	WR_H							; tick
+TFT_ClearScreen5:
 	decfsz	tft_temp1,F
 	bra		TFT_ClearScreen4
 	bsf		INTCON,GIE
@@ -339,7 +352,8 @@ TFT_boot_0:
 	movwf	TBLPTRH
 	movlw	UPPER display0_config_table
 	movwf	TBLPTRU
-	bcf		screen_type1
+	btfss	less_io_cpu			; less I/O CPU?
+	bcf		screen_type1		; NO
 
 TFT_boot_com:
 	rcall	display0_init_loop
@@ -483,6 +497,8 @@ TFT_CmdWrite:
 ;	bra		TFT_CmdWrite_screen2
 	clrf	PORTA					; upper
 	bcf		INTCON,GIE
+	btfsc	less_io_cpu			; less I/O CPU?
+	bra	TFT_CmdWrite_less_io ; YES
 	movwf	PORTH					; lower
 	WR_L
 	WR_H							; tick
@@ -494,12 +510,23 @@ TFT_CmdWrite:
 ;	WR_H							; tick
 ;	return;
 
+TFT_CmdWrite_less_io:
+	WR_L
+	WR_H							; tick
+	movwf	PORTA					; lower
+	WR_L
+	WR_H							; tick
+	bsf		INTCON,GIE
+	return
+	
 	global	TFT_DataWrite
 TFT_DataWrite:
 	RS_H							; data
 ;	btfsc	screen_type2
 ;	bra		TFT_DataWrite_screen2
 	bcf		INTCON,GIE
+	btfsc	less_io_cpu			; less I/O CPU?
+	bra	TFT_DataWrite_less_io ; YES
 	movwf	PORTH					; lower
 	WR_L
 	WR_H							; tick
@@ -510,6 +537,14 @@ TFT_DataWrite:
 ;	WR_L
 ;	WR_H							; tick
 ;	return
+TFT_DataWrite_less_io:
+    	WR_L
+	WR_H							; tick
+	movwf	PORTA					; lower
+	WR_L
+	WR_H							; tick
+	bsf		INTCON,GIE
+	return
 
 
 ;-----------------------------------------------------------------------------
@@ -751,13 +786,24 @@ half_pixel_write_1_display1:
 	Index_out 0x22					; frame memory data write start
 	RS_H							; data
 	bcf		INTCON,GIE
-	movff	win_color1,PORTA		; upper
-	movff	win_color2,PORTH		; lower
+	movff	win_color1,PORTA			; upper
+	btfsc	less_io_cpu				; less I/O CPU?
+	bra	half_pixel_write_1_display1_l_io	; YES
+	movff	win_color2,PORTH			; lower
 	WR_L
-	WR_H							; tick
+	WR_H						; tick
 	bsf		INTCON,GIE
 	return
 
+half_pixel_write_1_display1_l_io:
+	WR_L
+	WR_H						; tick
+	movff	win_color2,PORTA			; lower
+	WR_L
+	WR_H						; tick
+	bsf		INTCON,GIE
+	return
+	
 half_pixel_write_1_display2:
 	mullw	1						; copy row to PRODL (PRODH=0)
 	; Row address start
@@ -880,12 +926,23 @@ TFT_DataWrite_PROD:
 	bra		TFT_DataWrite_PROD_display2	; YES
 	bcf		INTCON,GIE					; NO  -
 	movff	PRODH,PORTA					;     - move high byte to PORTA
+	btfsc	less_io_cpu					; less I/O CPU?
+	bra	TFT_DataWrite_PROD_less_io			; YES
 	movff	PRODL,PORTH					;     - move low byte to PORTH
 	WR_L								;     - tick
 	WR_H								;     - tack
 	bsf		INTCON,GIE					;     -
 	return								;     - done
 
+TFT_DataWrite_PROD_less_io:
+	WR_L
+	WR_H							; tick
+	movff	PRODL,PORTA					;     - move low byte to PORTH
+	WR_L								;     - tick
+	WR_H								;     - tack
+	bsf		INTCON,GIE					;     -
+	return								;     - done
+	
 TFT_DataWrite_PROD_display2:
 	movff	PRODH,PORTH					; move high byte to PORTH (display 2 is big endian)
 	WR_L								; tick
@@ -1228,6 +1285,8 @@ TFT_box2:							; loop height times
 TFT_box3:							; loop width times
 	bcf		INTCON,GIE
 	movff	win_color1,PORTA		; upper
+	btfsc	less_io_cpu			; less I/O CPU?
+	bra	TFT_box3_less_io		 ; YES
 	movff	win_color2,PORTH		; lower
 	WR_L							; tick
 	WR_H							; ...
@@ -1254,6 +1313,30 @@ TFT_box4:
 	; reset bargraph mode...
 	setf	win_bargraph
 	return
+
+TFT_box3_less_io:	
+	WR_L							; tick
+	WR_H							; ...
+	movff	win_color2,PORTA		; lower
+	WR_L							; tick
+	WR_H							; ...
+	movff	win_color1,PORTA		; upper
+	WR_L							; tick
+	WR_H							; ...
+	movff	win_color2,PORTA		; lower
+	WR_L							; tick
+	WR_H							; ...
+	bsf		INTCON,GIE
+	decfsz	PRODL,F					; row loop finished ?
+	bra		TFT_box3				; NO - continue
+
+	incf	PRODH,F					; column count ++
+	movf	win_bargraph,W			; get width of active bargraph part
+	cpfseq	PRODH					; current column == end of active bargraph ?
+	bra		TFT_box4				; NO  - just loop
+	clrf	win_color1				; YES - switch to black
+	clrf	win_color2				;     - ...
+	bra		TFT_box4				; NO  - just loop
 
 TFT_box_display2:
 	; Screen 2
@@ -1440,7 +1523,8 @@ TFT_set_color:
 
 	rrcf	tft_temp4,F
 	rrcf	tft_temp1,W				; red done
-	movwf	win_color1				; set color registers
+							; tft_temp1 (b'RRRRRGGG') done
+	movwf	win_color1				; set color registers...
 	return
 
 

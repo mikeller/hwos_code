@@ -556,6 +556,7 @@
 	TCODE	tResetDeco,			"Azzera Deco"			; Reset Deco
 	TCODE	tResetBattery,		"Azzera Batteria"		; Reset Battery
 	TCODE	tResetLogbook,		"Azzera Logbook"		; Reset Logbook
+	TCODE	tResetBLE2,		"Azzera Bluetooth"		; Reset Bluetooth
 
  IFDEF _firmware_recovery
 	TCODE	tRebootCurFirmware,	"Reboot  current FW"	; Reboot current Firmware

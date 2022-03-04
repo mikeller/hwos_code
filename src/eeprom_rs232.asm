@@ -491,4 +491,67 @@ serial_rx_stream_tmr_loop:
 
 ;-----------------------------------------------------------------------------
 
+;-----------------------------------------------------------------------------
+; Add new services and characteristics to new BLE (type 2) module
+;-----------------------------------------------------------------------------
+    global  ble2_configure
+ble2_configure:
+    rcall    enable_rs232
+    bcf         NCTS            ; Clear to send
+    call	wait_1s
+    call	wait_1s
+    bcf	PORTB,6
+    bsf	PORTB,6			; rising edge -> Command mode
+    
+    ; point to config table
+    movlw   LOW     ble_AT1
+    movwf   TBLPTRL
+    movlw   HIGH    ble_AT1
+    movwf   TBLPTRH
+    movlw   UPPER   ble_AT1
+    movwf   TBLPTRU
+    rcall   ble_init_loop
+	
+    rcall   disable_rs232
+    bcf	    PORTB,6	    ; keep low for min. current consumption
+    return		    ; done.
+
+ble_init_loop:
+        TBLRD*+
+        movlw   0xFF	; end
+        cpfseq  TABLAT
+        bra     ble_init_loop1	; not end
+        ; quit (return)
+	return	; done.
+ble_init_loop1:
+        movlw   0xFE	; WAIT 20ms
+        cpfseq  TABLAT
+        bra     ble_init_loop2	; not wait 20ms
+	WAITMS      d'20'
+	bra	ble_init_loop
+ble_init_loop2:	
+        movlw   0xFD	; WAIT 1s
+        cpfseq  TABLAT
+        bra     ble_init_loop3	; not wait 1s
+	call    wait_1s
+	bra	ble_init_loop
+ble_init_loop3:
+	movf	TABLAT,W
+	SERIAL_CC_SEND	WREG
+	bra	ble_init_loop
+    
+ble_AT1:	; config table
+    ; 0xFF at the end
+    ; 0xFE: 20ms delay
+    ; 0xFD: 1s delay
+    ; .13: cr character
+    db	0xFD,0xFD						; Wait 2 seconds
+    db	"AT+UDSC=0,0",.13,0xFE,0xFE				; Disable SPP Server on ID0 (and wait 40ms)
+    db	"AT+UDSC=0,3",.13,0xFE,0xFE				; SPP Server on ID0 (and wait 40ms)
+    db	"AT+UDSC=1,0",.13,0xFE,0xFE				; Disable SPS Server on ID1 (and wait 40ms)
+    db	"AT+UDSC=1,6",.13,0xFE,0xFE				; SPS Server on ID1 (and wait 40ms)
+    db	"AT&W",.13,0xFE						; write settings into eeprom (and wait 20ms)
+    db	"AT+CPWROFF",.13,0xFD,0xFD,0xFF				; save and reboot  (and wait 2 seconds)
+
+	
 	END

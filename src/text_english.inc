@@ -556,6 +556,7 @@
 	TCODE	tResetDeco,			"Reset Deco"			; Reset Deco
 	TCODE	tResetBattery,		"Reset Battery"			; Reset Battery
 	TCODE	tResetLogbook,		"Reset Logbook"			; Reset Logbook
+	TCODE	tResetBLE2,		"Reset Bluetooth"		; Reset Bluetooth
 
  IFDEF _firmware_recovery
 	TCODE	tRebootCurFirmware,	"Reboot  current FW"	; Reboot current Firmware

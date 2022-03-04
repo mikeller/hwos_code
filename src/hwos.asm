@@ -463,8 +463,10 @@ init_ostc:
 	global	power_up_switches
 power_up_switches:
 	bsf		power_sw1			; switch on power supply for switch 1
-	btfss	power_sw1			; power established?
-	bra		$-4					; NO - wait
+	
+	; power_sw1 not available in less pin CPU, do not use
+;	btfss	power_sw1			; power established?
+;	bra		$-4					; NO - wait
 
 	bsf		power_sw2			; switch on power supply for switch 2
 	btfss	power_sw2			; power established?
@@ -618,7 +620,9 @@ get_cpu_version:
 	movwf	TBLPTRH					; ...
 	movlw	0x3F					; ...
 	movwf	TBLPTRU					; ...
-	TBLRD*+							; read DEVID1 byte
+	TBLRD*+						; read DEVID1 byte
+	btfss	TABLAT,6
+	bsf	less_io_cpu				; Less I/O CPU found
 	movlw	b'00011111'				; load mask for silicon version
 	andwf	TABLAT,W				; apply mask and store result in WREG 
 	return							; done

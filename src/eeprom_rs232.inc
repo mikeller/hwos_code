@@ -337,6 +337,7 @@ SERIAL_RR_SEND	macro	mem_address, range
 	extern	enable_rs232
 	extern	disable_rs232
 	extern	rs232_wait_tx
+	extern	ble2_configure
 
 
  ENDIF	; INSIDE_EEPROM_RS232
