@@ -391,7 +391,7 @@ compass_filter_init:
 ; Show Calibration Progress
 ;
 TFT_compass_fast:
-	WIN_TINY .0,.50					; set font and position
+	WIN_TINY .5,.50					; set font and position
 	FONT_COLOR_MEMO					; set font color
 
 	STRCPY	"Cx:"					; print label
@@ -408,7 +408,7 @@ TFT_compass_fast:
 
 	PRINT							; dump to screen
 
-	WIN_TINY .0,.104				; set font and position
+	WIN_TINY .5,.104				; set font and position
 	FONT_COLOR_MEMO					; set font color
 
 	STRCPY	"Ax:"					; print label

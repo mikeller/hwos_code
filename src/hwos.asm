@@ -454,24 +454,9 @@ init_ostc:
 	bcf		active_reset_ostc_rx
 
 ; Power-up the Switches
-	;bra	power_up_switches
-
-
-;-----------------------------------------------------------------------------
-; Power-up the Switches
-;
-	global	power_up_switches
-power_up_switches:
 	bsf		power_sw1			; switch on power supply for switch 1
-	
-	; power_sw1 not available in less pin CPU, do not use
-;	btfss	power_sw1			; power established?
-;	bra		$-4					; NO - wait
-
+	nop
 	bsf		power_sw2			; switch on power supply for switch 2
-	btfss	power_sw2			; power established?
-	bra		$-4					; NO - wait
-
 	return						; done
 
 

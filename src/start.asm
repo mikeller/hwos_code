@@ -396,42 +396,12 @@ restart2:
 	bsf		ble_available					;       YES - BT available
 
 restart3:
-	bsf		PORTE,0							; power down BT chip
-	btfsc	ble_available					; BT available?
-	bra		restart4						; YES - can't be a cR then
-	btfss	battery_gauge_available			; NO  - rechargeable?
-	bra		restart4						;       NO  - can't be a cR
-	bsf		ext_input_s8_ana				;       YES - it's a cR, S8/analog sensor input available
-
-restart4:
-    ; Do the check for BLE-cR
-   IFDEF _external_sensor
-    bsf		mcp_power					; power-up instrumentation amp (used by S8 and analog input)
-    btfss	mcp_power					; power-up completed?
-    bra		$-4						; NO - loop
-    WAITMS	.1
-    banksel	BAUDCON2					; select bank for IO register access
-    movlw	b'00000000'					; speed generator configuration: BRG16=0, normal for S8
-    movwf	BAUDCON2					; ...
-    movlw	b'00100000'					; TX configuration: BRGH=0, SYNC=0
-    movwf	TXSTA2						; ...
-    movlw	.25							; speed configuration: SPBRGH:SPBRG = .25 : 9615 BAUD @ 16 MHz
-    movwf	SPBRG2						; ...
-    movlw	b'10010000'					; RX configuration
-    movwf	RCSTA2						; ...
-    banksel	common						; back to bank common
-    WAITMS	.1
-    ; Check sensor 1 input with no limits
-    movlw	b'00000000'					; AVDD Vref+
-    movwf	ADCON1						; ...
-    ; set to read Sensor 1
-    extern	wait_adc
-    movlw	b'00100001'					; power on ADC, select AN8
-    call	wait_adc					; wait for ADC
-    movlw	.10			    ; ~ >1,900V
-    cpfslt	ADRESH			    ; >10 on the high byte -> confident that there is cR circuity
-    bsf		ext_input_s8_ana				;       YES - it's a cR, S8/analog sensor input available
-    call	disable_ir_s8_analog				; power-down circuity again
+   IFDEF _external_sensor						; Compiled for external analog interface?
+    bsf	    ext_input_s8_ana					;       YES - Set the flag
+    call    eeprom_serial_number_read	; read OSTC serial number
+    movlw   .31
+    cpfslt  hi				; bigger than WREG?
+    bsf	    ble_available		; NO - must be new OSTC+ with interface
    ENDIF
    
    

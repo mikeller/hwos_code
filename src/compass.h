@@ -8,8 +8,6 @@
 #	define PARAMETER
 #	define OVERLAY
 #else
-//---- Bank 9 parameters -----------------------------------------------------
-#	pragma udata overlay bank9_compass = 0x900
 #	define PARAMETER	static
 #	define OVERLAY		overlay
 #endif
@@ -43,18 +41,18 @@ extern Int16 compass_heading_new;
 //extern Int16 compass_roll;
 //extern Int16 compass_pitch;
 
-extern Int16 umul(PARAMETER Int16 a, PARAMETER Int16 b);
-extern Int16 imul(PARAMETER Int16 a, PARAMETER Int16 b);
-extern Int16 udiv(PARAMETER Int16 a, PARAMETER Int16 b);
-extern Angle utan(PARAMETER Int16 a, PARAMETER Int16 b);
-extern Angle itan(PARAMETER Int16 a, PARAMETER Int16 b);
+extern Int16 umul (PARAMETER Int16 a, PARAMETER Int16 b);
+extern Int16 imul (PARAMETER Int16 a, PARAMETER Int16 b);
+extern Int16 udiv (PARAMETER Int16 a, PARAMETER Int16 b);
+extern Angle utan (PARAMETER Int16 a, PARAMETER Int16 b);
+extern Angle itan (PARAMETER Int16 a, PARAMETER Int16 b);
 extern Angle cosxh(PARAMETER Int16 a, PARAMETER Int16 b);
 
 extern void sincos(PARAMETER Int16 a, PARAMETER Int16 b, Int16* sin, Int16* cos);
 
 //////////////////////////////////////////////////////////////////////////////
 // The user functions
-extern void compass(void);
+extern void compass                  (void);
 extern void compass_reset_calibration(void);
-extern void compass_add_calibration(void);
+extern void compass_add_calibration  (void);
 extern void compass_solve_calibration(void);

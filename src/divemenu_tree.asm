@@ -362,6 +362,8 @@ do_lost_gas:
 	movlw	.1							; set to first option in dive mode menu
 	movwf	menu_pos_cur				; ...
 	bcf		gas6_or_EXIT				; default to presenting gas6 option
+        btfsc    alt_layout_active           ; alternative layout (big font) active?
+	bsf      gas6_or_EXIT                ; YES - do not present gas6 option
 do_lost_gas_common:
 	bsf		short_gas_descriptions		; do not show "Gas x" etc.
 	bcf		better_gas_hint				; do not mark the best gas/diluent

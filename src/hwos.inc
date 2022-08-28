@@ -112,7 +112,7 @@
 #DEFINE min_mv							.70			; =   7 mV
 #DEFINE max_mv							.2500		; = 250 mV
 #DEFINE ignore_mv_above					.3500		; = 350 mV (to suppress ghost readings on long open cables)
-#DEFINE ignore_mv_below					.19			; = 1.9 mv (to suppress noise readings on      open cabled)
+#DEFINE ignore_mv_below					.19			; = 1.9 mv (to suppress noise readings on open cables)
 
 
 ; ---- Profile Recording Parameters
@@ -323,11 +323,11 @@
 ; ---- Brightness Thresholds (between zero (off) and 255 (max. power consumption))
 #DEFINE ambient_light_max_high_36V		.170
 #DEFINE ambient_light_max_high_cr		.240
-#DEFINE ambient_light_max_high_15V		.140
+#DEFINE ambient_light_max_high_15V		.100
 #DEFINE ambient_light_min_high			.35
-#DEFINE ambient_light_max_medium		.125
+#DEFINE ambient_light_max_medium		.90
 #DEFINE ambient_light_min_medium		.25
-#DEFINE ambient_light_max_eco			.70
+#DEFINE ambient_light_max_eco			.50
 #DEFINE ambient_light_min_eco			.10			; must be the lowest value!
 
 
@@ -519,7 +519,7 @@
  ;---- Hardware - States 3 (stored in access RAM, NOT cleared on restart)
 #DEFINE ms5837_state			HW_flags_state3,0	; =1: result of pressure is in the ADC
 #DEFINE	i2c_busy_pressure		HW_flags_state3,1	; =1: Currently updating pressure from MS5837
-;					HW_flags_state3,2	; --- unused
+#DEFINE	eeprom_write_error_flag		HW_flags_state3,2	; =1: an EEPROM write error occurred (Reset only in a Reboot/POR)
 ;					HW_flags_state3,3	; --- unused
 ;					HW_flags_state3,4	; --- unused
 ;					HW_flags_state3,5	; --- unused
@@ -1458,9 +1458,9 @@ wait_counter					res 1
 
 ;---- tft_outputs.asm
 pressure_update_lag_counter		res 1		; lag time counter for fast surface pressure display updating
+gp_debug				res 2		; General Purpose debug registers
 
-
-; 201 byte used, 7 byte free (208 byte total)
+; 203 byte used, 5 byte free (208 byte total)
 
 
 ;-----------------------------------------------------------------------------
@@ -1665,6 +1665,7 @@ opt_fw_version_beta				res 1		; firmware version, beta  |
 opt_surface_interval			res 1		; surface interval, used by deco calculator
 opt_brightness_divemode				res 1		; =0: Eco, =1:Medium, =2:Full
 opt_brightness_surface				res 1		; =0: Eco, =1:Medium, =2:Full
+opt_use_AmbientSensor				res 1		; =1: Use the ambient sensor
 opt_salinity					res 1		; 0-5%
 opt_language					res 1		; current language: 0=EN, 1=DE, 2=FR, 3=SP
 opt_units						res 1		; 0:m/°C, 1:ft/°F
@@ -1721,6 +1722,7 @@ opt_gas_density_check			res 1		; =1: gas density is checked (effective in CCR / 
 opt_comm_timeout				res 1		; comm RX timeout in multiples of 10 ms
 opt_fallback					res 1		; unused dummy option for compatibility with 3rd party tools
 opt_conservatism				res 1		; unused dummy option for compatibility with 3rd party tools
+opt_warning_level_divemode			res 1		; warning verbose level (divemode) =0: Less, =1: All				
 
 ;---- RX Function Settings
 opt_transmitter_id_1			res 2		; 16 bit transmitter ID for Gas 1

@@ -1917,8 +1917,12 @@ timeout_divemode_menu_ndl:
 	global	check_dive_modes_surf
 check_dive_modes_surf:
 	SMOVII	pressure_rel_cur,sub_a			; ISR-safe 2 byte copy of current relative pressure to sub_a
-	bcf		divetime_longer_1min			; not diving when in surface mode
-	bra		check_dive_modes				; continue with common part
+	bcf	divetime_longer_1min			; not diving when in surface mode
+	btfsc	cc_active				; charging constant current?
+	bra	check_dive_modes_shallow		; YES - abort (And reset debounce counter)
+	btfsc	cv_active				; NO  - charging constant voltage?
+	bra	check_dive_modes_shallow		; YES - abort (And reset debounce counter)
+	bra	check_dive_modes			; continue with common part
 
 
 ;-----------------------------------------------------------------------------
@@ -1963,7 +1967,7 @@ check_dive_modes_norm_end:
 	MOVLI	dive_threshold_norm_alt_end,sub_b	; load normal altitude end threshold
 	bra		check_dive_modes_comm				; continue with common part
 
-check_dive_modes_norm_start
+check_dive_modes_norm_start:
 	MOVLI	dive_threshold_norm_alt_start,sub_b	; load normal altitude start threshold
 	;bra	check_dive_modes_comm				; continue with common part
 
@@ -3828,6 +3832,8 @@ check_saturation_3:
 	btfsc	bailout_mode				; YES - in bailout mode?
 	return								;       YES - done (deco zone flag is not updated when in bailout mode)
  ENDIF
+	TSTOSS	opt_warning_level_divemode		; Warning level set to =1 "All" ?
+	return						; NO, skip warning/advise then
 	movff	char_O_deco_info,WREG		;       NO  - get the deco info vector
 	btfss	WREG,deco_zone				;             deco zone flag set?
 	return								;             NO  - done
@@ -3859,12 +3865,14 @@ check_depth_limit:
 	cpfsgt	depth_meter					; current depth > depth limit?
 	return								; NO  - done
 	bsf		warn_det_depth_limit		; YES - set warning
+	TSTOSS	opt_warning_level_divemode		; Warning level set to =1 "All" ?
+	return						; NO, skip warning/advise then
 	incf	message_counter,F			;     - increase message counter
 	goto	TFT_message_depth_limit		;     - show message
 
 
 ;-----------------------------------------------------------------------------
-; Check BÃ¼hlmann Model Violation
+; Check Bühlmann Model Violation
 ;
 check_outside:
 	bcf		warn_det_outside			; clear warning
@@ -3899,7 +3907,7 @@ check_mbubbles:
 	bsf		warn_det_microbubble		; YES - set warning
 	bra		check_mbubbles_mesg			;     - show message
 
-check_mbubbles_1
+check_mbubbles_1:
 	btfss	WREG,mbubble_warning_lock	; had been in micro bubbling zone?
 	return								; NO  - done
 	bsf		attn_det_microbubble		; YES - set attention
@@ -4040,6 +4048,8 @@ check_gas_change:
 	return								; NO  - done
 
 check_gas_change_mesg:
+	TSTOSS	opt_warning_level_divemode		; Warning level set to =1 "All" ?
+	return						; NO, skip warning/advise then
 	bsf		advc_det_change_gas			; set advice
 	incf	message_counter,F			; increase message counter
 	goto	TFT_message_gas_change		; show advice and return

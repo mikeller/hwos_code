@@ -961,6 +961,18 @@ WaitMSSP2:
 
 
 ;-----------------------------------------------------------------------------
+; Helper Function - Master NOT acknowledge and Stop
+;
+I2C_MasterNotAckStop:
+	bsf		SSP1CON2,ACKDT				; set ACKDT flag
+	bsf		SSP1CON2,ACKEN				; master NOT acknowledge
+	rcall	WaitMSSP					; wait for TX to complete
+	bcf		SSP1CON2,ACKDT				; reset ACKDT flag
+
+	bsf	SSP1CON2,PEN					; stop condition
+	bra	WaitMSSP					; wait for TX to complete
+	
+;-----------------------------------------------------------------------------
 ; Helper Function - check for Acknowledge by Receiver
 ;
 I2C_Check_ACK:
@@ -1113,13 +1125,8 @@ lt2942_get_voltage:
 	bsf		SSP1CON2,RCEN				; enable receive mode
 	rcall	WaitMSSP					; wait for TX to complete
 	movff	SSP1BUF,xA+0				; copy received byte to xA+0
-	bsf		SSP1CON2,ACKDT				; set ACKDT flag
-	bsf		SSP1CON2,ACKEN				; master NOT acknowledge
-	rcall	WaitMSSP					; wait for TX to complete
-	bcf		SSP1CON2,ACKDT				; reset ACKDT flag
-
-	bsf		SSP1CON2,PEN				; stop condition
-	rcall	WaitMSSP					; wait for TX to complete
+	
+	rcall	I2C_MasterNotAckStop				; Master NOT acknowledge and Stop
 	
 	; convert voltage from raw value to Volt
 	MOVLI	.6000,xB					; load conversion multiplicand into xB
@@ -1147,13 +1154,7 @@ lt2942_get_temperature:					; read battery temperature
 	bsf		SSP1CON2,RCEN				; enable receive mode
 	rcall	WaitMSSP					; wait for TX to complete
 	movff	SSP1BUF,xA+0				; store raw temperature, low byte
-	bsf		SSP1CON2,ACKDT				; set ACKDT flag
-	bsf		SSP1CON2,ACKEN				; master NOT acknowledge
-	rcall	WaitMSSP					; wait for TX to complete
-	bcf		SSP1CON2,ACKDT				; reset ACKDT flag
-
-	bsf		SSP1CON2,PEN				; stop condition
-	rcall	WaitMSSP					; wait for TX to complete
+	rcall	I2C_MasterNotAckStop				; Master NOT acknowledge and Stop
 
 	; convert temperature from raw value to Kelvin
 	MOVLI	.6000,xB					; load conversion multiplicand into xB
@@ -1217,13 +1218,7 @@ lt2942_get_accumulated_charge:			; read accumulated charge and compute percent
 	bsf		SSP1CON2,RCEN				; enable receive mode
 	rcall	WaitMSSP					; wait for TX to complete
 	movff	SSP1BUF,sub_a+0				; copy received byte to sub_a+0
-	bsf		SSP1CON2,ACKDT				; set ACKDT flag
-	bsf		SSP1CON2,ACKEN				; master NOT acknowledge
-	rcall	WaitMSSP					; wait for TX to complete
-	bcf		SSP1CON2,ACKDT				; reset ACKDT flag
-
-	bsf		SSP1CON2,PEN				; stop condition
-	rcall	WaitMSSP					; wait for TX to complete
+	rcall	I2C_MasterNotAckStop				; Master NOT acknowledge and Stop
 
 	btfsc	gauge_status_byte,0			; UVLO event ?
 	rcall	lt2942_init_again			; YES - do an re-initialization
@@ -1399,12 +1394,7 @@ I2C_probe_OSTC_rx_1:
 	bsf		SSP1CON2,RCEN				; enable receive mode
 	rcall	WaitMSSP					; wait for TX to complete
 	movff	SSP1BUF,rx_firmware_cur_minor ; store as firmware version, minor
-	bsf		SSP1CON2,ACKDT				; set ACKDT flag
-	bsf		SSP1CON2,ACKEN				; master NOT acknowledge
-	rcall	WaitMSSP					; wait for TX to complete
-	bcf		SSP1CON2,ACKDT				; reset ACKDT flag
-	bsf		SSP1CON2,PEN				; stop condition
-	rcall	WaitMSSP					; wait for TX to complete
+	rcall	I2C_MasterNotAckStop				; Master NOT acknowledge and Stop
 	
 	; wait for TR module becoming ready
 	movff	rx_firmware_cur_minor,i2c_temp1	; copy minor firmware version to bank common
@@ -1470,12 +1460,7 @@ I2C_get_tankdata_loop_read:
 	bsf		SSP1CON2,RCEN				; enable receive mode
 	rcall	WaitMSSP					; wait for TX to complete
 	movff	SSP1BUF,POSTINC2			; copy received byte to the rx buffer
-	bsf		SSP1CON2,ACKDT				; set ACKDT flag
-	bsf		SSP1CON2,ACKEN				; master NOT acknowledge
-	rcall	WaitMSSP					; wait for TX to complete
-	bcf		SSP1CON2,ACKDT				; reset ACKDT flag
-	bsf		SSP1CON2,PEN				; stop condition
-	rcall	WaitMSSP					; wait for TX to complete
+	rcall	I2C_MasterNotAckStop				; Master NOT acknowledge and Stop
 	return							; done
 
 
@@ -1541,13 +1526,7 @@ I2C_update_OSTC_loop_read:
 	movf	SSP1BUF,W					;     - get 64th byte
 	cpfseq	POSTINC2					;     - compare read-back byte with sent byte, equal?
 	bsf		i2c_error_flag				;       NO  - not equal, set error flag
-	bsf		SSP1CON2,ACKDT				;     - set ACKDT flag
-	bsf		SSP1CON2,ACKEN				;     - master NOT acknowledge
-	rcall	WaitMSSP					;     - wait for TX to complete
-	bcf		SSP1CON2,ACKDT				;     - reset ACKDT flag
-	; stop
-	bsf		SSP1CON2,PEN				; stop condition
-	rcall	WaitMSSP					; wait for TX to complete
+	rcall	I2C_MasterNotAckStop				; Master NOT acknowledge and Stop
 	WAITMS	.1
 	; address commit
 	bsf		SSP1CON2,SEN				; start condition
@@ -1678,8 +1657,6 @@ I2C_get_calib_MS5837:
 
 	global	I2C_get_press_val_MS5837
 I2C_get_press_val_MS5837:
-    	bsf	i2c_busy_pressure				; reading new pressure
-	
 	bsf	SSP1CON2,SEN					; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0xEC						; address byte + write bit
@@ -1696,6 +1673,7 @@ I2C_get_press_val_MS5837:
 	rcall	WaitMSSP				; wait for TX to complete
 	rcall	I2C_Check_ACK				; check for acknowledge by receiver
 
+	bsf	i2c_busy_pressure				; reading new pressure
 	bsf	SSP1CON2,RCEN				; enable receive mode
 	rcall	WaitMSSP				; wait for reception and return
 	movff	SSP1BUF,D1_buffer+2					; Upper byte
@@ -1709,11 +1687,10 @@ I2C_get_press_val_MS5837:
 	bsf	SSP1CON2,RCEN					; enable receive mode
 	rcall	WaitMSSP					; wait for reception
 	movff	SSP1BUF,D1_buffer+0					; Low byte
-	bsf	SSP1CON2,ACKEN					; master acknowledge
-	rcall	WaitMSSP					; wait for TX to complete
-	bsf	SSP1CON2,PEN					; stop condition
-	rcall	WaitMSSP					; wait for TX to complete
 
+	rcall	I2C_MasterNotAckStop				; Master NOT acknowledge and Stop
+	bcf	i2c_busy_pressure				; reading new pressure done.
+	
 	; Start temperature measurement
 	bsf	SSP1CON2,SEN					; start condition
 	rcall	WaitMSSP					; wait for TX to complete
@@ -1724,13 +1701,10 @@ I2C_get_press_val_MS5837:
 	bsf	SSP1CON2,PEN					; stop condition
 	rcall	WaitMSSP					; wait for TX to complete
 	bcf	ms5837_state					; =0: result of temperature will be in the ADC
-	bcf	i2c_busy_pressure				; reading new pressure
     	return
 	
 	global	I2C_get_temp_val_MS5837	
 I2C_get_temp_val_MS5837:
-	bsf	i2c_busy_temperature				; reading new temperature
-
 	bsf	SSP1CON2,SEN					; start condition
 	rcall	WaitMSSP					; wait for TX to complete
 	movlw	0xEC						; address byte + write bit
@@ -1747,6 +1721,7 @@ I2C_get_temp_val_MS5837:
 	rcall	WaitMSSP				; wait for TX to complete
 	rcall	I2C_Check_ACK				; check for acknowledge by receiver
 
+	bsf	i2c_busy_temperature				; reading new temperature
 	bsf	SSP1CON2,RCEN				; enable receive mode
 	rcall	WaitMSSP				; wait for reception and return
 	movff	SSP1BUF,D2_buffer+2					; Upper byte
@@ -1760,11 +1735,10 @@ I2C_get_temp_val_MS5837:
 	bsf	SSP1CON2,RCEN					; enable receive mode
 	rcall	WaitMSSP					; wait for reception
 	movff	SSP1BUF,D2_buffer+0					; Low byte
-	bsf	SSP1CON2,ACKEN					; master acknowledge
-	rcall	WaitMSSP					; wait for TX to complete
-	bsf	SSP1CON2,PEN					; stop condition
-	rcall	WaitMSSP					; wait for TX to complete
 
+	rcall	I2C_MasterNotAckStop				; Master NOT acknowledge and Stop
+	bcf	i2c_busy_temperature				; reading new temperature done.
+	
 	; Start pressure measurement
 	bsf	SSP1CON2,SEN					; start condition
 	rcall	WaitMSSP					; wait for TX to complete
@@ -1775,7 +1749,6 @@ I2C_get_temp_val_MS5837:
 	bsf	SSP1CON2,PEN					; stop condition
 	rcall	WaitMSSP					; wait for TX to complete
 	bsf	ms5837_state					; =0: result of pressure will be in the ADC
-	bcf	i2c_busy_temperature				; reading new temperature
 	return
 	
 	

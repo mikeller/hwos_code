@@ -148,11 +148,11 @@ EEPROM_RR_READ		macro	eeprom_address, memory_address, range
 ; eeprom_address: address:2 containing destination address in EEPROM
 ;
 EEPROM_CC_WRITE		macro	memory_address, eeprom_address
+	movff	memory_address,EEDATA	; copy byte to EEPROM data register
 	movlw	HIGH(eeprom_address)	; extract bank in EEPROM
 	movwf	EEADRH					; set     bank in EEPROM
 	movlw	LOW (eeprom_address)	; extract start address in EEPROM
 	movwf	EEADR					; set     start address in EEPROM
-	movff	memory_address,EEDATA	; copy byte to EEPROM data register
 	call	write_eeprom			; execute write
 	endm
 

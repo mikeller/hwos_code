@@ -95,6 +95,21 @@ main_menu:
 	call	TFT_boot								; initialize display
 	call	menu_processor_reset					; reset menu stack
 
+	; reset planning parameters to default values - only when entering the menu, thus keeping the settings between multiple calculator runs
+	lfsr	FSR0,odiveInterval			; surface interval
+	call	option_reset				; reset to default
+	lfsr	FSR0,obottomTime			; bottom time
+	call	option_reset				; reset to default
+	lfsr	FSR0,obottomDepth			; bottom depth
+	call	option_reset				; reset to default
+	lfsr	FSR0,oSimAGF				; GF/aGF
+	call	option_reset				; reset to default
+
+ IFDEF _gas_contingency
+	lfsr	FSR0,oGasContingencySim		; gas contingency
+	call	option_reset				; reset to default (volatile option)
+ ENDIF	; _gas_contingency
+
 main_menu_common:
  IFDEF _ccr_pscr
 	MENU_BEGIN	tMainMenu, .7
@@ -517,8 +532,11 @@ do_gas_depth_reset:
 ;
 do_menu_gas_tank:
  IFDEF _rx_functions
+	btfss	ostc_rx_present					; OSTC has RX module?
+	bra	do_menu_gas_tank2				; NO, skip tank menu with RX
 	TSTOSC	opt_TR_mode					; TR functions switched on?
 	bra		do_menu_gas_tank_rx			; YES
+do_menu_gas_tank2:	
  ENDIF
 
  IFDEF _ccr_pscr
@@ -692,20 +710,20 @@ do_return_menu_simulator_planner:
 ; Simulator (Deco Calculator) Menu
 ;
 do_menu_simulator:
-	; reset planning parameters to default values
-	lfsr	FSR0,odiveInterval			; surface interval
-	call	option_reset				; reset to default
-	lfsr	FSR0,obottomTime			; bottom time
-	call	option_reset				; reset to default
-	lfsr	FSR0,obottomDepth			; bottom depth
-	call	option_reset				; reset to default
-	lfsr	FSR0,oSimAGF				; GF/aGF
-	call	option_reset				; reset to default
-
- IFDEF _gas_contingency
-	lfsr	FSR0,oGasContingencySim		; gas contingency
-	call	option_reset				; reset to default (volatile option)
- ENDIF	; _gas_contingency
+;	; reset planning parameters to default values
+;	lfsr	FSR0,odiveInterval			; surface interval
+;	call	option_reset				; reset to default
+;	lfsr	FSR0,obottomTime			; bottom time
+;	call	option_reset				; reset to default
+;	lfsr	FSR0,obottomDepth			; bottom depth
+;	call	option_reset				; reset to default
+;	lfsr	FSR0,oSimAGF				; GF/aGF
+;	call	option_reset				; reset to default
+;
+; IFDEF _gas_contingency
+;	lfsr	FSR0,oGasContingencySim		; gas contingency
+;	call	option_reset				; reset to default (volatile option)
+; ENDIF	; _gas_contingency
 
 do_menu_simulator_common_1:
 	call	restart_set_modes_and_flags	; initialize dive mode settings
@@ -803,21 +821,23 @@ do_menu_dive:
 ;
 do_menu_dive_dive:
  IFDEF _cave_mode
-	MENU_BEGIN	tDiveSetup, .6
-		MENU_OPT_INC	tDvMode,					oDiveMode				; dive mode
-		MENU_OPT_INC	tCvMode,					oCaveMode				; cave mode
-		MENU_OPT_INC	tFTTSMenu,					oExtraTime				; fTTS/delay
+	MENU_BEGIN	tDiveSetup, .7
+		MENU_OPT_INC	tDvMode,				oDiveMode			; dive mode
+		MENU_OPT_INC	tCvMode,				oCaveMode			; cave mode
+		MENU_OPT_INC	tFTTSMenu,				oExtraTime			; fTTS/delay
 		MENU_OPT_INC	tTimeoutDive,				oDiveTimeout			; dive timeout
-		MENU_OPT_INC	tStoreApnoeDive,			oStoreApnoe				; store apnoe
-		MENU_CALL		tBack,						do_return_menu_dive
+		MENU_OPT_INC	tStoreApnoeDive,			oStoreApnoe			; store apnoe
+		MENU_OPT_INC	tWarningLevel,				oWarningLevel			; Warning level
+		MENU_CALL	tBack,					do_return_menu_dive
 	MENU_END
  ELSE
-	MENU_BEGIN	tDiveSetup, .5
-		MENU_OPT_INC	tDvMode,					oDiveMode				; dive mode
-		MENU_OPT_INC	tFTTSMenu,					oExtraTime				; fTTS/delay
+	MENU_BEGIN	tDiveSetup, .6
+		MENU_OPT_INC	tDvMode,				oDiveMode			; dive mode
+		MENU_OPT_INC	tFTTSMenu,				oExtraTime			; fTTS/delay
 		MENU_OPT_INC	tTimeoutDive,				oDiveTimeout			; dive timeout
-		MENU_OPT_INC	tStoreApnoeDive,			oStoreApnoe				; store apnoe
-		MENU_CALL		tBack,						do_return_menu_dive
+		MENU_OPT_INC	tStoreApnoeDive,			oStoreApnoe			; store apnoe
+		MENU_OPT_INC	tWarningLevel,				oWarningLevel			; Warning level
+		MENU_CALL	tBack,					do_return_menu_dive
 	MENU_END
  ENDIF
 
@@ -1563,9 +1583,10 @@ do_menu_dispsets:
 ; Settings Menu - 3rd Layer - Display Settings - Brightness
 ;
 do_menu_Brightness: 
-    	MENU_BEGIN	tBright, .3
-		MENU_OPT_INC	tDvMode,					oBrightness_dive
-		MENU_OPT_INC	tBrightsurface,					oBrightness_surface
+    	MENU_BEGIN	tBright, .4
+		MENU_OPT_INC	tBrightDive,					oBrightness_dive
+		MENU_OPT_INC	tBrightSurface,					oBrightness_surface
+		MENU_OPT_INC	tUseAmbientSensor,				oUseAmbientSensor
 		MENU_CALL	tBack,						do_return_dispsets_menu
 	MENU_END
 

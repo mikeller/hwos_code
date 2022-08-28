@@ -22,7 +22,7 @@
 ; fast hack **ONLY** for **CHANGING** languages ( en / de / fr / it )
 
 ;#undefine _language_1
-;#define   _language_1 fr
+;#define   _language_1 it
 
 ;#undefine _language_2
 ;#define   _language_2 it

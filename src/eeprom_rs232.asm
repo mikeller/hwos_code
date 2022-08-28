@@ -69,10 +69,24 @@ write_eeprom:
 write_eeprom_loop:
 	btfsc	EECON1,WR						; write completed?
 	bra		write_eeprom_loop				; NO  - loop waiting
+	btfsc	EECON1,WRERR						; All ok?
+	rcall	write_eeprom_error					; NO, something failed.
 	bcf		EECON1,WREN						; YES - disable writing
 	bsf		INTCON,GIE						;     - re-enable interrupts 
 	return									;     - done
-
+write_eeprom_error:
+	bsf	eeprom_write_error_flag					; Set error flag
+	; Try again (once)
+	movlw	0x55							; unlock sequence
+	movwf	EECON2							; ...
+	movlw	0xAA							; ...
+	movwf	EECON2							; ...
+	bsf		EECON1,WR						; start write operation
+write_eeprom_loop2:
+	btfsc	EECON1,WR						; write completed?
+	bra		write_eeprom_loop2				; NO  - loop waiting
+	return
+	
 
 ;-----------------------------------------------------------------------------
 ; EEPROM read and write Functions to be used via Macros
@@ -500,7 +514,10 @@ ble2_configure:
     bcf         NCTS            ; Clear to send
     call	wait_1s
     call	wait_1s
+    call	wait_1s
+    call	wait_1s
     bcf	PORTB,6
+    nop
     bsf	PORTB,6			; rising edge -> Command mode
     
     ; point to config table
@@ -545,7 +562,7 @@ ble_AT1:	; config table
     ; 0xFE: 20ms delay
     ; 0xFD: 1s delay
     ; .13: cr character
-    db	0xFD,0xFD						; Wait 2 seconds
+    db	0xFD,0xFD,0xFD,0xFD					; Wait 4 seconds
     db	"AT+UDSC=0,0",.13,0xFE,0xFE				; Disable SPP Server on ID0 (and wait 40ms)
     db	"AT+UDSC=0,3",.13,0xFE,0xFE				; SPP Server on ID0 (and wait 40ms)
     db	"AT+UDSC=1,0",.13,0xFE,0xFE				; Disable SPS Server on ID1 (and wait 40ms)

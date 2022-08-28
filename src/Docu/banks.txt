@@ -1,0 +1,21 @@
+                  Bank Overview (FW 3.19)
+                  =======================
+
+Bank    Use                                        free Bytes
+-------------------------------------------------------------
+  0     ASM (ISR) vars                                  2
+  1     ASM vars "common"                               5
+  2     buffer                                          0
+  3     ASM / C shared vars                             3
+  4     ASM / C shared vars                           160
+  5     C vars p2_deco                                  4
+  6     C vars p2_deco                                 18
+  7     tissue pressures "real"                         0
+  8     tissue pressures "sim"                          0
+  9     C vars a:compass  b:compass_calib             153
+ 10     ASM vars "common2"                             92
+ 11     ASM / C shared vars (buffer2, backtracking)     0
+ 12     tissue pressures "vault"                        0
+ 13     C stack                                         0
+ 14     options table                                  51
+ 15     SFRs + 16 unused bytes                         16

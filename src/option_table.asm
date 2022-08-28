@@ -152,7 +152,7 @@ option_table_begin:
 
 	; Managing Settings
 	OPTION_UINT8    oExtraTime,          .0,                   .9,                 .0,      tMinutes,        0x028,    0x24,  char_I_extra_time				; extra bottom time for future TTS calculation
-	OPTION_ENUM8    oBrightness_dive,    .3,                                       .0,      tEco,            0x029,    0x2D,  opt_brightness_divemode				; =0: Eco, =1:Medium, =2:Full
+	OPTION_ENUM8    oBrightness_dive,    .3,                                       .0,      tEco,            0x029,    0x2D,  opt_brightness_divemode			; =0: Eco, =1:Medium, =2:Full
 	OPTION_UINT8    oDiveSalinity,   salinity_min,      salinity_max,              .0,      tPercent,        0x02A,    0x30,  opt_salinity					; 0-4%
 	OPTION_ENUM8    oCCRMode,            .3,                                       .0,      tCCRModeFixedSP, 0x02B,    0x1F,  opt_ccr_mode					; =0: Fixed SP, =1: Sensor, =2: Auto SP
 	OPTION_ENUM8    oLanguage,           .2,                                       .0,      tLang1,          0x02C,    0x32,  opt_language					; language selection
@@ -300,7 +300,7 @@ option_table_begin:
 	OPTION_BOOL     oCalcAscGas,                                                   .0,                       0x0CB,    0x5A,  opt_calc_gasvolume			; calculate OC gas volume needs for ascent
 	OPTION_ENUM8    oAltMode,            .4,                                       .0,      tAltModeFly,     0x0CC,    0x5C,  char_I_altitude_wait			; no-fly time calculation for: 0=no-fly, 1=1000m, 2=2000m, 3=3000m
 	OPTION_BOOL     oEnable_IBCD,                                                  .1,                       0x0CD,    0x5D,  opt_enable_IBCD				; =1: IBCD warning activated
-	;                                                                                                        0x0CE											; not used any more (ex ascent speed)
+	OPTION_BOOL	oUseAmbientSensor,					       .1,	                 0x0CE,	   0x83,  opt_use_AmbientSensor				; =1: Use the ambient sensor 
 	OPTION_UINT8    oGasChangeTime,      .0,                   .3,                 .0,      tMinutes,        0x0CF,    0x5B,  char_I_gas_change_time		; (extra) time at a stop to change the gas
 	OPTION_UINT8p5  osatmult,          .100,                 .140,               .110,      tPercent,        0x0D0,    0x2A,  opt_sat_multiplier_non_gf		; saturation   factor for NON-GF Mode
 	OPTION_UINT8p5  odesatmult,         .60,                 .100,                .90,      tPercent,        0x0D1,    0x2B,  opt_desat_multiplier_non_gf	; desaturation factor for NON-GF Mode
@@ -328,13 +328,13 @@ option_table_begin:
 	OPTION_ENUM8    oCaveMode,           .2,                                       .0,      tOff,            0x105,    0x90,  opt_cave_mode					; =1: cave mode switched on
 	OPTION_BOOL     oGasContingencyDive,                                           .0,                       0x106,    0x91,  opt_gas_contingency_dive		; =1: dive mode: switch to alternative gas if best gas is depleted
 	OPTION_BOOL     oGasDensityCheck,                                              .1,                       0x107,    0x92,  opt_gas_density_check			; gas density is checked (effective in CCR / pSCR modes only)
-
+	OPTION_ENUM8	oWarningLevel,	     .2,                                       .0,      tLess,           0x108,    0x93,  opt_warning_level_divemode		; =0: Less, =1: All
 	;	+---------------------------------------------------------------------------------------------------------------------------------------------+
-	;   |  .                                                                                                                                          |
+	;	|  .                                                                                                                                          |
 	;	| /|\                                                                                                                                         |
 	;	|  |  add new options here!                                                                                                                   |
 	;	|  |  EEPROM address  min: 0x012, max: 0x1FF, last used: 0x107, spare: 0x0B7-0x0B9, 0x0F5-0x0F6, disused: 0x0A8, 0x0CE                        |
-	;	|  |  serial address  min:  0x20, max:  0xF9, last used:  0x92, spare: 0x83, 0x84 (0xFA - 0xFE are reserved for internal use)                 |
+	;	|  |  serial address  min:  0x20, max:  0xF9, last used:  0x92, spare: 0x84 (0xFA - 0xFE are reserved for internal use)			      |
 	;	+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 	; ppO2 warnings, sorted by ppO2 levels

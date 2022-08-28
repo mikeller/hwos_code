@@ -197,8 +197,11 @@
 	TCODE	tCvMode,			"Cave Mode     : "		; Cave Mode
  ENDIF
 	TCODE	tFTTSMenu,			"TTS Futuro    : "		; Future TTS
-	TCODE	tTimeoutDive,		"Timeout Immsni: "		; Dive Timeout
-	TCODE	tStoreApnoeDive,	"Salva Apnee   : "		; Salva Tuffi Apnea
+	TCODE	tTimeoutDive,			"Timeout Immsni: "		; Dive Timeout
+	TCODE	tStoreApnoeDive,		"Salva Apnee   : "		; Salva Tuffi Apnea
+	TCODE   tWarningLevel,			"Liv. d'allarme:"		; Warning level
+	TCODE	tLess,				"Meno"				; Less
+	TCODE	tFull,				"Tutti"				; Full
 	TCODE	tDvOC,				"OC"					; 0 | keep order, enum!
 	TCODE	tDvCCR,				"CCR"					; 1 |
 	TCODE	tDvGauge,			"Gauge"					; 2 |
@@ -288,7 +291,9 @@
 
 ; Display Settings
 	TCODE	tBright,			"Luminosita'"			; Brightness
-	TCODE	tBrightsurface,			"Superficie  : "		; ...Surface
+	TCODE	tBrightDive,			"Immersione:"			; Dive Mode
+	TCODE	tBrightSurface,			"Superficie:"			; ...Surface
+	TCODE	tUseAmbientSensor,		"Sensore luce:"			; Use light sensor
 	TCODE	tLayout,			"Layout     : "			; Layout
 	TCODE	tUnits,				"Unita'     : "			; Units
  IF _language_2!=none

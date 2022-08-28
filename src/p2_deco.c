@@ -1,5 +1,5 @@
 // ***************************************************************************
-// p2_deco.c                                  combined next generation V3.12.1
+// p2_deco.c                                  combined next generation V3.19.4
 //
 //  Created on: 12.05.2009
 //  Author: heinrichs weikamp, contributions by Ralph Lembcke and others
@@ -89,10 +89,15 @@
 
 
 #include	<math.h>
+#include	<string.h>
 #include	"p2_definitions.h"
 #define		TEST_MAIN
 #include	"shared_definitions.h"
 #include	"configuration.inc"
+
+
+// work-around for a C18 compiler bug (to avoid a warning been thrown for valid code)
+#define memcpy(a,b,c)  memcpy((a),(const void*)(b),(c))
 
 
 // *********************************************************************************************************************************
@@ -216,12 +221,8 @@
 #define PHASE_40_BOTTOM_GAS_NEED		0x40	// calculate gas needs for bottom segment
 #define PHASE_50_NDL_TIME				0x50	// calculate NDL time
 #define PHASE_70_ASCENT_OR_RETURN		0x70	// calculate open water ascent or cave return
-#define PHASE_80_RESULTS				0x80	// results - initialization
-#define PHASE_81_RESULTS_STOPS_TABLE	0x81	// results - publish stops table
-#define PHASE_82_RESULTS_NDL			0x82	// results - publish data / within NDL
-#define PHASE_83_RESULTS_DECO			0x83	// results - publish data / in deco
-#define PHASE_84_GAS_NEEDS_PRESSURES	0x84	// results - convert gas needs from volumes to pressures
-#define PHASE_85_GAS_NEEDS_CAVE			0x85	// results - tag gas needs as calculated in cave or open water mode
+#define PHASE_80_RESULTS				0x80	// results - NDL, TTS, TST
+#define PHASE_81_GAS_NEEDS_PRESSURES	0x81	// results - convert gas needs from volumes to pressures
 #define PHASE_90_FINISH					0x90	// finish calculation cycle
 
 
@@ -280,7 +281,7 @@ static void			 calc_alveolar_pressures(void);		// Computes the partial pressures
 														// gas_take_current() or gas_find_best()/gas_take_best() and gas_set_ratios().
 static void			 calc_tissues(void);				// Updates the tissues   dependent on the partial pressures of N2 and He.
 static void			 calc_CNS(void);					// Updates the CNS value dependent on the partial pressure  of the O2.
-static void			 calc_limit(PARAMETER float GF_current);
+static void			 calc_limit(PARAMETER float GF_parameter);
 														// Calculates ceiling, current supersaturation factor and some more data.
 
 // Functions for TR
@@ -305,7 +306,8 @@ static unsigned char find_next_stop(void);				// Finds the next stop when in a d
 static void			 update_deco_table(PARAMETER unsigned char time_increment);
 														// Enters a new stop or extends an existing stop in the deco stops table.
 static void			 calc_required_volume(void);		// Calculates gas volume required for a given depth, time and usage (SAC rate).
-static void			 convert_volume_to_pressure(void);	// Converts gas volumes into pressures and sets respective flags.
+static void			 convert_volume_to_pressure(PARAMETER unsigned char index);
+														// Converts gas volumes into pressures and sets respective flags.
 
 // Functions for Results Reporting
 static void			 publish_deco_table(void);			// Copies the internal deco stops table to the export interface.
@@ -321,7 +323,7 @@ static void 		 read_tmr5(void);					// Reads  a hardware timer which is used for
 static void			 read_CNS_ab_coefficient(void);		// Reads the CNS      a and b coefficients from a ROM table.
 static void			 read_CNS_c_coefficient(void);		// Reads the CNS      c       coefficient  from a ROM table.
 static void			 read_Buhlmann_coefficients(void);	// Reads the Buhlmann a and b coefficients from a ROM table.
-static void			 read_Buhlmann_times(PARAMETER char period);
+static void			 read_Buhlmann_times(PARAMETER unsigned char period);
 														// Reads pre-computed tissue increment factors from a ROM table.
 static void			 read_Buhlmann_ht(void);			// Reads the half-times from a ROM table.
 static void			 adopt_Buhlmann_coefficients(void);	// Computes average a and b coefficient by the N2/He tissue ratio.
@@ -338,14 +340,81 @@ static void			 apply_saturation_factors(void);	// Applies saturation and desatur
 //
 // *********************************************************************************************************************************
 
+
+//---- Bank 13 parameters -----------------------------------------------------
+#ifndef UNIX
+#   pragma udata overlay bank13=0xd00
+static char				C_STACK[256];					// C-code data stack
+#   define C_STACK_ADDR C_STACK
+#endif
+
+// 256 byte used, bank is full
+
+
+//---- Bank 7 parameters -----------------------------------------------------
+#ifndef UNIX
+#   pragma udata bank7=0x700
+#endif
+
+// tissue pressures for the real tissues (128 byte)
+
+static float			real_pres_tissue_N2[NUM_COMP];	// 16 floats = 64 bytes  ||  keep order and position of these variables as
+static float			real_pres_tissue_He[NUM_COMP];	// 16 floats = 64 bytes  ||  they are backed-up to & restored from EEPROM!
+
+// delta-pressures for the real tissue pressures (128 byte)
+
+static float			real_pres_delta_N2[NUM_COMP];	// 16 floats = 64 bytes
+static float			real_pres_delta_He[NUM_COMP];	// 16 floats = 64 bytes
+
+// 256 byte used, bank is full
+
+
+//---- Bank 8 parameters -----------------------------------------------------
+#ifndef UNIX
+#   pragma udata bank8=0x800
+#endif
+
+// tissue pressures for the simulated tissues (128 byte)
+
+static float			sim_pres_tissue_N2[NUM_COMP];	// 16 floats = 64 bytes
+static float			sim_pres_tissue_He[NUM_COMP];	// 16 floats = 64 bytes
+
+// delta-pressures for the simulated tissues (128 byte)
+
+static float			sim_pres_delta_N2[NUM_COMP];	// 16 floats = 64 bytes
+static float			sim_pres_delta_He[NUM_COMP];	// 16 floats = 64 bytes
+
+// 256 byte used, bank is full
+
+
+//---- Bank 12 parameters -----------------------------------------------------
+
+#ifndef UNIX
+#   pragma udata bank12=0xc00
+#endif
+
+// vault for backing up real tissue pressures (128 byte)
+
+static float			vault_pres_tissue_N2[NUM_COMP];	// 16 floats = 64 bytes
+static float			vault_pres_tissue_He[NUM_COMP];	// 16 floats = 64 bytes
+
+// vault for backing up real delta-pressures (128 byte)
+
+static float			vault_pres_delta_N2[NUM_COMP];	// 16 floats = 64 bytes
+static float			vault_pres_delta_He[NUM_COMP];	// 16 floats = 64 bytes
+
+// 256 byte used, bank is full
+
+
 //---- Bank 5 parameters -----------------------------------------------------
 #ifndef UNIX
 #   pragma udata bank5=0x500
 #endif
 
-// Data that go into the deco data vault (4 byte)
+// Timer5 Interface (3 byte) - Attention: keep order and keep at beginning of bank 5, i.e. at address 0x500 !
 
-static float			CNS_fraction_real;				// || current real CNS (1.00 = 100%)
+static volatile unsigned short	tmr5_value;				// | timer 5 value buffer	MUST be at address 0x500
+static volatile unsigned char	tmr5_overflow;			// | timer 5 overflow flag	MUST be at address 0x502
 
 
 // Environmental and Gas Data (51 byte)
@@ -394,8 +463,9 @@ static unsigned char	deco_gas_type[NUM_GAS];			// type and state of the deco gas
 static unsigned char	peer_tank[NUM_GAS];				// bit flag vector indicating peer tanks holding same gas
 
 
-// real Context: what we are doing now (12 byte)
+// real Context: what we are doing now (16 byte)
 
+static float			CNS_fraction_real;				// current real CNS (1.00 = 100%)
 static unsigned short	IBCD_tissue_vector;				// 16 bit vector to memorize all tissues that experience IBCD
 
 static float			pres_respiration_sac;			// used in SAC calculation: current depth in absolute pressure
@@ -430,7 +500,7 @@ static float			pres_actual;					// current pressure of  the compartment
 static unsigned short	int_time;						// time it takes for the compartment to reach the target pressure
 
 
-// Gas in Use and Gas Needs (67 byte)
+// Gas in Use and Gas Needs (66 byte)
 
 static unsigned char	start_gas_num;					// number of the gas/dil to start with
 
@@ -441,7 +511,6 @@ static unsigned char	sim_gas_current_depth;			// change depth of the currently u
 static unsigned char	sim_gas_best_num;				// number       of the best gas available
 static unsigned char	sim_gas_best_depth;				// change depth of the best gas available
 
-static unsigned char	gas_needs_gas_index;			// index to the gas and tank data arrays
 static float			gas_volume_need[NUM_GAS];		// gas volumes required  for ascent / cave return in liters
 static float			gas_volume_avail[NUM_GAS];		// gas volumes available for ascent / cave return in liters
 static float			gas_volume_atten[NUM_GAS];		// attention threshold for gas volumes available
@@ -455,7 +524,13 @@ static unsigned char	gas_needs_usage_rate;			// gas usage in l/min
 static float			gas_needs_volume_due;			// computed amount of required gas volume
 
 
-// 243 byte used, 13 byte left in this bank (4 bytes per float, 2 bytes per short, 1 byte per char)
+// Transfer Values for convert_float_to_int() (6 byte)
+
+static float			float_value;					// input value,   float
+static unsigned short	int_value;						// output value, 16 bit
+
+
+// 251 byte used, 5 byte left in this bank (4 bytes per float, 2 bytes per short, 1 byte per char)
 
 
 //---- Bank 6 parameters -----------------------------------------------------
@@ -463,13 +538,7 @@ static float			gas_needs_volume_due;			// computed amount of required gas volume
 #   pragma udata bank6=0x600
 #endif
 
-// Timer5 Interface (3 byte) - Attention: keep order and keep at beginning of bank 6, i.e. at address 0x600 !
-
-static volatile unsigned short	tmr5_value;				// | timer 5 value buffer		MUST be at address 0x600
-static volatile unsigned char	tmr5_overflow;			// | timer 5 overflow flag	MUST be at address 0x602
-
-
-// Modes, Sequencing and Indexing (14 byte)
+// Modes, Sequencing and Indexing (17 byte)
 
 static unsigned char	main_status;					// shadow register for char_O_main_status
 static unsigned char	deco_status;					// shadow register for char_O_deco_status
@@ -487,9 +556,10 @@ static unsigned char	chained_stops;					// counter for chained stop entries
 static unsigned char	backtrack_index;				// index into the depth backtracking array char_I_backtrack_storage
 static unsigned char	backtrack_target_depth;			// current backtracking target depth
 static unsigned char	backtrack_step_counter;			// counter for number of 1/10 minute steps done
+static unsigned char	spare;							// UNUSED YET, placed here for alignment purpose
 
 
-// Result Values from Calculation Functions (28 byte)
+// Result Values from Calculation Functions (30 byte)
 
 static float			ppO2_O2;						// ppO2 calculated for breathing pure oxygen in OC   mode
 static float			ppO2_OC;						// ppO2 calculated for breathing current gas in OC   mode
@@ -519,13 +589,6 @@ static float			var_N2_ht;						// half-time  for current N2 tissue
 static float			var_He_ht;						// half-time  for current He tissue
 
 
-// CNS Coefficients (10 byte)
-
-static float			var_cns_gain;					// two coefficients approximation, gain
-static float			var_cns_offset;					// two coefficients approximation, offset
-static unsigned short	var_cns_value;					// one coefficient  approximation, value
-
-
 // Auxiliary Variables for Data Buffering (28 byte)
 
 static float			N2_equilibrium;					// used for N2 tissue graphics scaling
@@ -533,14 +596,29 @@ static float			temp_tissue;					// auxiliary variable to buffer tissue pressures
 static float			float_pSCR_factor;				// pre-computed factor for pSCR ppO2 drop calculation
 static float			calc_pres_tissue_N2;			// auxiliary variable to buffer tissue N2 pressure
 static float			calc_pres_tissue_He;			// auxiliary variable to buffer tissue He pressure
-static float			pres_tissue;					// auxiliary variable to buffer total tissue pressure
+static float			calc_pres_tissue;				// auxiliary variable to buffer total tissue pressure
 static float			old_pres_respiration;			// auxiliary variable to buffer sim_pres_respiration
 
 
-// Transfer Values for convert_float_to_int() (6 byte)
+// CNS Coefficients (10 byte)
 
-static float			float_value;					// input value,   float
-static unsigned short	int_value;						// output value, 16 bit
+static float			var_cns_gain;					// two coefficients approximation, gain
+static float			var_cns_offset;					// two coefficients approximation, offset
+static unsigned short	var_cns_value;					// one coefficient  approximation, value
+
+
+// Vault to back-up & restore Tissue related Data (6 byte)
+
+static float			vault_CNS_fraction_real;		// stores CNS percentage (1.0 = 100%)
+static unsigned char	vault_deco_warnings;			// stores warnings status
+static unsigned char	vault_deco_info;				// stores info     status
+
+
+// stops table (96 byte)
+
+static unsigned char	internal_deco_depth[NUM_STOPS];	// depths     of the stops in meters
+static unsigned char	internal_deco_time[NUM_STOPS];	// durations  of the stops in minutes
+static unsigned char	internal_deco_gas[NUM_STOPS];	// gases used on the stops (0 / 1-5)
 
 
 // Performance Profiling (4 byte)
@@ -550,67 +628,17 @@ static unsigned char	profiling_runs;					// performance measurement: invocations
 static unsigned char	profiling_phase;				// performance measurement: current calculation phase
 
 
-// 7 byte occupied by compiler-placed vars
+// Function Parameters placed by the C Compiler (7 byte)
+/*
+static unsigned char	period
+static float			parameter
+static unsigned char	time_increment
+static unsigned char	time_interval
+*/
 
 
-// 139 byte used, 117 byte left in this bank (4 bytes per float, 2 bytes per short, 1 byte per char)
+// 238 byte used, 18 byte left in this bank (4 bytes per float, 2 bytes per short, 1 byte per char)
 
-
-
-//---- Bank 12 parameters -----------------------------------------------------
-#ifndef UNIX
-#   pragma udata bank12=0xc00
-#endif
-
-// stops table (96 byte)
-
-static unsigned char	internal_deco_depth[NUM_STOPS];	// depths     of the stops in meters
-static unsigned char	internal_deco_time[NUM_STOPS];	// durations  of the stops in minutes
-static unsigned char	internal_deco_gas[NUM_STOPS];	// gases used on the stops (0 / 1-5)
-
-
-// Vault to back-up & restore Tissue related Data (134 byte)
-
-static float			vault_pres_tissue_N2[NUM_COMP];	// stores the nitrogen tissue pressures
-static float			vault_pres_tissue_He[NUM_COMP];	// stores the helium   tissue pressures
-static float			vault_CNS_fraction_real;		// stores CNS percentage (1.0 = 100%)
-static unsigned char	vault_deco_warnings;			// stores warnings status
-static unsigned char	vault_deco_info;				// stores info     status
-
-// 230 byte used, 26 byte left in this bank (4 bytes per float, 2 bytes per short, 1 byte per char)
-
-
-//---- Bank 7 parameters -----------------------------------------------------
-#ifndef UNIX
-#   pragma udata bank7=0x700
-#endif
-
-// Keep order and position of the variables in bank 7 as they are backed-up to & restored from EEPROM
-
-static float			real_pres_tissue_N2[NUM_COMP];		// 16 floats = 64 bytes
-static float			real_pres_tissue_He[NUM_COMP];		// 16 floats = 64 bytes
-
-static float			sim_pres_tissue_N2[NUM_COMP];		// 16 floats = 64 bytes
-static float			sim_pres_tissue_He[NUM_COMP];		// 16 floats = 64 bytes
-
-// 256 byte used, bank is full
-
-
-//---- Bank 8 parameters -----------------------------------------------------
-#ifndef UNIX
-#   pragma udata overlay bank8=0x800
-
-static char				md_pi_subst[256];				// overlay C-code data stack here, too
-
-#   define C_STACK md_pi_subst
-#endif
-
-
-// Back to bank6 for further tmp data
-// Do not delete this assignment, it is needed by the compiler/linker.
-#ifndef UNIX
-#   pragma udata bank6
-#endif
 
 
 // *********************************************************************************************************************************
@@ -850,21 +878,21 @@ void assert_failed(PARAMETER short int line)
 		void fillDataStack(void)
 		{
 			_asm
-				LFSR	1,C_STACK
+				LFSR	1,C_STACK_ADDR
 				MOVLW	0xCC
 		loop:	MOVWF	POSTINC1,0
 				TSTFSZ	FSR1L,0
 				BRA		loop
 
-				LFSR	1,C_STACK
-				LFSR	2,C_STACK
+				LFSR	1,C_STACK_ADDR
+				LFSR	2,C_STACK_ADDR
 			_endasm
 		}
 #	else
-#		define	RESET_C_STACK	\
-		_asm					\
-			LFSR	1,C_STACK	\
-			LFSR	2,C_STACK	\
+#		define	RESET_C_STACK		\
+		_asm						\
+			LFSR	1,C_STACK_ADDR	\
+			LFSR	2,C_STACK_ADDR	\
 		_endasm
 #	endif
 #endif
@@ -882,8 +910,8 @@ static void load_tmr5(void)
 {
 #ifndef CROSS_COMPILE
 	_asm
-		movff	0x601,0xF7D		// bank-safe load TMR5H from C variable tmr5_value first
-		movff	0x600,0xF7C		// bank-safe load TMR5L from C variable tmr5_value thereafter
+		movff	0x501,0xF7D		// bank-safe load TMR5H from C variable tmr5_value first
+		movff	0x500,0xF7C		// bank-safe load TMR5L from C variable tmr5_value thereafter
 		bcf		0xFBA,1,0		// clear timer 5 overrun flag (0xFBA = PIR5, bit 1 = TMR5IF)
 	_endasm
 #else
@@ -905,12 +933,12 @@ static void read_tmr5(void)
 {
 #ifndef CROSS_COMPILE
 	_asm
-		movff	0xF7C,0x600		// copy TMR5L to C variable tmr5_value, low  byte first
-		movff	0xF7D,0x601		// copy TMR5H to C variable tmr5_value, high byte thereafter
+		movff	0xF7C,0x500		// copy TMR5L to C variable tmr5_value, low  byte first
+		movff	0xF7D,0x501		// copy TMR5H to C variable tmr5_value, high byte thereafter
 		clrf	WREG,0			// clear WREG to 0x00 = no overrun by default
 		btfsc	0xFBA,1,0		// did timer 5 overrun? (0xFBA = PIR5, bit 1 = TMR5IF)
 		setf	WREG,0			// YES - set WREG to 0xff = overrun detected
-		movff	WREG,0x602		// copy WREG to C variable tmr5_overflow
+		movff	WREG,0x502		// copy WREG to C variable tmr5_overflow
 	_endasm
 #else
 	return;
@@ -998,7 +1026,7 @@ static void read_Buhlmann_coefficients(void)
 // If period == 0 :  2 sec interval
 //              1 :  1 min interval
 //              2 : 10 min interval
-static void read_Buhlmann_times(PARAMETER char period)
+static void read_Buhlmann_times(PARAMETER unsigned char period)
 {
 #ifndef CROSS_COMPILE
 	// Note: We don't use far ROM pointer, because handling
@@ -1094,7 +1122,7 @@ static void read_Buhlmann_ht(void)
 //         var_He_a, var_He_b       coefficients for He
 //         calc_pres_tissue_N2      partial pressure of N2 in tissue
 //         calc_pres_tissue_He      partial pressure of He in tissue
-//         pres_tissue              total pressure in tissue
+//         calc_pres_tissue         total pressure in tissue
 //
 // Output: var_a, var_b             coefficients adopted by N2/He ratio
 //
@@ -1104,8 +1132,8 @@ static void adopt_Buhlmann_coefficients(void)
 
 #ifdef _helium
 
-	var_a = (var_N2_a * calc_pres_tissue_N2 + var_He_a * calc_pres_tissue_He) / pres_tissue;
-	var_b = (var_N2_b * calc_pres_tissue_N2 + var_He_b * calc_pres_tissue_He) / pres_tissue;
+	var_a = (var_N2_a * calc_pres_tissue_N2 + var_He_a * calc_pres_tissue_He) / calc_pres_tissue;
+	var_b = (var_N2_b * calc_pres_tissue_N2 + var_He_b * calc_pres_tissue_He) / calc_pres_tissue;
 
 #else
 
@@ -2058,6 +2086,9 @@ static void clear_tissue(void)
 		real_pres_tissue_He[ci]    = 0.0;				// He
 		real_pres_tissue_N2[ci]    = N2_equilibrium;	// N2
 
+		real_pres_delta_He[ci]     = 0.0;				// He
+		real_pres_delta_N2[ci]     = 0.0;				// N2
+
 		// reset tissue pressures for scaled tissue graphics
 		char_O_tissue_pres_He[ci]  =  0;				// He
 		char_O_tissue_pres_N2[ci]  = 10;				// N2
@@ -2161,7 +2192,7 @@ static void calc_hauptroutine(void)
 		main_status = char_O_main_status;
 		deco_status = char_O_deco_status;
 
-		// clear all command flags on the master mode to signal that the command is read
+		// clear all command flags on the master mode to signal that the command is read and in processing
 		char_O_deco_status &= ~COMMAND_MASK;
 
 		// clear the initialization flag on the shadow copy
@@ -2183,7 +2214,7 @@ static void calc_hauptroutine(void)
 		main_status = char_O_main_status;
 		deco_status = char_O_deco_status;
 
-		// clear all command flags on the master mode to signal that the command is read
+		// clear all command flags on the master mode to signal that the command is read and in processing
 		char_O_deco_status &= ~COMMAND_MASK;
 
 		// set the calculation phase to start with to doing the cyclic initialization
@@ -2325,7 +2356,7 @@ static void calc_hauptroutine(void)
 		//      (7 meters chosen as to be 2 stop depth intervals plus 1 additional meter below)
 		if (    ( deco_info & DECO_MODE ) > 0                        )
 		if (    ( char_depth_real       ) > char_O_deco_depth[0] + 7 )
-				  deco_info &= ~DECO_MODE;
+		          deco_info &= ~DECO_MODE;
 
 		// Set the deco mode flag if:
 		//     deco mode is not set
@@ -2340,7 +2371,7 @@ static void calc_hauptroutine(void)
 		     || ( char_I_current_gas_type == 0 )
 		     || ( char_O_deco_depth[0]     > 0 )
 		   )
-				  deco_info |=  DECO_MODE;
+		          deco_info |=  DECO_MODE;
 
 
 		//---- Compute ppO2 Warnings ------------------------------------------------------------------
@@ -2511,11 +2542,7 @@ static void calc_hauptroutine(void)
 		else                          deco_info &= ~DECO_STOPS_ALT;
 
 		// initialize the simulated tissues with the current state of the real tissues
-		for( i = 0; i < NUM_COMP; i++ )
-		{
-			sim_pres_tissue_N2[i] = real_pres_tissue_N2[i];
-			sim_pres_tissue_He[i] = real_pres_tissue_He[i];
-		}
+		memcpy(sim_pres_tissue_N2, real_pres_tissue_N2, 256);
 
 		// initialize the gas types
 		for( i = 0; i < NUM_GAS; i++ )
@@ -2631,9 +2658,6 @@ static void calc_hauptroutine(void)
 		// start calculating NDL time with the tissue that had the shortest NDL last time
 		NDL_tissue      = NDL_tissue_start;
 		NDL_tissue_lead = NDL_tissue_start;
-
-		// initialization for convert_volume_to_pressure()
-		gas_needs_gas_index = 0;
 
 		// tag gas needs as not calculated in fTTS mode by default
 		deco_info &= ~GAS_NEEDS_fTTS;
@@ -2934,8 +2958,8 @@ static void calc_hauptroutine(void)
 			// shall calculate gas needs?
 			if( main_status & CALC_VOLUME )
 			{
-				overlay unsigned char index_last_gas = sim_gas_last_num-1;
-				overlay unsigned char index_curr_gas = sim_gas_current_num-1;
+				overlay unsigned char index_last_gas = sim_gas_last_num    - 1;
+				overlay unsigned char index_curr_gas = sim_gas_current_num - 1;
 
 #ifdef _cave_mode
 				// in cave mode?
@@ -3087,7 +3111,7 @@ static void calc_hauptroutine(void)
 				TTS_time += 1;
 			}
 
-		} // overlay
+		}
 
 		// calculate absolute pressure at the current depth
 		sim_pres_respiration = (float)char_depth_sim * METER_TO_BAR + pres_surface;
@@ -3117,132 +3141,94 @@ static void calc_hauptroutine(void)
 		// convert the CNS value to integer
 		convert_sim_CNS_for_display();
 
-		// normal or alternative plan?
-		if( deco_status & CALC_NORM )
-		{
-			// normal plan - export the integer CNS value
-			int_O_CNS_norm  = int_sim_CNS_fraction;
-		}
-		else
-		{
-			// alternative plan - export the integer CNS value
-			int_O_CNS_alt   = int_sim_CNS_fraction;
-		}
-
 		// limit total time to surface to display max. and rescale to full minutes
 		if( TTS_time < 9995 ) TTS_time = (TTS_time + 5) / 10;
 		else                  TTS_time = 999 | INT_FLAG_INVALID;
 
-		// The next calculation phase will
-		// - publish the stops table if in normal plan mode,
-		// - proceed with remaining results dependent on if within NDL, or
-		// - in deco
-		if      ( deco_status & CALC_NORM ) next_planning_phase = PHASE_81_RESULTS_STOPS_TABLE;
-		else if ( NDL_time                ) next_planning_phase = PHASE_82_RESULTS_NDL;
-		else                                next_planning_phase = PHASE_83_RESULTS_DECO;
-
-		break;
-
-
-		///
-		//--- Publish Stops Table -----------------------------------------------------------------
-		//
-		case PHASE_81_RESULTS_STOPS_TABLE:
-
-		// publish the stops table to the display functions
-		publish_deco_table();
-
-		// When entering deco and the ceiling depth becomes > 0 but the
-		// deco calculation reveals no distinct deco stop yet because
-		// the deco obligation will vanish during the ascent, create an
-		// artificial stop to signal that expedite surfacing ("popping
-		// up") is not allowed anymore.
-		if( char_O_deco_depth[0] == 0 )		// simulated ascent reveals no required stops
-		if( int_O_ceiling        >  0 )		// real tissues have a ceiling
-		{
-			// set a pro forma stop at the configured last stop depth
-			char_O_deco_depth[0] = char_I_last_stop_depth;
-
-			// set a stop time of 0 minutes, this will be displayed as "..'"
-			char_O_deco_time[0]  = 0;
-		}
-
-		// The next calculation phase will publish the main results dependent on being
-		// - within NDL,
-		// - in deco.
-		if   ( NDL_time ) next_planning_phase = PHASE_82_RESULTS_NDL;
-		else              next_planning_phase = PHASE_83_RESULTS_DECO;
-
-		break;
-
-
-		///
-		//--- Results - within NDL ----------------------------------------------------------------
-		//
-		case PHASE_82_RESULTS_NDL:
-
-		// normal or alternative plan?
-		if( deco_status & CALC_NORM )
-		{
-			// normal plan - output the NDL and TTS time
-			int_O_NDL_norm = NDL_time;
-			int_O_TTS_norm = TTS_time;
-
-			// clear the stops time
-			int_O_TST_norm = 0;
-		}
-		else
-		{
-			// alternative plan - output the NDL time
-			int_O_NDL_alt = NDL_time;
-			int_O_TTS_alt = TTS_time;
-
-			// clear the alternative TTS and stops time
-			int_O_TST_alt = 0 + INT_FLAG_ZERO;
-		}
-
-		// The next calculation phase will
-		// - convert the gas needs from volume to pressure if gas needs calculation is configured
-		// - else finish the calculation cycle
-		if   ( main_status & CALC_VOLUME ) next_planning_phase = PHASE_84_GAS_NEEDS_PRESSURES;
-		else                               next_planning_phase = PHASE_90_FINISH;
-
-		break;
-
-
-		///
-		//--- Results - in Deco -------------------------------------------------------------------
-		//
-		case PHASE_83_RESULTS_DECO:
-
 		// limit total stops time to display max.
-		if( TST_time > 999 ) TST_time = 999 | INT_FLAG_INVALID;
-
+		if( TST_time >  999 ) TST_time = 999 | INT_FLAG_INVALID;
 
 		// normal or alternative plan?
 		if( deco_status & CALC_NORM )
 		{
-			// normal plan - clear the normal NDL time
-			int_O_NDL_norm = 0;
+			// normal plan
 
-			// export the TTS and total stops time
-			int_O_TTS_norm = TTS_time;
-			int_O_TST_norm = TST_time;
+			// export the integer CNS value
+			int_O_CNS_norm  = int_sim_CNS_fraction;
+
+			// publish the stops table to the display functions
+			publish_deco_table();
+
+			// When in deco and the ceiling depth is > 0 but the deco calculation
+			// reveals no distinct deco stop yet because the deco obligation will
+			// vanish during the ascent, create an artificial stop to signal that
+			// expedite surfacing ("popping up") is not allowed any more.
+			if( char_O_deco_depth[0] == 0 )		// simulated ascent reveals no required stops
+			if( int_O_ceiling         > 0 )		// real tissues have a ceiling
+			{
+				// set a pro forma stop at the configured last stop depth
+				char_O_deco_depth[0] = char_I_last_stop_depth;
+
+				// set a stop time of 0 minutes, this will be displayed as "..'"
+				char_O_deco_time[0]  = 0;
+			}
+
+			// within NDL?
+			if ( NDL_time )
+			{
+				// YES - output the NDL and TTS time
+				int_O_NDL_norm = NDL_time;
+				int_O_TTS_norm = TTS_time;
+
+				// clear the stops time
+				int_O_TST_norm = 0;
+			}
+			else
+			{
+				// NO - clear the normal NDL time
+				int_O_NDL_norm = 0;
+
+				// export the TTS and total stops time
+				int_O_TTS_norm = TTS_time;
+				int_O_TST_norm = TST_time;
+			}
 		}
 		else
 		{
-			// alternative plan - clear the alternative NDL time
-			int_O_NDL_alt  = 0;
+			// alternative plan
 
-			// export the TTS and total stops time
-			int_O_TTS_alt  = TTS_time;
-			int_O_TST_alt  = TST_time;
+			// export the integer CNS value
+			int_O_CNS_alt   = int_sim_CNS_fraction;
+
+			// within NDL?
+			if ( NDL_time )
+			{
+				// YES - output the NDL time
+				int_O_NDL_alt = NDL_time;
+				int_O_TTS_alt = TTS_time;
+
+				// clear the alternative TTS and stops time
+				int_O_TST_alt = 0 + INT_FLAG_ZERO;
+			}
+			else
+			{
+				// NO - clear the alternative NDL time
+				int_O_NDL_alt = 0;
+
+				// export the TTS and total stops time
+				int_O_TTS_alt = TTS_time;
+				int_O_TST_alt = TST_time;
+			}
 		}
+
+		// export deco infos and warnings
+		char_O_deco_info     = deco_info;
+		char_O_deco_warnings = deco_warnings;
 
 		// The next calculation phase will
 		// - convert the gas needs from volume to pressure if gas needs calculation is configured
 		// - else finish the calculation cycle
-		if   ( main_status & CALC_VOLUME ) next_planning_phase = PHASE_84_GAS_NEEDS_PRESSURES;
+		if   ( main_status & CALC_VOLUME ) next_planning_phase = PHASE_81_GAS_NEEDS_PRESSURES;
 		else                               next_planning_phase = PHASE_90_FINISH;
 
 		break;
@@ -3251,49 +3237,28 @@ static void calc_hauptroutine(void)
 		//
 		//--- Results - convert Gas Needs Volumes to Pressures ------------------------------------
 		//
-		case PHASE_84_GAS_NEEDS_PRESSURES:
+		case PHASE_81_GAS_NEEDS_PRESSURES:
 
-		// convert required volume of the gas pointed to by gas_needs_gas_index
-		// into the respective pressure and set the flags
-		convert_volume_to_pressure();
+		// step through all gases
+		for (i = 0; i < NUM_GAS; i++)
+		{
+			// convert required volume of the gas into the respective pressure and set the flags
+			convert_volume_to_pressure(i);
+		}
 
-		// increment index to address next gas
-		gas_needs_gas_index++;
-
-		// if all gases have been converted, advance to next calculation phase
 #ifdef _cave_mode
-		if( gas_needs_gas_index == NUM_GAS ) next_planning_phase = PHASE_85_GAS_NEEDS_CAVE;
-#else
-		if( gas_needs_gas_index == NUM_GAS ) next_planning_phase = PHASE_90_FINISH;
+		// tag gas needs as calculated in cave mode or in open water mode
+		if( main_status & CAVE_MODE ) deco_info |=  GAS_NEEDS_CAVE;
+		else                          deco_info &= ~GAS_NEEDS_CAVE;
+
+		// export updated deco info
+		char_O_deco_info = deco_info;
 #endif
-
-		break;
-
-
-#ifdef _cave_mode
-		//
-		//--- Results - tag Gas Needs as Cave or Open Water Mode ----------------------------------
-		//
-		case PHASE_85_GAS_NEEDS_CAVE:
-
-		// in cave mode?
-		if( main_status & CAVE_MODE )
-		{
-			// YES - tag gas needs as calculated in cave mode (return along recorded depth profile)
-			deco_info |= GAS_NEEDS_CAVE;
-		}
-		else
-		{
-			// NO  - tag gas needs as calculated in open water mode (vertical ascent)
-			deco_info &= ~GAS_NEEDS_CAVE;
-		}
 
 		// advance to next calculation phase
 		next_planning_phase = PHASE_90_FINISH;
 
 		break;
-#endif
-
 
 		//
 		//--- finish Calculation Cycle ------------------------------------------------------------
@@ -3309,16 +3274,15 @@ static void calc_hauptroutine(void)
 		if( !(int_O_TTS_alt & INT_FLAG_INVALID) )
 		if( !(deco_status   & BAILOUT_MODE    ) )
 		{
-			if( int_O_TTS_alt < int_O_TTS_norm ) deco_info |=  DECO_ZONE;
-			if( int_O_TTS_alt > int_O_TTS_norm ) deco_info &= ~DECO_ZONE;
+			if     ( int_O_TTS_alt < int_O_TTS_norm ) deco_info |=  DECO_ZONE;
+			else if( int_O_TTS_alt > int_O_TTS_norm ) deco_info &= ~DECO_ZONE;
+
+			// export updated deco info
+			char_O_deco_info = deco_info;
 		}
 
-		// export updated deco infos and warnings
-		char_O_deco_info     = deco_info;
-		char_O_deco_warnings = deco_warnings;
-
-		// restore command flag to indicate that deco calculation cycle has finished
-		char_O_deco_status   = deco_status;
+		// restore command flag to indicate that the deco calculation cycle has finished
+		char_O_deco_status  = deco_status;
 
 		// signal end of deco calculation
 		next_planning_phase = PHASE_00_DONE;
@@ -3471,12 +3435,12 @@ void calc_hauptroutine_data_input(void)
 static void calc_tissues()
 {
 	overlay unsigned char	period;
-	overlay float			temp_tissue_N2;
+	overlay float			last_press_tissue;
+	overlay float			delta_press_N2;
 
 #ifdef _helium
-	overlay float			temp_tissue_He;
+	overlay float			delta_press_He;
 #endif
-
 
 	assert( 0.00 <= ppN2 && ppN2 < 11.2 );  // 80% N2 at 130m
 	assert( 0.00 <= ppHe && ppHe < 12.6 );  // 90% He at 130m
@@ -3506,43 +3470,100 @@ static void calc_tissues()
 
 		do
 		{
-			//---- N2 --------------------------------------------------------
-
-			temp_tissue = (tissue_increment & TISSUE_SELECTOR) ? real_pres_tissue_N2[ci] : sim_pres_tissue_N2[ci];
-
-			temp_tissue = (ppN2 - temp_tissue) * var_N2_e;
-
-			apply_saturation_factors();
-
-			if( tissue_increment & TISSUE_SELECTOR )
+			if (tissue_increment & TISSUE_SELECTOR)
 			{
-				temp_tissue_N2           = temp_tissue;
-				real_pres_tissue_N2[ci] += temp_tissue;
-			}
-			else
-			{
-				sim_pres_tissue_N2[ci]  += temp_tissue;
-			}
+				//---- real N2 --------------------------------------
+
+				// get the real tissue pressure
+				last_press_tissue = real_pres_tissue_N2[ci];
+
+				// calculate the pressure change
+				temp_tissue = (ppN2 - last_press_tissue) * var_N2_e;
+
+				// apply the saturation / desaturation factor on temp_tissue
+				apply_saturation_factors();
+
+				// store the pressure change for IBCD check and tissue graphics
+				delta_press_N2 = temp_tissue;
+
+				// update the delta accumulator
+				real_pres_delta_N2[ci] += temp_tissue;
+
+				// update the real tissue pressure
+				real_pres_tissue_N2[ci] += real_pres_delta_N2[ci];
+
+				// reduce the delta accumulator
+				real_pres_delta_N2[ci]  -= real_pres_tissue_N2[ci] - last_press_tissue;
 
 #ifdef _helium
-			//---- He --------------------------------------------------------
+				//---- real He --------------------------------------
 
-			temp_tissue = (tissue_increment & TISSUE_SELECTOR) ? real_pres_tissue_He[ci] : sim_pres_tissue_He[ci];
+				// get the real tissue pressure
+				last_press_tissue = real_pres_tissue_He[ci];
 
-			temp_tissue = (ppHe - temp_tissue) * var_He_e;
+				// calculate the pressure change
+				temp_tissue = (ppHe - last_press_tissue) * var_He_e;
 
-			apply_saturation_factors();
+				// apply the saturation / desaturation factor on temp_tissue
+				apply_saturation_factors();
 
-			if( tissue_increment & TISSUE_SELECTOR )
-			{
-				temp_tissue_He           = temp_tissue;
-				real_pres_tissue_He[ci] += temp_tissue;
+				// store the pressure change for IBCD check and tissue graphics
+				delta_press_He = temp_tissue;
+
+				// update the delta accumulator
+				real_pres_delta_He[ci] += temp_tissue;
+
+				// update the real tissue pressure
+				real_pres_tissue_He[ci] += real_pres_delta_He[ci];
+
+				// reduce the delta accumulator
+				real_pres_delta_He[ci]  -= real_pres_tissue_He[ci] - last_press_tissue;
+#endif
 			}
 			else
 			{
-				sim_pres_tissue_He[ci]  += temp_tissue;
-			}
+				//---- simulated N2 ---------------------------------
+
+				// get the simulated tissue pressure
+				last_press_tissue = sim_pres_tissue_N2[ci];
+
+				// calculate the pressure change
+				temp_tissue = (ppN2 - last_press_tissue) * var_N2_e;
+
+				// apply the saturation / desaturation factor on temp_tissue
+				apply_saturation_factors();
+
+				// update the delta accumulator
+				sim_pres_delta_N2[ci] += temp_tissue;
+
+				// update the simulated tissue pressure
+				sim_pres_tissue_N2[ci] += sim_pres_delta_N2[ci];
+
+				// reduce the delta accumulator
+				sim_pres_delta_N2[ci]  -= sim_pres_tissue_N2[ci] - last_press_tissue;
+
+#ifdef _helium
+				//---- simulated He ---------------------------------
+
+				// get the simulated tissue pressure
+				last_press_tissue = sim_pres_tissue_He[ci];
+
+				// calculate the pressure change
+				temp_tissue = (ppHe - last_press_tissue) * var_He_e;
+
+				// apply the saturation / desaturation factor on temp_tissue
+				apply_saturation_factors();
+
+				// update the delta accumulator
+				sim_pres_delta_He[ci] += temp_tissue;
+
+				// update the simulated tissue pressure
+				sim_pres_tissue_He[ci] += sim_pres_delta_He[ci];
+
+				// reduce the delta accumulator
+				sim_pres_delta_He[ci]  -= sim_pres_tissue_He[ci] - last_press_tissue;
 #endif
+			}
 
 			//---- decrement loop counter and adjust step size ---------------
 
@@ -3564,10 +3585,8 @@ static void calc_tissues()
 		{
 
 #ifdef _helium
-
 			// net tissue balance
-			temp_tissue = temp_tissue_N2 + temp_tissue_He;
-
+			temp_tissue = delta_press_N2 + delta_press_He;
 
 			// check tissue on-/off-gassing and IBCD with applying a threshold of +/-HYST
 			//
@@ -3579,14 +3598,13 @@ static void calc_tissues()
 			else if ( temp_tissue > +HYST )				// check if the tissue in on-gassing
 			{
 				// check for counter diffusion
-				if(    ((temp_tissue_N2 > 0.0) && (temp_tissue_He < 0.0))
-				    || ((temp_tissue_N2 < 0.0) && (temp_tissue_He > 0.0)) )
+				if(    ((delta_press_N2 > 0.0) && (delta_press_He < 0.0))
+				    || ((delta_press_N2 < 0.0) && (delta_press_He > 0.0)) )
 				{
 					// tag tissue as experiencing mentionable IBCD
 					IBCD_tissue_vector |= (1 << ci);
 				}
 			}
-
 #endif
 
 			// For N2 tissue pressure display purpose:
@@ -3594,19 +3612,19 @@ static void calc_tissues()
 			// basically keep the on-gassing / off-gassing flag from last invocation, but flip
 			// it in case the rate exceeds a set hysteresis (actual value: see #define of HYST)
 			char_O_tissue_pres_N2[ci]  &= 128;
-			if      ( temp_tissue_N2 > +HYST ) char_O_tissue_pres_N2[ci]  = 128; // set flag for tissue pressure is increasing
-			else if ( temp_tissue_N2 < -HYST ) char_O_tissue_pres_N2[ci]  =   0; // clear flag (-> tissue pressure is decreasing)
+			if      ( delta_press_N2 > +HYST ) char_O_tissue_pres_N2[ci]  = 128; // set flag for tissue pressure is increasing
+			else if ( delta_press_N2 < -HYST ) char_O_tissue_pres_N2[ci]  =   0; // clear flag (-> tissue pressure is decreasing)
 
 			// scale N2 tissue pressure such that the surface steady-state tissue loading
 			// of [0.7902 * (1013 hPa - ppWater)] bar will give a 8, which aligns with
 			// the 2nd scale line.
-			temp_tissue_N2 = (8 / (0.7902 * (1.013 - ppWater))) * real_pres_tissue_N2[ci];
+			delta_press_N2 = (8 / (0.7902 * (1.013 - ppWater))) * real_pres_tissue_N2[ci];
 
 			// limit to 127 to protect the uppermost bit which holds the sat/desat flag
-			if (temp_tissue_N2 > 127) temp_tissue_N2 = 127;
+			if (delta_press_N2 > 127) delta_press_N2 = 127;
 
 			// convert to integer and combine with sat/desat flag
-			char_O_tissue_pres_N2[ci] += (unsigned char)temp_tissue_N2;
+			char_O_tissue_pres_N2[ci] += (unsigned char)delta_press_N2;
 
 #ifdef _helium
 
@@ -3615,19 +3633,18 @@ static void calc_tissues()
 			// basically keep the on-gassing / off-gassing flag from last invocation, but flip
 			// it in case the rate exceeds a set hysteresis (actual value: see #define of HYST)
 			char_O_tissue_pres_He[ci]  &= 128;
-			if      ( temp_tissue_He > +HYST ) char_O_tissue_pres_He[ci]  = 128; // set flag for tissue pressure is increasing
-			else if ( temp_tissue_He < -HYST ) char_O_tissue_pres_He[ci]  =   0; // clear flag (-> tissue pressure is decreasing)
+			if      ( delta_press_He > +HYST ) char_O_tissue_pres_He[ci]  = 128; // set flag for tissue pressure is increasing
+			else if ( delta_press_He < -HYST ) char_O_tissue_pres_He[ci]  =   0; // clear flag (-> tissue pressure is decreasing)
 
 			// scale He tissue pressure alike it is done for N2.
 			// With no He in a tissue, the result will be 0.
-			temp_tissue_He = (8 / (0.7902 * (1.013 - ppWater))) * real_pres_tissue_He[ci];
+			delta_press_He = (8 / (0.7902 * (1.013 - ppWater))) * real_pres_tissue_He[ci];
 
 			// limit to 127 to protect the uppermost bit which holds the sat/desat flag
-			if (temp_tissue_He > 127) temp_tissue_He = 127;
+			if (delta_press_He > 127) delta_press_He = 127;
 
 			// convert to integer and combine with sat/desat flag
-			char_O_tissue_pres_He[ci] += (unsigned char)temp_tissue_He;
-
+			char_O_tissue_pres_He[ci] += (unsigned char)delta_press_He;
 
 			// For combined tissue pressure display purpose:
 
@@ -3638,7 +3655,7 @@ static void calc_tissues()
 			else if ( temp_tissue    < -HYST ) char_O_tissue_pressure[ci] =   0; // clear flag (-> tissue pressure is decreasing)
 
 			// add the two scaled pressures.
-			temp_tissue = temp_tissue_N2 + temp_tissue_He;
+			temp_tissue = delta_press_N2 + delta_press_He;
 
 			// limit to 127 to protect the uppermost bit which holds the sat/desat flag
 			if (temp_tissue > 127) temp_tissue = 127;
@@ -3732,12 +3749,12 @@ static void calc_limit(PARAMETER float GF_parameter)
 		}
 
 		// overall tissue pressure
-		pres_tissue = calc_pres_tissue_N2 + calc_pres_tissue_He;
+		calc_pres_tissue = calc_pres_tissue_N2 + calc_pres_tissue_He;
 
 #else
 
 		// get the tissue pressure
-		pres_tissue = ( tissue_increment & TISSUE_SELECTOR ) ? real_pres_tissue_N2[ci] : sim_pres_tissue_N2[ci];
+		calc_pres_tissue = ( tissue_increment & TISSUE_SELECTOR ) ? real_pres_tissue_N2[ci] : sim_pres_tissue_N2[ci];
 
 #endif
 
@@ -3753,14 +3770,14 @@ static void calc_limit(PARAMETER float GF_parameter)
 
 
 			// check if tissue is in supersaturation
-			if( pres_tissue > real_pres_respiration )
+			if( calc_pres_tissue > real_pres_respiration )
 			{
 				// calculate maximum allowed tissue pressure at current ambient pressure
 				pres_tissue_max = real_pres_respiration / var_b + var_a;
 
 				// calculate current supersaturation value (1.0 = 100%) of this tissue according to straight Buhlmann
-				supersat =    ( pres_tissue     - real_pres_respiration )
-				            / ( pres_tissue_max - real_pres_respiration );
+				supersat =    ( calc_pres_tissue - real_pres_respiration )
+				            / ( pres_tissue_max  - real_pres_respiration );
 
 				// calculate supersaturation value for display purpose: 1.35 = 135% = 86 pixel
 				if( supersat <= 1.35 ) char_O_tissue_saturation[ci] = (unsigned char)(supersat * 64);
@@ -3814,13 +3831,13 @@ static void calc_limit(PARAMETER float GF_parameter)
 		if( char_I_model == 0 )
 		{
 			// straight Buhlmann
-			pres_ambient_min_tissue = (pres_tissue - var_a) * var_b;
+			pres_ambient_min_tissue = (calc_pres_tissue - var_a) * var_b;
 		}
 		else
 		{
 			// Buhlmann with Eric Baker's varying gradient factor correction
 			// note: this equation [1] is the inverse of equation [2]
-			pres_ambient_min_tissue =   ( pres_tissue        - (var_a        * GF_parameter) )
+			pres_ambient_min_tissue =   ( calc_pres_tissue   - (var_a        * GF_parameter) )
 			                          / ( 1.0 - GF_parameter + (GF_parameter / var_b       ) );
 		}
 
@@ -3903,7 +3920,7 @@ static void calc_NDL_time_tissue(void)
 #else
 
 	// get the current simulated tissue pressure
-	pres_tissue = last_pres_tissue = sim_pres_tissue_N2[ci];
+	calc_pres_tissue = last_pres_tissue = sim_pres_tissue_N2[ci];
 
 	// set the a and b coefficients
 	adopt_Buhlmann_coefficients();
@@ -3917,7 +3934,7 @@ static void calc_NDL_time_tissue(void)
 #ifdef _helium
 
 		// calculate the total tissue pressure
-		pres_tissue = calc_pres_tissue_N2 + calc_pres_tissue_He;
+		calc_pres_tissue = calc_pres_tissue_N2 + calc_pres_tissue_He;
 
 		// adopt a and b coefficients to current N2/He ratio inside the tissue
 		adopt_Buhlmann_coefficients();
@@ -3938,7 +3955,7 @@ static void calc_NDL_time_tissue(void)
 		}
 
 		// is the tissue pressure higher than the maximum tissue pressure allowed?
-		if( pres_tissue > pres_limit)
+		if( calc_pres_tissue > pres_limit)
 		{
 			// YES - tissue is outside NDL
 
@@ -3977,7 +3994,7 @@ static void calc_NDL_time_tissue(void)
 #else
 
 				// go back to last pressure
-				pres_tissue = last_pres_tissue;
+				calc_pres_tissue = last_pres_tissue;
 
 #endif
 
@@ -4029,7 +4046,7 @@ static void calc_NDL_time_tissue(void)
 #else
 
 			// back-up current tissue pressure
-			last_pres_tissue    = pres_tissue;
+			last_pres_tissue    = calc_pres_tissue;
 
 #endif
 
@@ -4051,9 +4068,9 @@ static void calc_NDL_time_tissue(void)
 #else
 
 			// step forward tissue pressure
-			temp_tissue          = (ppN2 - pres_tissue        ) * var_N2_e;		// pressure delta breathed - tissue
+			temp_tissue          = (ppN2 - calc_pres_tissue   ) * var_N2_e;		// pressure delta breathed - tissue
 			apply_saturation_factors();											// apply safety factor
-			pres_tissue         += temp_tissue;									// add pressure delta to tissue
+			calc_pres_tissue    += temp_tissue;									// add pressure delta to tissue
 
 #endif
 
@@ -5112,7 +5129,7 @@ static void read_backtrack_data(void)
 //
 // Converts gas volumes into pressures and sets respective flags
 //
-// Input:  gas_needs_gas_index       index of the gas to convert (0-4)
+// Input:  index                     index of the gas to convert (0-4)
 //         gas_volume_need[]         needed gas volume in liters
 //         char_I_gas_avail_pres[]   available gas volume in bar
 //         char_I_gas_avail_size[]   size of the tanks in liters
@@ -5122,10 +5139,10 @@ static void read_backtrack_data(void)
 //         int_O_gas_need_pres[]     required gas amount in bar, including flags
 //         int_O_pressure_need[]     required gas amount for reading 1/2 (TR only)
 //
-static void convert_volume_to_pressure(void)
+static void convert_volume_to_pressure(PARAMETER unsigned char index)
 {
 	// just to make the code more readable...
-	i = gas_needs_gas_index;
+	i = index;
 
 	if( gas_volume_need[i] >= 65534.5 )
 	{
@@ -5343,16 +5360,8 @@ static void push_tissues_to_vault(void)
 	vault_deco_warnings     = char_O_deco_warnings;
 	vault_deco_info         = char_O_deco_info;
 
-	// store the tissue pressures
-	for( i = 0; i < NUM_COMP; i++ )
-	{
-		vault_pres_tissue_N2[i] = real_pres_tissue_N2[i];
-#ifdef _helium
-		vault_pres_tissue_He[i] = real_pres_tissue_He[i];
-#else
-		vault_pres_tissue_He[i] = 0;
-#endif
-	}
+	// copy the real pressures to the vault
+	memcpy(vault_pres_tissue_N2, real_pres_tissue_N2, 256);
 }
 
 static void pull_tissues_from_vault(void)
@@ -5365,16 +5374,8 @@ static void pull_tissues_from_vault(void)
 	// convert the CNS value to integer
 	convert_cur_CNS_for_display();
 
-	// restore the tissue pressures
-	for( i = 0; i < NUM_COMP; i++ )
-	{
-		real_pres_tissue_N2[i] = vault_pres_tissue_N2[i];
-#ifdef _helium
-		real_pres_tissue_He[i] = vault_pres_tissue_He[i];
-#else
-		real_pres_tissue_He[i] = 0;
-#endif
-	}
+	// copy the vault back to the real pressures
+	memcpy(real_pres_tissue_N2, vault_pres_tissue_N2, 256);
 }
 
 

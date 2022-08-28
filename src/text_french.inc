@@ -197,8 +197,11 @@
 	TCODE	tCvMode,			"Spéléo      : "		; Cave Mode
  ENDIF
 	TCODE	tFTTSMenu,			"Future DTR  : "		; Future TTS
-	TCODE	tTimeoutDive,		"Fin Plongée : "		; Dive Timeout
-	TCODE	tStoreApnoeDive,	"Carnet Apnée: "		; Store Apnoe Dives
+	TCODE	tTimeoutDive,			"Fin Plongée : "		; Dive Timeout
+	TCODE	tStoreApnoeDive,		"Carnet Apnée: "		; Store Apnoe Dives
+	TCODE   tWarningLevel,			"Niv. d'alerte:"		; Warning level
+	TCODE	tLess,				"Moins"				; Less
+	TCODE	tFull,				"Tous"				; Full
 	TCODE	tDvOC,				"OC"					; 0 | keep order, enum!
 	TCODE	tDvCCR,				"CCR"					; 1 |
 	TCODE	tDvGauge,			"Gauge"					; 2 |
@@ -288,7 +291,9 @@
 
 ; Display Settings
 	TCODE	tBright,			"Luminosité"			; Brightness
-	TCODE	tBrightsurface,			"Mode Surface: "		; ...Surface
+	TCODE	tBrightDive,			"Mode plongee:"			; Dive Mode
+	TCODE	tBrightSurface,			"Mode Surface:"			; ...Surface
+	TCODE	tUseAmbientSensor,		"capteur lumière:"		; Use light sensor
 	TCODE	tLayout,			"Affichage : "			; Layout
 	TCODE	tUnits,				"Unités    : "			; Units
  IF _language_2!=none

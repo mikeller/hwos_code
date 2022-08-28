@@ -88,12 +88,13 @@
 
 #ifdef __18CXX
 	//---- BANK 3 DATA -------------------------------------------------------
-	// Gather all Data C-Code --> ASM-Code
+	// Gather all Data C-Code <--> ASM-Code
 	//
 	// Attention: keep the first block of variables on position and also do not change
 	//            their relative position - this block goes into the deco data vault!
 	//
 	// Memory usage: 253 Byte used, 3 Byte free
+	//
 #   pragma udata overlay bank3=0x300
 #else
 	; in ASM, put the same bank, in overlay mode, at the same address
@@ -236,6 +237,7 @@ VAR_UCHAR (char_I_dil_check);					// =1: check ppO2 of the pure diluent against 
 	//---- BANK 4 DATA -------------------------------------------------------
 	// Gather all Data ASM-Code --> C-Code
 	// Memory usage: 96 Byte used, 160 byte free
+	//
 #   pragma udata overlay bank4=0x400
 #else
 	; in ASM, put the same bank, in overlay mode, at the same address
@@ -252,6 +254,7 @@ TAB_UCHAR (char_O_deco_gas,   NUM_STOPS);			// ... gas breathed         |       
 	//---- BANK 11 DATA -------------------------------------------------------
 	// Backtracking Data ASM-Code --> C-Code
 	// Memory usage: 256 Byte used, 0 byte free
+	//
 #   pragma udata overlay bank11=0xB00
 #else
 	; in ASM, put the same bank, in overlay mode, at the same address

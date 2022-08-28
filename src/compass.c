@@ -18,20 +18,28 @@
 
 
 //////////////////////////////////////////////////////////////////////////////
-// mH: crude work-around, needs to be fixed up
+//
+// Put compass data into bank 13 (stack) and bank 9 (variables)
+//
 #ifndef UNIX
-#	pragma udata overlay bank8=0x800
-	static char C_STACK[256];			// overlay C-code data stack here
-#	define RESET_C_STACK		\
-		_asm					\
-			LFSR	1, 0x800	\
-			LFSR	2, 0x800	\
+#	pragma udata overlay bank13=0xd00
+	static char C_STACK[256];				// overlay C-code data stack here
+#	define C_STACK_ADDR C_STACK
+#	define RESET_C_STACK			\
+		_asm						\
+			LFSR	1,C_STACK_ADDR	\
+			LFSR	2,C_STACK_ADDR	\
 		_endasm
-#	pragma udata overlay bank9_compass
+#	pragma udata bank9a = 0x900
 #	pragma code compass_run
+#	define PARAMETER	static
+#	define OVERLAY		overlay
 #else
 #	define RESET_C_STACK
+#	define PARAMETER
+#	define OVERLAY
 #endif
+
 
 //////////////////////////////////////////////////////////////////////////////
 // fifth order of polynomial approximation of atan(), giving 0.05 deg max error
@@ -247,7 +255,7 @@ void compass(void)
 
 	//---- Calculate sine and cosine of roll angle Phi -----------------------
 	sincos(accel_DZ_f, accel_DY_f, &sin, &cos);
-    
+
 	//---- rotate by roll angle (-Phi) ---------------------------------------
 	iBfy = imul(iBpy, cos) - imul(iBpz, sin);
 	iBpz = imul(iBpy, sin) + imul(iBpz, cos);

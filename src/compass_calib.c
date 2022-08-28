@@ -19,22 +19,27 @@
 
 //////////////////////////////////////////////////////////////////////////////
 //
-// mH: Put compass data into bank 8 (stack) and bank 9 (variables)
-// rl: could also be overlaid with p2_deco.c stack...
+// Put compass data into bank 13 (stack) and bank 9 (variables)
 //
 #ifndef UNIX
-#	pragma udata overlay bank8=0x800
+#	pragma udata overlay bank13=0xd00
 	static char C_STACK[256];				// overlay C-code data stack here
-#	define RESET_C_STACK		\
-		_asm					\
-			LFSR	1, 0x800	\
-			LFSR	2, 0x800	\
+#	define C_STACK_ADDR C_STACK
+#	define RESET_C_STACK			\
+		_asm						\
+			LFSR	1,C_STACK_ADDR	\
+			LFSR	2,C_STACK_ADDR	\
 		_endasm
-#	pragma udata overlay bank9_compass
+#	pragma udata bank9b = 0x980
 #	pragma code compass_cal
+#	define PARAMETER	static
+#	define OVERLAY		overlay
 #else
 #	define RESET_C_STACK
+#	define PARAMETER
+#	define OVERLAY
 #endif
+
 
 //////////////////////////////////////////////////////////////////////////////
 

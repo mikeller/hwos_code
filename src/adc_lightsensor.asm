@@ -81,6 +81,11 @@ get_battery_voltage_1:
 	;bra	charge_cv_active				;       YES - charging in CV mode
 
 charge_cv_active:
+    	btfss	analog_switches				; does the OSTC have analog switches?
+	bra	charge_cv_active1			; NO
+    	btfsc	surfmode_menu				; YES - in surface menus?
+	bsf	trigger_timeout				; YES - exit to surface mode during charging
+charge_cv_active1:
 	decfsz	get_bat_volt_counter,F			; decrement counter, became zero?
 	return									; NO  - not yet, done
 	movlw	.15								; YES - battery voltage >= 16*256mV (4.096V)
@@ -96,6 +101,11 @@ charge_cv_active:
 	return									;         - done
 
 charge_cc_active:
+    	btfss	analog_switches				; does the OSTC have analog switches?
+	bra	charge_cc_active1			; NO
+    	btfsc	surfmode_menu				; YES - in surface menus?
+	bsf	trigger_timeout				; YES - exit to surface mode during charging
+charge_cc_active1:
 	bsf		cc_active						; set CC charging mode
 	bsf		LEDr							; indicate charging
 	bcf		CHRG_OUT						; 
@@ -258,9 +268,12 @@ get_ambient_level:
 	return									; YES - done
 	btfsc	adc_is_running					; NO  - ADC in use?
 	return									;       YES - abort
+	TSTOSS	opt_use_AmbientSensor				; =1: Use the ambient sensor
+	bra	get_ambient_level0				; NO, skip and use fixed value
 	banksel	HW_descriptor					;       NO  - select bank where hardware descriptor is stored
 	btfsc	ambient_sensor					;           - ambient sensor available?
 	bra		get_ambient_level1				;             YES - use sensor
+get_ambient_level0:	
 	banksel	isr_backup						;             NO  - back to ISR default bank
 	movff	brightness,isr_lo			;                 - get brightness selection
 	incf	isr_lo,F						;                 - 0-2 -> 1-3
@@ -509,7 +522,9 @@ get_analog_switches0:
 get_analog_switches_1:
 	btfsc	adc_is_running					; ADC in use?
 	return									; YES - abort
-	btfsc	cc_active						; NO  - charging?
+	btfsc	cc_active						; NO  - charging constant current?
+	bra		get_analog_switches0			;       YES - abort (and clear both flags)
+	btfsc	cv_active						; NO  - charging constant voltage?
 	bra		get_analog_switches0			;       YES - abort (and clear both flags)
 
 get_analog_switches_2:

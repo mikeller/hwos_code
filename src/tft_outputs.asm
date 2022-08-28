@@ -3079,7 +3079,7 @@ TFT_message_cns_eod:
 ; Dive Mode - Message - Saturation
 ;
 	global	TFT_message_saturation
-TFT_message_saturation
+TFT_message_saturation:
 	rcall	TFT_message_open			; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
 	return								; NO  - skip message in this cycle
@@ -3330,7 +3330,7 @@ TFT_message_depth_limit:
 ; Dive Mode - Message - Deco Info
 ;
 	global	TFT_message_deco_info
-TFT_message_deco_info
+TFT_message_deco_info:
 	rcall	TFT_message_open			; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
 	return								; NO  - skip message in this cycle
@@ -6070,16 +6070,13 @@ TFT_debug_output:
 ;	WIN_TINY   .0, .		0					; dive    mode: overwrites depth label
 	FONT_COLOR_MEMO								; set color
 	
-	movff	ambient_light+0,lo
+	movff	gp_debug+0,lo
 	output_256
 	PUTC	","
-	movff	ambient_light+0,lo
-	movff	ambient_light+1,hi
-	output_65535
+	movff	gp_debug+1,lo
+	output_256
 
-	
-
-;	; deco engine scheduling performance
+	;	; deco engine scheduling performance
 ;	MOVII	int_O_profiling_overrun,mpr			; runtime +/- versus target
 ;	btfss	mpr+1,7								; overrun?
 ;	bra		TFT_debug_output_1					; YES

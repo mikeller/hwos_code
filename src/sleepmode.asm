@@ -28,7 +28,6 @@
 
 	extern	eeprom_deco_data_write
 	extern	option_check_and_store_all
-	extern	power_up_switches			; from hwos.asm
 
 
 ;---- Private local Variables -------------------------------------------------
@@ -152,7 +151,9 @@ deepsleep_loop:
 deepsleep_loop_exit:
 	bcf		deep_sleep						; clear flag (again)
 	clrf	sm_10min_counter				; clear 10mins counter
-	call	power_up_switches				; turn on    the analog switches
+	bsf		power_sw1			; switch on power supply for switch 1
+	nop
+	bsf		power_sw2			; switch on power supply for switch 2
 	rcall	init_avg_switches				; initialize the averaging system
 
 	bsf		PIE1,TMR1IE						; enable timer 1 interrupt
@@ -179,12 +180,26 @@ sleeploop_exit:
 ;
 one_sec_sleep:
 	bcf		trigger_full_second				; clear trigger flag
+	
+	btfss	button_hold_down_allowed			; mechanical push buttons?
+	bra	one_sec_sleep_piezo_buttons			; No
+		
+	btfss	switch_left					; left switch pressed?
+	bra	one_sec_sleep_buttons_done			; no, done
+	btfss	switch_right					; right switch pressed?
+	bra	one_sec_sleep_buttons_done			; no, done
+	bcf	sleepmode					; Both pressed, wake up
+	bra	one_sec_sleep_buttons_done			; Done.
 
-	btfsc	switch_left						; left switch pressed?
-	bcf		sleepmode						; YES - terminate sleep mode
-
+one_sec_sleep_piezo_buttons:	
+	btfsc	switch_left					; left switch pressed?
+	bcf	sleepmode					; YES - terminate sleep mode
 	btfsc	switch_right					; right switch pressed?
-	bcf		sleepmode						; YES - terminate sleep mode
+	bcf	sleepmode					; YES - terminate sleep mode
+
+one_sec_sleep_buttons_done:
+    	bcf		switch_right				; clear right button event
+	bcf		switch_left				; clear left  button event
 
 	btfsc	battery_gauge_available			; is a battery gauge IC available?
 	bra		one_sec_sleep_1					; YES - check for charger
@@ -240,14 +255,12 @@ one_sec_sleep_2:
 	return							; No, done.
 
 	btfsc	ms5837_state					; =0: result of temperature is in the ADC
-	bra	one_sec_sleep_3
-	call	I2C_get_temp_val_MS5837				; (Will set ms5837_state)
-	return
-one_sec_sleep_3:
-	call	I2C_get_press_val_MS5837			; (Will clear ms5837_state)
-	return									; done
+	goto	I2C_get_press_val_MS5837			; (Will clear ms5837_state) (And return!)
+	goto	I2C_get_temp_val_MS5837				; (Will set ms5837_state) (And return!)
+	; done.
 
 
+	
 ;-----------------------------------------------------------------------------
 ; Helper Function - Tasks every 10 Seconds in Sleep Mode
 ;
