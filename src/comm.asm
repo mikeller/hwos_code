@@ -975,7 +975,7 @@ comm_read_option:
 	SERIAL_CC_RECEIVE lo				; (try to) receive option index
 	btfsc	rs232_rx_timeout			; received option index?
 	bra		comm_command_loop			; NO - show rx timeout message and back to command loop
-
+	
 	; option index 0x00 - 0x0F: unused
 	movlw	0x0F						; last option index of the unused range
 	cpfsgt	lo							; received option index > end of unused range ?
@@ -992,9 +992,10 @@ comm_read_option:
 	bra		comm_read_sp				; NO  - process setpoint read
 
 	; option index = 0x49 - special handling button polarity
-	movf	lo,W						; copy option index to WREG
-	iorlw	0x49						; received option index for button polarity ?
-	bz		comm_read_button_polarity	; YES - process button polarity read
+	movlw	0x49
+	cpfseq	lo						; received option index for button polarity ?
+	bra	$+4						; NO
+	bra		comm_read_button_polarity		; YES - process button polarity read
 
 	; option index 0x1F - 0xF9: options managed by option table
 	movlw	0xF9						; last option index for options
@@ -1030,9 +1031,10 @@ comm_write_option:
 	bra		comm_write_sp				; NO  - process setpoint write
 
 	; option index = 0x49 - special handling button polarity
-	movf	lo,W						; copy option index to WREG
-	iorlw	0x49						; received option index for button polarity ?
-	bz		comm_write_button_polarity	; YES - process button polarity write
+	movlw	0x49
+	cpfseq	lo						; received option index for button polarity ?
+	bra	$+4						; NO
+	bra		comm_write_button_polarity		; YES - process button polarity write
 
 	; option index 0x1F - 0xF9: options managed by option table
 	movlw	0xF9						; last option index for options

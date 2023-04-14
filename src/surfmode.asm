@@ -571,21 +571,22 @@ housekeeping_3:
 	btfsc	comm_mode_disabled			; COMM mode disabled?
 	return								; YES - done
  ENDIF
-	btfss	surfmode_menu				; in surface menus?
-	return								; NO  - done
-
-	btfsc	simulatormode				; currently in simulator (deco calculator) mode?
-	return								; YES - suppress COMM mode to not jeopardize backup/restore of tissue data
-
-	btfss	vusb_in						; USB plugged in?
-	return								; NO  - done
- IFDEF _screendump
-	btfsc	screen_dump_avail			; YES - screen dump enabled?
-	return								;       YES - no COMM mode to be able to make screen shots of the menu and simulator mode
- ENDIF
-	btfss	ble_available				; skip "USB" check in all Bluetooth models (required for very old OSTC sport)
-	goto	comm_mode_usb				; YES / NO  - proceed to COMM mode, will also set CPU to speed normal
 	return
+;	btfss	surfmode_menu				; in surface menus?
+;	return								; NO  - done
+;
+;	btfsc	simulatormode				; currently in simulator (deco calculator) mode?
+;	return								; YES - suppress COMM mode to not jeopardize backup/restore of tissue data
+;
+;	btfss	vusb_in						; USB plugged in?
+;	return								; NO  - done
+; IFDEF _screendump
+;	btfsc	screen_dump_avail			; YES - screen dump enabled?
+;	return								;       YES - no COMM mode to be able to make screen shots of the menu and simulator mode
+; ENDIF
+;	btfss	ble_available				; skip "USB" check in all Bluetooth models (required for very old OSTC sport)
+;	goto	comm_mode_usb				; YES / NO  - proceed to COMM mode, will also set CPU to speed normal
+;	return
 
 ;-----------------------------------------------------------------------------
 

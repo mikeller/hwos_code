@@ -1144,8 +1144,9 @@ do_menu_settings:
 	btfsc	ble_available				; BT available?
 	bra		do_menu_settings_bt			; YES - do BT menu
 
-	MENU_BEGIN	tSystSets, .5
+	MENU_BEGIN	tSystSets, .6
 		MENU_CALL		tInfoMenu,					do_menu_info
+		MENU_CALL		tUsbTitle,					do_comm_mode_usb
 		MENU_CALL		tSetTimeDate,				do_menu_date_time
 		MENU_CALL		tDispSets,					do_menu_dispsets
 		MENU_CALL		tSysSets,					do_menu_syssets
@@ -1180,10 +1181,12 @@ do_menu_settings_noRX:
 
 
 ;-----------------------------------------------------------------------------
-; Call Function - start Communication Mode (BT)
+; Call Functions - start Communication Mode (BT and USB)
 ;
 do_comm_mode_bt:
 	goto	comm_mode_bt				; code hosted in comm.asm
+do_comm_mode_usb:
+	goto	comm_mode_usb				; code hosted in comm.asm
 
 
 ;-----------------------------------------------------------------------------
