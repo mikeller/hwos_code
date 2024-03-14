@@ -4,7 +4,7 @@
 ;
 ;   Font-data for the anti-aliased word processor
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2010-11-23 : [jDG] Creation for OSTC 1.72, with the original fonts repacked

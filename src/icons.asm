@@ -4,7 +4,7 @@
 ;
 ;   Tables for all OSTC icons.
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-05-24 : [jDG] Creation with icons for demo menus.

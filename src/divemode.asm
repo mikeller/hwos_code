@@ -4,7 +4,7 @@
 ;
 ;   Dive Mode
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-08-15 : [mH] moving from OSTC code
@@ -627,6 +627,8 @@ TFT_output_1:								; every second - before deco calculations, all mode
 	call	TFT_show_apnoe_max_depth		; YES - show max. depth of last dive
 	btfsc	FLAG_TFT_apnoe_divetime			; shall show apnoe dive time?
 	call	TFT_show_apnoe_times			; YES - show apnoe dive time?
+	btfsc	FLAG_TFT_depth_maximum_apnoe	; shall show max. depth of last dive? (Flag re-used here for #dive)
+	call	TFT_apnoe_divecounter			; YES - show apnoe #dive counter?
 
 	clrf	TFT_output_flags_1				; mark all TFT updates done
 	return									; done
@@ -644,6 +646,7 @@ TFT_output_2:								; every second - before deco calculations, deco modes only
 	call	TFT_safety_stop_show			; YES - show safety stop
 	btfsc	FLAG_TFT_safety_stop_clear		; shall clear safety stop?
 	call	TFT_safety_stop_clear			; YES - clear safety stop
+	
 	clrf	TFT_output_flags_2				; mark all TFT updates done
 	goto	dive_customview_second			; do every-second tasks for the custom view area (in sync with the dive time) and return
 
@@ -704,6 +707,7 @@ divemode_apnoe_tasks_dive:					; apnoe mode, submerged
 	return									; NO  - done
 	bcf		apnoe_new_dive					; YES - clear flag
 	bsf		FLAG_TFT_clear_apnoe_surface	;     - clear apnoe mode surface data from screen
+	incf	    apnoe_dive_counter,F			; Increase #dive counter
 	return									;     - done
 
 divemode_apnoe_tasks_surf:					; apnoe mode, at the surface
@@ -1724,7 +1728,7 @@ check_deco_states:
 	movff	char_O_deco_info,WREG		; NO  - get deco info vector
 	btfss	WREG,deco_stops_norm		;       do we have a deco obligation right now?
 	return								;       NO  - done
-	bsf		deco_locked					;       YES - memorize dive was in deco
+;	bsf		deco_locked					;       YES - memorize dive was in deco
 	movff	char_O_deco_depth+0,WREG	;           - get depth of first stop in meters into WREG
 	addlw	deco_region_distance+.1		;           - add deco region start distance + 1 meter for the negative test to work
 	subwf	depth_meter,W				;           - compute current depth - (first stop depth + deco region distance)
@@ -3378,6 +3382,7 @@ diveloop_boot_3:
 	clrf	apnoe_surface_secs			; clear apnoe surface time, seconds (8 bit)
 	clrf	apnoe_dive_mins				; clear apnoe dive    time, minutes (8 bit)
 	clrf	apnoe_dive_secs				; clear apnoe dive    time, seconds (8 bit)
+	clrf	apnoe_dive_counter			; clear apnoe #dive counter         (8 bit)
 
 	return								; done with dive mode boot
 

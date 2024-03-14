@@ -3,7 +3,7 @@
 ;   File adc_lightsensor.asm                * combined next generation V3.11.1
 ;
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-08-08 : [mH] moving from OSTC code
@@ -95,6 +95,13 @@ charge_cv_active1:
 	bsf		cv_active						;         - set CV charging status
 	bsf		LEDr							;         - indicate charging
 	call	lt2942_charge_done				;         - reset accumulating registers to 0xFFFF
+	btfsc	lock_cycle_counter				; cycle counted already?
+	bra	charge_cv_active2				; Yes, skip
+	banksel	charge_cycles
+	INCI	charge_cycles					; increase charge_cycles counter by one
+	banksel	common
+	bsf	lock_cycle_counter			; lock cycle counter
+charge_cv_active2:
 	WAITMS	d'10'							;         - wait 10 ms
 	bcf		LEDr							;         - indicate charging
 	bsf		get_bat_volt_counter,0			;         - set counter to 1

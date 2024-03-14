@@ -4,7 +4,7 @@
 ;
 ;   OSTC Surface Menus
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;   2011-07-11 : [jDG] Creation.
@@ -1294,16 +1294,18 @@ dyn_show_total_dives:
 ;
 do_menu_info2:
  IFNDEF _comm_debug
-	MENU_BEGIN	tInfoMenu, .5
+	MENU_BEGIN	tInfoMenu, .6
 		MENU_DYNAMIC	dyn_show_battery_volts,		0
+		MENU_DYNAMIC	dyn_show_battery_cycles,	0
 		MENU_DYNAMIC	dyn_show_config,			0
 		MENU_DYNAMIC	dyn_show_sensor_calib,		0
 		MENU_DYNAMIC	dyn_show_sensor_offset,		0
 		MENU_CALL		tBack,						do_return_menu_settings_deeper
 	MENU_END
  ELSE
-	MENU_BEGIN	tInfoMenu, .6
+	MENU_BEGIN	tInfoMenu, .7
 		MENU_DYNAMIC	dyn_show_battery_volts,		0
+		MENU_DYNAMIC	dyn_show_battery_cycles,	0
 		MENU_DYNAMIC	dyn_show_config,			0
 		MENU_DYNAMIC	dyn_show_sensor_calib,		0
 		MENU_DYNAMIC	dyn_show_sensor_offset,		0
@@ -1328,7 +1330,16 @@ dyn_show_battery_volts:
 	PUTC	")"							; append fix legend
 	return								; done
 
-
+;-----------------------------------------------------------------------------
+; dynamic Title - show Battery charge cycles
+;
+dyn_show_battery_cycles:	
+	STRCAT_TEXT tBatteryCycles				; print text
+	MOVII	charge_cycles,mpr			; get battery cycles
+	bsf		leftbind					; print left-aligned
+	output_65535							; print # cycles
+	return								; done
+    
 ;-----------------------------------------------------------------------------
 ; dynamic Title - show Hardware / Software Configuration
 ;
@@ -1512,10 +1523,11 @@ do_menu_date_time:
 	bsf		imprint_time_date			; start imprinting current time & date
 	bcf		block_option_value			; resume displaying of option values
 
-	MENU_BEGIN	tSetTimeDate, .4
+	MENU_BEGIN	tSetTimeDate, .5
 		MENU_CALL		tSetTime,					do_menu_set_time
 		MENU_CALL		tSetDate,					do_menu_set_date
-		MENU_OPT_INC	tDateFormat,				oDateFormat
+		MENU_OPT_INC	tDateFormat,						oDateFormat
+		MENU_OPT_INC	tTimeFormat,						oTimeFormat
 		MENU_CALL		tBack,						do_return_menu_settings
 	MENU_END
 
@@ -2140,6 +2152,9 @@ do_new_battery_select:
 	; 0x02:                           ambient sensor                   ---> OSTC Sport (USB model)   YES    NO     1.5V  3.6V disposable  3.6V rechargeable
 	; 0x52: BLE                   and ambient sensor and low volt core ---> OSTC Sport (BLE model)   YES    NO     1.5V  3.6V disposable  3.6V rechargeable
 
+	btfsc	dn_flag
+	bra	use_404050_battery
+	
 	movlw	0x11						; OSTC 2 (2015 model)
 	cpfseq	HW_descriptor
 	bra		$+4
@@ -2309,8 +2324,15 @@ do_use_16650_battery:
 ;
 use_18650_battery:
 	rcall	setup_new_18650
-	;bra	use_batt_exit
+	bra	use_batt_exit
 
+;-----------------------------------------------------------------------------
+; Call Function - build-in 404050
+;
+use_404050_battery:
+	rcall	setup_new_404050
+	;bra	use_batt_exit
+	
 
 ;-----------------------------------------------------------------------------
 ; Helper Function - finish Battery Selection
@@ -2323,22 +2345,6 @@ use_batt_exit_1:
 	bcf		comm_mode_disabled				; re-enable COMM mode again
  ENDIF
 	goto	surfloop						; exit to surface mode
-
-
-;-----------------------------------------------------------------------------
-; Migrate Battery Selection from Firmwares prior 2.09
-;
-	global	use_old_prior_209
-use_old_prior_209:
-	EEPROM_CC_READ eeprom_battery_type,WREG	; read battery type from EEPROM
-	incfsz	WREG,W							; battery type = 0xFF (undefined) ?
-	return									; NO  - done
-	call	lt2942_get_status				; YES - check for gauge IC
-	movlw	.3								;     - default to a 18650 (LiIon 3.7V/3.1Ah)
-	btfss	battery_gauge_available			;     - OSTC 2 or cR hardware?
-	movlw	.1								;     - NO - assume a Saft (disposable 3.6 V)
-	EEPROM_CC_WRITE WREG,eeprom_battery_type;     - write battery type to EEPROM
-	return									;     - done
 
 
 ;-----------------------------------------------------------------------------
@@ -2360,6 +2366,8 @@ get_battery_data:
 	rcall	setup_new_18650				; =3
 	dcfsnz	lo,F
 	rcall	setup_new_16650				; =4
+	dcfsnz	lo,F
+	rcall	setup_new_404050			; =5
 	bcf		use_old_batt_flag			; clear flag
  IFNDEF _screendump
 	bcf		comm_mode_disabled			; re-enable COMM mode again
@@ -2411,6 +2419,8 @@ setup_new_18650:
 	MOVLI	offset_ncr18650,   battery_offset
 	movlw	.3
 	movwf	battery_type
+	btfss	use_old_batt_flag				; In a power-on-reset run?
+	clrf	batt_percent					; YES: Start with 0%
 	return
 
 	; rechargeable internal Lithium-ion
@@ -2422,6 +2432,21 @@ setup_new_16650:
 	MOVLI	offset_ur16650,   battery_offset
 	movlw	.4
 	movwf	battery_type
+	btfss	use_old_batt_flag				; In a power-on-reset run?
+	clrf	batt_percent					; YES: Start with 0%
+	return
+
+	; rechargeable internal Lithium-ion 404050
+setup_new_404050:
+	bcf		charge_disable				; release  charging-inhibit signal
+	bsf		charge_enable				; tristate charging-inhibit signal
+	CLRI	battery_capacity_internal
+	MOVLI	capacity_404050, battery_capacity
+	MOVLI	offset_404050,   battery_offset
+	movlw	.5
+	movwf	battery_type
+	btfss	use_old_batt_flag				; In a power-on-reset run?
+	clrf	batt_percent					; YES: Start with 0%
 	return
 
 ;-----------------------------------------------------------------------------

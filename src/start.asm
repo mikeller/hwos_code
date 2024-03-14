@@ -4,7 +4,7 @@
 ;
 ;   Startup subroutines
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-08-06 : [mH] moving from OSTC code
@@ -38,7 +38,6 @@
 	extern	rtc_init
 	extern	new_battery_select
 	extern	get_battery_data
-	extern	use_old_prior_209
 	extern	get_first_gas_to_WREG
 
 	extern	oFirmwareMajor
@@ -144,6 +143,7 @@ start_clear_rambank:
 	; get screen type (2) from bootloader info
 	bsf		screen_type2					; set flags for later clear of the false one
 	bsf		screen_type3					; ...
+	bsf		screen_type4					; ...
 	movlw	0x80							; set up read from 0x01F780
 	movwf	TBLPTRL							; ...
 	;movlw	0xF7							; high and upper are still at 0x01F7xx
@@ -157,7 +157,14 @@ start_clear_rambank:
 	movlw	0x84							; coding for screen type 3
 	cpfseq	TABLAT							; equal?
 	bcf		screen_type3					; NO  -  not screen type 3
+	movlw	0x85							; coding for screen type 4
+	cpfseq	TABLAT							; equal?
+	bcf		screen_type4					; NO  -  not screen type 4
 
+	bcf	dn_flag
+	btfsc	screen_type4
+	bsf	dn_flag
+	
 	; get button polarity from configuration data (EEPROM)
 	EEPROM_CC_READ eeprom_button_polarity,button_polarity
 
@@ -216,8 +223,6 @@ start_clean:
 
 start_common:
 	; check for power-on reset
-	btfsc	RCON,POR						; was this a power-on reset?
-	call	use_old_prior_209				; NO - migrate the last battery status from firmware 2.09 or earlier
 
 	bcf		use_old_batt_flag				; default to no reload of last battery data
 	btfsc	RCON,POR						; was this a power-on reset?
@@ -235,7 +240,7 @@ start_common:
 start_check_new_firmware:
 	call	TFT_boot						; initialize TFT (includes clear screen & backlight switch-off)
 
-	; show heinrichsweikamp logo
+	; show heinrichs weikamp logo
 	WIN_TOP  .40
 	WIN_LEFT .10
 	TFT_WRITE_PROM_IMAGE_BY_ADDR hw_logo_block
@@ -388,7 +393,7 @@ restart2:
  IFNDEF _hwos_sport
 	btfsc	vusb_in							; USB power detected?
 	bra		restart3						; YES - no BT then
-	bcf		PORTE,0							; NO  - power up BT chip (if available)
+	bcf		ble_npower							; NO  - power up BT chip (if available)
 	WAITMS	d'5'							;     - wait 5 ms
 	btfss	vusb_in							;     - BT chip detected?
 	bra		restart3						;       NO  - no BT then
@@ -396,6 +401,7 @@ restart2:
 	bsf		ble_available					;       YES - BT available
 
 restart3:
+    bsf		ble_npower						; power down BT chip (if available)
    IFDEF _external_sensor						; Compiled for external analog interface?
     bsf	    ext_input_s8_ana					;       YES - Set the flag
     call    eeprom_serial_number_read	; read OSTC serial number
@@ -467,7 +473,7 @@ restart4b:
 	call	TFT_boot						; initialize TFT (includes clear screen & backlight switch-off)
 	WIN_TOP  .40							; set position
 	WIN_LEFT .10							; ...
-	TFT_WRITE_PROM_IMAGE_BY_ADDR hw_logo_block ; show heinrichsweikamp logo
+	TFT_WRITE_PROM_IMAGE_BY_ADDR hw_logo_block ; show heinrichs weikamp logo
 	WIN_SMALL .10,.130						; set position
 	STRCAT_PRINT "Updating TR Module..."	; print update message
 	call	TFT_Display_FadeIn				; dimm up backlight to show outputs

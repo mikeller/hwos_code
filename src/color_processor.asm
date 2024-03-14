@@ -4,7 +4,7 @@
 ;
 ;   Decompress and draw an image
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2010-12-13 : [jDG] Creation.
@@ -97,8 +97,10 @@ color_image_1:
 	rlcf	win_width+0				; multiply width x 2 to get the true box width
 	rlcf	win_width+1				; ...
 	call	TFT_box_write			; set output box
-	Index_out 0x22					; frame memory data write start
-
+	movlw	0x22				; frame memory data write start
+	btfsc	screen_type4
+	movlw	0x2C				; Start Writing Data to GRAM (Display 4)
+	call	TFT_CmdWrite
 color_image_loop_xy:
 	; prepare to read next pixel count and color
 	clrf	pixel_count+0			; clear number of pixels
@@ -159,7 +161,7 @@ color_image_pixel:
 	btfsc	screen_type3			; display type 3 ?
 	bra		color_image_display3	; YES
 	
-	; Screen 1
+	; Screen 0 or 1 or 4
 	btfsc	less_io_cpu			; less I/O CPU?
 	bra	color_image_pixel1_loop_less_io ; YES
 	    

@@ -4,7 +4,7 @@
 ;
 ;   o2 sensor calibration subroutines
 ;
-;   Copyright (c) 2014, Heinrichs Weikamp, all right reserved.
+;   Copyright (c) 2014, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 
 #include "hwos.inc"

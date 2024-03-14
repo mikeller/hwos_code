@@ -4,7 +4,7 @@
 ;
 ;   Routines to handle all OSTC graphic/text menus.
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;   2011-05-30 : [jDG] Creation.

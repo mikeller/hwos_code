@@ -4,7 +4,7 @@
 ;
 ;   Routines to handle all hwOS graphic/text menus.
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;   2012-11-02 : [jDG] Cleanup for hwOS: removed icons. Added scrolling.

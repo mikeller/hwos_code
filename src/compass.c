@@ -2,7 +2,7 @@
 /// compass.c
 /// Compute north direction from magnetic/acceleration measures        V3.02.1
 ///
-/// Copyright (c) 2012-2015, JD Gascuel, HeinrichsWeikamp, all right reserved.
+/// Copyright (c) 2012-2015, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 //////////////////////////////////////////////////////////////////////////////
 // HISTORY
 //  2012-12-01  [jDG] Creation

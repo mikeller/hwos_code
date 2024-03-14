@@ -4,7 +4,7 @@
 ;
 ;   OSTC dive mode menu
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all rights reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all rights reserved.
 ;=============================================================================
 ; HISTORY
 ;   2013-02-02 : [mH] Made out of menu_tree.asm

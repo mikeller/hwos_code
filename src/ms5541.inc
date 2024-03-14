@@ -3,7 +3,7 @@
 ;   File ms5541.inc                            combined next generation V3.0.1
 ;
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-08-04 : [mH] moving from OSTC code

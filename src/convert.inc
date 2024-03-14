@@ -4,7 +4,7 @@
 ;
 ;   Converts register values to string
 ;
-;   Copyright (c) 2011, Matthias Heinrichs, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, Matthias Heinrichs, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;   2007-10-07 : [MH]  Creation for OSTC sources

@@ -4,7 +4,7 @@
 ;
 ;   Internal EEPROM, RS232
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-08-06 : [mH] moving from OSTC code
@@ -160,6 +160,7 @@ eeprom_battery_gauge_read:
 	bsf		block_battery_gauge								; suspend ISR from accessing the battery gauge
 	EEPROM_CC_READ eeprom_battery_type, battery_type		; 1 byte read from EEPROM
 	EEPROM_RR_READ eeprom_battery_gauge,battery_gauge,.6	; 6 byte read from EEPROM
+	EEPROM_RR_READ eeprom_charge_cycles,charge_cycles,.2	; 2 byte read from EEPROM
 	bcf		block_battery_gauge								; allow ISR to access the battery gauge again
 	return													; done
 
@@ -169,6 +170,7 @@ eeprom_battery_gauge_write:
 	EEPROM_CC_WRITE battery_type, eeprom_battery_type		; 1 byte write to EEPROM
 update_battery_gauge:
 	EEPROM_RR_WRITE battery_gauge,eeprom_battery_gauge,.6	; 6 byte write to EEPROM
+	EEPROM_RR_WRITE charge_cycles,eeprom_charge_cycles,.2	; 2 byte write to EEPROM
 	bcf		block_battery_gauge								; allow ISR to access the battery gauge again
 	return													; done
 
@@ -366,7 +368,7 @@ enable_rs232_1:
 	btfss	speed_is_normal				; speed = normal?
 	bra		enable_rs232_1				; NO  - loop waiting for ISR to have adjusted the speed
 	bsf	TRISC,7
-	bcf		PORTE,0						; YES - switch port to comm
+	bcf		ble_npower						; YES - switch port to comm
 	bsf		PORTJ,2						;     - /Reset (required for very old OSTC sport)
 	movlw	b'00100100'					;     - TX configuration: TX enabled, async, high speed
 	movwf	TXSTA1						;     - ...
@@ -402,7 +404,7 @@ disable_rs232:
 	clrf	RCSTA1						; disable RX
 	clrf	TXSTA1						; disable TX
 	bcf		PORTC,6						; switch TX pin hard to GND
-	bsf		PORTE,0						; power down BT chip
+	bsf		ble_npower						; power down BT chip
 	bcf		PORTJ,2						; /Reset (required for very old OSTC sport)
 	bcf	TRISC,7
 	bcf		PORTC,7						; switch RX pin hard to GND

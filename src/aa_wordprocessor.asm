@@ -4,7 +4,7 @@
 ;
 ;   Anti-aliased word processor
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2010-11-22 : [jDG] Creation
@@ -432,7 +432,7 @@ aa_decode_3:
 	btfsc	screen_type3			; display 3 ?
 	bra		aa_decode_3_display3	; YES
 
-	; Screen 1 or 0
+	; Screen 1 or 0 or 4
 	btfsc	less_io_cpu				; less I/O CPU?
 	bra	aa_decode_3_display0and1_less_io	; YES
 
@@ -504,9 +504,11 @@ aa_wordprocessor:
 	call	TFT_set_color			; compute printing color (16 bit)
 	rcall	aa_string_width			; set win_height and compute win_width:2
 	call	TFT_box_write			; set up output box
-	lfsr	FSR2,buffer				; set FSR2 to the start of the output buffer
-	Index_out	0x22				; DATA block command (macro defined in tft.inc)
-
+	lfsr	FSR2,buffer			; set FSR2 to the start of the output buffer
+	movlw	0x22				; frame memory data write start
+	btfsc	screen_type4
+	movlw	0x2C				; Start Writing Data to GRAM (Display 4)
+	call	TFT_CmdWrite
 aa_wordprocessor_1:
 	movf	POSTINC2,W				; read character from the buffer
 	bz		aa_wordprocessor_99		; done if null byte encountered
@@ -516,7 +518,7 @@ aa_wordprocessor_1:
 	bra		aa_wordprocessor_1		; loop
 
 aa_wordprocessor_99:
-	Index_out	0x00				; send end of bloc command
+	Index_out	0x00				; send end of bloc command or NOP for most displays
 	bcf		win_invert				; terminate inverse printing
 	return							; done
 

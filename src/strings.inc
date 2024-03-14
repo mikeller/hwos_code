@@ -4,7 +4,7 @@
 ;
 ;   Implementation code various string functions
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;   2010-12-02 : [jDG] Creation

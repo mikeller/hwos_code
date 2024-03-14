@@ -2,13 +2,13 @@
 // p2_deco.c                                  combined next generation V3.19.4
 //
 //  Created on: 12.05.2009
-//  Author: heinrichs weikamp, contributions by Ralph Lembcke and others
+//  Author: heinrichs weikamp gmbh, contributions by Ralph Lembcke and others
 //
 // ***************************************************************************
 
 //////////////////////////////////////////////////////////////////////////////
 // OSTC - diving computer code
-// Copyright (C) 2018 HeinrichsWeikamp GmbH
+// Copyright (C) 2018 heinrichs weikamp gmbh GmbH
 //
 //    This program is free software: you can redistribute it and/or modify
 //    it under the terms of the GNU General Public License as published by

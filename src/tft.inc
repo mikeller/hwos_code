@@ -4,7 +4,7 @@
 ;
 ;   Declaring interfaces to the TFT screen and its Oxxx controler
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-05-24 : [jDG] Cleanups from initial Matthias code.
@@ -24,7 +24,8 @@
 ;	extern	pixel_write				; draw two half-pixels at position         (win_top,win_leftx2 )
 	extern	pixel_write_col320		; draw two half-pixels at position         (win_top,PRODH:PRODL)
 	extern	half_vertical_line		; draw a vertical   line of half-pixels at (win_top,win_leftx2,win_height)
-	extern	half_horizontal_line	; draw a horizontal line of half-pixels at (win_top,win_leftx2,win_width)
+	extern	half_horizontal_line		; draw a horizontal line of half-pixels at (win_top,win_leftx2,win_width)
+	extern	TFT_CmdWrite			; send a one byte command to the screen
 
  IFDEF _screendump
 	extern	TFT_dump_screen			; send a screenshot via the serial interface immediately

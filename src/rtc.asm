@@ -3,7 +3,7 @@
 ;   File rtc.asm                            * combined next generation V3.09.4k
 ;
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-08-08 : [mH] moving from OSTC code
@@ -233,7 +233,7 @@ rtc_add_minutes_2:
 	bra		rtc_add_minutes_3		;       NO  - month is ok
 	subwf	rtc_latched_month,F		;       YES - subtract 12 from resulting month (actually sets back to January)
 	incf	rtc_latched_year,F		;           - increment year
-rtc_add_minutes_3
+rtc_add_minutes_3:
 	banksel	common					; back to bank common
 	return							; done
 

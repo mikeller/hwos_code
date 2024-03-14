@@ -4,7 +4,7 @@
 ;
 ;   Logbook
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-11-12 : [mH] moving from OSTC code
@@ -393,6 +393,8 @@ display_profile2:
 	; show time
 	WIN_SMALL logbook_time_column, logbook_time_row
 	MOVII	header_buffer+index_time,mpr			; get time
+	TSTOSC	opt_timeformat							; =1: Use 12h format
+	call	TFT_convert_lo_into_12h_format					; converts lo (0-23h) into lo (1-12) with PM/AM flag in aux_flag
 	output_99x										; print hour
 	PUTC	':'										; print spacing ":"
 	movff	hi,lo									; print minute
@@ -1590,6 +1592,8 @@ logbook_page2a:
 	call	output_date_short							; print date (day and month)
 	STRCAT	".-"										; print spacing ".-"
 	MOVII	rtc_latched_hour,mpr						; get computed end-of-dive time
+	TSTOSC	opt_timeformat							; =1: Use 12h format
+	call	TFT_convert_lo_into_12h_format					; converts lo (0-23h) into lo (1-12) with PM/AM flag in aux_flag
 	output_99x											; print hour
 	PUTC	':'											; print spacing ":"
 	movff	hi,lo										; print minute
@@ -1783,6 +1787,8 @@ log_details_header:
 	call	output_date								; print date
 	PUTC	"-"										; print "-"
 	MOVII	header_buffer+index_time,mpr			; get time
+	TSTOSC	opt_timeformat							; =1: Use 12h format
+	call	TFT_convert_lo_into_12h_format					; converts lo (0-23h) into lo (1-12) with PM/AM flag in aux_flag
 	output_99x										; print hour
 	PUTC	':'										; print spacing ":"
 	movff	hi,lo									; print minute

@@ -3,7 +3,7 @@
 ;   File divemode.inc                       * combined next generation V3.09.4g
 ;
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-08-15 : [mH] moving from OSTC code
@@ -535,6 +535,10 @@
 #DEFINE dm_apnoe_surface_time_row				.207							; 207
 #DEFINE dm_apnoe_surface_time_column			.80								;  80
 
+#DEFINE	dm_apnoe_surface_dive_text_col			.60  
+#DEFINE	dm_apnoe_surface_dive_text_row			.170
+#DEFINE	dm_apnoe_surface_divecnt_col			.130
+#DEFINE	dm_apnoe_surface_divecnt_row			.161
 
 ;-----------------------------------------------------------------------------
 ; Bottom content / Gauge mode

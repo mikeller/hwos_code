@@ -4,7 +4,7 @@
 ;
 ;   Implementation text in various selectable languages.
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-06-12 : [jDG] Creation
@@ -22,7 +22,7 @@
 ; fast hack **ONLY** for **CHANGING** languages ( en / de / fr / it )
 
 ;#undefine _language_1
-;#define   _language_1 it
+;#define   _language_1 fr
 
 ;#undefine _language_2
 ;#define   _language_2 it

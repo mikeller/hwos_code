@@ -4,7 +4,7 @@
 ;
 ;   OSTC Platform Definitions
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;   2011-05-24 : [jDG] Cleanups from initial Matthias code
@@ -42,9 +42,10 @@
 
 
 ; ---- Logo Address Vectors
-#DEFINE hw_logo_block			0x01E000	; color image data for heinrichsweikamp logo
+#DEFINE hw_logo_block			0x01E000	; color image data for heinrichs weikamp gmbh logo
 #DEFINE comm_logo_1				0x01EEDE	; color image data for USB or BT logo
 #DEFINE comm_logo_2				0x01EA04	; color image data for BT logo, "+" bootloader
+#DEFINE comm_logo_3				0x01E936	; color image data for BT logo, dn bootloader
 
 
 ;-----------------------------EEPROM DATA ------------------------------------
@@ -308,7 +309,9 @@
 #DEFINE capacity_ur16650				.235		; 2.0Ah/0.085mAh/100 [%]
 #DEFINE offset_ur16650					.42006		; 65536-(2.0Ah/0.085mAh)
 
-
+#DEFINE capacity_404050					.141		; 1.2Ah/0.085mAh/100 [%]
+#DEFINE offset_404050					.51418		; 65536-(1.2Ah/0.085mAh)
+ 
 ; ---- Power Consumption Values
 #DEFINE current_sleepmode				.31
 #DEFINE current_backlight_multi			.115		; * CCPR1L + current_backlight_offset (restricted to  <= 255)
@@ -489,8 +492,8 @@
  ;---- Hardware - OSTC Model Variants2 (stored in access RAM, NOT cleared in restart)
 #DEFINE press_sensor_type		HW_variants2,0		; =1: pressure sensor MS5837, =0: Pressure sensor MS5541
 #DEFINE	less_io_cpu			HW_variants2,1		; =1: OSTC has a CPU with less I/O pins
-;					HW_variants2,2		; --- unused
-;					HW_variants2,3		; --- unused
+#DEFINE screen_type4			HW_variants2,2		; =1: display type 4, =0: display type 0 or 1 or 2 or 3
+#DEFINE	dn_flag				HW_variants2,3		; =1: dn
 ;					HW_variants2,4		; --- unused
 ;					HW_variants2,5		; --- unused
 ;					HW_variants2,6		; --- unused
@@ -520,7 +523,7 @@
 #DEFINE ms5837_state			HW_flags_state3,0	; =1: result of pressure is in the ADC
 #DEFINE	i2c_busy_pressure		HW_flags_state3,1	; =1: Currently updating pressure from MS5837
 #DEFINE	eeprom_write_error_flag		HW_flags_state3,2	; =1: an EEPROM write error occurred (Reset only in a Reboot/POR)
-;					HW_flags_state3,3	; --- unused
+#DEFINE	lock_cycle_counter		HW_flags_state3,3	; =1: Do not count charge cycle (again), cleared when batt_percent<95%
 ;					HW_flags_state3,4	; --- unused
 ;					HW_flags_state3,5	; --- unused
 ;					HW_flags_state3,6	; --- unused
@@ -590,7 +593,7 @@
 
 ;---- Dive Mode - Dive States
 #DEFINE use_aGF					DM_flags_state,0	; =1: use aGF, =0: use GF
-#DEFINE deco_locked				DM_flags_state,1	; =1: in or has been in deco obligation       during the dive
+;#DEFINE deco_locked				DM_flags_state,1	; =1: in or has been in deco obligation       during the dive
 #DEFINE deco_region				DM_flags_state,2	; =1: in or has been in the deco stops region during the dive
 #DEFINE cave_mode				DM_flags_state,3	; =1: cave mode is active                                 (cave mode)
 #DEFINE dive_turned				DM_flags_state,4	; =1: dive is turned                                      (cave mode)
@@ -1334,8 +1337,9 @@ backtrack_waypoint_num			res 1		; current waypoint number
 backtrack_waypoint_turn			res 1		; waypoint number of the turn point
  ENDIF
 
-;---- Dive Mode / apnoe mode (2 byte)
+;---- Dive Mode / apnoe mode (3 byte)
 apnoe_max_pressure				res 2		; max depth over all dives in the series
+apnoe_dive_counter				res 1		; apnoe #dive counter
 
 ;---- Profile Recording (6 byte)
 alarm_type						res 1		; alarm states recording
@@ -1460,7 +1464,7 @@ wait_counter					res 1
 pressure_update_lag_counter		res 1		; lag time counter for fast surface pressure display updating
 gp_debug				res 2		; General Purpose debug registers
 
-; 203 byte used, 5 byte free (208 byte total)
+; 204 byte used, 4 byte free (208 byte total)
 
 
 ;-----------------------------------------------------------------------------
@@ -1597,7 +1601,8 @@ D1_buffer					res 3		; Buffer of D1 (Sensor raw data)
 D2_buffer					res 3		; Buffer of D2 (Sensor raw data)					
 
 brightness					res 1		; =0: Eco, =1:Medium, =2:Full
-; 157 byte used, 92 byte free
+charge_cycles					res 2		; 16bit charge cycles counter
+; 159 byte used, 90 byte free
 
 
 ;-----------------------------------------------------------------------------
@@ -1723,7 +1728,8 @@ opt_comm_timeout				res 1		; comm RX timeout in multiples of 10 ms
 opt_fallback					res 1		; unused dummy option for compatibility with 3rd party tools
 opt_conservatism				res 1		; unused dummy option for compatibility with 3rd party tools
 opt_warning_level_divemode			res 1		; warning verbose level (divemode) =0: Less, =1: All				
-
+opt_timeformat					res 1		; =0:24h, =1:12h
+					
 ;---- RX Function Settings
 opt_transmitter_id_1			res 2		; 16 bit transmitter ID for Gas 1
 opt_transmitter_id_2			res 2		; 16 bit transmitter ID for Gas 2
@@ -1740,7 +1746,7 @@ opt_TR_1st_pres					res 1		; TR functions - 1st pressure assignment
 opt_TR_2nd_pres					res 1		; TR functions - 2nd pressure assignment
 opt_TR_Bail_pres				res 1		; TR functions - bailout pressure assignment
 
-; ==> 193 bytes used - 51 bytes free (244 usable bytes only in bank 14 as the upper 12
+; ==> 194 bytes used - 50 bytes free (244 usable bytes only in bank 14 as the upper 12
 ;                                     bytes are reserved for special function registers)
 
 ;-----------------------------------------------------------------------------

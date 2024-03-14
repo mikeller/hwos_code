@@ -4,7 +4,7 @@
 ;
 ;   I2C Interface
 ;
-;   Copyright (c) 2012, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2012, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ;
 ;   Compass0
@@ -1136,8 +1136,8 @@ lt2942_get_voltage:
 	movff	xC+3,batt_voltage+1			; ...
 
 	tstfsz	batt_voltage+1				; < 256 mV ?
-	return								; NO  - done
-	bra		lt2942_init					; YES - initialize gauge and return
+	return						; NO  - done
+	bra	lt2942_init_again			; YES - initialize gauge and return
 
 
 ;-----------------------------------------------------------------------------
@@ -1239,6 +1239,9 @@ lt2942_get_accumulated_charge:			; read accumulated charge and compute percent
 	movlw	.100						; max. value is  100 %
 	cpfslt	batt_percent				; batt_percent < 100 % ?
 	movwf	batt_percent				; NO  - limit to 100 %
+	movlw	.95						; < 95 %
+	cpfsgt	batt_percent
+	bcf	lock_cycle_counter			; Yes, unlock cycle counter
 	return								; done
 
 lt2942_set_to_zero_percent:
@@ -1331,6 +1334,9 @@ reset_battery_gauge:
 	clrf	battery_gauge+3				; ...
 	clrf	battery_gauge+4				; ...
 	clrf	battery_gauge+5				; ...
+	banksel	charge_cycles
+	clrf	charge_cycles+0				; null the charge cycles
+	clrf	charge_cycles+1				; ...
 	banksel	common						; back to bank common
 	goto	eeprom_battery_gauge_write	; update battery registers in EEPROM, unblock ISR and return
 

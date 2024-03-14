@@ -4,7 +4,7 @@
 ;
 ;   Definition of the hwOS dive computer platform.
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;   2011-05-24 : [jDG] Cleanups from initial Matthias code
@@ -529,6 +529,7 @@ hwos4	CODE
 	global	restore_flash
 restore_flash:
 	banksel	common
+	bcf	INTCON,GIE
 
 	;set start address in internal program FLASH
 	movlw	0x00					; set 0x000000

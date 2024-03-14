@@ -4,7 +4,7 @@
 ;
 ;   Customview for divemode and surfacemode
 ;
-;   Copyright (c) 2011, Matthias Heinrichs, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, Matthias Heinrichs, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;   2011-08-10 : [mH] Import into hwOS sources

@@ -4,7 +4,7 @@
 ;
 ;   low-level Display Outputs
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-05-24 : [jDG] Cleanups from initial Matthias code.
@@ -71,23 +71,25 @@ tft		CODE
 
 	global	TFT_ClearScreen
 TFT_ClearScreen:
-	btfsc	screen_type2			; screen type 2?
-	bra		TFT_ClearScreen_display2; YES
+    	btfsc	screen_type4			; screen type 4?
+	bra		TFT_ClearScreen_display4; YES
 	btfsc	screen_type3			; screen type 3?
 	bra		TFT_ClearScreen_display3; YES
+	btfsc	screen_type2			; screen type 2?
+	bra		TFT_ClearScreen_display2; YES
 
 	Index_out 0x50					; window horizontal start address
-	Parameter_out 0x00, 0x00		; 0-239
+	Parameter_out 0x00, 0x00		; 0
 	Index_out 0x51					; window horizontal end   address
-	Parameter_out 0x00, 0xEF		; 0-239
+	Parameter_out 0x00, 0xEF		; 239
 	Index_out 0x52					; window vertical   start address
-	Parameter_out 0x00, 0x00		; 0-319
+	Parameter_out 0x00, 0x00		; 0
 	Index_out 0x53					; window vertical   end   address
-	Parameter_out 0x01, 0x3F		; 0-319
+	Parameter_out 0x01, 0x3F		; 319
 	Index_out 0x20					; frame memory horizontal address
-	Parameter_out 0x00, 0x00		; 0-239
+	Parameter_out 0x00, 0x00		; 0
 	Index_out 0x21					; frame memory vertical   address
-	Parameter_out 0x01, 0x3F		; 0-319
+	Parameter_out 0x01, 0x3F		; 319
 
 	Index_out 0x22					; frame memory data write start
 
@@ -232,6 +234,61 @@ TFT_ClearScreen_display3:
 	movlw	.107				; 107 x 240 x 6 = 154080 ticks (153600 would be enough)
 	bra		TFT_ClearScreen_display2_loop0
 
+TFT_ClearScreen_display4:
+ ; Column Address start
+	movlw	0x2A
+	rcall	TFT_CmdWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+; Column Address end (d'239')
+	movlw	0x00
+	rcall	TFT_DataWrite
+	movlw	0xEF
+	rcall	TFT_DataWrite
+
+; Row address start
+	movlw	0x2B
+	rcall	TFT_CmdWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+; Row address end   (d'319)
+	movlw	0x01
+	rcall	TFT_DataWrite
+	movlw	0x3F
+	rcall	TFT_DataWrite
+
+	movlw	0x2C                ; Start Writing Data to GRAM
+	rcall	TFT_CmdWrite
+
+	RD_H						; Not Read
+	RS_H						; Data
+	NCS_L						; Not CS
+	clrf	PORTA				; Data Upper
+	clrf	PORTH				; Data Lower
+	bcf		INTCON,GIE
+	movlw	d'10'
+	movwf	tft_temp3
+TFT_ClearScreen_display4_loop1:
+	movlw	d'30'
+	movwf	tft_temp2
+TFT_ClearScreen_display4_loop2:
+	clrf	tft_temp1				; 30*10*256=76800 Pixels -> Clear complete 240*320
+TFT_ClearScreen_display4_loop3:
+	WR_L
+	WR_H							; Tick
+	decfsz	tft_temp1,F
+	bra		TFT_ClearScreen_display4_loop3
+	decfsz	tft_temp2,F
+	bra		TFT_ClearScreen_display4_loop2
+	decfsz	tft_temp3,F
+	bra		TFT_ClearScreen_display4_loop1
+	bsf		INTCON,GIE
+	return
+	
 
 	global	TFT_DisplayOff
 TFT_DisplayOff:
@@ -288,7 +345,6 @@ TFT_boot:
 
 	clrf	PORTA
 	clrf	PORTH
-
 	RD_L	; LOW
 	nop
 	WR_L
@@ -313,6 +369,9 @@ TFT_boot:
 
 	btfsc	screen_type3			; display type 3 ?
 	bra		TFT_boot_screen3		; YES
+
+	btfsc	screen_type4			; display type 4 ?
+	bra		TFT_boot_screen4		; YES
 
 	; Data Transfer Synchronization
 	Parameter_out 0x00, 0x00
@@ -381,7 +440,7 @@ TFT_boot3:
 	rcall	TFT_ClearScreen
 	Index_out 0x07
 	Parameter_out 0x01, 0x33
-	return
+	return					; done TFT_boot
 
 display0_config_table:
 	; Reg, Dat0, Dat1 or 0xFF,0x00,0x00 for end
@@ -488,6 +547,177 @@ display1_config_write:				; with command in WREG
 	movf	TABLAT,W
 	rcall	TFT_DataWrite			; write configuration
 	bra		display1_init_loop		; loop
+
+TFT_boot_screen4:
+	movlw	0xB0
+	rcall	TFT_CmdWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+	movlw	0xC4
+	rcall	TFT_DataWrite
+	
+	movlw	0xB1
+	rcall	TFT_CmdWrite
+	movlw	0xC0
+	rcall	TFT_DataWrite
+	
+	movlw	0x3A
+	rcall	TFT_CmdWrite
+	movlw	0x55
+	rcall	TFT_DataWrite
+	
+	movlw	0x36		    ; x/y mirror, see page 125 of ST7789V datasheet
+	rcall	TFT_CmdWrite
+	movlw	0x40		    ; 0x40 (normal orientation)
+	rcall	TFT_DataWrite
+	
+	movlw	0xB0
+	rcall	TFT_CmdWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+	
+	movlw	0xB2
+	call	TFT_CmdWrite
+	movlw	0x0C
+	rcall	TFT_DataWrite
+	movlw	0x0C
+	rcall	TFT_DataWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+	movlw	0x33
+	rcall	TFT_DataWrite
+	movlw	0x33
+	rcall	TFT_DataWrite
+	
+	movlw	0xB7
+	rcall	TFT_CmdWrite
+	movlw	0x75
+	rcall	TFT_DataWrite
+	
+	movlw	0xBB
+	rcall	TFT_CmdWrite
+	movlw	0x20
+	rcall	TFT_DataWrite
+	
+	movlw	0xC0
+	rcall	TFT_CmdWrite
+	movlw	0x2C
+	rcall	TFT_DataWrite
+	
+	movlw	0xC2
+	rcall	TFT_CmdWrite
+	movlw	0x01
+	rcall	TFT_DataWrite
+	
+	movlw	0xC3
+	rcall	TFT_CmdWrite
+	movlw	0x19
+	rcall	TFT_DataWrite
+	
+	movlw	0xC4
+	rcall	TFT_CmdWrite
+	movlw	0x20
+	rcall	TFT_DataWrite
+	
+	movlw	0xC6
+	rcall	TFT_CmdWrite
+	movlw	0x0F
+	rcall	TFT_DataWrite
+	
+	movlw	0xD0
+	rcall	TFT_CmdWrite
+	movlw	0xA7
+	rcall	TFT_DataWrite
+	movlw	0xA1
+	rcall	TFT_DataWrite
+	
+	movlw	0xBB
+	rcall	TFT_CmdWrite
+	movlw	0x35
+	rcall	TFT_DataWrite
+	
+	movlw	0xC0
+	rcall	TFT_CmdWrite
+	movlw	0x2C
+	rcall	TFT_DataWrite
+	
+	movlw	0xC2
+	rcall	TFT_CmdWrite
+	movlw	0x01
+	rcall	TFT_DataWrite
+	
+	movlw	0xC3
+	rcall	TFT_CmdWrite
+	movlw	0x11
+	rcall	TFT_DataWrite
+
+	movlw	0xC4
+	rcall	TFT_CmdWrite
+	movlw	0x20
+	rcall	TFT_DataWrite
+
+	movlw	0xC6
+	rcall	TFT_CmdWrite
+	movlw	0x0F
+	rcall	TFT_DataWrite
+	
+	movlw	0xD0
+	rcall	TFT_CmdWrite
+	movlw	0xA7
+	rcall	TFT_DataWrite
+	movlw	0xA1
+	rcall	TFT_DataWrite
+	
+	movlw	0xBB
+	rcall	TFT_CmdWrite
+	movlw	0x35
+	rcall	TFT_DataWrite
+	
+	movlw	0xC0
+	rcall	TFT_CmdWrite
+	movlw	0x2C
+	rcall	TFT_DataWrite
+	
+	movlw	0x2C
+	rcall	TFT_CmdWrite
+	movlw	0x01
+	rcall	TFT_DataWrite
+	
+	movlw	0xC3
+	rcall	TFT_CmdWrite
+	movlw	0x11
+	rcall	TFT_DataWrite
+	
+	movlw	0xC4
+	rcall	TFT_CmdWrite
+	movlw	0x20
+	rcall	TFT_DataWrite
+	
+	movlw	0xC6
+	rcall	TFT_CmdWrite
+	movlw	0x0F
+	rcall	TFT_DataWrite
+	
+	movlw	0xD0
+	rcall	TFT_CmdWrite
+	movlw	0xA4
+	rcall	TFT_DataWrite
+	movlw	0xA1
+	rcall	TFT_DataWrite
+	; gamma
+	movlw	0x11
+	rcall	TFT_CmdWrite
+	
+	movlw	0x21
+	rcall	TFT_CmdWrite
+	WAITMS	d'60'
+	
+	movlw	0x29
+	rcall	TFT_CmdWrite
+	WAITMS	d'50'
+	rcall	TFT_ClearScreen
+	; ToDo: Flip....
+	return			    ; done TFT_boot
 
 
 	global	TFT_CmdWrite
@@ -706,12 +936,14 @@ pixel_write:
 
 	global	pixel_write_col320
 pixel_write_col320:
+    	btfsc	screen_type4			; display type 4 ?
+	bra		pixel_write_col320_d4	; YES
+	btfsc	screen_type3			; display type 3 ?
+	bra		pixel_write_col320_d3	; YES
 	btfsc	screen_type2			; display type 2 ?
 	bra		pixel_write_col320_d2	; YES
 	btfsc	screen_type1			; display type 1 ?
 	bra		pixel_write_col320_d1	; YES
-	btfsc	screen_type3			; display type 3 ?
-	bra		pixel_write_col320_d3	; YES
 									; NO to all - display type 0
 	btfss	flip_screen				; 180° rotation?
 	bra		pixel_write_noflip_H	; NO
@@ -761,6 +993,15 @@ pixel_write_col320_d3:
 	rcall	TFT_CmdWrite
 	bra		TFT_DataWrite_PROD		; and return...
 
+pixel_write_col320_d4:
+    	movlw	0x2A
+	rcall	TFT_CmdWrite
+	rcall	TFT_DataWrite_PROD
+	incf	PRODL,F
+	movlw	.0
+	addwfc	PRODH,F					; +1
+	bra	TFT_DataWrite_PROD		; and return...	
+
 ;-----------------------------------------------------------------------------
 ; Write one half-pixel at position (win_top,win_leftx2).
 ; Inputs: win_leftx2, win_top, win_color_1/_2
@@ -771,10 +1012,12 @@ half_pixel_write:
 	movf	win_top,W					; d'0' ... d'239'
 	; Variant with Y position in WREG
 half_pixel_write_1:
+	btfsc	screen_type4				; display type 4 ?
+	bra		half_pixel_write_1_display4	; YES
+        btfsc	screen_type3				; display type 3 ?
+	bra		half_pixel_write_1_display3	; YES
 	btfsc	screen_type2				; display type 2 ?
 	bra		half_pixel_write_1_display2	; YES
-	btfsc	screen_type3				; display type 3 ?
-	bra		half_pixel_write_1_display3	; YES
 
 half_pixel_write_1_display1:
 	btfss	flip_screen				; 180° rotation?
@@ -862,6 +1105,32 @@ half_pixel_write_1_display3:
 	WR_L
 	WR_H							; tick
 	return							; done
+
+half_pixel_write_1_display4:	
+	mullw	1						; copy row to PRODL (PRODH=0)
+	; Row address start
+	movlw	0x2B
+	rcall	TFT_CmdWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+	movf	PRODL,W
+	rcall	TFT_DataWrite
+
+	incf	PRODL,F		    ; +1
+	movlw	0x00
+	rcall	TFT_DataWrite
+	movf	PRODL,W
+	rcall	TFT_DataWrite
+
+	movlw	0x2C                ; Start Writing Data to GRAM
+	rcall	TFT_CmdWrite
+	RS_H						; data
+	movff	win_color1,PORTA			; upper
+	movff	win_color2,PORTH			; lower
+	WR_L
+	WR_H						; tick
+	bsf		INTCON,GIE
+	return
 
 ;-----------------------------------------------------------------------------
 ; Draw a vertical line of half-pixel at position (win_top,win_leftx2,win_height).
@@ -996,10 +1265,12 @@ TFT_box_write:
 	movf	win_leftx2,W			; compute left = 2 * leftx2 --> PROD
 	mullw	.2						; win_leftx2 x 2 -> PRODH:PRODL
 
-	btfsc	screen_type2			; screen type 2 ?
-	bra		TFT_box_write_display2	; YES
+	btfsc	screen_type4			; screen type 4 ?
+	bra		TFT_box_write_display4	; YES
 	btfsc	screen_type3			; screen type 3 ?
 	bra		TFT_box_write_display3	; YES
+	btfsc	screen_type2			; screen type 2 ?
+	bra		TFT_box_write_display2	; YES
 	btfsc	screen_type1			; screen type 1 ?
 	bra		TFT_box_write_display1	; YES
 
@@ -1204,6 +1475,49 @@ TFT_box_write_display3:
 	Index_out	0x20
 	bra		TFT_DataWrite_PROD		; and return...
 
+TFT_box_write_display4:
+    	movlw	0x2B
+	rcall	TFT_CmdWrite
+	movf	PRODH,W
+	rcall	TFT_DataWrite
+	movf	PRODL,W
+	rcall	TFT_DataWrite
+
+	movf	win_width+0,W			; right = left + width - 1
+	addwf	PRODL,F
+	movf	win_width+1,W
+	addwfc	PRODH,F
+	decf	PRODL,F					; decrement result
+	btfss	STATUS,C
+	decf	PRODH,F
+
+	; setup right border
+	movf	PRODH,W
+	rcall	TFT_DataWrite
+	movf	PRODL,W
+	rcall	TFT_DataWrite
+
+	;---- Normal vertical window -----------------------------------------
+	; Output (top) (bottom)
+	movff	win_top,PRODH			; top --> PRODH (first byte)
+	movf	win_height,W
+	addwf	PRODH,W
+	decf	WREG
+	movwf	PRODL					; top+height-1 --> PRODL (second byte)
+
+	movlw	0x2A
+	rcall	TFT_CmdWrite
+	movlw	0x00
+	rcall	TFT_DataWrite
+	movf	PRODH,W
+	rcall	TFT_DataWrite
+	
+	; setup bottom border
+	movlw	0x00
+	rcall	TFT_DataWrite
+	movf	PRODL,W
+	bra	TFT_DataWrite			; ... and return
+
 
 ;-----------------------------------------------------------------------------
 ; TFT_frame : draw a frame around current box with current color
@@ -1270,14 +1584,20 @@ TFT_box:
 	rrcf	win_width+0,F
 
 	;---- Fill Window --------------------------------------------------------
-	Index_out 0x22					; frame memory data write start
+	movlw	0x22				; frame memory data write start
+	btfsc	screen_type4
+	movlw	0x2C				; Start Writing Data to GRAM (Display 4)
+	rcall	TFT_CmdWrite
+
 	clrf	PRODH					; column counter
 	RS_H							; data
 
-	btfsc	screen_type2			; display type 2 ?
-	bra		TFT_box_display2		; YES
+	btfsc	screen_type4			; display type 4 ?
+	bra		TFT_box_display4		; YES
 	btfsc	screen_type3			; display type 3 ?
 	bra		TFT_box_display3		; YES
+	btfsc	screen_type2			; display type 2 ?
+	bra		TFT_box_display2		; YES
 
 TFT_box2:							; loop height times
 	movff	win_height,PRODL
@@ -1414,6 +1734,32 @@ TFT_box4_display3:
 	setf	win_bargraph			; YES - reset bargraph mode
 	return
 
+TFT_box_display4:	
+	; Screen 4
+	clrf	PRODH					; column counter
+TFT_box2_display4:					; loop height times
+	movff	win_height,PRODL
+TFT_box3_display4:					; loop width times
+	movff	win_color1,PORTA
+	movff	win_color2,PORTH
+	WR_L							; tick
+	WR_H							; ...
+	WR_L							; tick
+	WR_H							; ...
+	decfsz	PRODL,F					; row loop finished?
+	bra		TFT_box3_display4		; NO  - loop
+	incf	PRODH,F					; YES - column count ++
+	movf	win_bargraph,W			;     - get bargraph width
+	cpfseq	PRODH					;     - current column = bargraph ?
+	bra		TFT_box4_display4		;       NO
+	clrf	win_color1				;       Yes - switch to black
+	clrf	win_color2				;           - ...
+TFT_box4_display4:
+	movf	win_width+0,W			; get width
+	cpfseq	PRODH					; width loop finished ?
+	bra		TFT_box2_display4		; NO  - loop
+	setf	win_bargraph			; YES - reset bargraph mode
+	return							;     - done
 
 ;-----------------------------------------------------------------------------
 ; Convert 8 bit RGB b'RRRGGGBB' into 16 bit RGB    b'RRRRRGGGGGGBBBBB'

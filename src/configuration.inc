@@ -5,7 +5,7 @@
 ; 
 ;    OSTC hwOS Configuration
 ; 
-;    Copyright (c) 2019, HeinrichsWeikamp, all rights reserved.
+;    Copyright (c) 2019, heinrichs weikamp gmbh, all rights reserved.
 ; ============================================================================
 #endif
 
@@ -23,8 +23,8 @@
 ;
 #endif
 
-#define fw_version_major		.3;0x03
-#define fw_version_minor		.21;0x15
+#define fw_version_major		0x03
+#define fw_version_minor		0x16
 #define fw_version_beta			0x00
 
 
@@ -42,13 +42,13 @@
 ;
 #endif
 
-#define firmware_creation_year	.23;0x18
+#define firmware_creation_year	.24;0x18
 #define firmware_creation_month	.03;0x09
-#define firmware_creation_day	.31;0x06
+#define firmware_creation_day	.11;0x06
 
-#define firmware_expire_year	.25;0x18
-#define firmware_expire_month	.03;0x08
-#define firmware_expire_day	.31;0x1C
+#define firmware_expire_year	.27;0x18
+#define firmware_expire_month	.01;0x08
+#define firmware_expire_day	.10;0x1C
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -64,7 +64,7 @@
 ;                                                                                    122.880 max. available
 #endif
 
-#define _hwos_tech_2_TR
+#define _hwos_sport
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -79,7 +79,7 @@
 ; 
 #endif
 
-#define _language_1		de
+#define _language_1		en
 #define _language_2		none
 
 
@@ -139,8 +139,8 @@
 #define _compass
 #define _helium
 #define _ccr_pscr
-#define _rx_functions
-#define _rx_update
+#define NOT_INCLUDED_rx_functions
+#define NOT_INCLUDED_rx_update
 #define _gauge_mode
 #define _high_ppO2_max
 #define _gas_contingency
@@ -159,8 +159,8 @@
 #define _compass
 #define _helium
 #define _ccr_pscr
-#define _rx_functions
-#define _rx_update
+#define NOT_INCLUDED_rx_functions
+#define NOT_INCLUDED_rx_update
 #define _gauge_mode
 #define _high_ppO2_max
 #define _gas_contingency

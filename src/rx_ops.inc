@@ -3,7 +3,7 @@
 ;   File rx_ops.inc                            combined next generation V3.0.1
 ;
 ;
-;   Copyright (c) 2018, heinrichs weikamp, all right reserved.
+;   Copyright (c) 2018, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 
  IFDEF _rx_functions

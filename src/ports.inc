@@ -4,7 +4,7 @@
 ;
 ;   Portmap
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;   2012-08-13 : [mH] Creation
@@ -49,7 +49,7 @@
 ; TRIS=b'00100000'
 
 ; PORTE
-#DEFINE	RE0_unused		PORTE,0			; unused
+#DEFINE	ble_npower		PORTE,0			; power supply for ble (inverted)
 #DEFINE	ir_power		PORTE,1			; power supply for IR
 #DEFINE	charge_disable	PORTE,2			; ex. mcp_ncs (RX /CS) (available from hardware rev x.x only)
 #DEFINE	LEDr			PORTE,3			; LED red

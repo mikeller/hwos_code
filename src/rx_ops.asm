@@ -4,7 +4,7 @@
 ;
 ;   RX (Tank Pressure Transmitter) Routines.
 ;
-;   Copyright (c) 2018, heinrichs weikamp, all right reserved.
+;   Copyright (c) 2018, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 
 #include "hwos.inc"						; mandatory header

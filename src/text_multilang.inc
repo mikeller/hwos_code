@@ -4,7 +4,7 @@
 ;
 ;    Implementation of texts in various selectable languages
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-06-12 : [jDG] Creation

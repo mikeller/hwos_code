@@ -4,7 +4,7 @@
 ;
 ;   Surface Mode
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ; 2011-08-07 : [mH] moving from OSTC code
@@ -78,7 +78,7 @@ surfloop:
 	btfsc	restart_fast				; shall make a fast restart?
 	bra		surfloop_1					; YES
 
-	; show heinrichsweikamp logo
+	; show heinrichs weikamp gmbh logo
 	WIN_TOP  .40
 	WIN_LEFT .10
 	TFT_WRITE_PROM_IMAGE_BY_ADDR hw_logo_block

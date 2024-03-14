@@ -3,7 +3,7 @@
 ;   File tft_outputs.inc                    * combined next generation V3.09.5
 ;
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-08-07 : [mH] moving from OSTC code
@@ -34,6 +34,7 @@
 	extern	TFT_surf_cv_text					; the custom text
 	extern	TFT_surf_cv_tissues					; tissue diagram (also used by logbook)
 	extern	TFT_surf_cv_settings				; all deco settings
+	extern	TFT_surf_desat_nofly_cns
 
  IFDEF _rx_functions
 	extern	TFT_surf_cv_tankdata				; show the tank pressure data in surface customview
@@ -62,6 +63,7 @@
 	extern	TFT_imprint_time_date				; imprint current     time and date
 	extern	TFT_imprint_time_date_fast			; imprint last cahced time and date
 	extern	TFT_imprint_color_schemes			; imprint color schemes (animated dive time)
+	extern	TFT_convert_lo_into_12h_format			; converts lo (0-23h) into lo (1-12) with PM/AM flag in aux_flag
 
  IFDEF _external_sensor
 	extern	TFT_imprint_menu_mV					; imprint sensor data in menu    mode - mv
@@ -95,6 +97,7 @@
 	extern	TFT_show_apnoe_times				; show  apnoe current and overall time
 	extern	TFT_show_apnoe_surface				; show  apnoe surface mode data
 	extern	TFT_clear_apnoe_surface				; clear apnoe surface data
+	extern	TFT_apnoe_divecounter				; show apnoe #dive counter
 
 	extern	TFT_clear_deco_data					; clear deco data (NDL or stop & TTS)
 	extern	TFT_clear_divemode_menu				; clear the divemode menu

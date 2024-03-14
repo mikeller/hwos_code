@@ -4,7 +4,7 @@
 ;
 ;   The Option Table
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;   2014-08-03 : mH creation
@@ -329,12 +329,13 @@ option_table_begin:
 	OPTION_BOOL     oGasContingencyDive,                                           .0,                       0x106,    0x91,  opt_gas_contingency_dive		; =1: dive mode: switch to alternative gas if best gas is depleted
 	OPTION_BOOL     oGasDensityCheck,                                              .1,                       0x107,    0x92,  opt_gas_density_check			; gas density is checked (effective in CCR / pSCR modes only)
 	OPTION_ENUM8	oWarningLevel,	     .2,                                       .0,      tLess,           0x108,    0x93,  opt_warning_level_divemode		; =0: Less, =1: All
+	OPTION_ENUM8    oTimeFormat,         .2,                                       .0,      tTimeformat,     0x109,    0x94,  opt_timeformat			; =0:24h, =1:12h
 	;	+---------------------------------------------------------------------------------------------------------------------------------------------+
 	;	|  .                                                                                                                                          |
 	;	| /|\                                                                                                                                         |
 	;	|  |  add new options here!                                                                                                                   |
-	;	|  |  EEPROM address  min: 0x012, max: 0x1FF, last used: 0x107, spare: 0x0B7-0x0B9, 0x0F5-0x0F6, disused: 0x0A8, 0x0CE                        |
-	;	|  |  serial address  min:  0x20, max:  0xF9, last used:  0x92, spare: 0x84 (0xFA - 0xFE are reserved for internal use)			      |
+	;	|  |  EEPROM address  min: 0x012, max: 0x1FF, last used: 0x109, spare: 0x0B7-0x0B9, 0x0F5-0x0F6, disused: 0x0A8, 0x0CE                        |
+	;	|  |  serial address  min:  0x20, max:  0xF9, last used:  0x94, spare: 0x84 (0xFA - 0xFE are reserved for internal use)			      |
 	;	+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 	; ppO2 warnings, sorted by ppO2 levels
@@ -348,7 +349,7 @@ option_table_begin:
 	OPTION_UINT8    oGas6O2,         gaslist_min_o2,    gaslist_max_o2,           .21,      tPercent,     volatile,    0xFA,  opt_gas6_O2_ratio				; O2 % of gas 6
 	OPTION_UINT8    oGas6He,             .0,            gaslist_max_He,            .0,      tPercent,     volatile,    0xFB,  opt_gas6_He_ratio				; He % of gas 6
 	OPTION_UINT8p10 odiveInterval,       .0,                 .240,                 .0,      tMinutes,     volatile,  nocomm,  opt_surface_interval			; additional surface interval for deco calculator
-	OPTION_UINT8p2  obottomTime,         .2,                  .60,                .10,      tMinutes,     volatile,  nocomm,  char_I_bottom_time			; bottom time  for deco calculator
+	OPTION_UINT8p2  obottomTime,         .2,                  .60,                 .2,      tMinutes,     volatile,  nocomm,  char_I_bottom_time			; bottom time  for deco calculator
 	OPTION_UINT8p3d obottomDepth,       .12,                 .120,                .21,      tMeters,      volatile,  nocomm,  char_I_bottom_depth			; bottom depth for deco calculator and simulator
 	OPTION_BOOL     oSimAGF,                                                       .0,                    volatile,  nocomm,  opt_sim_use_aGF				; =1: use GF (no) or aGF (yes) in deco calculator
 	OPTION_ENUM8    oLogOffsetStep,      .4,                                       .0,      tLogOffStep1, volatile,  nocomm,  opt_logoffset_step			; step size when adjusting the log offset

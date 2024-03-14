@@ -4,7 +4,7 @@
 ;
 ;   Firmware for the RX Co-Processor
 ;
-;   Copyright (c) 2019, HeinrichsWeikamp, all rights reserved.
+;   Copyright (c) 2019, heinrichs weikamp gmbh, all rights reserved.
 ;=============================================================================
 
 

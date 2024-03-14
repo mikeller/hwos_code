@@ -4,7 +4,7 @@
 ;
 ;   high-level Display Outputs
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-08-07 : [mH] moving from OSTC code
@@ -587,6 +587,31 @@ tft_out3	CODE
 ;
 	global	TFT_surfmode_time
 TFT_surfmode_time:
+    	TSTOSS	opt_timeformat					; =1: Use 12h format
+	bra	TFT_surfmode_time24				; <>1: Use 24h format
+	; 12h Format
+	WIN_SMALL surf_clock_column,surf_clock_row
+	FONT_COLOR_MEMO						; set color
+	SMOVSS	rtc_year,rtc_latched_year			; ISR-safe 6 byte copy of date and time
+	movff	rtc_latched_hour,lo			; get   hours
+	call	TFT_convert_lo_into_12h_format			; converts lo (0-23h) into lo (1-12) and sets aux_flag for PM/AM
+	output_99							; print hours (0-99)
+	movlw	':'							; load a ":"
+	movff	rtc_latched_secs,lo			; get seconds
+	btfss	lo,0						; on even second?
+	movlw	' '							; NO - load a space char
+	movwf	POSTINC2					; print ":" or space char
+	movff	rtc_latched_mins,lo			; get   minutes
+	output_99x							; print minutes (00-99)
+	btfsc	aux_flag					; =1 for PM
+	bra	TFT_surfmode_time_PM
+	STRCAT_PRINT "AM"
+	return								; done
+TFT_surfmode_time_PM:	
+        STRCAT_PRINT "PM"
+	return								; done
+	
+TFT_surfmode_time24:
 	WIN_SMALL surf_clock_column+.7,surf_clock_row
 	FONT_COLOR_MEMO						; set color
 	SMOVSS	rtc_year,rtc_latched_year	; ISR-safe 6 byte copy of date and time
@@ -1067,8 +1092,32 @@ TFT_imprint_time_date:
 ;
 	global	TFT_imprint_time_date_fast
 TFT_imprint_time_date_fast:
-	WIN_SMALL .20,.40					; column, row - keep clear of the cursor area on the left!
-	FONT_COLOR_MEMO						; select color
+    	WIN_SMALL .20,.35					; column, row - keep clear of the cursor area on the left!
+	FONT_COLOR_MEMO						; set color
+	TSTOSS	opt_timeformat					; =1: Use 12h format
+	bra	TFT_imprint_time_date_fast24			; <>1: Use 24h format
+	; 12h Format
+	movff	rtc_latched_hour,lo				; get   hours
+	rcall	TFT_convert_lo_into_12h_format			; converts lo (0-23h) into lo (1-12) and sets aux_flag for PM/AM
+	output_99							; print hours (0-99)
+	movlw	':'							; load a ":"
+	movff	rtc_latched_secs,lo			; get seconds
+	btfss	lo,0						; on even second?
+	movlw	' '							; NO - load a space char
+	movwf	POSTINC2					; print ":" or space char
+	movff	rtc_latched_mins,lo			; get   minutes
+	output_99x							; print minutes (00-99)
+	PUTC	':'							; print ":"
+	movff	rtc_latched_secs,lo			; get   seconds
+	output_99x							; print seconds (00-99)
+	btfsc	aux_flag					; =1 for PM
+	bra	TFT_surfmode_time_PM_fast
+	STRCAT "AM "
+	bra	TFT_imprint_time_date_fast_date				; done
+TFT_surfmode_time_PM_fast:	
+        STRCAT "PM "
+	bra	TFT_imprint_time_date_fast_date				; done
+TFT_imprint_time_date_fast24:
 	movff	rtc_latched_hour,lo			; get   hours
 	output_99							; print hours (0-99)
 	PUTC	':'							; print ":"
@@ -1078,6 +1127,7 @@ TFT_imprint_time_date_fast:
 	movff	rtc_latched_secs,lo			; get   seconds
 	output_99x							; print seconds (00-99)
 	STRCAT	"  "						; append two spaces
+TFT_imprint_time_date_fast_date:
 	movff	rtc_latched_year, lo		; get date
 	movff	rtc_latched_month,hi		; ...
 	movff	rtc_latched_day,  up		; ...
@@ -1085,7 +1135,31 @@ TFT_imprint_time_date_fast:
 	PUTC_PRINT " "						; append a space and dump to screen
 	return								; done
 
-
+	global	TFT_convert_lo_into_12h_format
+TFT_convert_lo_into_12h_format:	; converts lo (0-23h) into lo (1-12) with PM/AM flag in aux_flag
+	tstfsz	lo
+	bra	TFT_convert_lo_into_12h_format1
+	; 0 -> 12AM
+	movlw	.12
+	movwf	lo
+	bcf	aux_flag			; PM/AM Bit
+	return
+TFT_convert_lo_into_12h_format1:
+	movlw	.13
+	cpfslt	lo				; >12h?
+	bra	TFT_convert_lo_into_12h_format2	; yes
+	; lo stays the same
+	bsf	aux_flag			; PM/AM Bit
+	movlw	.12				; 12:00 is 12:00 PM...
+	cpfseq	lo
+	bcf	aux_flag
+	return
+TFT_convert_lo_into_12h_format2:
+	movlw	.12
+	subwf	lo,F
+	bsf	aux_flag			; PM/AM Bit
+	return
+    
  IFDEF _external_sensor
 
 ;-----------------------------------------------------------------------------
@@ -1415,6 +1489,8 @@ TFT_show_ndl_mask:
 	return								;       NO  - done
 	btfsc	safety_stop_active			;       YES - safety stop shown?
 	return								;             YES - done
+	btfsc	alt_layout_active			;   In alternative layout?
+	return						;       YES - DONE.
 	goto	TFT_show_slow_reminder		;             NO  - show "slow" reminder
 
 
@@ -2106,8 +2182,8 @@ TFT_show_ndl:
 	return								; YES - abort
 	MOVII	int_O_NDL_norm,mpr			; NO  - get NDL time in normal plan
 	rcall	TFT_show_ndl_tts_set_color	;     - set color
-	btfsc	deco_locked					;     - was the dive in deco?
-	bra		TFT_show_ndl_norm			;       YES - use normal layout
+;	btfsc	deco_locked					;     - was the dive in deco?
+;	bra		TFT_show_ndl_norm			;       YES - use normal layout
 	btfsc	alt_layout_active			;       NO  - alternative layout active?
 	bra		TFT_show_ndl_alt			;             YES - use alternative layout
 	;bra	TFT_show_ndl_norm			;             NO  - use normal layout
@@ -2291,8 +2367,23 @@ TFT_show_apnoe_surface:
 	global	TFT_clear_apnoe_surface
 TFT_clear_apnoe_surface:
 	WIN_BOX_BLACK dm_apnoe_last_max_depth_text_row, .239, dm_apnoe_last_max_depth_column, .159
+	WIN_BOX_BLACK dm_customview_bot, dm_apnoe_last_max_depth_text_row, dm_apnoe_surface_dive_text_col, .159
 	return								; done
 
+;-----------------------------------------------------------------------------
+; Dive Mode - show apnoe #dive counter
+;
+	global	TFT_apnoe_divecounter
+TFT_apnoe_divecounter:
+	FONT_COLOR_MASK						; select mask color
+	WIN_TINY dm_apnoe_surface_dive_text_col, dm_apnoe_surface_dive_text_row
+	STRCPY_TEXT_PRINT tTotalDives		; print label
+	FONT_COLOR_MEMO						; select memo color
+	WIN_STD dm_apnoe_surface_divecnt_col, dm_apnoe_surface_divecnt_row
+	movff	apnoe_dive_counter,lo
+	output_256							; print #dives (0-255)
+	PRINT								; dump to screen
+	return								; done
 
 ;=============================================================================
 tft_out8	CODE
@@ -2782,7 +2873,9 @@ TFT_safety_stop_clear:
 	WIN_BOX_BLACK dm_safetystop_row, dm_safetystop_bot, dm_safetystop_text_column, dm_safetystop_rgt ; top, bottom, left, right
 	bcf		safety_stop_active			;           - safety stop not shown any more
 	btfss	deco_region					;           - was the dive within deco stops region?
-	return								;             NO  - done
+	return			
+	btfsc	alt_layout_active			; In alternative layout?
+	return						;     YES - DONE.
 	;bra	TFT_show_slow_reminder		;             YES - show "SLOW" reminder
 
 
@@ -2862,10 +2955,16 @@ TFT_message_i2c_error:
 ;
 	global	TFT_surf_mesg_desat
 TFT_surf_mesg_desat:
+	movlw	.11
+	cpfseq	active_customview			; custom view 11 (DSAT/NOFLY/CNS) shown?
+	bra	TFT_surf_mesg_desat1			; No, continue
+	return						; Yes. Skip the warning then
+TFT_surf_mesg_desat1:	
 	rcall	TFT_message_open			; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
 	return								; NO - skip message in this cycle
 
+TFT_surf_mesg_desat2:	
 	FONT_COLOR_MEMO						; select color
 	STRCPY	"Desat:"					; print label
 	MOVII	int_O_desaturation_time,mpr	; get desaturation time in minutes
@@ -2877,6 +2976,11 @@ TFT_surf_mesg_desat:
 ;
 	global	TFT_surf_mesg_nofly
 TFT_surf_mesg_nofly:
+    	movlw	.11
+	cpfseq	active_customview			; custom view 11 (DSAT/NOFLY/CNS) shown?
+	bra	TFT_surf_mesg_nofly1			; No, continue
+	return						; Yes. Skip the warning then
+TFT_surf_mesg_nofly1:	
 	rcall	TFT_message_open			; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
 	return								; NO - skip message in this cycle
@@ -3517,7 +3621,20 @@ TFT_message_cave_mode_info:
 tft_out13	CODE
 ;=============================================================================
 
-
+;-----------------------------------------------------------------------------
+; Surface Custom View - DESAT, NoFly, CNS
+;
+	
+	global	TFT_surf_desat_nofly_cns
+TFT_surf_desat_nofly_cns:
+	WIN_SMALL surf_gaslist_column+.10,surf_gaslist_row+.5
+	call	TFT_surf_mesg_desat2
+	WIN_SMALL surf_gaslist_column+.10,surf_gaslist_row+(surf_gaslist_spacing*.1)+.5
+	call	TFT_nofly_time_fly
+	WIN_SMALL surf_gaslist_column+.10,surf_gaslist_row+(surf_gaslist_spacing*.2)+.5
+	bra	TFT_surface_tissues_5		; continue
+	
+	
 ;-----------------------------------------------------------------------------
 ; Surface Custom View - Last Dive Summery
 ;
@@ -3861,6 +3978,7 @@ TFT_surface_tissues_4:
 
 	; draw CNS% in-between tissue bars
 	WIN_SMALL surf_tissue_He_column+.22,surf_tissue_He_row
+TFT_surface_tissues_5:	
 	MOVII	int_O_CNS_current,mpr		; get current CNS
 	call	TFT_color_code_cns			; color-code CNS value
 	STRCPY_TEXT tCNS2					; "CNS: "
@@ -5101,6 +5219,27 @@ TFT_clock_batt_surfpress:
 	WIN_SMALL dm_custom_clock_column, dm_custom_clock_row
 	FONT_COLOR_MEMO						; select color
 	SMOVSS	rtc_year,rtc_latched_year	; ISR-safe 6 byte copy of date and time
+	TSTOSS	opt_timeformat					; =1: Use 12h format
+	bra	TFT_clock_batt_surfpress24			; <>1: Use 24h format
+	; 12h Format
+	movff	rtc_latched_hour,lo				; get   hours
+	call	TFT_convert_lo_into_12h_format			; converts lo (0-23h) into lo (1-12) and sets aux_flag for PM/AM
+	output_99							; print hours (0-99)
+	movlw	':'							; load a ":"
+	movff	rtc_latched_secs,lo			; get seconds
+	btfss	lo,0						; on even second?
+	movlw	' '							; NO - load a space char
+	movwf	POSTINC2					; print ":" or space char
+	movff	rtc_latched_mins,lo			; get   minutes
+	output_99x							; print minutes (00-99)
+	btfsc	aux_flag					; =1 for PM
+	bra	TFT_clock_batt_surfpress_PM
+	STRCAT_PRINT "AM"
+	bra	TFT_clock_batt_surfpress_batt				; done
+TFT_clock_batt_surfpress_PM:	
+        STRCAT_PRINT "PM"
+	bra	TFT_clock_batt_surfpress_batt				; done
+TFT_clock_batt_surfpress24:
 	movff	rtc_latched_hour,lo			; get   hours
 	output_99							; print hours (0-99)
 	PUTC	':'							; print ":"
@@ -5110,7 +5249,7 @@ TFT_clock_batt_surfpress:
 	movff	rtc_latched_secs,lo			; get   seconds
 	output_99x							; print seconds (00-99)
 	PRINT								; dump to screen
-
+TFT_clock_batt_surfpress_batt:
 	; show battery voltage
 	WIN_SMALL dm_custom_battery_column, dm_custom_battery_volt_row
 	;FONT_COLOR_MEMO						; select color

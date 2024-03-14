@@ -4,7 +4,7 @@
 ;
 ;	German texts translation file.
 ;
-;	Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;	Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 
 ; Basic texts
@@ -366,6 +366,10 @@
 	TCODE	tDateformat,		"MMTTJJ"
 	TCODE	tDateformat1,		"TTMMJJ"
 	TCODE	tDateformat2,		"JJMMTT"
+; Time
+	TCODE	tTimeFormat,		"24/12h: "
+	TCODE	tTimeformat,		"24h"
+	TCODE	tTimeformat1,		"12h"
 
 
 ; Simulator menu
@@ -406,6 +410,7 @@
 	TCODE	tHardware,			"Hardware: "			; Hardware: (space)
 	TCODE	tSerial,			"Seriennr: "			; Serial  : (space)
 	TCODE	tBatteryV,			"Batterie: "			; Battery : (space)
+	TCODE	tBatteryCycles,			"Zyklen  : "			; Cycles  : (space)
 	TCODE	tSensorC,			"Sensor  : "			; Sensor  : (space)
 	TCODE	tSensorD,			"Offset  : "			; Offset  : (space)
 	TCODE	tUptime,			"Laufzeit: "			; Uptime:

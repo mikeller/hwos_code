@@ -4,7 +4,7 @@
 ;
 ;   Custom Views in Surface and Dive Mode
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-08-10 : [mH] moving from OSTC code
@@ -34,7 +34,7 @@
 
 
 #DEFINE num_premenu_items	.12			; overall number of pre-menu items
-#DEFINE num_surface_cv		.10			; overall number of surface custom views
+#DEFINE num_surface_cv		.11			; overall number of surface custom views
 
 
 ;=============================================================================
@@ -172,6 +172,8 @@ surf_customview_mask:
 	bra		surf_customview_init_view9	; sensor mV readings
 	dcfsnz	WREG,F						; 10:
 	bra		surf_customview_init_view10	; tank data
+	dcfsnz	WREG,F						; 11:
+	bra		surf_customview_init_view11	; Desat, noFly, CNS screen
 	bra		surf_customview_init_view4	; 0: default view after restart and loading of new firmware
 
 surf_cv_toggle_exit:
@@ -315,6 +317,15 @@ surf_customview_init_view10:
 	bra		surf_customview_toggle		; not available without RX functions compiled in, goto next view
  ENDIF
 
+	; ---- view 11: Desat, NoFly, CNS ----
+	;
+surf_customview_init_view11: 
+    	btfsc	FLAG_gauge_mode				; in gauge mode?
+	bra		surf_customview_toggle		; YES - not available in gauge mode, goto next view
+	btfsc	FLAG_apnoe_mode				; in apnoe mode?
+	bra		surf_customview_toggle		; YES - not available in apnoe mode, goto next view
+	call	TFT_surf_desat_nofly_cns		; Desat, NoFly, CNS
+	bra		surf_cv_toggle_exit			; done
 
 ;=============================================================================
 custview3	CODE

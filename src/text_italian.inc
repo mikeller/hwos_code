@@ -4,7 +4,7 @@
 ;
 ;	Italian texts translation file.
 ;
-;	Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;	Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 
 ; Basic texts
@@ -366,6 +366,10 @@
 	TCODE	tDateformat,		"MMGGAA"
 	TCODE	tDateformat1,		"GGMMAA"
 	TCODE	tDateformat2,		"AAMMGG"
+; Time
+	TCODE	tTimeFormat,		"24/12h: "
+	TCODE	tTimeformat,		"24h"
+	TCODE	tTimeformat1,		"12h"
 
 
 ; Simulator menu
@@ -406,6 +410,7 @@
 	TCODE	tHardware,			"Hardware: "			; Hardware: (space)
 	TCODE	tSerial,			"Seriale : "			; Serial  : (space)
 	TCODE	tBatteryV,			"Batteria: "			; Battery : (space)
+	TCODE	tBatteryCycles,			"Cicli   : "			; Cycles  : (space)
 	TCODE	tSensorC,			"Sensor  : "			; Sensor  : (space)
 	TCODE	tSensorD,			"Offset  : "			; Offset  : (space)
 	TCODE	tUptime,			"Uptime: "				; Uptime: 

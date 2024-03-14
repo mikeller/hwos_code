@@ -3,7 +3,7 @@
 // compass_calib.c                                    next generation V3.09.4
 //
 // Calibrate hard-iron for magnetic compass measurements.
-// Copyright (c) 2012-2019, JD Gascuel, HeinrichsWeikamp, all rights reserved.
+// Copyright (c) 2012-2019, JD Gascuel, heinrichs weikamp gmbh, all rights reserved.
 //
 //////////////////////////////////////////////////////////////////////////////
 

@@ -3,7 +3,7 @@
 ;   File eeprom_rs232.inc                   * combined next generation V3.09.4n
 ;
 ;
-;   Copyright (c) 2011, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-08-03 : [mH] moving from OSTC code
@@ -34,7 +34,7 @@
 #DEFINE eeprom_battery_type				0x00F		; | 1  battery type inside the OSTC
 #DEFINE eeprom_options_version			0x010		;   2  options version identifier
 #DEFINE eeprom_fw_chksum_current		0x012		;   6  checksum of the current firmware *)
-;										0x018		;   2  unused
+#DEFINE	eeprom_charge_cycles			0x018		;   2  16bit charge cycles (Reset with "new battery")
 #DEFINE eeprom_options_storage			0x01A		; 486  backup storage for the options
 
 

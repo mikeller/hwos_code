@@ -4,7 +4,7 @@
 ;
 ;   RS232 via USB
 ;
-;   Copyright (c) 2012, JD Gascuel, HeinrichsWeikamp, all right reserved.
+;   Copyright (c) 2012, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
 ;=============================================================================
 ; HISTORY
 ;  2011-08-22 : [mH] Creation
@@ -133,9 +133,14 @@ comm_mode_common_logo1:
 	bra		comm_mode_common_start					; continue with starting message
 
 comm_mode_common_logo2:
+	btfsc	dn_flag
+	bra	comm_mode_common_logo3
 	TFT_WRITE_PROM_IMAGE_BY_ADDR comm_logo_2		; show BT logo / OSTC+
-	;bra	comm_mode_common_start					; continue with starting message
+	bra	comm_mode_common_start					; continue with starting message
 
+comm_mode_common_logo3:
+	TFT_WRITE_PROM_IMAGE_BY_ADDR comm_logo_3		; show BT logo / dn
+	
 comm_mode_common_start:
 	WIN_SMALL comm_status1_column,comm_status1_row	; set position
 	FONT_COLOR_MEMO									; set standard color
