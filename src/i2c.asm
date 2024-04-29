@@ -1044,6 +1044,7 @@ I2CReset_2:
 ; Helper Function - Initialize Gauge IC again after an UVLO Event
 ;
 lt2942_init_again:
+	rcall   I2CReset
 	movlw	0x02									; point to accumulated charge registers
 	rcall	I2C_TX_GAUGE							; send byte to the LT2942 gauge IC
 	movff	battery_accumulated_charge+1,SSP1BUF	; data byte

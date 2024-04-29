@@ -23,8 +23,8 @@
 ;
 #endif
 
-#define fw_version_major		0x03
-#define fw_version_minor		0x16
+#define fw_version_major		.3;0x03
+#define fw_version_minor		.22;0x15
 #define fw_version_beta			0x00
 
 
@@ -43,8 +43,8 @@
 #endif
 
 #define firmware_creation_year	.24;0x18
-#define firmware_creation_month	.03;0x09
-#define firmware_creation_day	.11;0x06
+#define firmware_creation_month	.04;0x09
+#define firmware_creation_day	.24;0x06
 
 #define firmware_expire_year	.27;0x18
 #define firmware_expire_month	.01;0x08
@@ -64,7 +64,7 @@
 ;                                                                                    122.880 max. available
 #endif
 
-#define _hwos_sport
+#define _hwos_tech_3_cR
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -79,7 +79,7 @@
 ; 
 #endif
 
-#define _language_1		en
+#define _language_1		de
 #define _language_2		none
 
 
