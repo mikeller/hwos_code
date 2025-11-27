@@ -491,7 +491,51 @@ aa_decode_3_done:
 	bra		aa_decode_1				;       NO  - loop
 	return							;       YES - done
 
+;------------------------------------------------------------------------------
+; Convert the output buffer to all caps, leave anything outside "a" to "z" untouched
+; Input    buffer (NEEDS TO BE NULL TERMINATED)
+; Output   buffer
+; Trashed  PROD
 
+all_caps:
+    	lfsr	FSR2, buffer			; FSR2 pointer to start of string
+
+all_caps_1:
+	movf	POSTINC2,W			; get character
+	bz	all_caps_3			; exit if null byte encountered
+	movwf	PRODL
+
+	btfsc	force_all_caps
+	bra	all_caps_2
+	movlw	.58
+	cpfslt	PRODL
+	bra	all_caps_2			; >57, can't be a "0" to "9", continue
+
+	movlw	.47
+	cpfsgt	PRODL
+	bra	all_caps_2			; <48, can't be a "0" to "9", continue
+	bra	all_caps_3			; "0" to "9" found, exit here
+	
+all_caps_2:	
+	movlw	.96
+	cpfsgt	PRODL
+	bra	all_caps_1			; <97 ("a") -> skip character
+
+	movlw	.123
+	cpfslt	PRODL
+	bra	all_caps_1			; >122 ("z") -> skip character
+	
+	movf	POSTDEC2,W			; dummy decrease FSR2
+	movlw	.32
+	subwf	PRODL,W				; make caps by subtracting .32
+	movwf	INDF2				; store caps version of INDF2 back into buffer
+	bra	all_caps_1			; check next char
+
+all_caps_3:
+	return					; done
+
+    
+	
 ;------------------------------------------------------------------------------
 ; Print the Output Buffer to Screen
 ;
@@ -500,6 +544,8 @@ aa_decode_3_done:
 ;
 	global	aa_wordprocessor
 aa_wordprocessor:
+	btfsc	dn_flag
+	rcall	all_caps			; make the string "all caps"
 	movf	font_color,W			; get selected font color (8 bit)
 	call	TFT_set_color			; compute printing color (16 bit)
 	rcall	aa_string_width			; set win_height and compute win_width:2
@@ -508,6 +554,8 @@ aa_wordprocessor:
 	movlw	0x22				; frame memory data write start
 	btfsc	screen_type4
 	movlw	0x2C				; Start Writing Data to GRAM (Display 4)
+	btfsc	screen_type5
+	movlw	0x2C				; Start Writing Data to GRAM (Display 5)
 	call	TFT_CmdWrite
 aa_wordprocessor_1:
 	movf	POSTINC2,W				; read character from the buffer

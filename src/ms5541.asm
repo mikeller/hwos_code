@@ -635,93 +635,93 @@ get_calibration_data1:
 	movlw	d'13'						; send command
 	rcall	send_data_MS5541			; ...
 	rcall	get_2bytes_MS5541			; read result
-	movff	dMSB,ir_s8_buffer+1			; copy result, high byte first
-	movff	dLSB,ir_s8_buffer+0			; copy result, low  byte second
+	movff	dMSB,ms5541_rawdata+1			; copy result, high byte first
+	movff	dLSB,ms5541_rawdata+0			; copy result, low  byte second
 
 	movlw	b'01011000'					; +3*high as start and 1+low as stop
 	movwf	dbuffer						; ...
 	movlw	d'13'						; send command
 	rcall	send_data_MS5541			; ...
 	rcall	get_2bytes_MS5541			; read result
-	movff	dMSB,ir_s8_buffer+3			; copy result, high byte first
-	movff	dLSB,ir_s8_buffer+2			; copy result, low  byte second
+	movff	dMSB,ms5541_rawdata+3			; copy result, high byte first
+	movff	dLSB,ms5541_rawdata+2			; copy result, low  byte second
 
 	movlw	b'01100100'					; +3*high as start and 1+low as stop
 	movwf	dbuffer						; ...
 	movlw	d'13'						; send command
 	rcall	send_data_MS5541			; ...
 	rcall	get_2bytes_MS5541			; read result
-	movff	dMSB,ir_s8_buffer+5			; copy result, high byte first
-	movff	dLSB,ir_s8_buffer+4			; copy result, low  byte second
+	movff	dMSB,ms5541_rawdata+5			; copy result, high byte first
+	movff	dLSB,ms5541_rawdata+4			; copy result, low  byte second
 
 	movlw	b'01101000'					; +3*high as start and 1+low as stop
 	movwf	dbuffer						; ...
 	movlw	d'13'						; send command
 	rcall	send_data_MS5541			; ...
 	rcall	get_2bytes_MS5541			; read result
-	movff	dMSB,ir_s8_buffer+7			; copy result, high byte first
-	movff	dLSB,ir_s8_buffer+6			; copy result, low  byte second
+	movff	dMSB,ms5541_rawdata+7			; copy result, high byte first
+	movff	dLSB,ms5541_rawdata+6			; copy result, low  byte second
 
 	; calculate C1 (16 Bit)
-	movff	ir_s8_buffer+1,C1+1
+	movff	ms5541_rawdata+1,C1+1
 	bcf		STATUS,C
 	rrcf	C1+1
 	bcf		STATUS,C
 	rrcf	C1+1
 	bcf		STATUS,C
 	rrcf	C1+1
-	movff	ir_s8_buffer+0,C1+0
+	movff	ms5541_rawdata+0,C1+0
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+1,0
+	btfss	ms5541_rawdata+1,0
 	bcf		STATUS,C
 	rrcf	C1+0
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+1,1
+	btfss	ms5541_rawdata+1,1
 	bcf		STATUS,C
 	rrcf	C1+0
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+1,2
+	btfss	ms5541_rawdata+1,2
 	bcf		STATUS,C
 	rrcf	C1+0
 
 	; calculate C2 (16 Bit)
-	movff	ir_s8_buffer+2, C2+0
+	movff	ms5541_rawdata+2, C2+0
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+3,0
+	btfss	ms5541_rawdata+3,0
 	bcf		STATUS,C
 	rrcf	C2+0
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+3,1
+	btfss	ms5541_rawdata+3,1
 	bcf		STATUS,C
 	rrcf	C2+0
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+3,2
+	btfss	ms5541_rawdata+3,2
 	bcf		STATUS,C
 	rrcf	C2+0
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+3,3
+	btfss	ms5541_rawdata+3,3
 	bcf		STATUS,C
 	rrcf	C2+0
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+3,4
+	btfss	ms5541_rawdata+3,4
 	bcf		STATUS,C
 	rrcf	C2+0
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+3,5
+	btfss	ms5541_rawdata+3,5
 	bcf		STATUS,C
 	rrcf	C2+0
 
-	movff	ir_s8_buffer+3, C2+1
+	movff	ms5541_rawdata+3, C2+1
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+0,0
+	btfss	ms5541_rawdata+0,0
 	bcf		STATUS,C
 	rrcf	C2+1
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+0,1
+	btfss	ms5541_rawdata+0,1
 	bcf		STATUS,C
 	rrcf	C2+1
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+0,2
+	btfss	ms5541_rawdata+0,2
 	bcf		STATUS,C
 	rrcf	C2+1
 	bcf		STATUS,C
@@ -732,29 +732,29 @@ get_calibration_data1:
 	rrcf	C2+1
 
 	; calculate C3 (16 Bit)
-	movff	ir_s8_buffer+5,C3+0
+	movff	ms5541_rawdata+5,C3+0
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+4,7
+	btfss	ms5541_rawdata+4,7
 	bcf		STATUS,C
 	rlcf	C3+0
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+4,6
+	btfss	ms5541_rawdata+4,6
 	bcf		STATUS,C
 	rlcf	C3+0
 	clrf	C3+1
-	btfsc	ir_s8_buffer+5,7
+	btfsc	ms5541_rawdata+5,7
 	bsf		C3+1,1
-	btfsc	ir_s8_buffer+5,6
+	btfsc	ms5541_rawdata+5,6
 	bsf		C3+1,0
 
 	; calculate C4 (16 Bit)
-	movff	ir_s8_buffer+7,C4+0
+	movff	ms5541_rawdata+7,C4+0
 	bsf		STATUS,C
-	btfss	ir_s8_buffer+6,7
+	btfss	ms5541_rawdata+6,7
 	bcf		STATUS,C
 	rlcf	C4+0
 	clrf	C4+1
-	btfsc	ir_s8_buffer+7,7
+	btfsc	ms5541_rawdata+7,7
 	bsf		C4+1,0
 
 	; C4=C4-250
@@ -766,21 +766,21 @@ get_calibration_data1:
 	movwf	C4+1
 
 	; calculate C5 (16 Bit)
-	movff	ir_s8_buffer+4,C5+0
+	movff	ms5541_rawdata+4,C5+0
 	bcf		C5+0,6
-	btfsc	ir_s8_buffer+2,0
+	btfsc	ms5541_rawdata+2,0
 	bsf		C5+0,6
 	bcf		C5+0,7
-	btfsc	ir_s8_buffer+2,1
+	btfsc	ms5541_rawdata+2,1
 	bsf		C5+0,7
 	clrf	C5+1
-	btfsc	ir_s8_buffer+2,2
+	btfsc	ms5541_rawdata+2,2
 	bsf		C5+1,0
-	btfsc	ir_s8_buffer+2,3
+	btfsc	ms5541_rawdata+2,3
 	bsf		C5+1,1
-	btfsc	ir_s8_buffer+2,4
+	btfsc	ms5541_rawdata+2,4
 	bsf		C5+1,2
-	btfsc	ir_s8_buffer+2,5
+	btfsc	ms5541_rawdata+2,5
 	bsf		C5+1,3
 
 	; calculate C5 = UT1
@@ -798,7 +798,7 @@ get_calibration_data1:
 
 	; calculate C6 (16Bit)
 	clrf	C6+1
-	movff	ir_s8_buffer+6,C6+0
+	movff	ms5541_rawdata+6,C6+0
 	bcf		C6+0,7
 
 get_calibration_data2:

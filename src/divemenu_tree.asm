@@ -128,12 +128,14 @@ main_divemenu_loop:
 
 
 main_divemenu_pscr:
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	btfsc	ext_input_s8_ana			; do we have an S8/analog input (OSTC cR)?
 	bra		main_divemenu_pscr_sensors	; YES - do menu with calibration
 	btfsc	ext_input_optical			; do we have an optical input (OSTC 3)?
 	bra		main_divemenu_pscr_sensors	; YES - do menu with calibration
- ENDIF	; _external_sensor
+	btfsc	ext_s8_full_digital			; NO - are we in external S8 full digital mode? 
+	bra		main_divemenu_pscr_sensors	; YES - do menu with calibration
+ ENDIF	; _external_sensor_eccr
 
 main_divemenu_pscr_no_sensors:
 	MENU_BEGIN_DIVE	tMainMenu,  .6
@@ -145,7 +147,7 @@ main_divemenu_pscr_no_sensors:
 		MENU_CALL		tExit,				do_exit_divemode_menu
 	MENU_END
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 main_divemenu_pscr_sensors:
 	MENU_BEGIN_DIVE	tMainMenu,  .6
 		MENU_CALL		tDiveBailout,		do_divemode_gaslist_bail
@@ -155,7 +157,7 @@ main_divemenu_pscr_sensors:
 		MENU_DYNAMIC	dyn_toggle_gf,		do_toggle_gf
 		MENU_CALL		tExit,				do_exit_divemode_menu
 	MENU_END
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
 
 ;-----------------------------------------------------------------------------
@@ -535,12 +537,14 @@ do_divemode_splist:
 	movlw	.1							; YES - revert to first menu item
 	movwf	menu_pos_cur				; set cursor position
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	btfsc	ext_input_s8_ana			; do we have an S8/analog input (OSTC cR)?
 	bra		do_divemode_splist_sensor	; YES
 	btfsc	ext_input_optical			; do we have an optical input (OSTC 3)?
 	bra		do_divemode_splist_sensor	; YES
- ENDIF	; _external_sensor
+	btfsc	ext_s8_full_digital			; NO - are we in external S8 full digital mode? 
+	bra		main_divemenu_pscr_sensors	; YES - do menu with calibration
+ ENDIF	; _external_sensor_eccr
 
 do_divemode_splist_no_sensor:
 	MENU_BEGIN_DIVE	tFixedSetpoints,    .6
@@ -553,7 +557,7 @@ do_divemode_splist_no_sensor:
 	MENU_END
 
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 do_divemode_splist_sensor:
 	MENU_BEGIN_DIVE	tFixedSetpoints,    .6
@@ -565,7 +569,7 @@ do_divemode_splist_sensor:
 		MENU_CALL		tCCRModeSensor,				do_divemode_sensor
 	MENU_END
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
 
 ;-----------------------------------------------------------------------------
@@ -582,7 +586,7 @@ do_switch_sp:
 	decf	menu_pos_cur,W				; 1-5 -> 0-4
 	lfsr	FSR1,opt_setpoint_cbar		; load base address
 	movff	PLUSW1,char_I_const_ppO2	; set selected setpoint
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	call	transmit_setpoint			; transmit current setpoint from WREG (in cbar) to external electronics
  ENDIF
 	bcf		warn_det_sensors_lost		; clear fallback condition (revoke all sensors lost warning)
@@ -623,7 +627,7 @@ do_switch_sp_com:						; common part
 	bra		do_exit_divemode_menu		; continue exiting the menu
 
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 
 ;-----------------------------------------------------------------------------
@@ -677,6 +681,8 @@ do_switch_sensor:
 	; check for external HUD/ppO2 Monitor
 	btfss	ext_input_optical			; do we have an optical input?
 	bra		do_switch_sp_com			; NO  - continue with common part
+	btfss	ext_s8_full_digital			; are we in external S8 full digital mode? 
+	bra		do_switch_sp_com			; NO  - continue with common part
 	btfsc	sensor1_active				; YES - process flags from HUD/ppO2 Monitor
 	bsf		use_O2_sensor1				;     - ...
 	btfsc	sensor2_active				;     - ...
@@ -700,7 +706,7 @@ do_toggle_sensor:
 	btg		use_O2_sensor3				; YES - toggle sensor 3 state
 	bra		do_return_divemode_sensor	; back to same menu
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
  ENDIF	; _ccr_pscr
 
 

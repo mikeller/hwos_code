@@ -1482,9 +1482,13 @@ static unsigned char find_next_stop(void)
 	if( char_depth_sim > internal_deco_depth[stop_index] )
 	    char_depth_sim = internal_deco_depth[stop_index];
 
-	// if using straight Buhlmann: done, stop needed
-	if( char_I_model == 0 ) return(1);
-
+    // using straight Buhlmann?
+    if( char_I_model == 0 )
+    {
+        // yes, reached surface?
+        if( char_depth_sim == 0 ) return(0);  // yes, no stop when at the surface
+        else                      return(1);  // no,  stop needed
+    } 
 	// -----------------------------------------------------------------------
 	// we need to make or hold a stop and we are using the GF extension
 	// -----------------------------------------------------------------------
@@ -2048,6 +2052,84 @@ static void init_output_vars(void)
 	char_I_sim_advance_time = 0;
 }
 
+//////////////////////////////////////////////////////////////////////////////
+// calc_GF_surface
+//
+// Calculates the instantaneous surface GF (GF_surf) for the leading compartment.
+//
+// Definition:
+//   GF_surf = (P_tissue - pres_surface) / (M_surf - pres_surface)
+//
+// - P_tissue  : current inert gas tissue pressure (N2 + He) in bar
+// - pres_surface : pres_surface (Ambient pressure at the surface, in bar)
+// - M_surf    : M-value on the surface (per calc_M_value_at_pressure)
+//
+// The maximum across all compartments is taken as GF_surf.
+// The result is written in percent (0..250) in int_O_GF_surface.
+//
+static float calc_M_value_at_pressure(float pres_surface)
+{
+    float a, b;
+    read_Buhlmann_coefficients();
+#ifdef _helium
+    adopt_Buhlmann_coefficients();
+    a = var_a;
+    b = var_b;
+#else    
+    a = var_N2_a;
+    b = var_N2_b;
+#endif
+    return a + b * pres_surface;
+}
+
+static void calc_GF_surface(void)
+{
+    overlay float P_tissue;
+    overlay float M_surf;
+    overlay float gf_surf;
+    overlay float gf_surf_max = 0.0f;
+
+    // Pass through all compartments
+    for (ci = 0; ci < NUM_COMP; ci++)
+    {
+#ifdef _helium
+        P_tissue = real_pres_tissue_N2[ci] + real_pres_tissue_He[ci];
+#else
+        P_tissue = real_pres_tissue_N2[ci];
+#endif
+
+        // M-value on the surface for this compartment
+        M_surf = calc_M_value_at_pressure(pres_surface);
+
+        // Filtering out unnecessary cases
+        if (M_surf <= pres_surface)
+            continue;
+
+        // Surface-GF of this compartment
+        gf_surf = (P_tissue - pres_surface) / (M_surf - pres_surface);
+
+        // Keep biggest result in gf_surf
+        if (gf_surf > gf_surf_max)
+            gf_surf_max = gf_surf;
+    }
+
+    // Convert to %
+    if (gf_surf_max <= 0.0f)
+    {
+        int_O_GF_surface = 0;
+    }
+    else
+    {
+        unsigned int tmp;
+
+        tmp = (unsigned int)(gf_surf_max * 100.0f + 0.5f);
+
+        if (tmp > 999)
+            tmp = 999;
+
+        int_O_GF_surface = tmp;
+    }
+}
 
 //////////////////////////////////////////////////////////////////////////////
 // Reset all tissues to surface pressure equilibrium state
@@ -2307,6 +2389,9 @@ static void calc_hauptroutine(void)
 
 		// convert the CNS value to integer
 		convert_cur_CNS_for_display();
+        
+        // compute the surface GF
+        calc_GF_surface();
 
 	} // tasks every 2 seconds
 

@@ -596,12 +596,14 @@ option_inc_enum8_1:
 	movlw	0x1F							; serial ID of option oCCRMode
 	cpfseq	opt_serial						; editing oCCRMode right now?
 	bra		option_inc_enum8_2				; NO  - check next option
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	btfsc	ext_input_s8_ana				; YES - S8/analog input available?
 	bra		option_inc_enum8_1a				;       YES - setting 'sensor' allowed
 	btfsc	ext_input_optical				;     - optical interface available?
 	bra		option_inc_enum8_1a				;       YES - setting 'sensor' allowed
- ENDIF	; _external_sensor
+	btfsc	ext_s8_full_digital			; are we in external S8 full digital mode? 
+	bra		option_inc_enum8_1a				;       YES - setting 'sensor' allowed
+ ENDIF	; _external_sensor_eccr
 	movf	INDF1,W							;       NO to both - get mode (=0: fixed SP, =1: Sensor, =2: AutoSP)
 	xorlw	.1								;                  - in sensor mode?
 	bnz		option_inc_enum8_1a				;                    NO  - continue with next check
@@ -980,12 +982,14 @@ option_cleanup_oCCRMode_pSCR:				; jump-in from start.asm if known to be in pSCR
 	banksel	common							;     - back to bank common
 	bsf		option_changed					;     - flag that EEPROM needs to be updated
 option_cleanup_oCCRMode_CCR:				; continue from above & jump-in from start.asm if known to be in CCR mode
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	btfsc	ext_input_s8_ana				; S8/analog interface available?
 	return									; YES - setting 'sensor' allowed
 	btfsc	ext_input_optical				; does hosting OSTC have an optical interface?
 	return									; YES - setting 'sensor' allowed
- ENDIF	; _external_sensor
+	btfsc	ext_s8_full_digital			; are we in external S8 full digital mode? 
+	return									; YES - setting 'sensor' allowed
+ ENDIF	; _external_sensor_eccr
 	movff	opt_ccr_mode,WREG				; NO to both - get CCR mode
 	xorlw	.1								;            - coding for sensor
 	tstfsz	WREG							;            - CCR mode = sensor?

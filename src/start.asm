@@ -144,6 +144,7 @@ start_clear_rambank:
 	bsf		screen_type2					; set flags for later clear of the false one
 	bsf		screen_type3					; ...
 	bsf		screen_type4					; ...
+	bsf		screen_type5					; ...
 	movlw	0x80							; set up read from 0x01F780
 	movwf	TBLPTRL							; ...
 	;movlw	0xF7							; high and upper are still at 0x01F7xx
@@ -160,9 +161,14 @@ start_clear_rambank:
 	movlw	0x85							; coding for screen type 4
 	cpfseq	TABLAT							; equal?
 	bcf		screen_type4					; NO  -  not screen type 4
+	movlw	0x86							; coding for screen type 5
+	cpfseq	TABLAT							; equal?
+	bcf		screen_type5					; NO  -  not screen type 5
 
 	bcf	dn_flag
 	btfsc	screen_type4
+	bsf	dn_flag
+	btfsc	screen_type5
 	bsf	dn_flag
 	
 	; get button polarity from configuration data (EEPROM)
@@ -365,13 +371,15 @@ restart:
 	bcf		tft_power						; inverted, here needed for I2C_probe_OSTC_rx, to wake-up RX circuity
 	bsf		ambient_sensor					; set ambient light sensor as available by default
 	bsf		ext_input_optical				; set optical input        as available by default
+	bcf		ext_s8_full_digital				; clear flag
 
 	call	lt2942_get_status				; check for gauge IC
 	btfss	battery_gauge_available			; OSTC 2, cR or TR?
 	bra		restart2						; NO
 
 	; OSTC 2, cR or TR
-	call	lt2942_init						; initialize battery gauge IC
+	call	battery_gauge_init						; initialize battery gauge IC
+	call	lt2942_get_voltage
 	bcf		ext_input_optical				; OSTC 2, cR and TR do not have an optical input
 
 	banksel	ANCON0							; ANCON0 is outside access RAM
@@ -388,7 +396,35 @@ restart:
 	bsf		lightsen_power					; power-up ambient light sensor again
 
 restart2:
-    	btfsc	less_io_cpu						; Less I/O CPU found?
+	; Dual comm hardware (USB and BLE-only)?
+	bsf	dual_comm						; assume dual comm hardware by default
+	movlw	0xFC							; set up read from 0x01FFFC
+	movwf	TBLPTRL							; ...
+	movlw	0xFF							; ...
+	movwf	TBLPTRH							; ...
+	movlw	0x01							; ...
+	movwf	TBLPTRU							; ...
+	TBLRD*+								; read configuration byte
+	movlw	0x6E							; coding for dual comm 
+	cpfseq	TABLAT							; equal?
+	bcf	dual_comm						; NO
+	TBLRD*+								; read configuration byte
+	movlw	0x61							; coding for dual comm 
+	cpfseq	TABLAT							; equal?
+	bcf	dual_comm						; NO
+	TBLRD*+								; read configuration byte
+	movlw	0x6E							; coding for dual comm 
+	cpfseq	TABLAT							; equal?
+	bcf	dual_comm						; NO
+	TBLRD*+								; read configuration byte
+	movlw	0x6F							; coding for dual comm 
+	cpfseq	TABLAT							; equal?
+	bcf	dual_comm						; NO
+    
+	btfsc	dual_comm
+	bcf	ambient_sensor						; dual-comm has no ambient sensor
+	
+	btfsc	less_io_cpu						; Less I/O CPU found?
 	bsf	ble_available						; Yes, must have BLE (old or new)
  IFNDEF _hwos_sport
 	btfsc	vusb_in							; USB power detected?
@@ -402,7 +438,7 @@ restart2:
 
 restart3:
     bsf		ble_npower						; power down BT chip (if available)
-   IFDEF _external_sensor						; Compiled for external analog interface?
+   IFDEF _external_sensor_eccr						; Compiled for external analog interface?
     bsf	    ext_input_s8_ana					;       YES - Set the flag
     call    eeprom_serial_number_read	; read OSTC serial number
     movlw   .31
@@ -584,7 +620,7 @@ boot4	CODE
 restart_set_modes_and_flags:
 	call	disable_ir_s8_analog			; switch off IR/S8/analog interface by default (for all compile versions!)
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	WAITMS	d'100'							; wait 100 ms to S8-HUD powered down properly
  ENDIF
 
@@ -639,9 +675,9 @@ restart_set_modes_and_flags3:
  IFDEF _rx_functions
 	call	option_cleanup_oTrMode_CCR		;     - revert TR mode from 'ind.double' to 'on'
  ENDIF	; _rx_functions
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	call	enable_ir_s8_analog				;     - enable IR/S8/analog interface
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
  ENDIF	; _ccr_pscr
 	return									;     - done
 
@@ -673,9 +709,9 @@ restart_set_modes_and_flags6:
  IFDEF _rx_functions
 	call	option_cleanup_oTrMode_no_CCR	;     - revert TR mode from 'CCR Dil+O2' to 'on'
  ENDIF	; _rx_functions
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	call	enable_ir_s8_analog				;     - enable IR/S8/analog interface
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
  ENDIF	; _ccr_pscr
 	return									;     - done
 

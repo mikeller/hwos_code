@@ -23,9 +23,9 @@
 ;
 #endif
 
-#define fw_version_major		.3;0x03
-#define fw_version_minor		.22;0x15
-#define fw_version_beta			0x00
+#define fw_version_major		.3
+#define fw_version_minor		.31
+#define fw_version_beta			0x01
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -42,13 +42,13 @@
 ;
 #endif
 
-#define firmware_creation_year	.24;0x18
-#define firmware_creation_month	.04;0x09
+#define firmware_creation_year	.25;0x18
+#define firmware_creation_month	.11;0x09
 #define firmware_creation_day	.24;0x06
 
-#define firmware_expire_year	.27;0x18
-#define firmware_expire_month	.01;0x08
-#define firmware_expire_day	.10;0x1C
+#define firmware_expire_year	.28;0x18
+#define firmware_expire_month	.08;0x08
+#define firmware_expire_day	.29;0x1C
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -64,7 +64,7 @@
 ;                                                                                    122.880 max. available
 #endif
 
-#define _hwos_tech_3_cR
+#define _hwos_tech_2_TR_cave
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -79,7 +79,7 @@
 ; 
 #endif
 
-#define _language_1		de
+#define _language_1		en
 #define _language_2		none
 
 
@@ -91,7 +91,7 @@
 ; _compass				compass function								mem: + 10.404 byte
 ; _helium				helium (trimix) gases and diluents				mem: +  2.113 byte || both together
 ; _ccr_pscr				CCR & pSCR modes, basic functionality			mem: +  4.117 byte ||  + 6.250 byte
-; _external_sensor		CCR & pSCR modes, external sensor support		mem: +  3.343 byte
+; _external_sensor_eccr		CCR & pSCR modes, external sensor and eccr support		mem: +  3.343 byte (OUTDATED)!
 ; _gauge_mode			gauge mode										mem: -     28 byte (less)
 ; _high_ppO2_max		raised ppO2 max limit (2.0 bar)					mem:        0 byte (neutral)
 ; _rx_functions			RX function        (OSTC TR)					mem: +  4.497 byte
@@ -124,7 +124,7 @@
 #define NOT_INCLUDED_gauge_mode
 #define NOT_INCLUDED_high_ppO2_max
 #define NOT_INCLUDED_gas_contingency
-#define NOT_INCLUDED_external_sensor
+#define NOT_INCLUDED_external_sensor_eccr
 #define NOT_INCLUDED_cave_mode
 #define NOT_INCLUDED_big_divemenu
 #define NOT_INCLUDED_firmware_recovery
@@ -144,7 +144,7 @@
 #define _gauge_mode
 #define _high_ppO2_max
 #define _gas_contingency
-#define NOT_INCLUDED_external_sensor
+#define NOT_INCLUDED_external_sensor_eccr
 #define NOT_INCLUDED_cave_mode
 #define _big_divemenu
 #define _firmware_recovery
@@ -164,7 +164,7 @@
 #define _gauge_mode
 #define _high_ppO2_max
 #define _gas_contingency
-#define NOT_INCLUDED_external_sensor
+#define NOT_INCLUDED_external_sensor_eccr
 #define _cave_mode
 #define _big_divemenu
 #define _firmware_recovery
@@ -183,13 +183,13 @@
 #define _high_ppO2_max
 #define NOT_INCLUDED_rx_functions
 #define NOT_INCLUDED_rx_update
-#define _external_sensor
+#define _external_sensor_eccr
 #define _gas_contingency
 #define NOT_INCLUDED_cave_mode
 #define _big_divemenu
 #define _firmware_recovery
 #define NOT_INCLUDED_min_depth_option
-#define _screendump
+#define NOT_INCLUDED_screendump
 
 #endif
 
@@ -203,7 +203,7 @@
 #define _high_ppO2_max
 #define NOT_INCLUDED_rx_functions
 #define NOT_INCLUDED_rx_update
-#define _external_sensor
+#define _external_sensor_eccr
 #define _gas_contingency
 #define _cave_mode
 #define _big_divemenu
@@ -222,9 +222,9 @@
 #define NOT_INCLUDED_ccr_pscr
 #define NOT_INCLUDED_gauge_mode
 #define NOT_INCLUDED_high_ppO2_max
-#define _rx_functions
-#define _rx_update
-#define NOT_INCLUDED_external_sensor
+#define NOT_INCLUDED_rx_functions
+#define NOT_INCLUDED_rx_update
+#define NOT_INCLUDED_external_sensor_eccr
 #define NOT_INCLUDED_cave_mode
 #define _big_divemenu
 #define _firmware_recovery
@@ -274,7 +274,7 @@
 #endif
 #endif
 
-#ifdef  _external_sensor
+#ifdef  _external_sensor_eccr
 #ifndef _ccr_pscr
 #define _ccr_pscr
 #endif
@@ -323,7 +323,7 @@
 #define FW_CONF_6    0x00
 #endif
 
-#ifdef _external_sensor
+#ifdef _external_sensor_eccr
 #define FW_CONF_7    0x40
 #else
 #define FW_CONF_7    0x00

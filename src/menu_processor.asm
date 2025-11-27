@@ -98,7 +98,7 @@ menu_processor:
 	; draw menu title
 	WIN_BOX_BLACK   dm_menu_row+.2,dm_menu_row+.26,dm_menu_left+.2,dm_menu_right-.2	; clear menu title area
 	WIN_SMALL .2, dm_menu_row+.2							; set menu title font and position
-	FONT_COLOR color_greenish				; set menu title font color
+	FONT_COLOR color_green				; set menu title font color
 	movff	menu_title_addr+0,FSR1L			; point to multi-lingual menu title text
 	movff	menu_title_addr+1,FSR1H			; ...
 	call	strcpy_text_FSR					; copy translated text into the buffer
@@ -128,7 +128,7 @@ menu_processor_menu_title1:
 	; draw menu title
 	WIN_BOX_BLACK   .2,.23,.0,.159			; clear menu title area
 	WIN_STD .0, .2							; set menu title font and position
-	FONT_COLOR color_greenish				; set menu title font color
+	FONT_COLOR color_green				; set menu title font color
 	movff	menu_title_addr+0,FSR1L			; point to multi-lingual menu title text
 	movff	menu_title_addr+1,FSR1H			; ...
 	call	strcpy_text_FSR					; copy translated text into the buffer
@@ -145,7 +145,7 @@ menu_processor_menu_title1:
 	PRINT									; output menu title
 
 	; draw footer line
-	FONT_COLOR_MEMO							; select default color
+	FONT_COLOR color_green				; set menu title font color
 	WIN_TINY   .5, .224						; tiny font, left position
 	STRCPY_TEXT_PRINT tNext					; print "Next"
 	WIN_TINY .124, .224						; tiny font, righ position
@@ -268,6 +268,7 @@ menu_read_menu_item_data_1:
 	global	menu_vertical
 menu_vertical:
 	rcall	menu_draw_menu_items			; draw all menu items
+	bcf	force_all_caps				; clear flag (which is only used in dn hardware)
 	movlw	CCP1CON_VALUE					; load PWM setting
 	btfss	divemode						; in dive mode?
 	movwf	CCP1CON							; NO - power-on backlight

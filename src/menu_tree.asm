@@ -164,7 +164,7 @@ do_return_menu_ccr:
 do_menu_ccr:
 	call	option_cleanup_oCCRMode		; in pSCR mode, revert AutoSP (2) to calculated SP (0)
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 	bcf		imprint_sensor_mv			; stop imprinting of live O2 sensor mV data
 	btfss	ext_input_s8_ana			; S8/analog sensor input available?
@@ -181,7 +181,7 @@ do_menu_ccr_cR:							; OSTC cR menu
 		MENU_CALL		tBack,						do_return_main_menu
 	MENU_END
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
 do_menu_ccr_2:
 	MENU_BEGIN	tCCRSetup, .5			; OSTC 2 menu
@@ -197,7 +197,7 @@ do_menu_ccr_2:
 ; CCR / pSCR Setup - 2nd Level
 ;
 do_menu_ccr_more:
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	MENU_BEGIN	tCCRSetup, .7			; CCR/pSCR more menu
 		MENU_OPT_INC	tS8Mode,					oS8Mode
 		MENU_OPT_INC	tCCmaxFracO2,				oCCmaxFracO2
@@ -216,12 +216,12 @@ do_menu_ccr_more:
 		MENU_OPT_INC	tPSCR_lungratio,			oPSCR_lungratio
 		MENU_CALL		tBack,						do_return_menu_ccr
 	MENU_END
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
  ENDIF	; _ccr_pscr
 
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 ;-----------------------------------------------------------------------------
 ; Calibration Menu
@@ -250,7 +250,7 @@ do_calibrate:
 	movff	WREG,customview_surfmode	; show this custom view when back in surface mode
 	bra		do_restart					; exit menu
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
 
  IFDEF _ccr_pscr
@@ -807,6 +807,8 @@ do_return_menu_dive:
 ; Dive Settings Menu - 1st Layer
 ;
 do_menu_dive:
+	btfsc	dn_flag	; force menu all caps in dn hardware
+	bsf	force_all_caps
 	MENU_BEGIN	tDiveModeMenu, .6
 		MENU_CALL		tDiveSetup,					do_menu_dive_dive		; dive setup
 		MENU_CALL		tDecoSetup,					do_menu_dive_deco		; deco setup
@@ -956,6 +958,8 @@ do_menu_dive_ppO2:
 		MENU_OPT_INC	tIBCDwarning,				oEnable_IBCD				; IBCD warning
 		MENU_CALL		tBack,						do_return_menu_dive
  ELSE
+	btfsc	dn_flag	; force menu all caps in dn hardware
+	bsf	force_all_caps
 	MENU_BEGIN	tppO2Setup, .4
 		MENU_DYNAMIC	dyn_ppo2_max,				do_toggle_ppO2_max_work		; max work
 		MENU_DYNAMIC	dyn_ppo2_max_deco,			do_toggle_ppO2_max_deco		; max deco
@@ -1138,6 +1142,9 @@ do_return_menu_settings:
 ; Settings Menu - 1st Layer
 ;
 do_menu_settings:
+	btfsc	dual_comm				    ; Dual comm hardware (USB and BLE-only)?
+	bra	do_menu_settings_dual_comm		    ; Use this menu here on the first layer
+    
  IFDEF _hwos_sport
 	bsf		ble_available				; required for very old OSTC sport
  ENDIF
@@ -1179,6 +1186,17 @@ do_menu_settings_noRX:
 		MENU_CALL		tBack,						do_return_main_menu
 	MENU_END
 
+do_menu_settings_dual_comm:
+	MENU_BEGIN	tSystSets, .7
+		MENU_CALL		tInfoMenu,					do_menu_info
+		MENU_CALL		tBleTitle,					do_comm_mode_bt
+		MENU_CALL		tUsbTitle,					do_comm_mode_usb
+		MENU_CALL		tSetTimeDate,					do_menu_date_time
+		MENU_CALL		tDispSets,					do_menu_dispsets
+		MENU_CALL		tSysSets,					do_menu_syssets
+		MENU_CALL		tBack,						do_return_main_menu
+	MENU_END
+    
 
 ;-----------------------------------------------------------------------------
 ; Call Functions - start Communication Mode (BT and USB)
@@ -1294,10 +1312,11 @@ dyn_show_total_dives:
 ;
 do_menu_info2:
  IFNDEF _comm_debug
-	MENU_BEGIN	tInfoMenu, .6
+	MENU_BEGIN	tInfoMenu, .7
 		MENU_DYNAMIC	dyn_show_battery_volts,		0
 		MENU_DYNAMIC	dyn_show_battery_cycles,	0
 		MENU_DYNAMIC	dyn_show_config,			0
+		MENU_DYNAMIC	dyn_show_config2,			0
 		MENU_DYNAMIC	dyn_show_sensor_calib,		0
 		MENU_DYNAMIC	dyn_show_sensor_offset,		0
 		MENU_CALL		tBack,						do_return_menu_settings_deeper
@@ -1355,11 +1374,20 @@ dyn_show_config:
 	output_hex					; print as hex
 	call	get_cpu_version				; get CPU version
 	output_hex					; print as hex
-	btfss	less_io_cpu				; =1: OSTC has a CPU with less I/O pins
 	return						; Done.
-	PUTC	"*"
-	return						; Less I/O CPU done.
 
+dyn_show_config2:	
+	STRCAT_TEXT tHardware				; print  text
+	movf	HW_variants2,W				; copy hardware variants2  to WREG
+	output_hex					; print as hex
+	movf	HW_variants3,W				; copy hardware variants3  to WREG
+	output_hex					; print as hex
+	PUTC	"/"					; print a separator
+	movff	i2c_error_counter+1,WREG
+	output_hex					; print as hex
+	movff	i2c_error_counter+0,WREG
+	output_hex					; print as hex
+	return						; Less I/O CPU done.
 
 ;-----------------------------------------------------------------------------
 ; dynamic Title - show Pressure Sensor Calibration Data C1 and C5
@@ -1598,6 +1626,9 @@ do_menu_dispsets:
 ; Settings Menu - 3rd Layer - Display Settings - Brightness
 ;
 do_menu_Brightness: 
+	btfss	ambient_sensor
+	bra	do_menu_Brightness2
+	
     	MENU_BEGIN	tBright, .4
 		MENU_OPT_INC	tBrightDive,					oBrightness_dive
 		MENU_OPT_INC	tBrightSurface,					oBrightness_surface
@@ -1605,6 +1636,12 @@ do_menu_Brightness:
 		MENU_CALL	tBack,						do_return_dispsets_menu
 	MENU_END
 
+do_menu_Brightness2:	
+    	MENU_BEGIN	tBright, .3
+		MENU_OPT_INC	tBrightDive,					oBrightness_dive
+		MENU_OPT_INC	tBrightSurface,					oBrightness_surface
+		MENU_CALL	tBack,						do_return_dispsets_menu
+	MENU_END
  
 ;-----------------------------------------------------------------------------
 ; Settings Menu - 3rd Layer - Display Settings - Color Schemes
@@ -1634,6 +1671,8 @@ do_menu_dispsets_more:
 		MENU_CALL		tBack,						do_return_menu_settings_deeper
 	MENU_END
  ELSE
+	btfsc	dn_flag	; force menu all caps in dn hardware
+	bsf	force_all_caps
 	MENU_BEGIN	tDispSets, .6
 		MENU_OPT_INC	tVSIgraph,					oVSIgraph
 		MENU_OPT_INC	tVSItext2,					oVSItext
@@ -1675,9 +1714,15 @@ do_return_menu_syssets_piezo:
 ; Settings Menu - 2nd Layer - System Settings
 ;
 do_menu_syssets:
+	btfsc	dn_flag				; dn hardware?
+	bra	do_menu_syssets_dn		; YES
+	btfsc	dual_comm			; Dual comm hardware?
+	bra	do_menu_syssets_dual_comm	; YES
 	btfsc	battery_gauge_available		; piezo buttons available?
-	bra		do_menu_syssets_piezo		; YES
+	bra	do_menu_syssets_piezo		; YES
 
+do_menu_syssets_dual_comm:	
+do_menu_syssets_mechanical:
  IFDEF _compass
 	MENU_BEGIN	tSystSets, .4													; All MENU_CALLs in this menu
 		MENU_CALL		tCompassMenu,				do_menu_compass				; need to stay together on this
@@ -1693,6 +1738,26 @@ do_menu_syssets:
 	MENU_END
  ENDIF	; _compass
 
+	
+do_menu_syssets_dn:
+ IFDEF _compass
+	MENU_BEGIN	tSystSets, .5													; All MENU_CALLs in this menu
+		MENU_CALL		tCompassMenu,				do_menu_compass				; need to stay together on this
+		MENU_CALL		tLogOffset,					do_menu_log_offset			; menu level in order to not
+		MENU_CALL		tResetMenu,					do_menu_reset				; mess up the menu stack on doing
+		MENU_OPT_INC		tBLE_Compatibility,				oBLE_Compatibility			; BLE Compatibility mode
+		MENU_CALL		tBack,						do_return_menu_settings		; the do_return_menu_settings !
+	MENU_END
+ ELSE
+	MENU_BEGIN	tSystSets, .4													; see above
+		MENU_CALL		tLogOffset,					do_menu_log_offset			;
+		MENU_CALL		tResetMenu,					do_menu_reset				;
+		MENU_OPT_INC		tBLE_Compatibility,				oBLE_Compatibility			; BLE Compatibility mode
+		MENU_CALL		tBack,						do_return_menu_settings		;
+	MENU_END
+ ENDIF	; _compass
+ 
+ 
 do_menu_syssets_piezo:
  IFDEF _compass
 	MENU_BEGIN	tSystSets, .5
@@ -1897,6 +1962,8 @@ do_menu_piezo:
 ; Settings Menu - 3rd Layer - System Settings - Reset Menus
 ;
 do_menu_reset:
+       	btfsc	dn_flag
+	bra	do_menu_reset_dn
 	MENU_BEGIN	tResetMenu, .7
 		MENU_CALL		tBack,						do_return_menu_syssets_more
 		MENU_CALL		tReboot,					do_menu_reset_reboot	; confirm
@@ -1904,7 +1971,17 @@ do_menu_reset:
 		MENU_CALL		tResetSettings,				do_menu_reset_settings	; confirm
 		MENU_CALL		tResetLogbook,				do_menu_reset_logbook	; confirm
 		MENU_CALL		tResetBattery,				do_menu_reset_battery	; confirm
-		MENU_CALL		tResetBLE2,				do_menu_reset_ble2	; Configure the new BLE module
+		MENU_CALL		tResetBLE2,				do_menu_reset_ble2	; (Re-) Configure the new BLE module
+	MENU_END
+
+do_menu_reset_dn:	; no reset battery for dn
+	MENU_BEGIN	tResetMenu, .6
+		MENU_CALL		tBack,						do_return_menu_syssets_more
+		MENU_CALL		tReboot,					do_menu_reset_reboot	; confirm
+		MENU_CALL		tResetDeco,					do_menu_reset_deco		; confirm
+		MENU_CALL		tResetSettings,				do_menu_reset_settings	; confirm
+		MENU_CALL		tResetLogbook,				do_menu_reset_logbook	; confirm
+		MENU_CALL		tResetBLE2,				do_menu_reset_ble2	; (Re-) Configure the new BLE module
 	MENU_END
 
 
@@ -2155,6 +2232,9 @@ do_new_battery_select:
 	btfsc	dn_flag
 	bra	use_404050_battery
 	
+	btfsc	dual_comm
+	bra	use_404050_battery
+	
 	movlw	0x11						; OSTC 2 (2015 model)
 	cpfseq	HW_descriptor
 	bra		$+4
@@ -2338,7 +2418,7 @@ use_404050_battery:
 ; Helper Function - finish Battery Selection
 ;
 use_batt_exit:
-	call	reset_battery_gauge_and_lt2942	; reset battery hard- and software gauge
+	call	reset_battery_gauge_and_lt2942			; reset battery hard- and software gauge
 
 use_batt_exit_1:
  IFNDEF _screendump
@@ -2403,9 +2483,9 @@ setup_new_saft:
 setup_new_panasonic:
 	bcf		charge_disable				; release  charging-inhibit signal
 	bsf		charge_enable				; tristate charging-inhibit signal
-	MOVLI	capacity_panasonic_internal, battery_capacity_internal
-	MOVLI	capacity_panasonic,          battery_capacity
-	MOVLI	offset_panasonic,            battery_offset
+	MOVLI	capacity_14500_internal, battery_capacity_internal
+	MOVLI	capacity_14500,          battery_capacity
+	MOVLI	offset_14500,            battery_offset
 	movlw	.2
 	movwf	battery_type
 	return
@@ -2440,6 +2520,7 @@ setup_new_16650:
 setup_new_404050:
 	bcf		charge_disable				; release  charging-inhibit signal
 	bsf		charge_enable				; tristate charging-inhibit signal
+	
 	CLRI	battery_capacity_internal
 	MOVLI	capacity_404050, battery_capacity
 	MOVLI	offset_404050,   battery_offset

@@ -45,7 +45,7 @@
 #DEFINE hw_logo_block			0x01E000	; color image data for heinrichs weikamp gmbh logo
 #DEFINE comm_logo_1				0x01EEDE	; color image data for USB or BT logo
 #DEFINE comm_logo_2				0x01EA04	; color image data for BT logo, "+" bootloader
-#DEFINE comm_logo_3				0x01E936	; color image data for BT logo, dn bootloader
+#DEFINE comm_logo_3				0x01EE10	; color image data for BT logo, dn bootloader
 
 
 ;-----------------------------EEPROM DATA ------------------------------------
@@ -275,8 +275,14 @@
 #DEFINE battery_show_level				.30			; [%]  threshold when to show battery level
 #DEFINE battery_warn_level_36			.15			; [%]  threshold for 3.6 V battery warning, also acts as threshold for setting display brightness level to ECO when in dive mode
 #DEFINE battery_warn_level_15			.25			; [%]  threshold for 1.5 V battery warning, also acts as threshold for setting display brightness level to ECO when in dive mode
-
-
+#DEFINE	battery_cycle_counter_unlock		.95			; [%]  threshold to unlock the charge cycle counter for a new charge cycle to count
+ 
+#DEFINE	rechargeable_36V_80			.3950			; [mV] fixed threshold, from UR16650ZTA.PDF, page 2, 0°C
+#DEFINE	rechargeable_36V_60			.3780			; [mV] fixed threshold, from UR16650ZTA.PDF, page 2, 0°C
+#DEFINE	rechargeable_36V_40			.3650			; [mV] fixed threshold, from UR16650ZTA.PDF, page 2, 0°C
+#DEFINE	rechargeable_36V_20			.3500			; [mV] fixed threshold, from UR16650ZTA.PDF, page 2, 0°C
+#DEFINE	rechargeable_36V_00			.3350			; [mV] fixed threshold, from UR16650ZTA.PDF, page 2, 0°C
+ 
 ; ---- 3.6 Volt Battery Sensing Data Points at 70 mA Load
 #DEFINE lithium_36v_75					.3000		; [mV]
 #DEFINE lithium_36v_50					.2900		; [mV]
@@ -292,25 +298,25 @@
 
 
 ; ---- internal Battery Gauging
-#DEFINE capacity_saft_internal			.364
-#DEFINE capacity_panasonic_internal		.121
+#DEFINE capacity_saft_internal				.364
+#DEFINE capacity_14500_internal				.121
 
 
 ; Gauge IC
 #DEFINE capacity_saft					.271		; 2.3Ah/0.085mAh/100 [%]
 #DEFINE offset_saft					.38477		; 65536-(2.3Ah/0.085mAh)
 
-#DEFINE capacity_panasonic				.94		; 0.8Ah/0.085mAh/100 [%]
-#DEFINE offset_panasonic				.56124		; 65536-(0.8Ah/0.085mAh)
-
+#DEFINE capacity_14500					.94		; 0.8Ah/0.085mAh/100 [%]
+#DEFINE offset_14500					.56124		; 65536-(0.8Ah/0.085mAh)
+ 
 #DEFINE capacity_ncr18650				.364		; 3.1Ah/0.085mAh/100 [%]
 #DEFINE offset_ncr18650					.29065		; 65536-(3.1Ah/0.085mAh)
-
+ 
 #DEFINE capacity_ur16650				.235		; 2.0Ah/0.085mAh/100 [%]
 #DEFINE offset_ur16650					.42006		; 65536-(2.0Ah/0.085mAh)
-
-#DEFINE capacity_404050					.141		; 1.2Ah/0.085mAh/100 [%]
-#DEFINE offset_404050					.51418		; 65536-(1.2Ah/0.085mAh)
+ 
+#DEFINE capacity_404050					.112		; 0.96Ah/0.085mAh/100 [%]
+#DEFINE offset_404050					.54241		; 65536-(0.96Ah/0.085mAh)
  
 ; ---- Power Consumption Values
 #DEFINE current_sleepmode				.31
@@ -326,11 +332,15 @@
 ; ---- Brightness Thresholds (between zero (off) and 255 (max. power consumption))
 #DEFINE ambient_light_max_high_36V		.170
 #DEFINE ambient_light_max_high_cr		.240
+#DEFINE ambient_light_max_high_dn		.240 
+#DEFINE ambient_no_sensor_high			.190
 #DEFINE ambient_light_max_high_15V		.100
 #DEFINE ambient_light_min_high			.35
 #DEFINE ambient_light_max_medium		.90
+#DEFINE ambient_no_sensor_medium		.50
 #DEFINE ambient_light_min_medium		.25
 #DEFINE ambient_light_max_eco			.50
+#DEFINE ambient_no_sensor_eco			.20
 #DEFINE ambient_light_min_eco			.10			; must be the lowest value!
 
 
@@ -470,10 +480,10 @@
 ;-----------------------------------------------------------------------------
 
 ;---- Hardware - OSTC Model Descriptor (stored in access RAM, cleared & rebuilt in restart, to preserve compatibility with 3rd party tools DO NOT alter bit positions)
-#DEFINE battery_gauge_available	HW_descriptor,0		; =1: OSTC has rechargeable battery with battery management chip
+#DEFINE battery_gauge_available		HW_descriptor,0		; =1: OSTC has rechargeable battery with battery management chip
 #DEFINE ambient_sensor			HW_descriptor,1		; =1: OSTC has an ambient light sensor
 #DEFINE ext_input_s8_ana		HW_descriptor,2		; =1: OSTC has S8/analog input
-#DEFINE ext_input_optical		HW_descriptor,3		; =1: OSTC has optical   input
+#DEFINE ext_input_optical		HW_descriptor,3		; =1: OSTC has optical   input or uses fully digital external interface
 #DEFINE ble_available			HW_descriptor,4		; =1: OSTC has an BT module
 #DEFINE ostc_rx_present			HW_descriptor,5		; =1: OSTC has RX module
 #DEFINE lv_core				HW_descriptor,6		; =1: OSTC has low-voltage core (2.7V)
@@ -494,11 +504,15 @@
 #DEFINE	less_io_cpu			HW_variants2,1		; =1: OSTC has a CPU with less I/O pins
 #DEFINE screen_type4			HW_variants2,2		; =1: display type 4, =0: display type 0 or 1 or 2 or 3
 #DEFINE	dn_flag				HW_variants2,3		; =1: dn
-;					HW_variants2,4		; --- unused
-;					HW_variants2,5		; --- unused
-;					HW_variants2,6		; --- unused
-;					HW_variants2,7		; --- unused
+#DEFINE screen_type5			HW_variants2,4		; =1: display type 5, =0: display type 0 or 1 or 2 or 3 or 4
+#DEFINE compass_type0			HW_variants2,5		; =1: compass type 0, =0: compass type 1 or 2
+#DEFINE compass_present			HW_variants2,6		; =1: a compass is present, =0: hardware w/o compass
+#DEFINE	battery_gauge_type		HW_variants2,7		; =1: Gauge IC LTC2959, =0: LT2942
 
+ ;---- Hardware - OSTC Model Variants3 (stored in access RAM, NOT cleared in restart)
+#DEFINE dual_comm			HW_variants3,0		; =1: dual comm hardware (USB and BLE-only)
+ 
+ 
 ;---- Hardware - States 1 (stored in access RAM, cleared on restart)
 #DEFINE analog_sw1_pressed		HW_flags_state1,0	; =1: analog switch 1 pressed
 #DEFINE analog_sw2_pressed		HW_flags_state1,1	; =1: analog switch 2 pressed
@@ -524,8 +538,8 @@
 #DEFINE	i2c_busy_pressure		HW_flags_state3,1	; =1: Currently updating pressure from MS5837
 #DEFINE	eeprom_write_error_flag		HW_flags_state3,2	; =1: an EEPROM write error occurred (Reset only in a Reboot/POR)
 #DEFINE	lock_cycle_counter		HW_flags_state3,3	; =1: Do not count charge cycle (again), cleared when batt_percent<95%
-;					HW_flags_state3,4	; --- unused
-;					HW_flags_state3,5	; --- unused
+#DEFINE	i2c_error_flag_lock		HW_flags_state3,4	; =1: The last I2C error was not displayed yet
+#DEFINE	i2c_reinit_sensor2		HW_flags_state3,5	; =1: Do an I2C reset and reinitialize the pressure sensor type 2
 ;					HW_flags_state3,6	; --- unused
 ;					HW_flags_state3,7	; --- unused
  
@@ -566,7 +580,7 @@
 #DEFINE divemode				OM_flags_mode,1		; =1: in dive mode
 #DEFINE simulatormode			OM_flags_mode,2		; =1: in simulator mode
 #DEFINE high_altitude_mode		OM_flags_mode,3		; =1: unit was manually turned on with absolute pressure < 880 mbar
-;								OM_flags_mode,4		; --- unused
+#DEFINE	ext_s8_full_digital		OM_flags_mode,4		; =1: External S8 full digital mode
 #DEFINE tr_functions_activated	OM_flags_mode,5		; =1: TR module is available and TR mode is <> off
 #DEFINE cold_start				OM_flags_mode,6		; =1: restart is entered from a cold start
  IFDEF _screendump
@@ -808,7 +822,7 @@
 #DEFINE aa_aux_flag				AA_flags,3			;     auxiliary flag for various purposes
 #DEFINE use_custom_colors		AA_flags,4			; =1: override default pixel colors, used by color_image
 #DEFINE win_invert				AA_flags,5			; =1: print in inverse video
-;								AA_flags,6			; --- unused
+#DEFINE	force_all_caps			AA_flags,6			; =1: force output all caps (even if there is a 0-9 in the string)
 ;								AA_flags,7			; --- unused
 
 
@@ -1037,6 +1051,7 @@ retry:
 	extern	HW_descriptor
 	extern	HW_variants
 	extern	HW_variants2
+	extern	HW_variants3
 
 	extern	HW_flags_state1
 	extern	HW_flags_state2
@@ -1082,7 +1097,7 @@ retry:
 	extern	battery_type
 	extern	battery_accumulated_charge
 	extern	battery_temperature
-	extern	gauge_status_byte
+
 
  endif	; ACCESS_RAM_VARS
 
@@ -1184,20 +1199,20 @@ max_CCPR1L						res 1		; max. brightness value for CCPR1L
 ;---- Battery Gauge (nAs, nC)
 battery_gauge					res 6		; 48 bit -> 78 Ah max
 
-;---- IR/S8-Link
-ir_s8_buffer					res .18		; buffer for data received on IR/S8 interface,
-											; also used to buffer MS5541 raw calibration data
-
- IFDEF _external_sensor
+;---- MS5541 raw calibration data
+ms5541_rawdata					res 8
+					
+ IFDEF _external_sensor_eccr
 ir_s8_counter					res 1
 ir_s8_timeout					res 1		; timeout for valid data
  ENDIF
 
 ;---- raw O2 Sensor Data received on S8 Link
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 s8_rawdata_sensor1				res 3		; 24 bit A/D raw data from S8 HUD sensor 1
 s8_rawdata_sensor2				res 3		; 24 bit A/D raw data from S8 HUD sensor 2
 s8_rawdata_sensor3				res 3		; 24 bit A/D raw data from S8 HUD sensor 3
+ccr_status_byte					res 2		; Status bytes for ccr				
  ENDIF
 
 ;---- Switch Processing (8 byte, called by ISR and sleep mode)
@@ -1218,7 +1233,7 @@ pressure_rel_max_trip			res 2		; resettable maximum relative pressure
 debounce_counter			res 1		; multiples of 16ms 
 isr_tmr7_helper				res 1		; used for 1/4 second trigger
 			
-; 158 byte used, 2 byte free
+; 150 byte used, 10 byte free
 
 
 ;-----------------------------------------------------------------------------
@@ -1310,6 +1325,7 @@ pairing_slot					res 1		; slot number, used in transmitter pairing
 ;---- Dive Mode / all modes (26 byte)
 divesecs_avg_trip				res 2		; time accumulator for the resettable average depth & stopwatch
 divesecs_avg_total				res 2		; time accumulator for the total dive average depth
+divesecs_compass_trip				res 2		; time accumulator for the compass stopwatch
 pressure_rel_avg_trip			res 2		; calculated resettable average depth
 pressure_rel_avg_total			res 2		; calculated total dive average depth
 pressure_rel_cur_cached			res 2		; cached current relative pressure
@@ -1464,7 +1480,9 @@ wait_counter					res 1
 pressure_update_lag_counter		res 1		; lag time counter for fast surface pressure display updating
 gp_debug				res 2		; General Purpose debug registers
 
-; 204 byte used, 4 byte free (208 byte total)
+gauge_status_byte				res 1		; gauge IC status byte
+				
+; 208 byte used, 1 byte free (208 byte total)
 
 
 ;-----------------------------------------------------------------------------
@@ -1518,7 +1536,7 @@ start_secs						res 1		; second, not used, for code commonality  |
 supersat_start					res 1		; leading tissue supersaturation at beginning of the dive
 
 ;---- O2 Sensors (9 byte, updated by ISR when sensors are connected via datalink)
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 sensor1_mv						res 2		; sensor 1 voltage in 0.1  mV  steps
 sensor2_mv						res 2		; sensor 2 voltage in 0.1  mV  steps
 sensor3_mv						res 2		; sensor 3 voltage in 0.1  mV  steps
@@ -1596,13 +1614,18 @@ time_last_1st					res 2		; last pressure reading time       in seconds    |
 time_last_2nd					res 2		; last pressure reading time       in seconds    |
  ENDIF
 
-i2c_error_vault					res 2		; Store last used device ID and data byte
+i2c_error_vault					res 3		; Store last used device ID, data byte and copy of SSP1CON2
 D1_buffer					res 3		; Buffer of D1 (Sensor raw data)
 D2_buffer					res 3		; Buffer of D2 (Sensor raw data)					
-
+i2c_error_counter				res 2		; counts I2C errors
+					
 brightness					res 1		; =0: Eco, =1:Medium, =2:Full
 charge_cycles					res 2		; 16bit charge cycles counter
-; 159 byte used, 90 byte free
+					
+;---- IR/S8-Link
+ir_s8_buffer					res .64		; buffer for data received on IR/S8 interface,
+
+; 224 byte used, 25 byte free
 
 
 ;-----------------------------------------------------------------------------
@@ -1729,6 +1752,7 @@ opt_fallback					res 1		; unused dummy option for compatibility with 3rd party t
 opt_conservatism				res 1		; unused dummy option for compatibility with 3rd party tools
 opt_warning_level_divemode			res 1		; warning verbose level (divemode) =0: Less, =1: All				
 opt_timeformat					res 1		; =0:24h, =1:12h
+opt_BLE_compatibility				res 1		; =1: configure BLE name to hwOS style for dn hardware					
 					
 ;---- RX Function Settings
 opt_transmitter_id_1			res 2		; 16 bit transmitter ID for Gas 1

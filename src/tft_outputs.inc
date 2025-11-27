@@ -65,7 +65,7 @@
 	extern	TFT_imprint_color_schemes			; imprint color schemes (animated dive time)
 	extern	TFT_convert_lo_into_12h_format			; converts lo (0-23h) into lo (1-12) with PM/AM flag in aux_flag
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	extern	TFT_imprint_menu_mV					; imprint sensor data in menu    mode - mv
 	extern	TFT_imprint_surf_ppO2				; imprint sensor data in surface mode - ppO2
 	extern	TFT_imprint_surf_mV					; imprint sensor data in surface mode - mV
@@ -110,6 +110,10 @@
 
 	extern	TFT_safety_stop_show				; show  safety stop
 	extern	TFT_safety_stop_clear				; clear safety stop
+	
+ IFDEF _compass
+	extern	TFT_dive_compass_extras				; Update Stopwatch display in compass mode
+ ENDIF
 
 
 ;-----------------------------------------------------------------------------
@@ -139,7 +143,7 @@
 	extern	TFT_message_gas_density				; gas density
  ENDIF
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	extern	TFT_message_divergence				; sensor ppO2 divergence
 	extern	TFT_message_fallback				; show fallback warning
  ENDIF
@@ -167,6 +171,8 @@
 	extern	TFT_decoplan						; data for deco plan
 	extern	TFT_ceiling_GF_tissue_mask			; mask for ceiling, current GF and tissues
 	extern	TFT_ceiling_GF_tissue				; data for ceiling, current GF and tissues
+	extern	TFT_ceiling_GF_surfGF_mask			; mask for ceiling, current GF and Surf GF
+	extern	TFT_ceiling_GF_surfGF				; data for ceiling, current GF and Surf GF
 	extern	TFT_CNS_mask						; mask for CNS values
 	extern	TFT_CNS								; data for CNS values
 	extern	TFT_ppo2_ead_end_cns_mask			; mask for ppO2, END/EAD and CNS / gas density
@@ -183,7 +189,7 @@
 	extern	TFT_pscr_info						; data for pSCR info
  ENDIF
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	extern	TFT_ppo2_sensors_mask				; mask for ppO2 sensors
 	extern	TFT_ppo2_sensors					; data for ppO2 sensors
  ENDIF

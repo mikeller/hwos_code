@@ -20,7 +20,7 @@
 ;=============================================================================
 ; Code to be placed at a fixed Position
 ;
-isr_high	CODE	0x0008				; high priority interrupts
+isr_high	CODE	0x00008				; high priority interrupts
 	bra		HighInt						; jump to ISR
 
 isr_low		CODE	0x00018				; low priority interrupts *** not used ***
@@ -47,7 +47,7 @@ HighInt:
 	btfsc	INTCON3,INT1IF				; left button activity?
 	rcall	isr_switch_left				; YES - check left switch
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	; serve IR/S8 link timer
 	btfsc	PIR3,RC2IF					; UART 2 interrupt?
 	rcall	isr_uart2					; YES - get a byte from the IR/S8 link
@@ -56,7 +56,7 @@ HighInt:
  ELSE
 	bcf		PIR3,RC2IF					; clear UART 2  interrupt
 	bcf		PIR2,TMR3IF					; clear timer 3 interrupt
-	; fill-up to keep code size identical to _external_sensor variant, see "Attention" below
+	; fill-up to keep code size identical to _external_sensor_eccr variant, see "Attention" below
 	nop
 	nop
  ENDIF
@@ -113,7 +113,7 @@ isr_set_speed_to_fastest:
 
 	; Attention: fill-up the gap between the end of this section
 	;            and the next section which starts at 0x00080 !!
-	nop
+;	nop
 	
 block_0_code_end:						; marker to find end of code in block 0 in linker report file
 
@@ -144,7 +144,7 @@ isr_adjust_speed_exit:
 ;
 ; take a byte received on IR/S8 link and slot it into the RX buffer
 ;
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 isr_uart2:
 	bcf		PIR3,RC2IF					; clear UART 2 interrupt flag
@@ -152,8 +152,9 @@ isr_uart2:
 	movff	RCREG2,isr_lo				; copy received byte to isr_lo
 	bcf		RCSTA2,CREN					; clear receiver status
 	bsf		RCSTA2,CREN					; ...
+;	movff	RCREG2,TXREG2 ;mH
 	banksel	isr_backup					; back to default ISR bank
-	movlw	.18							; size of the buffer
+	movlw	.64							; size of the buffer
 	cpfslt	ir_s8_counter				; number of received bytes < buffer size?
 	bra		isr_uart2_1					; NO  - buffer full, do not store the byte
 	movf	ir_s8_counter,W				; YES - copy number of received bytes to WREG
@@ -183,32 +184,94 @@ isr_timer3_1:
 	movlw	.16							; a IR telegram may also have 16 bytes, with last byte 0x00
 	cpfseq	ir_s8_counter				; got exactly 16 bytes?
 	bra		isr_timer3_2				; NO  - test for 17 bytes
+	banksel	common2					; ir_s8_buffer is in common2
 	tstfsz	ir_s8_buffer+.15			; YES - last byte = 0x00 ?
 	bra		isr_timer3_exit				;       NO  - exit
 	bra		isr_timer3_ir				;       YES - got 16 bytes, compute local checksum
 isr_timer3_2:
 	movlw	.17							; a S8 telegram has 17 bytes
 	cpfseq	ir_s8_counter				; got exactly 17 bytes?
-	bra		isr_timer3_exit				; NO  - exit
+	bra		isr_timer3_3				; NO  - test for 57 bytes
 	bra		isr_timer3_s8				; YES - S8 data
+isr_timer3_3:
+	movlw	.57							; an eccr telegram has 57 bytes
+	cpfseq	ir_s8_counter				; got exactly 17 bytes?
+	bra		isr_timer3_exit				; NO  - exit
+	bra		isr_timer3_eccr				; YES - eccr data
 
+isr_timer3_eccr:	
+ ;	; process telegram received on S8 link
+	banksel	isr_backup					; default bank for all ISR code is bank ISR data
+	movlw	.55							; compute checksum over 1st and next 55 bytes
+	rcall	compute_IR_S8_checksum		; compute checksum
+
+
+;	tstfsz	ir_s8_counter				; checksum ok?
+;	bra		isr_timer3_exit				; NO - discard data
+	
+	; copy received data to respective variables
+;	movff	ir_s8_buffer+.1,hud_status_byte
+	movff	ir_s8_buffer+.9,s8_rawdata_sensor1+0
+	movff	ir_s8_buffer+.10,s8_rawdata_sensor1+1
+	movff	ir_s8_buffer+.11,s8_rawdata_sensor1+2
+	movff	ir_s8_buffer+.12,sensor1_ppO2
+	movff	ir_s8_buffer+.13,s8_rawdata_sensor2+0
+	movff	ir_s8_buffer+.14,s8_rawdata_sensor2+1
+	movff	ir_s8_buffer+.15,s8_rawdata_sensor2+2
+	movff	ir_s8_buffer+.16,sensor2_ppO2
+	movff	ir_s8_buffer+.17,s8_rawdata_sensor3+0
+	movff	ir_s8_buffer+.18,s8_rawdata_sensor3+1
+	movff	ir_s8_buffer+.19,s8_rawdata_sensor3+2
+	movff	ir_s8_buffer+.20,sensor3_ppO2
+	movff	ir_s8_buffer+.27,hud_battery_mv+0
+	movff	ir_s8_buffer+.28,hud_battery_mv+1	    ; External battery voltage in mV
+	movff	ir_s8_buffer+.29,ccr_status_byte+0
+	movff	ir_s8_buffer+.30,ccr_status_byte+1
+
+	clrf	hud_status_byte
+	
+	; manually build HUD status byte for ccr testing
+	btfsc	ccr_status_byte+0,0
+	bsf	sensor1_active
+	btfsc	ccr_status_byte+0,0
+	bsf	sensor1_calibrated_ok
+	
+	
+	
+	btfsc	ccr_status_byte+0,1
+	bsf	sensor2_active
+	btfsc	ccr_status_byte+0,1
+	bsf	sensor2_calibrated_ok
+	
+	btfsc	ccr_status_byte+0,2
+	bsf	sensor3_active
+	btfsc	ccr_status_byte+0,2
+	bsf	sensor3_calibrated_ok
+	
+	bsf		trigger_S8_data_update		; YES - set flag for new data available
+	;bsf	ext_input_optical
+	bsf	ext_s8_full_digital			; Set flag for external S8 full digital mode
+	bsf		hud_connection_ok			; set manually for eccr
+	bra		isr_timer3_reload			; reload timer and exit
+	
 	; process telegram received on IR link
 isr_timer3_ir:
+	banksel	isr_backup					; default bank for all ISR code is bank ISR data
 	movlw	.12							; compute checksum over 1st and next 12 bytes
 	rcall	compute_IR_S8_checksum		; compute checksum
 	tstfsz	ir_s8_counter				; checksum ok?
 	bra		isr_timer3_exit				; NO - discard data
 
 	; copy received data to respective variables
-	movff	ir_s8_buffer+.1, hud_status_byte
-	movff	ir_s8_buffer+.2, sensor1_mv+0
-	movff	ir_s8_buffer+.3, sensor1_mv+1
-	movff	ir_s8_buffer+.4, sensor2_mv+0
-	movff	ir_s8_buffer+.5, sensor2_mv+1
-	movff	ir_s8_buffer+.6, sensor3_mv+0
-	movff	ir_s8_buffer+.7, sensor3_mv+1
-	movff	ir_s8_buffer+.8, sensor1_ppO2
-	movff	ir_s8_buffer+.9, sensor2_ppO2
+	movff	ir_s8_buffer+.1,hud_status_byte
+	movff	ir_s8_buffer+.2,sensor1_mv+0
+	movff	ir_s8_buffer+.3,sensor1_mv+1
+	movff	ir_s8_buffer+.4,sensor2_mv+0
+	movff	ir_s8_buffer+.5,sensor2_mv+1
+	movff	ir_s8_buffer+.6,sensor3_mv+0
+	movff	ir_s8_buffer+.7,sensor3_mv+1
+	movff	ir_s8_buffer+.8,sensor1_ppO2
+	movff	ir_s8_buffer+.9,sensor2_ppO2
 	movff	ir_s8_buffer+.10,sensor3_ppO2
 	movff	ir_s8_buffer+.11,hud_battery_mv+0
 	movff	ir_s8_buffer+.12,hud_battery_mv+1
@@ -233,12 +296,12 @@ isr_timer3_s8:
 	bsf		trigger_S8_data_update		; YES - set flag for new data available
 
 	; copy more received data to respective variables
-	movff	ir_s8_buffer+.4, s8_rawdata_sensor1+0
-	movff	ir_s8_buffer+.5, s8_rawdata_sensor1+1
-	movff	ir_s8_buffer+.6, s8_rawdata_sensor1+2
-	movff	ir_s8_buffer+.7, s8_rawdata_sensor2+0
-	movff	ir_s8_buffer+.8, s8_rawdata_sensor2+1
-	movff	ir_s8_buffer+.9, s8_rawdata_sensor2+2
+	movff	ir_s8_buffer+.4,s8_rawdata_sensor1+0
+	movff	ir_s8_buffer+.5,s8_rawdata_sensor1+1
+	movff	ir_s8_buffer+.6,s8_rawdata_sensor1+2
+	movff	ir_s8_buffer+.7,s8_rawdata_sensor2+0
+	movff	ir_s8_buffer+.8,s8_rawdata_sensor2+1
+	movff	ir_s8_buffer+.9,s8_rawdata_sensor2+2
 	movff	ir_s8_buffer+.10,s8_rawdata_sensor3+0
 	movff	ir_s8_buffer+.11,s8_rawdata_sensor3+1
 	movff	ir_s8_buffer+.12,s8_rawdata_sensor3+2
@@ -247,6 +310,7 @@ isr_timer3_reload:
 	movlw	ir_timeout_value			; get timeout value (in multiples of 62.5 ms)
 	movwf	ir_s8_timeout				; reload timeout counter
 isr_timer3_exit:
+	banksel	isr_backup					; default bank for all ISR code is bank ISR data
 	clrf	ir_s8_counter				; clear number of received bytes
 	bcf		PIR2,TMR3IF					; clear IRQ flag
 	return								; done
@@ -260,24 +324,24 @@ compute_IR_S8_checksum:
 	MOVII	FSR0L,FSR0_backup			; back-up FSR0
 	lfsr	FSR0,ir_s8_buffer			; load base address of the receive buffer
 	movff	POSTINC0,isr_mpr+0			; initialize low byte of the calculated checksum with first byte in buffer
-	clrf	         isr_mpr+1			; clear the high byte of the calculated checksum
+	clrf	isr_mpr+1				; clear the high byte of the calculated checksum
 compute_IR_S8_checksum_loop:
-	movf	POSTINC0,W					; read next byte
-	addwf	isr_mpr+0,F					; add it to the to checksum, low  byte
-	movlw	.0							; no explicit data to add to the high byte...
-	addwfc	isr_mpr+1,F					; ... besides the carry
+	movf	POSTINC0,W				; read next byte
+	addwf	isr_mpr+0,F				; add it to the to checksum, low  byte
+	movlw	.0					; no explicit data to add to the high byte...
+	addwfc	isr_mpr+1,F				; ... besides the carry
 	decfsz	ir_s8_counter,F				; decrement number of bytes yet to do, all done?
-	bra		compute_IR_S8_checksum_loop	; NO  - loop
-	movf	POSTINC0,W					; YES - read     low  byte of the received   checksum
-	cpfseq	isr_mpr+0					;     - equal to low  byte of the calculated checksum?
+	bra	compute_IR_S8_checksum_loop		; NO  - loop
+	movf	POSTINC0,W				; YES - read     low  byte of the received   checksum
+	cpfseq	isr_mpr+0				;     - equal to low  byte of the calculated checksum?
 	incf	ir_s8_counter,F				;       NO - mark a checksum error
-	movf	POSTINC0,W					;     - read     high byte of the received   checksum
-	cpfseq	isr_mpr+1					;     - equal to high byte of the calculated checksum?
+	movf	POSTINC0,W				;     - read     high byte of the received   checksum
+	cpfseq	isr_mpr+1				;     - equal to high byte of the calculated checksum?
 	incf	ir_s8_counter,F				;       NO - mark a checksum error
 	MOVII	FSR0_backup,FSR0L			;     - restore FSR0
-	return								;     - done
+	return						;     - done
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
  
 ;-----------------------------------------------------------------------------
@@ -362,13 +426,15 @@ isr_tmr7_4:
 	cpfseq	CCPR1L						; = current PWM value?
 	rcall	isr_dimm_tft				; NO - adjust until max_CCPR1L = CCPR1L
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 	decfsz	ir_s8_timeout,F				; decrement IR/S8 timeout counter, became zero?
 	bra		isr_sensor_state2			; NO  - continue with sensor
 	movlw	ir_timeout_value			; YES - get timeout value (in multiples of 62.5 ms)
 	movwf	ir_s8_timeout				;     - reload timeout timer
 	btfsc	ext_input_optical			;     - optical input in use?
+	bra		isr_tmr7_5					;       YES - clear data
+	btfsc	ext_s8_full_digital			; are we in external S8 full digital mode? 
 	bra		isr_tmr7_5					;       YES - clear data
 	TSTOSS	opt_s8_mode					;       NO  - S8 input in use?
 	bra		isr_sensor_state2			;             NO  - must be analog interface in use, keep data
@@ -396,7 +462,7 @@ isr_tmr7_5:
 
 	bsf		trigger_S8_data_update		; signal a data update
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
 isr_sensor_state2:
 	btfss	speed_is_normal						; CPU running on normal speed?
@@ -435,18 +501,22 @@ isr_sensor_state2:
 	call	calculate_compensation				; calculate temperature compensated pressure (27 us)
 
 	; build average for pressure
-	;bcf		STATUS,C							; clear carry bit - not needed since we don't use the +2 register later
+	bcf		STATUS,C					; clear carry bit
 	rrcf	pressure_abs_avg+2					; divide by 2
 	rrcf	pressure_abs_avg+1					; ...
 	rrcf	pressure_abs_avg+0					; ...
-	;bcf		STATUS,C							; clear carry bit - not needed since we don't use the +2 register later
+	bcf		STATUS,C					; clear carry bit
 	rrcf	pressure_abs_avg+2					; divide by 2, again
 	rrcf	pressure_abs_avg+1					; ...
 	rrcf	pressure_abs_avg+0					; ...
 
 	; export averaged pressure
+	tstfsz	pressure_abs_avg+2					; must be zero for all depths < 262m
+	bra	isr_sensor_state_sensor_error				; assume a false reading if <> 0
+	
 	MOVII	pressure_abs_avg,pressure_abs		; export result (Which is 16 bit for all depths < 262m)
 
+isr_sensor_state_sensor_resume:
 	; build average for temperature
 	bcf		STATUS,C							; clear carry bit by default
 	btfsc	temperature_avg+1,7					; sign bit set?
@@ -458,8 +528,13 @@ isr_sensor_state2:
 	bsf		STATUS,C							; YES - copy sign bit to carry bit
 	rrcf	temperature_avg+1					; divide signed temperature by 2 again (by 4 in total now)
 	rrcf	temperature_avg+0					; ...
+	
+	btfsc	i2c_reinit_sensor2					; Sensor ok?
+	bra	isr_sensor_state_skip_temp				; likely not, skip updating the temperature
+	
 	MOVII	temperature_avg,temperature_cur		; store final result
 
+isr_sensor_state_skip_temp:
 	; check for temperature change
 	movf	temperature_cur+0,W					; get current temperature, low  byte
 	cpfseq	temperature_last+0					; compare with last temperature, equal?
@@ -569,7 +644,10 @@ sensor_int_state_exit:
 	bsf		PIE5,TMR7IE					; re-enable IRQs by TMR7
 	bra		isr_adjust_speed			; set/restore CPU speed and return
 
-
+isr_sensor_state_sensor_error:
+	bsf	i2c_reinit_sensor2				; Do an I2C reset and reinitialize the pressure sensor type 2 
+								; Done in I2C_get_press_val_MS5837 and I2C_get_temp_val_MS5837
+	bra	isr_sensor_state_sensor_resume			; Ignore the reading and continue
 ;-----------------------------------------------------------------------------
 ; Helper Function for Display Dimming
 ;

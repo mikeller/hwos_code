@@ -232,6 +232,7 @@ VAR_UCHAR (char_I_gas_density_warn);			// threshold for gas density warning   [0
 
 VAR_UCHAR (char_I_dil_check);					// =1: check ppO2 of the pure diluent against current setpoint
 
+VAR_UINT  (int_O_GF_surface);					// instantaneous surface GF (GF_surf) for the leading compartment
 
 #ifdef __18CXX
 	//---- BANK 4 DATA -------------------------------------------------------

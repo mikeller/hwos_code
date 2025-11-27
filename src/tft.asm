@@ -73,6 +73,8 @@ tft		CODE
 TFT_ClearScreen:
     	btfsc	screen_type4			; screen type 4?
 	bra		TFT_ClearScreen_display4; YES
+    	btfsc	screen_type5			; screen type 5?
+	bra		TFT_ClearScreen_display4; YES
 	btfsc	screen_type3			; screen type 3?
 	bra		TFT_ClearScreen_display3; YES
 	btfsc	screen_type2			; screen type 2?
@@ -373,6 +375,10 @@ TFT_boot:
 	btfsc	screen_type4			; display type 4 ?
 	bra		TFT_boot_screen4		; YES
 
+	btfsc	screen_type5			; display type 5 ?
+	bra		TFT_boot_screen5		; YES
+
+	
 	; Data Transfer Synchronization
 	Parameter_out 0x00, 0x00
 	Parameter_out 0x00, 0x00
@@ -547,178 +553,99 @@ display1_config_write:				; with command in WREG
 	movf	TABLAT,W
 	rcall	TFT_DataWrite			; write configuration
 	bra		display1_init_loop		; loop
-
+	
 TFT_boot_screen4:
-	movlw	0xB0
+        movlw	0x11
 	rcall	TFT_CmdWrite
-	movlw	0x00
-	rcall	TFT_DataWrite
-	movlw	0xC4
-	rcall	TFT_DataWrite
-	
-	movlw	0xB1
-	rcall	TFT_CmdWrite
-	movlw	0xC0
-	rcall	TFT_DataWrite
-	
-	movlw	0x3A
-	rcall	TFT_CmdWrite
-	movlw	0x55
-	rcall	TFT_DataWrite
-	
+	WAITMS	d'120'
+
 	movlw	0x36		    ; x/y mirror, see page 125 of ST7789V datasheet
 	rcall	TFT_CmdWrite
-	movlw	0x40		    ; 0x40 (normal orientation)
+	movlw	0x80		    ; 0x80 (flipped orientation)
+	btfss	flip_screen	    ; 180° rotation?
+	movlw	0x40		    ; NO, 0x40 (normal orientation)
 	rcall	TFT_DataWrite
 	
-	movlw	0xB0
+	movlw	LOW   display4_config_table
+	movwf	TBLPTRL
+	movlw	HIGH  display4_config_table
+	movwf	TBLPTRH
+	movlw	UPPER display4_config_table
+	movwf	TBLPTRU	
+	bra	display45_init_loop		; use common loop
+	
+TFT_boot_screen5:
+        movlw	0x11
 	rcall	TFT_CmdWrite
-	movlw	0x00
-	rcall	TFT_DataWrite
-	
-	movlw	0xB2
-	call	TFT_CmdWrite
-	movlw	0x0C
-	rcall	TFT_DataWrite
-	movlw	0x0C
-	rcall	TFT_DataWrite
-	movlw	0x00
-	rcall	TFT_DataWrite
-	movlw	0x33
-	rcall	TFT_DataWrite
-	movlw	0x33
-	rcall	TFT_DataWrite
-	
-	movlw	0xB7
-	rcall	TFT_CmdWrite
-	movlw	0x75
-	rcall	TFT_DataWrite
-	
-	movlw	0xBB
-	rcall	TFT_CmdWrite
-	movlw	0x20
-	rcall	TFT_DataWrite
-	
-	movlw	0xC0
-	rcall	TFT_CmdWrite
-	movlw	0x2C
-	rcall	TFT_DataWrite
-	
-	movlw	0xC2
-	rcall	TFT_CmdWrite
-	movlw	0x01
-	rcall	TFT_DataWrite
-	
-	movlw	0xC3
-	rcall	TFT_CmdWrite
-	movlw	0x19
-	rcall	TFT_DataWrite
-	
-	movlw	0xC4
-	rcall	TFT_CmdWrite
-	movlw	0x20
-	rcall	TFT_DataWrite
-	
-	movlw	0xC6
-	rcall	TFT_CmdWrite
-	movlw	0x0F
-	rcall	TFT_DataWrite
-	
-	movlw	0xD0
-	rcall	TFT_CmdWrite
-	movlw	0xA7
-	rcall	TFT_DataWrite
-	movlw	0xA1
-	rcall	TFT_DataWrite
-	
-	movlw	0xBB
-	rcall	TFT_CmdWrite
-	movlw	0x35
-	rcall	TFT_DataWrite
-	
-	movlw	0xC0
-	rcall	TFT_CmdWrite
-	movlw	0x2C
-	rcall	TFT_DataWrite
-	
-	movlw	0xC2
-	rcall	TFT_CmdWrite
-	movlw	0x01
-	rcall	TFT_DataWrite
-	
-	movlw	0xC3
-	rcall	TFT_CmdWrite
-	movlw	0x11
-	rcall	TFT_DataWrite
+	WAITMS	d'120'
 
-	movlw	0xC4
+	movlw	0x36
 	rcall	TFT_CmdWrite
-	movlw	0x20
-	rcall	TFT_DataWrite
-
-	movlw	0xC6
-	rcall	TFT_CmdWrite
-	movlw	0x0F
+	movlw	b'11001000'	    ; 0xC8 (flipped orientation)
+	btfss	flip_screen	    ; 180° rotation?
+	movlw	b'00001000'	    ; NO, 0x08 (normal orientation)
 	rcall	TFT_DataWrite
 	
-	movlw	0xD0
-	rcall	TFT_CmdWrite
-	movlw	0xA7
-	rcall	TFT_DataWrite
-	movlw	0xA1
-	rcall	TFT_DataWrite
+	movlw	LOW   display5_config_table
+	movwf	TBLPTRL
+	movlw	HIGH  display5_config_table
+	movwf	TBLPTRH
+	movlw	UPPER display5_config_table
+	movwf	TBLPTRU
+display45_init_loop:
+	TBLRD*+
+	movlw	0xFF				; coding for end of configuration
+	cpfseq	TABLAT				; TABLAT = 0xFF ?
+	bra	display45_config_write		; NO, write configuration to display
+	bra	display45_init_loop2		; YES - done
+display45_config_write:				; with command in WREG
+	movf	TABLAT,W
+	rcall	TFT_CmdWrite			; write command
+display45_config_write_more:
+	TBLRD*+					; get configuration
+	movf	TABLAT,W
+	rcall	TFT_DataWrite			; write configuration
+	movlw	0xFF				; coding for end of configuration
+	cpfseq	TABLAT
+	bra	display45_config_write_more
+	bra	display45_init_loop		; Continue with the next command
 	
-	movlw	0xBB
-	rcall	TFT_CmdWrite
-	movlw	0x35
-	rcall	TFT_DataWrite
-	
-	movlw	0xC0
-	rcall	TFT_CmdWrite
-	movlw	0x2C
-	rcall	TFT_DataWrite
-	
-	movlw	0x2C
-	rcall	TFT_CmdWrite
-	movlw	0x01
-	rcall	TFT_DataWrite
-	
-	movlw	0xC3
-	rcall	TFT_CmdWrite
-	movlw	0x11
-	rcall	TFT_DataWrite
-	
-	movlw	0xC4
-	rcall	TFT_CmdWrite
-	movlw	0x20
-	rcall	TFT_DataWrite
-	
-	movlw	0xC6
-	rcall	TFT_CmdWrite
-	movlw	0x0F
-	rcall	TFT_DataWrite
-	
-	movlw	0xD0
-	rcall	TFT_CmdWrite
-	movlw	0xA4
-	rcall	TFT_DataWrite
-	movlw	0xA1
-	rcall	TFT_DataWrite
-	; gamma
-	movlw	0x11
-	rcall	TFT_CmdWrite
-	
+display45_init_loop2:	
 	movlw	0x21
 	rcall	TFT_CmdWrite
 	WAITMS	d'60'
-	
 	movlw	0x29
 	rcall	TFT_CmdWrite
-	WAITMS	d'50'
+	WAITMS	d'120'
 	rcall	TFT_ClearScreen
-	; ToDo: Flip....
 	return			    ; done TFT_boot
 
+display4_config_table:
+	; Reg, Dat0, Dat1, Dat2, ... 0xFF for command end, 0xFF 0xFF for init end
+	db  0xB0,0x00,0xC4,0xFF,0xB1,0xC0,0xFF,0x3A
+	db  0x55,0xFF,0xB0,0x00,0xFF,0xB2,0x0C,0x0C
+	db  0x00,0x33,0x33,0xFF,0xB7,0x75,0xFF,0xBB
+	db  0x20,0xFF,0xC0,0x2C,0xFF,0xC2,0x01,0xFF
+	db  0xC3,0x19,0xFF,0xC4,0x20,0xFF,0xC6,0x0F
+	db  0xFF,0xD0,0xA7,0xA1,0xFF,0xBB,0x35,0xFF
+	db  0xC0,0x2C,0xFF,0xC2,0x01,0xFF,0xC3,0x11
+	db  0xFF,0xC4,0x20,0xFF,0xC6,0x0F,0xFF,0xD0
+	db  0xA7,0xA1,0xFF,0xBB,0x35,0xFF,0xC0,0x2C
+	db  0xFF,0x2C,0x01,0xFF,0xC3,0x11,0xFF,0xC4
+	db  0x20,0xFF,0xC6,0x0F,0xFF,0x11,0xFF,0xD0
+	db  0xA4,0xA1,0xC6,0x0F,0xFF,0x11,0xFF,0xFF
+	
+display5_config_table:
+	; Reg, Dat0, Dat1, Dat2, ... 0xFF for command end, 0xFF 0xFF for init end
+	db  0x13,0xFF,0xEF,0x01,0x01,0x00,0xFF,0xED
+	db  0x64,0x03,0x12,0x81,0xFF,0xE8,0x85,0x00
+	db  0x7A,0xFF,0xCB,0x39,0x2C,0x00,0x35,0x06
+	db  0xFF,0xEA,0x00,0x00,0xFF,0xC0,0x20,0xFF
+	db  0xC1,0x13,0xFF,0xC5,0x39,0x27,0xFF,0xC7
+	db  0xA6,0xFF,0x36,0x08,0xFF,0x3A,0x55,0xFF
+	db  0xB1,0x00,0x0B,0xFF,0xB6,0x08,0x82,0x27
+	db  0xFF,0xF2,0x00,0xFF,0x26,0x01,0xFF,0xFF
+	
 
 	global	TFT_CmdWrite
 TFT_CmdWrite:
@@ -938,6 +865,8 @@ pixel_write:
 pixel_write_col320:
     	btfsc	screen_type4			; display type 4 ?
 	bra		pixel_write_col320_d4	; YES
+    	btfsc	screen_type5			; display type 5 ?
+	bra		pixel_write_col320_d4	; YES
 	btfsc	screen_type3			; display type 3 ?
 	bra		pixel_write_col320_d3	; YES
 	btfsc	screen_type2			; display type 2 ?
@@ -994,14 +923,20 @@ pixel_write_col320_d3:
 	bra		TFT_DataWrite_PROD		; and return...
 
 pixel_write_col320_d4:
-    	movlw	0x2A
+    	movlw	0x2B
 	rcall	TFT_CmdWrite
-	rcall	TFT_DataWrite_PROD
+	movf	PRODH,W
+	rcall	TFT_DataWrite
+	movf	PRODL,W
+	rcall	TFT_DataWrite
 	incf	PRODL,F
 	movlw	.0
 	addwfc	PRODH,F					; +1
-	bra	TFT_DataWrite_PROD		; and return...	
-
+	movf	PRODH,W
+	rcall	TFT_DataWrite
+	movf	PRODL,W
+	bra	TFT_DataWrite				; and return
+	
 ;-----------------------------------------------------------------------------
 ; Write one half-pixel at position (win_top,win_leftx2).
 ; Inputs: win_leftx2, win_top, win_color_1/_2
@@ -1014,7 +949,9 @@ half_pixel_write:
 half_pixel_write_1:
 	btfsc	screen_type4				; display type 4 ?
 	bra		half_pixel_write_1_display4	; YES
-        btfsc	screen_type3				; display type 3 ?
+	btfsc	screen_type5				; display type 5 ?
+	bra		half_pixel_write_1_display4	; YES
+	btfsc	screen_type3				; display type 3 ?
 	bra		half_pixel_write_1_display3	; YES
 	btfsc	screen_type2				; display type 2 ?
 	bra		half_pixel_write_1_display2	; YES
@@ -1109,7 +1046,7 @@ half_pixel_write_1_display3:
 half_pixel_write_1_display4:	
 	mullw	1						; copy row to PRODL (PRODH=0)
 	; Row address start
-	movlw	0x2B
+	movlw	0x2A
 	rcall	TFT_CmdWrite
 	movlw	0x00
 	rcall	TFT_DataWrite
@@ -1266,6 +1203,8 @@ TFT_box_write:
 	mullw	.2						; win_leftx2 x 2 -> PRODH:PRODL
 
 	btfsc	screen_type4			; screen type 4 ?
+	bra		TFT_box_write_display4	; YES
+	btfsc	screen_type5			; screen type 5 ?
 	bra		TFT_box_write_display4	; YES
 	btfsc	screen_type3			; screen type 3 ?
 	bra		TFT_box_write_display3	; YES
@@ -1587,12 +1526,16 @@ TFT_box:
 	movlw	0x22				; frame memory data write start
 	btfsc	screen_type4
 	movlw	0x2C				; Start Writing Data to GRAM (Display 4)
+	btfsc	screen_type5
+	movlw	0x2C				; Start Writing Data to GRAM (Display 4)
 	rcall	TFT_CmdWrite
 
 	clrf	PRODH					; column counter
 	RS_H							; data
 
 	btfsc	screen_type4			; display type 4 ?
+	bra		TFT_box_display4		; YES
+	btfsc	screen_type5			; display type 5 ?
 	bra		TFT_box_display4		; YES
 	btfsc	screen_type3			; display type 3 ?
 	bra		TFT_box_display3		; YES

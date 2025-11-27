@@ -13,6 +13,6 @@
 	extern	piezo_config					; set up piezo sensitivity of heinrichs weikamp piezo buttons (~30ms)
 	extern	get_analog_switches				; get analog switches
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	extern	get_analog_inputs				; get AN8-10
  ENDIF

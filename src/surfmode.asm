@@ -28,7 +28,7 @@
 #include "rx_ops.inc"
  ENDIF
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 #include "calibrate.inc"
  ENDIF
 
@@ -79,10 +79,15 @@ surfloop:
 	bra		surfloop_1					; YES
 
 	; show heinrichs weikamp gmbh logo
-	WIN_TOP  .40
+	movlw	.40
+	btfsc	dn_flag
+	movlw	.100
+	movwf	win_top
 	WIN_LEFT .10
 	TFT_WRITE_PROM_IMAGE_BY_ADDR hw_logo_block
 
+	btfsc	dn_flag
+	bra	surfloop_0
 	; set font color
 	FONT_COLOR color_white
 
@@ -96,6 +101,7 @@ surfloop:
 	WIN_SMALL .35,.180
 	PUTC	"v"							; print "v"
 	call	TFT_print_firmware			; print full firmware version (may change the font color)
+surfloop_0:	
 	call	TFT_Display_FadeIn			; dim up the display
 
 surfloop_1:
@@ -115,7 +121,7 @@ surfloop_1:
 	movff	WREG,char_I_const_ppO2		; store it as current setpoint
  ENDIF
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	call	transmit_setpoint			; transmit current setpoint (in cbar) via S8 digital interface (currently disabled)
  ENDIF
 
@@ -131,7 +137,7 @@ surfloop_1:
 	call	deco_calc_desaturation_time	; calculate desaturation and no-fly/no-altitude time (C-code)
 	banksel	common						; back to bank common
 
-	WAITS	.2							; wait 2 seconds
+	WAITS	.1							; wait 1 second
 
 	;---- fade to standard surface view --------------------------------------
 
@@ -144,7 +150,7 @@ surfloop_2:
 
 	;---- button functionalities ---------------------------------------------
 
-	FONT_COLOR			color_lightblue					; set font color
+	FONT_COLOR		color_green				; set font color
 	WIN_SMALL			menu_pos_column,menu_pos_row	; set font size and output position
 	STRCPY_TEXT_PRINT	tMenu							; print "<Menu"
 	WIN_SMALL			view_column,view_row			; set font size and output position
@@ -152,7 +158,8 @@ surfloop_2:
 
 
 	;---- logo in upper right corner -----------------------------------------
-
+	btfsc	dn_flag
+	bra	surfloop_3
 	; show textual OSTC logo
 	WIN_STD .100,.2						; set output position
 	FONT_COLOR color_white				; set text color to white
@@ -167,7 +174,13 @@ surfloop_2:
  ELSE
 	STRCPY_PRINT "tech"					; show "tech"
  ENDIF
-
+	bra	surfloop_4
+surfloop_3:
+	WIN_TINY .105,.5						; set output position
+	FONT_COLOR color_grey				; set text color to white
+	STRCPY_PRINT "DYNAMICNORD"					; show "OSTC"
+	
+surfloop_4:	
 	; firmware version
 	WIN_TINY .100,.32					; set output position
 	FONT_COLOR color_white				; set text color to white
@@ -491,10 +504,10 @@ housekeeping_1:
 housekeeping_1ab:
 	call	I2C_get_press_val_MS5837		; (Will clear ms5837_state)
 housekeeping_1aa:	
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	btfsc	imprint_sensor_mv			;     - shall imprint sensor mV data?
 	call	TFT_imprint_menu_mV			;       YES - imprint sensor mV data
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 	btfss	imprint_surfmode_data		;     - shall imprint all surface mode data?
 	bra		housekeeping_2				;       NO
 
@@ -504,7 +517,7 @@ housekeeping_1aa:
 	btfsc	STATUS,Z					;           - equal?
 	call	TFT_surface_compass_heading	;             YES - update compass view
  ENDIF	; _compass
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	btfsc	FLAG_ccr_mode				;           - in CCR mode?
 	bra		housekeeping_1a				;           - YES - handle sensors
 	btfsc	FLAG_pscr_mode				;           - in pSCR mode?
@@ -522,7 +535,7 @@ housekeeping_1a:						; handle sensors
 	xorlw	.9							;     - coding of sensor mV readings custom view
 	btfsc	STATUS,Z					;     - equal?
 	call	TFT_imprint_surf_mV			;       YES - update mV readings
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
 housekeeping_2:
 	btfss	trigger_full_minute			; new 1/1 minute begun?

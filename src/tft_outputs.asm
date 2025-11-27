@@ -677,16 +677,13 @@ TFT_pres_surfmode_fast_1:
 	global	TFT_surfmode_pres
 TFT_surfmode_pres:
 	; value
-	WIN_SMALL surf_press_column+.8,surf_press_row
+	WIN_SMALL surf_press_column+.6,surf_press_row
 	FONT_COLOR_MEMO						; set color
 	SMOVII	pressure_abs,mpr			; get current pressure
 	FONT_COLOR_MEMO						; print in standard color
 	output_9999							; print (0-9999)
-	PRINT								; dump buffer to screen
-	; unit
-	WIN_SMALL	surf_press_column+(4+1)*8,surf_press_row
-	FONT_COLOR_MASK						; switch to mask color
-	STRCPY_TEXT_PRINT tMBAR				; print unit (hPa)
+	PUTC	" "
+	STRCAT_TEXT_PRINT tMBAR				; print unit (hPa)
 	return								; done
 
 
@@ -697,7 +694,7 @@ TFT_surfmode_pres:
 TFT_surfmode_temp:
 	; unit
 	WIN_SMALL surf_temp_column+3*8,surf_temp_row
-	FONT_COLOR_MASK						; select mask color
+	FONT_COLOR_MEMO						; print in standard color
 	TSTOSS	opt_units					; 0=°C, 1=°F
 	bra		TFT_temp_surfmode_metric	; 0: metric
 	;bra	TFT_temp_surfmode_imperial	; 1: imperial
@@ -783,6 +780,27 @@ TFT_surfmode_batt:
 	STRCAT_PRINT "% "					; append unit with trailing space and dump to screen
 
 	WIN_TINY batt_voltage_column+.15,batt_voltage_row
+	btfss	dn_flag
+	bra	TFT_surfmode_batt2
+	WIN_TINY batt_voltage_column+.15,.5
+	FONT_COLOR color_green				; set menu title font color
+	STRCPY_TEXT_PRINT tBattery
+	return
+TFT_surfmode_batt2:	
+	FONT_COLOR_MEMO						; set color
+	movff	battery_type,lo				; get battery type
+	PUTC	"T"							; print "T"
+	output_9							; print battery type code (0-9)
+	PUTC	":"							; print ":"
+	MOVII	batt_voltage,mpr			; get battery voltage
+	bsf		omit_digit_2				; do not print 2nd and 1st digit
+	bsf		decimal_digit3				; place a decimal point in front of digit 3
+	output_9999							; print x.x--
+	PUTC_PRINT 'V'						; append unit and dump to screen
+	return								; done
+	
+	
+	WIN_TINY batt_voltage_column+.15,batt_voltage_row
 	FONT_COLOR_MEMO						; set color
 	movff	battery_type,lo				; get battery type
 	PUTC	"T"							; print "T"
@@ -821,7 +839,7 @@ TFT_surfmode_batt:
 	global	TFT_surfmode_decotype
 TFT_surfmode_decotype:
 	WIN_STD surf_decotype_column,surf_decotype_row
-	FONT_COLOR color_lightblue			; set font color
+	FONT_COLOR	color_green			; set font color
 	movff	opt_dive_mode,lo			; get deco mode 
 	tstfsz	lo							; in OC mode?
 	bra		TFT_decotype_surface_2		; NO
@@ -849,10 +867,10 @@ TFT_surfmode_decotype_cc_var:
 	; Sensor or Auto SP mode
 	sublw	.2							; ccr_mode = 2 (Auto SP) ?
 	bz		TFT_decotype_surface_cc_auto; YES - AutoSP
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	STRCPY_TEXT tCCRModeSensor			; NO  - print "Sensor"
 	bra		TFT_decotype_surface_cc_com	;     - continue
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
 TFT_decotype_surface_cc_auto:
 	STRCPY_TEXT tCCRModeAutoSP			; print "Auto SP"
@@ -1160,7 +1178,7 @@ TFT_convert_lo_into_12h_format2:
 	bsf	aux_flag			; PM/AM Bit
 	return
     
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 ;-----------------------------------------------------------------------------
 ; Surface Mode - Imprint ppO2 from Sensors
@@ -1245,6 +1263,8 @@ TFT_imprint_surf_mV:
 	; print sensor connection type
 	WIN_SMALL surf_mV_sensor_column,surf_mV_sensor3_row+.24
 	btfsc	ext_input_optical			; optical input?
+	bra		TFT_sensor_mV_optical		; YES
+	btfsc	ext_s8_full_digital			; are we in external S8 full digital mode? 
 	bra		TFT_sensor_mV_optical		; YES
 	TSTOSS	opt_s8_mode					; NO  - S8 input selected?
 	bra		TFT_sensor_mV_analog		;       NO  - analog input
@@ -1376,7 +1396,7 @@ TFT_imprint_menu_mV_helper:
 	STRCAT_PRINT "mV"					; append unit and dump buffer to screen
 	return								; done
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
 
  IFDEF _rx_functions
@@ -1696,7 +1716,7 @@ TFT_depth_exit:
 	bra		TFT_depth_exit_2			;             YES
 	;bra	TFT_depth_exit_1			;             NO
 
-TFT_depth_exit_1
+TFT_depth_exit_1:
 	WIN_TINY dm_mask_depth_column_alt,dm_mask_depth_row
 	FONT_COLOR_MASK						; set color
 	STRCAT_TEXT_PRINT tDepth			; restore "Depth" title
@@ -2035,11 +2055,15 @@ TFT_show_temp_divemode:
 
 	WIN_SMALL dm_temp_column,dm_temp_row; set position
 	FONT_COLOR_MEMO						; set color
-	movlw	index_compass_dm			; index of compass custom view
-	cpfseq	active_customview			; compass shown in custom view?
-	goto	TFT_temp_common				; NO  - continue with common part for temperature
-	goto	TFT_update_stopwatch		; YES - show resettable dive time instead of temperature
+	goto	TFT_temp_common				; continue with common part for temperature
 
+	global	TFT_dive_compass_extras
+TFT_dive_compass_extras:			; Update Stopwatch display in compass mode
+	WIN_SMALL dm_compass_stopwatch_column,dm_compass_stopwatch_row	; set position
+	FONT_COLOR_MEMO					; set color
+	MOVII	divesecs_compass_trip,mpr		; get the compass stopwatch
+	goto	update_stopwatch_common		; YES - show resettable dive time instead of temperature (And return)
+	
 
 ;-----------------------------------------------------------------------------
 ; Dive Mode - active Gas and Setpoint
@@ -2099,7 +2123,7 @@ TFT_active_sp_label_1:
 	FONT_COLOR_MEMO						; select memo color
 	STRCAT	"bar"						; print "bar"
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 	movf	dive_ccr_mode,W				; get setpoint mode =0: Fixed SP, =1: Sensor, =2: Auto SP
 	sublw	.1							; dive_ccr_mode = 1 (Sensor) ?
@@ -2942,11 +2966,14 @@ TFT_message_i2c_error:
 	rcall	TFT_message_open			; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
 	return								; NO - skip message in this cycle
-	STRCPY	"I2C "						; print "I2C Error:"
+	STRCPY	"I: "						; print "I2C Error:"
 	movff	i2c_error_vault+0,WREG				; last device adress
 	output_hex
 	PUTC	" "
 	movff	i2c_error_vault+1,WREG				; last data byte 
+	output_hex
+	PUTC	" "
+	movff	i2c_error_vault+2,WREG				; copy of SSP1CON2
 	output_hex
 	bra		TFT_message_close			; finalize message output
 
@@ -3481,7 +3508,7 @@ TFT_message_gas_density:
 
  ENDIF	; _ccr_pscr
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 ;-----------------------------------------------------------------------------
 ; Dive Mode - Message - Sensor ppO2 Divergence
@@ -3510,7 +3537,7 @@ TFT_message_fallback:
 	STRCPY_TEXT tDiveFallback			; print "Fallback!"
 	bra		TFT_message_close			; finalize message output
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
  IFDEF _rx_functions
 
@@ -3627,21 +3654,66 @@ tft_out13	CODE
 	
 	global	TFT_surf_desat_nofly_cns
 TFT_surf_desat_nofly_cns:
-	WIN_SMALL surf_gaslist_column+.10,surf_gaslist_row+.5
-	call	TFT_surf_mesg_desat2
-	WIN_SMALL surf_gaslist_column+.10,surf_gaslist_row+(surf_gaslist_spacing*.1)+.5
-	call	TFT_nofly_time_fly
-	WIN_SMALL surf_gaslist_column+.10,surf_gaslist_row+(surf_gaslist_spacing*.2)+.5
-	bra	TFT_surface_tissues_5		; continue
-	
+    	FONT_COLOR color_green				; set menu title font color
+	WIN_TINY surf_gaslist_column,surf_gaslist_row+.5
+	STRCPY_PRINT	"Desat:"			; print label
+	FONT_COLOR_MEMO						; select color
+	WIN_SMALL surf_gaslist_column+.56,surf_gaslist_row
+	MOVII	int_O_desaturation_time,mpr	; get desaturation time in minutes
+	rcall	TFT_surf_desat_nofly_cns_helper
+
+	FONT_COLOR color_green				; set menu title font color
+	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.1)+.5
+	movff	char_I_altitude_wait,WREG	; get mode
+	tstfsz	WREG					; mode = altitude?
+	bra		TFT_surf_desat_nofly_cns_noalt	; YES
+	;bra	TFT_nofly_time_fly			; NO
+
+TFT_surf_desat_nofly_cns_nofly:
+	STRCPY_PRINT	"NoFly:"					; print no-fly label
+	FONT_COLOR_MEMO						; select color
+	WIN_SMALL surf_gaslist_column+.56,surf_gaslist_row+(surf_gaslist_spacing*.1)
+	MOVII	int_O_nofly_time,mpr		; get no-fly time in minutes
+	rcall	TFT_surf_desat_nofly_cns_helper
+	bra	TFT_surf_desat_nofly_cns2			; continue
+
+TFT_surf_desat_nofly_cns_noalt:
+	STRCPY_PRINT	"NoAlt:"					; print no-altitude label
+	FONT_COLOR_MEMO						; select color
+	WIN_SMALL surf_gaslist_column+.56,surf_gaslist_row+(surf_gaslist_spacing*.1)
+	rcall	TFT_surf_desat_nofly_cns_helper
+	;bra	TFT_surf_desat_nofly_cns2			; continue
+
+TFT_surf_desat_nofly_cns2:
+       	FONT_COLOR color_green				; set menu title font color
+	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.2)+.5
+	STRCPY_PRINT	"CNS:"			; print label
+	FONT_COLOR_MEMO						; select color
+	WIN_SMALL surf_gaslist_column+.62,surf_gaslist_row+(surf_gaslist_spacing*.2)
+	MOVII	int_O_CNS_current,mpr		; get current CNS
+	call	TFT_color_code_cns			; color-code CNS value
+	output_999							; print (0-999)
+	PUTC_PRINT "%"						; append unit and dump to screen
+	return
+		
+TFT_surf_desat_nofly_cns_helper:	
+	call	convert_time				; convert hi:lo in minutes to hours (up:hi) and minutes (lo)
+	movff	lo,up						; backup lo
+	movff	hi,lo						; get   hours into lo
+	output_99							; print hours (0-99)
+	PUTC	':'							; print ":"
+	movff	up,lo						; get   minutes into lo
+	output_99x							; print minutes (00-99)
+	PRINT
+	return
 	
 ;-----------------------------------------------------------------------------
 ; Surface Custom View - Last Dive Summery
 ;
 	global	TFT_surf_cv_lastdive
 TFT_surf_cv_lastdive:
-	FONT_COLOR_MEMO						; set color
-
+	FONT_COLOR color_green				; set menu title font color
+	
 	WIN_TINY surf_gaslist_column,surf_gaslist_row+.5
 	STRCAT_TEXT_PRINT	tLastDive		; "Last Dive:"
 
@@ -3654,6 +3726,7 @@ TFT_surf_cv_lastdive:
 	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.3)+.5
 	STRCAT_TEXT_PRINT	tAvgDepth		; "Average"
 
+	FONT_COLOR_MEMO						; set color
 	WIN_SMALL surf_gaslist_column+.48,surf_gaslist_row
 	SMOVII	int_O_desaturation_time,mpr	; ISR-safe copy of the desaturation time
 	movf	mpr+0,W						; get low byte into WREG
@@ -4010,9 +4083,16 @@ TFT_surf_tissues_bargraph:
 ;
 	global	TFT_surf_cv_settings
 TFT_surf_cv_settings:
+    	FONT_COLOR color_green				; set menu title font color
+	
+	WIN_TINY surf_gaslist_column,surf_gaslist_row+.5
+	STRCAT_TEXT	tGasDeco		; "Deco"
+	PUTC	":"
+	PRINT
+
 	; Deco Mode
 	FONT_COLOR_MEMO						; select color
-	WIN_SMALL surf_gaslist_column,surf_gaslist_row
+	WIN_SMALL surf_gaslist_column+.27,surf_gaslist_row
 	STRCAT_PRINT "ZH-L16"				; print fix part of model
 	movff	char_I_model,WREG			; get model
 	iorwf	WREG						; GF enabled?
@@ -4021,20 +4101,25 @@ TFT_surf_cv_settings:
 
 TFT_surface_decosettings0:
 	; Display ZH-L16 sat/desat model
-	WIN_SMALL surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.1)
-	STRCPY_TEXT tSD								; print label (S/D)
+	FONT_COLOR color_green				; set menu title font color
+	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.1)+.5
+	STRCPY_TEXT_PRINT tSD								; print label (S/D)
+	FONT_COLOR_MEMO						; select color
+	WIN_SMALL surf_gaslist_column+.27,surf_gaslist_row+(surf_gaslist_spacing*.1)
 	movff	char_I_saturation_multiplier,  lo	; get sat   mult.
 	movff	char_I_desaturation_multiplier,hi	; get desat mult.
 	bra		TFT_surface_decosettings_com		; continue with common part
 
 TFT_surface_decosettings1:
 	; Display ZH-L16-GF low/high model
-	WIN_SMALL surf_gaslist_column+.43,surf_gaslist_row
-	STRCPY_TEXT_PRINT tZHL16GF					; print GF label behind deco model label
-
-	WIN_SMALL surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.1)
-	STRCPY_TEXT tGF								; print label (GF:)
-	PUTC	' '									; print a space
+	WIN_SMALL surf_gaslist_column+.43+.27,surf_gaslist_row
+	STRCPY_TEXT_PRINT tZHL16GF					; print "+GF" label behind deco model label
+	
+	FONT_COLOR color_green				; set menu title font color
+	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.1)+.5
+	STRCPY_TEXT_PRINT tGF								; print label (GF:)
+	FONT_COLOR_MEMO						; select color
+	WIN_SMALL surf_gaslist_column+.27,surf_gaslist_row+(surf_gaslist_spacing*.1)
 	movff	opt_GF_low, lo						; get GF low
 	movff	opt_GF_high,hi						; get GF high
 	;bra	TFT_surface_decosettings_com		; continue with common part
@@ -4048,26 +4133,34 @@ TFT_surface_decosettings_com:
 	PUTC_PRINT "%"						; append unit and dump to screen
 
 	; fTTS
-	WIN_SMALL surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.2)
-	STRCPY_TEXT tFTTSSurf				; print label
+	FONT_COLOR color_green				; set menu title font color
+	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.2)+.5
+	STRCPY_TEXT_PRINT tFTTSSurf				; print label
+	FONT_COLOR_MEMO						; select color
+	WIN_SMALL surf_gaslist_column+.76,surf_gaslist_row+(surf_gaslist_spacing*.2)
 	movff	char_I_extra_time,lo		; get time
 	output_9							; print time (0-9)
 	STRCAT_TEXT_PRINT tMinutes			; append unit and dump to screen
 
 	; Last Stop
-	WIN_SMALL surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.3)
-	STRCPY_TEXT tLastDecostopSurf		; print label
+	FONT_COLOR color_green				; set menu title font color
+	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.3)+.5
+	STRCPY_TEXT_PRINT tLastDecostopSurf		; print label
+	FONT_COLOR_MEMO						; select color
+	WIN_SMALL surf_gaslist_column+.76,surf_gaslist_row+(surf_gaslist_spacing*.3)
 	movff	opt_last_stop,lo			; get depth
 	output_9							; print depth (0-9)
 	STRCAT_TEXT_PRINT tMeters			; append unit and dump to screen
 
 	; Salinity
-	WIN_SMALL surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.4)
-	STRCPY_TEXT tDvSalinitySurf			; print label
+	FONT_COLOR color_green				; set menu title font color
+	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.4)+.5
+	STRCPY_TEXT_PRINT tDvSalinitySurf			; print label
+	FONT_COLOR_MEMO						; select color
+	WIN_SMALL surf_gaslist_column+.76,surf_gaslist_row+(surf_gaslist_spacing*.4)
 	movff	opt_salinity,lo				; get salinity
 	output_9							; print salinity (0-9)
 	STRCAT_TEXT_PRINT tPercent			; append unit and dump to screen
-
 	return								; done
 
 
@@ -4436,8 +4529,8 @@ TFT_update_avr_stopwatch3:
 	;bra	TFT_update_stopwatch		; continue
 
 TFT_update_stopwatch:
-	; jump-in point for stopped dive time in compass custom view
-	MOVII	divesecs_avg_trip,mpr		; get the resettable dive time (stopwatch)
+    	MOVII	divesecs_avg_trip,mpr		; get the resettable dive time (stopwatch)
+update_stopwatch_common:				; jump-in point for stopped dive time in compass custom view
 	call	convert_time				; convert hi:lo in seconds to minutes (up:hi) and seconds (lo)
 	movlw	.100						; display layout will change if minutes become >= 100
 	cpfslt	hi							; minutes < 100 ?
@@ -4705,46 +4798,40 @@ TFT_display_stop_depth_m:
 TFT_ceiling_GF_tissue_mask:
 	FONT_COLOR_MASK						; select color
 
+	WIN_TINY dm_custom_gf_column1+.5, dm_custom_gf_title_row
+	STRCPY_TEXT_PRINT tGFInfo			; print label
+	
 	WIN_TINY dm_custom_ceiling_column+.2,dm_custom_ceiling_title_row
 	STRCPY_TEXT_PRINT tCeiling			; print label
 
 	WIN_TINY dm_custom_tissue_title_column, dm_custom_tissue_title_row
-	STRCPY_TEXT_PRINT tDiveTissues		; print label
+	STRCPY_TEXT_PRINT tDiveTissues		; print labelGF
+	return								; done
+
+;-----------------------------------------------------------------------------
+; Dive Custom View - Ceiling, Supersaturation & GF Surface - Mask
+;
+	global	TFT_ceiling_GF_surfGF_mask
+TFT_ceiling_GF_surfGF_mask:
+	FONT_COLOR_MASK						; select color
 
 	WIN_TINY dm_custom_gf_column1+.5, dm_custom_gf_title_row
 	STRCPY_TEXT_PRINT tGFInfo			; print label
 
-	return								; done
+	WIN_TINY dm_custom_ceiling_column+.2,dm_custom_ceiling_title_row
+	STRCPY_TEXT_PRINT tCeiling			; print label
 
+	WIN_TINY dm_custom_surfGF_title_column, dm_custom_surfGF_title_row
+	STRCPY_TEXT_PRINT tDiveSurfGF		; print label
+	return								; done	
 
 ;-----------------------------------------------------------------------------
 ; Dive Custom View - Ceiling, Supersaturation & Tissues - Data
 ;
 	global	TFT_ceiling_GF_tissue
 TFT_ceiling_GF_tissue:
-	WIN_MEDIUM dm_custom_ceiling_column,dm_custom_ceiling_row
-	MOVII	int_O_ceiling,mpr			; get ceiling in [mbar] relative pressure
-	call	TFT_color_code_ceiling		; color-code the output (also strips off flags)
-	call	convert_pres_to_depth		; convert pressure in [mbar] to depth in [cm]
-
-	TSTOSS	opt_units						; 0=m, 1=ft
-	bra		TFT_ceiling_GF_tissue_metric	; 0 - meter
-	;bra	TFT_ceiling_GF_tissue_imperial	; 1 - feet
-
-TFT_ceiling_GF_tissue_imperial:
-	call	convert_cm_to_feet			; convert value in hi:lo from [cm] to [feet]
-	output_999							; print (0-999)
-	bra		TFT_ceiling_GF_tissue0		; continue
-
-TFT_ceiling_GF_tissue_metric:
-	bsf		omit_digit_1				; do not print 1st digit
-	bsf		decimal_digit2				; place a decimal point in front of digit 2
-	bsf		leftbind					; print left-aligned
-	output_65535						; print (xxx.x-)
-	bra		TFT_ceiling_GF_tissue0		; continue
-
-TFT_ceiling_GF_tissue0:
-	PUTC_PRINT " "						; append a space and dump to screen
+    	; Show ceiling
+	rcall	TFT_ceiling
 	; show tissue diagram
 	rcall	TFT_dive_tissues			; show tissue pressure diagram
 	; show current supersaturation
@@ -4756,7 +4843,6 @@ TFT_ceiling_GF_tissue0:
 	WIN_STD	dm_custom_clock_column+.40, dm_custom_gf_row+.5
 	PUTC_PRINT "%"						; print "%" and dump to screen
 	return								; done
-
 
 	;-------------------------------------------------------------------------
 	; Draw saturation graph in dive mode custom view
@@ -4907,6 +4993,31 @@ TFT_dive_tissues_7:
 	PRINT								; dump buffer to screen
 	return								; done
 
+TFT_ceiling:    
+	WIN_MEDIUM dm_custom_ceiling_column,dm_custom_ceiling_row
+	MOVII	int_O_ceiling,mpr			; get ceiling in [mbar] relative pressure
+	call	TFT_color_code_ceiling		; color-code the output (also strips off flags)
+	call	convert_pres_to_depth		; convert pressure in [mbar] to depth in [cm]
+
+	TSTOSS	opt_units						; 0=m, 1=ft
+	bra		TFT_ceiling_GF_tissue_metric	; 0 - meter
+	;bra	TFT_ceiling_GF_tissue_imperial	; 1 - feet
+
+TFT_ceiling_GF_tissue_imperial:
+	call	convert_cm_to_feet			; convert value in hi:lo from [cm] to [feet]
+	output_999							; print (0-999)
+	bra		TFT_ceiling_GF_tissue0		; continue
+
+TFT_ceiling_GF_tissue_metric:
+	bsf		omit_digit_1				; do not print 1st digit
+	bsf		decimal_digit2				; place a decimal point in front of digit 2
+	bsf		leftbind					; print left-aligned
+	output_65535						; print (xxx.x-)
+	bra		TFT_ceiling_GF_tissue0		; continue
+
+TFT_ceiling_GF_tissue0:
+	PUTC_PRINT " "						; append a space and dump to screen
+	return	
 
 	; Helper Function - draw a bargraph
 TFT_dive_tissues_bargraph:
@@ -4924,6 +5035,32 @@ TFT_dive_tissues_bargraph:
 	BOX_COLOR							; draw bargraph
 	return								; done
 
+;-----------------------------------------------------------------------------
+; Dive Custom View - Ceiling, Supersaturation & Surf GF - Data
+;
+	
+	global	TFT_ceiling_GF_surfGF
+TFT_ceiling_GF_surfGF:				; data for ceiling, current GF and Surf GF
+	; Show ceiling
+	rcall	TFT_ceiling
+	; show current supersaturation
+	WIN_MEDIUM dm_custom_clock_column+.3, dm_custom_gf_row
+	MOVII	int_O_lead_supersat,mpr		; bank-safe copy of leading tissue's supersaturation
+	call	TFT_color_code_supersat		; color-code output
+	output_256							; need to print lo only, int_O_lead_supersat value is limited to 255
+	PRINT								; dump to screen
+	WIN_STD	dm_custom_clock_column+.40, dm_custom_gf_row+.5
+	PUTC_PRINT "%"						; print "%" and dump to screen
+	; show Surface GF
+	WIN_MEDIUM dm_custom_gf_column3+.13, dm_custom_gf_row
+	MOVII	int_O_GF_surface,mpr		; bank-safe copy of leading tissue's supersaturation
+	FONT_COLOR_MEMO							; set color
+	output_999
+	PRINT								; dump to screen
+	WIN_STD	dm_custom_gf_column3+.50, dm_custom_gf_row+.5
+	PUTC_PRINT "%"						; print "%" and dump to screen
+
+	return		
 
 ;-----------------------------------------------------------------------------
 ; Dive Custom View - CNS - Mask
@@ -5371,7 +5508,7 @@ TFT_pscr_info:
 
  ENDIF	; _ccr_psrc
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 ;-----------------------------------------------------------------------------
 ; Dive Custom View - Sensor ppO2 - Mask
@@ -5547,7 +5684,7 @@ TFT_ppo2_sensors_3e:
 TFT_ppo2_sensors_4:
 	return								; done
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
  IFDEF _rx_functions
 
@@ -6161,7 +6298,7 @@ TFT_print_firmware:
 TFT_print_decotype:
 	bsf		aux_flag					; default to dive with deco calculation (used by logbook)
 	incf	lo,W						; WREG = lo + 1
-TFT_print_decotype_1
+TFT_print_decotype_1:
 	decfsz	WREG,W						; in OC mode?
 	bra		TFT_print_decotype_2		; NO  - try next
 	STRCAT_TEXT_PRINT tDvOC				; YES - print "OC"
@@ -6209,10 +6346,13 @@ TFT_debug_output:
 ;	WIN_TINY   .0, .		0					; dive    mode: overwrites depth label
 	FONT_COLOR_MEMO								; set color
 	
+	;movff	ambient_light+0,lo
 	movff	gp_debug+0,lo
-	output_256
+	movff	gp_debug+1,hi
+	output_65535
 	PUTC	","
-	movff	gp_debug+1,lo
+	movff	ambient_light+0,lo
+;	movff	gp_debug+1,lo
 	output_256
 
 	;	; deco engine scheduling performance

@@ -201,44 +201,6 @@ one_sec_sleep_buttons_done:
     	bcf		switch_right				; clear right button event
 	bcf		switch_left				; clear left  button event
 
-	btfsc	battery_gauge_available			; is a battery gauge IC available?
-	bra		one_sec_sleep_1					; YES - check for charger
-	btfsc	ble_available				; Skip "USB" check in all Bluetooth models (Required for very old OSTC sport)
-	bra		one_sec_sleep_2					;     - continue
-	btfsc	vusb_in							; NO  - USB plugged in?
-	bcf		sleepmode						;       YES - terminate sleep mode
-	bra		one_sec_sleep_2					;     - continue
-
-one_sec_sleep_1:
-	call	get_battery_voltage				; check for charger
-
-	; Test if charging
-	btfss	cc_active						; charging?
-	bra		one_sec_sleep_1a				; NO
-	btfsc	charge_in_sleep					; YES - already showing charge screen?
-	bra		one_sec_sleep_1b				;       YES - only update data
-
-	bsf		charge_in_sleep
-	bcf		deep_sleep						; wake-up from deepsleep
-	call	TFT_boot						; initialize TFT (includes clear screen)
-	movlw	.32
-	movff	WREG,max_CCPR1L					; bank safe
-	call	TFT_Display_FadeIn				; dim up the display
-one_sec_sleep_1b:
-	call	TFT_surfmode_batt				; show battery type, voltage and color-coded percentage
-	bra		one_sec_sleep_2					; continue
-
-one_sec_sleep_1a:
-	btfss	charge_in_sleep					; was showing charge screen?
-	bra		one_sec_sleep_2					; NO
-
-	; yes, power-down screen    
-	call	TFT_Display_FadeOut				; power-down backlight
-	call	TFT_DisplayOff					; power-down display
-	bcf		charge_in_sleep
-
-
-one_sec_sleep_2:
 	incf	sm_timer_10sec,F				; increment 10 seconds timer
 	movlw	.10								; load  a 10 into WREG
 	cpfslt	sm_timer_10sec					; timer < 10 yet?
@@ -250,14 +212,7 @@ one_sec_sleep_2:
 	btfsc	trigger_full_hour				; one hour in sleep?
 	rcall	one_hour_sleep					; YES - do the every hour tasks
 
-	; sleepmode pressure sampling for new sensor is done here
-	btfss	press_sensor_type				; New sensor found?
-	return							; No, done.
-
-	btfsc	ms5837_state					; =0: result of temperature is in the ADC
-	goto	I2C_get_press_val_MS5837			; (Will clear ms5837_state) (And return!)
-	goto	I2C_get_temp_val_MS5837				; (Will set ms5837_state) (And return!)
-	; done.
+	return	; done.
 
 
 	
@@ -267,6 +222,46 @@ one_sec_sleep_2:
 ten_sec_sleep:
 	; tasks every 10 seconds in sleep mode
 	clrf	sm_timer_10sec					; clear timer
+
+	btfsc	battery_gauge_available			; is a battery gauge IC available?
+	bra		ten_sec_sleep_1					; YES - check for charger
+	btfsc	ble_available				; Skip "USB" check in all Bluetooth models (Required for very old OSTC sport)
+	bra		ten_sec_sleep_2					;     - continue
+	btfsc	vusb_in							; NO  - USB plugged in?
+	bcf		sleepmode						;       YES - terminate sleep mode
+	bra		ten_sec_sleep_2					;     - continue
+
+ten_sec_sleep_1:
+	call	get_battery_voltage				; check for charger
+
+	; Test if charging
+	btfss	cc_active						; charging?
+	bra		ten_sec_sleep_1a				; NO
+	btfsc	charge_in_sleep					; YES - already showing charge screen?
+	bra		ten_sec_sleep_1b				;       YES - only update data
+
+	bsf		charge_in_sleep
+	bcf		deep_sleep						; wake-up from deepsleep
+	call	TFT_boot						; initialize TFT (includes clear screen)
+	movlw	.32
+	movff	WREG,max_CCPR1L					; bank safe
+	call	TFT_Display_FadeIn				; dim up the display
+ten_sec_sleep_1b:
+	call	TFT_surfmode_batt				; show battery type, voltage and color-coded percentage
+	bra		ten_sec_sleep_2					; continue
+
+ten_sec_sleep_1a:
+	btfss	charge_in_sleep					; was showing charge screen?
+	bra		ten_sec_sleep_2					; NO
+
+	; yes, power-down screen    
+	call	TFT_Display_FadeOut				; power-down backlight
+	call	TFT_DisplayOff					; power-down display
+	bcf		charge_in_sleep
+
+
+ten_sec_sleep_2:
+
 	rcall	pressuretest_sleep_fast			; get pressure without averaging (faster)
 	MOVLI	wake_up_from_sleep,sub_a		; load wake-up pressure (1160 mbar) into sub_a
 	MOVII	pressure_abs,      sub_b		; load current absolute pressure    into sub_b
@@ -403,6 +398,8 @@ check_accelerometer:
 ;
 deepsleep_get_accel:
 	call	I2C_init_compass				; start compass
+	btfss	compass_present
+	bcf	deep_sleep				; No Compass - terminate deep sleep mode
 	rcall	sleepmode_sleep					; sleep for 62.5...125 ms
 	call	I2C_RX_accelerometer			; read accelerometer
 	call	I2C_RX_accelerometer			; read accelerometer
@@ -417,6 +414,21 @@ deepsleep_get_accel:
 ; faster method to save some power in sleep mode
 ;
 pressuretest_sleep_fast:
+    	; sleepmode pressure sampling for new sensor is done here
+	btfss	press_sensor_type				; New sensor found?
+	bra	pressuretest_sleep_fast2			; No
+
+	btfsc	ms5837_state					; =0: result of temperature is in the ADC
+	bra	pressuretest_sleep_fast1			; was =1 -> Read pressure from MS5837. ms5837_state will always be zero here from now on
+	call	I2C_get_temp_val_MS5837				; (Will set ms5837_state)
+	rcall	sleepmode_sleep					; sleep for 62.5...125 ms
+	rcall	sleepmode_sleep					; sleep for 62.5...125 ms
+pressuretest_sleep_fast1:	
+	call	I2C_get_press_val_MS5837			; (Will clear ms5837_state)
+	rcall	sleepmode_sleep					; sleep for 62.5...125 ms
+	rcall	sleepmode_sleep					; sleep for 62.5...125 ms
+
+pressuretest_sleep_fast2:
 	banksel	isr_backup						; select bank ISR data
 
 	clrf	pressure_abs_avg+0				; clear pressure    average register

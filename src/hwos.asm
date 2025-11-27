@@ -18,7 +18,7 @@
 #include "eeprom_rs232.inc"
 
 ;----------------------------- PIC Configuration -----------------------------
-;
+
 	CONFIG	RETEN   = OFF		; regulator power while in sleep mode controlled by SRETEN bit
 	CONFIG	SOSCSEL = HIGH		; high power SOSC circuit selected
 	CONFIG	XINST   = OFF		; extended instruction set disabled
@@ -46,6 +46,7 @@ ac_ram		udata_acs	ac_ram				; access RAM data
 HW_descriptor					res 1		; OSTC - model descriptor (cleared & rebuilt in restart)
 HW_variants					res 1		; OSTC - model variants   (NOT cleared in restart)
 HW_variants2					res 1		; OSTC - more model variants   (NOT cleared in restart)
+HW_variants3					res 1		; OSTC - more model variants   (NOT cleared in restart)					
 						
 ;---- Flags - Hardware States
 HW_flags_state1					res 1		; hardware - states 1
@@ -105,7 +106,7 @@ battery_offset					res 2		; for battery gauge IC
 battery_type					res 1		; =0:1.5V, =1:3.6V Saft, =2:LiIon 3.7V/0.8Ah, =3:LiIon 3.7V/3.1Ah, =4: LiIon 3.7V/2.3Ah
 battery_accumulated_charge		res 2		; raw values in battery gauge IC
 battery_temperature				res 2		; battery temperature in 0.1 Kelvin
-gauge_status_byte				res 1		; gauge IC status byte
+
 
 
 
@@ -119,6 +120,7 @@ gauge_status_byte				res 1		; gauge IC status byte
 	global	HW_descriptor
 	global	HW_variants
 	global	HW_variants2
+	global	HW_variants3
 	global	HW_flags_state1
 	global	HW_flags_state2
 	global	HW_flags_state3
@@ -151,7 +153,7 @@ gauge_status_byte				res 1		; gauge IC status byte
 	global	battery_type
 	global	battery_accumulated_charge
 	global	battery_temperature
-	global	gauge_status_byte
+
 
 
 ;=============================================================================
@@ -342,7 +344,7 @@ init_ostc:
 
 
 ; Timer 3 for IR-RX Timeout
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	clrf	T3GCON				; clear Timer3 gate control register
 ;	movlw	b'10001101'			; old value
 	movlw	b'10001011'			; bit 7-6: 10 = clock source SOSC/SCLKI (with bit   3 = 1)
@@ -367,6 +369,8 @@ init_ostc:
 
 
 ; MSSP1 Module: I2C Master
+	movlw	b'00000000'			; enable slew rate control
+	movwf	SSP1STAT			; ...
 	movlw	b'00101000'			; set up I2C to master mode
 	movwf	SSP1CON1			; ...
 	clrf	SSP1CON2			; ...
@@ -410,7 +414,7 @@ init_ostc:
 	banksel 0xF16				; addresses F16h...F5Fh are not part of the access RAM
 	movlw	b'11000000'			; disable ECCP3 and ECCP2
 	movwf	PMD0				; ...
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	movlw	b'11000001'			; disable PSP, CTMU and EMB
  ELSE
 	movlw	b'11001001'			; disable PSP, CTMU, Timer 3 and EMB
@@ -536,10 +540,11 @@ restore_flash:
 	movwf	TBLPTRL					; ...
 	movwf	TBLPTRH					; ...
 	movwf	TBLPTRU					; ...
-	TBLRD*-							; dummy read to be in 128 byte block
 
 	movlw	b'10010100'				; setup   block erase
 	rcall	restore_write			; execute block erase
+
+	TBLRD*-							; dummy read to be in 128 byte block
 
 	; set start address in EEPROM
 	EEPROM_SET_ADDRESS eeprom_prog_page0_backup

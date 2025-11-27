@@ -81,7 +81,7 @@
 #DEFINE FLAG_TFT_depth_maximum_apnoe	TFT_output_flags_1,4	; =1: show  maximum depth of last apnoe dive
 #DEFINE FLAG_TFT_clear_apnoe_surface	TFT_output_flags_1,5	; =1: clear apnoe mode surface data from screen
 #DEFINE FLAG_TFT_apnoe_divetime			TFT_output_flags_1,6	; =1: show  apnoe mode dive times
-#DEFINE FLAG_TFT_temperature			TFT_output_flags_1,7	; =1: show  temperature (or resettable dive time when in compass view)
+#DEFINE FLAG_TFT_temperature			TFT_output_flags_1,7	; =1: show/redraw temperature
 
 ; TFT_output_flags_2 - phase 2: every second - before deco calculations, deco modes only
 #DEFINE FLAG_TFT_divemode_mask			TFT_output_flags_2,0	; =1: show  dive mode mask
@@ -242,6 +242,16 @@ diveloop_loop:
 	movlw	.4					; 62,5ms * 4 = 1/4 second
 	movff	WREG,isr_tmr7_helper			; to make sure at least 1/4 will pass before trigger_quarter_second is re-set
 
+ IFDEF _compass
+	movlw	index_compass_dm			; index of compass view
+	cpfseq	active_customview			; in compass view?
+	bra		diveloop_loop_quarter_1		; NO  - continue with tasks 1/4 second
+	call	TFT_dive_compass_heading	; YES - update compass heading value
+	btfsc	compass_bearing_set			; is a bearing set?
+	call	TFT_dive_compass_extras			; YES, Update Stopwatch display in compass mode
+ ENDIF	
+	
+diveloop_loop_quarter_1: 
 	btfss	press_sensor_type			; New sensor found?
 	bra 	diveloop_loop_0				;       No - continue
 
@@ -259,15 +269,9 @@ diveloop_loop_0:
 	bra		diveloop_loop_2				; YES - continue with tasks every 1/1 second
 	btfsc	trigger_half_second			; NO  - new 1/2 second?
 	bra		diveloop_loop_1				;       YES - continue with tasks every 1/2 second
-
+	
 	; tasks every round except every 1/1 or 1/2 second
- IFDEF _compass
-	movlw	index_compass_dm			; index of compass view
-	cpfseq	active_customview			; in compass view?
-	bra		diveloop_loop_11			; NO  - continue with tasks every round
-	call	TFT_dive_compass_heading	; YES - update compass heading value
-	bsf		FLAG_TFT_temperature		;     - redraw temperature (will show resettable dive time now)
- ENDIF
+	
 	bra		diveloop_loop_11			;     - continue tasks every round
 
 diveloop_loop_1:
@@ -349,7 +353,7 @@ diveloop_loop_4:
 	call	check_dive_autosp			; YES - check for Auto-SP
  ENDIF
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	btfsc	FLAG_ccr_mode				; in CCR mode?
 	rcall	calc_deko_divemode_sensor	; YES - process sensor readings
 	btfsc	FLAG_pscr_mode				; in pSCR mode?
@@ -406,6 +410,7 @@ diveloop_loop_5:
 
 diveloop_loop_6:
 	; deco mode tasks every 1/1 second
+	INCI	divesecs_compass_trip			; increment the compass stopwatch
 	INCI	divesecs_avg_trip			; increment the resettable dive time
 	INCI	divesecs_avg_total			; increment the total      dive time
 
@@ -619,7 +624,7 @@ TFT_output_1:								; every second - before deco calculations, all mode
 	btfsc	FLAG_TFT_active_gas_divemode	; shall show active gas and dive mode?
 	call	TFT_show_active_gas_divemode	; YES - display gas, setpoint and mode
 	btfsc	FLAG_TFT_temperature			; shall show temperature?
-	call	TFT_show_temp_divemode			; YES - display temperature (or resettable dive time)
+	call	TFT_show_temp_divemode			; YES - display temperature
 
 	btfsc	FLAG_TFT_apnoe_surface_time		; shall show apnoe mode surface time?
 	call	TFT_show_apnoe_surface			; YES - show apnoe mode surface time
@@ -976,7 +981,7 @@ calc_deco_engine_exec:
 
 
  IFDEF _ccr_pscr
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 ;-----------------------------------------------------------------------------
 ; Process Sensor Readings
@@ -984,6 +989,8 @@ calc_deco_engine_exec:
 	global	calc_deko_divemode_sensor
 calc_deko_divemode_sensor:
 	btfsc	ext_input_optical				; do we have an optical interface?
+	bra		calc_deko_divemode_sensor_opt	; YES - process received data
+	btfsc	ext_s8_full_digital			; are we in external S8 full digital mode? 
 	bra		calc_deko_divemode_sensor_opt	; YES - process received data
 	btfss	ext_input_s8_ana				; NO  - do we have a S8/analog interface?
 	return									;       NO  - nothing to do, done
@@ -1335,7 +1342,7 @@ check_sensor_voting_helper:
 ;	retlw	.0								; NO  - within range
 ;	retlw	.1								; YES - out of range
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
  ENDIF	; _ccr_pscr
 
 
@@ -1887,7 +1894,7 @@ divemenu_cleanup:
 
 divemenu_cleanup_1:
 	bsf		FLAG_TFT_active_gas_divemode; request redraw of gas/setpoint/diluent
-	bsf		FLAG_TFT_temperature		; request redraw of temperature (or resettable dive)
+	bsf		FLAG_TFT_temperature		; request redraw of temperature
 	bcf		better_gas_blinking			; stop better gas cue
 	bcf		better_dil_blinking			; stop better dil cue
 	;bra	request_redraw_NDL_deco_data; request redraw of NDL/deco data and return
@@ -2312,6 +2319,7 @@ divemode_option_gauge_reset:
  IFDEF _compass
 divemode_option_course:
 	MOVII	compass_heading_shown,compass_bearing
+	CLRI	divesecs_compass_trip
 	bsf		compass_bearing_set				; set flag to show heading
 	goto	menuview_toggle_reset			; terminate the pre-menu and return
  ENDIF
@@ -2358,6 +2366,7 @@ advance_time:
 
 	ADDLI	.300,divesecs_avg_trip			; add 5 minutes (300 seconds) to resettable time accumulator
 	ADDLI	.300,divesecs_avg_total			; add 5 minutes (300 seconds) to total time accumulator
+	ADDLI	.300,divesecs_compass_trip		; add 5 minutes (300 seconds) to compass stopwatch accumulator
 
 	MOVII	pressure_rel_cur_cached,xB		; calculate 300 x depth in mbar (300 = 5 min * 60 sec/min)
 	MOVLI	.300,xA							; ...
@@ -2849,7 +2858,7 @@ check_dive_autosp6:
 ; Helper Function - transmit new Setpoint to external Electronics and flag Change
 ;
 xmit_sp_set_flag:
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	call	transmit_setpoint			; transmit current setpoint from WREG (in cbar) to external electronics
  ENDIF
 	bsf		event_occured				; set global   event flag
@@ -3128,9 +3137,11 @@ dive_boot_cc_part2:
 	btfss	sensor3_calibrated_ok
 	bcf		use_O2_sensor3
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	; check for external HUD/ppO2 Monitor
 	btfss	ext_input_optical			; do we have an optical input?
+	bra		dive_boot_cc_part2_1		; NO
+	btfss	ext_s8_full_digital			; are we in external S8 full digital mode? 
 	bra		dive_boot_cc_part2_1		; NO
 	btfsc	sensor1_active				; YES - process flags from HUD/ppO2 Monitor
 	bsf		use_O2_sensor1				;     - ...
@@ -3160,7 +3171,7 @@ dive_boot_cc_part2_2:
 	movff	opt_setpoint_cbar+0,WREG	; YES - get value of setpoint 1 into WREG
 	movff	WREG,char_I_const_ppO2		; write setpoint to deco engine
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	call	transmit_setpoint			; transmit current setpoint from WREG (in cbar) to external electronics
 	goto	calc_deko_divemode_sensor	; process sensor readings and return
  ELSE
@@ -3298,6 +3309,10 @@ diveloop_boot:
 	clrf	pressure_rel_accu_total+1	; ...
 	clrf	pressure_rel_accu_total+2	; ...
 	clrf	pressure_rel_accu_total+3	; ...
+	
+; IFDEF _compass	
+;	CLRI	divesecs_compass_trip		; time accumulator for the compass stopwatch (Not really needed, it's not shown until it's reset with the 1st. course set)
+; ENDIF	
 
  IFDEF _rx_functions
 
@@ -3439,7 +3454,7 @@ divemode_check_warnings1:
 	rcall	check_display_ftts			; show  fTTS time (or cave mode cTTS)
 	rcall	check_ppO2					; check ppO2
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	rcall	check_ext_sensors			; check external sensors
  ENDIF
 
@@ -4307,7 +4322,7 @@ check_gas_needs_mesg:
 	goto	TFT_message_gas_needs		; show message for gas needs and return
 
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 ;-----------------------------------------------------------------------------
 ; Check external Sensors for Loss and Divergence
@@ -4386,7 +4401,7 @@ check_ext_sensors_diverg_mesg:
 	incf	message_counter,F			; increase message counter
 	goto	TFT_message_divergence		; show message and return
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
 
 ;=============================================================================

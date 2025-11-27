@@ -59,7 +59,7 @@ dive_customview_second:
 	return								;  2: not available without compass
  ENDIF
 	dcfsnz	WREG,F						;
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	goto	TFT_ppo2_sensors			;  3: ppO2 sensors
  ELSE
 	return								;  3: not available without external sensors
@@ -95,18 +95,20 @@ dive_customview_second:
 	dcfsnz	WREG,F						;
 	goto	TFT_ceiling_GF_tissue		; 10: ceiling, current GF and tissues
 	dcfsnz	WREG,F						;
-	goto	TFT_CNS						; 11: CNS values
+	goto	TFT_ceiling_GF_surfGF		; 11: ceiling, current GF and Surf_GF
 	dcfsnz	WREG,F						;
-	goto	TFT_ppo2_ead_end_cns		; 12: ppO2, END/EAD and CNS / gas density
+	goto	TFT_CNS						; 12: CNS values
 	dcfsnz	WREG,F						;
-	goto	TFT_clock_batt_surfpress	; 13: clock, battery and surface pressure
+	goto	TFT_ppo2_ead_end_cns		; 13: ppO2, END/EAD and CNS / gas density
 	dcfsnz	WREG,F						;
-	return								; 14: GF factors - static only
+	goto	TFT_clock_batt_surfpress	; 14: clock, battery and surface pressure
+	dcfsnz	WREG,F						;
+	return								; 15: GF factors - static only
 	dcfsnz	WREG,F						;
  IFDEF _cave_mode
-	goto	TFT_cave_waypoints			; 15: cave waypoints
+	goto	TFT_cave_waypoints			; 16: cave waypoints
  ELSE
-	return								; 15: not available without cave mode functions
+	return								; 16: not available without cave mode functions
  ENDIF
 	return								;  0: do nothing
 
@@ -147,7 +149,7 @@ surf_customview_mask:
 	; prepare output of custom view title
 	WIN_BOX_BLACK .50,surf_warning1_row-1, .0, surf_decotype_column-.1	; top, bottom, left, right
 	WIN_TINY   surf_customview_title_column,surf_customview_title_row	; set title position
-	FONT_COLOR color_greenish											; set title color
+	FONT_COLOR color_green											; set title color
 
 	; jump table
 	movf	active_customview,W			; get custom view to show
@@ -257,6 +259,8 @@ surf_customview_init_view5:
 surf_customview_init_view6:
  IFDEF _compass
 	call	I2C_init_compass			; start compass
+	btfss	compass_present
+	bra		surf_customview_toggle		; not available without compass compiled in, goto next view
 	call	TFT_surface_compass_mask	; show compass mask
 	bra		surf_cv_toggle_exit			; done
  ELSE
@@ -285,7 +289,7 @@ surf_customview_init_view8:
 	; ---- view 9: sensor mV at the surface ----
 	;
 surf_customview_init_view9:
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	btfsc	FLAG_ccr_mode				; in CCR mode?
 	bra		surf_customview_init_view9a	; YES - show view
 	btfsc	FLAG_pscr_mode				; NO  - in pSCR mode?
@@ -628,15 +632,17 @@ dive_customview_callup:
 	dcfsnz	WREG,F						;
 	bra		init_ceiling_GF_tissue		; 10: ceiling, current GF and tissues
 	dcfsnz	WREG,F						;
-	bra		init_CNS					; 11: CNS values
+	bra		init_ceiling_GF_surfGF		; 11: ceiling, current GF and surfGF
 	dcfsnz	WREG,F						;
-	bra		init_ppo2_ead_end_cns		; 12: ppO2, END/EAD and CNS/gas density
+	bra		init_CNS					; 12: CNS values
 	dcfsnz	WREG,F						;
-	bra		init_clock_batt_surfpress	; 13: clock, battery and surface pressure
+	bra		init_ppo2_ead_end_cns		; 13: ppO2, END/EAD and CNS/gas density
 	dcfsnz	WREG,F						;
-	bra		init_gf_factors				; 14: GF factors
+	bra		init_clock_batt_surfpress	; 14: clock, battery and surface pressure
 	dcfsnz	WREG,F						;
-	bra		init_cave_waypoints			; 15: cave waypoints
+	bra		init_gf_factors				; 15: GF factors
+	dcfsnz	WREG,F						;
+	bra		init_cave_waypoints			; 16: cave waypoints
 	;bra	dive_cv_toggle_exit			;  0: no view (blank screen in custom view area)
 
 dive_cv_toggle_exit:
@@ -659,6 +665,8 @@ init_avr_stopwatch:
 init_TFT_dive_compass:
  IFDEF _compass
 	call	I2C_init_compass			; start compass
+	btfss	compass_present
+	bra		dive_customview_toggle		; not available without compass compiled in, goto next view
 	call	TFT_dive_compass_mask		; mask for compass
 	bra		dive_cv_toggle_exit			; done
  ELSE
@@ -669,7 +677,7 @@ init_TFT_dive_compass:
 	; ---- view 3: ppO2 sensors ---
 	;
 init_ppo2_sensors:
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	bsf		trigger_temp_changed		; fake a change of the temperature to have the resettable dive time overwritten which was shown with the compass view
 	btfsc	FLAG_ccr_mode				; in CC mode?
 	bra		init_ppo2_sensors_1			; YES
@@ -680,6 +688,8 @@ init_ppo2_sensors_1:
 	btfsc	ext_input_s8_ana			; do we have an S8/analog input?
 	bra		init_ppo2_sensors_2			; YES - show this view
 	btfsc	ext_input_optical			; NO  - do we have an optical input?
+	bra		init_ppo2_sensors_2			;       YES - show this view
+	btfsc	ext_s8_full_digital			; NO - are we in external S8 full digital mode? 
 	bra		init_ppo2_sensors_2			;       YES - show this view
 	bra		dive_customview_toggle		;       NO  - goto next view
 
@@ -783,8 +793,24 @@ init_ceiling_GF_tissue:
 	call	TFT_ceiling_GF_tissue		;           - data for ceiling, current GF and tissues
 	bra		dive_cv_toggle_exit			;           - done
 
+	; ---- view 11: ceiling, tissues and surf GF
+	;
+init_ceiling_GF_surfGF:
+	btfsc	FLAG_apnoe_mode				; in apnoe mode?
+	bra		dive_customview_toggle		; YES - goto next view
+	btfsc	FLAG_gauge_mode				; NO  - in gauge mode?
+	bra		dive_customview_toggle		; YES - call next view
+	movff	char_I_model,WREG			; get model
+	iorwf	WREG					; GF enabled?
+	bnz	init_ceiling_GF_surfGF1			; YES
+	bra	dive_customview_toggle			; NO - call next view
+init_ceiling_GF_surfGF1:
+	call	TFT_ceiling_GF_surfGF_mask	;       NO  - mask for ceiling, current GF and surf GF
+	call	TFT_ceiling_GF_surfGF	    	;           - data for ceiling, current GF and surf GF
+	bra		dive_cv_toggle_exit			;           - done
+	
 
-	; ---- view 11: CNS values ----
+	; ---- view 12: CNS values ----
 	;
 init_CNS:								; CNS at end of dive
 	btfsc	FLAG_gauge_mode				; in gauge mode?
@@ -796,7 +822,7 @@ init_CNS:								; CNS at end of dive
 	bra		dive_cv_toggle_exit			;           - done
 
 
-	; ---- view 12: ppO2, END/EAD and CNS/gas density ----
+	; ---- view 13: ppO2, END/EAD and CNS/gas density ----
 	;
 init_ppo2_ead_end_cns:					; 
 	btfsc	FLAG_apnoe_mode				; in apnoe mode?
@@ -808,7 +834,7 @@ init_ppo2_ead_end_cns:					;
 	bra		dive_cv_toggle_exit			;           - done
 
 
-	; ---- view 13: clock, battery and surface pressure
+	; ---- view 14: clock, battery and surface pressure
 	;
 init_clock_batt_surfpress:
 	call	TFT_clock_batt_surfpress_mask	; mask for clock, battery and surface pressure
@@ -816,14 +842,14 @@ init_clock_batt_surfpress:
 	bra		dive_cv_toggle_exit				; done
 
 
-	; ---- view 14: GF factors
+	; ---- view 15: GF factors
 	;
 init_gf_factors:
 	call	TFT_gf_factors_mask			; show GF factors
 	bra		dive_cv_toggle_exit			; done
 
 
-	; ---- view 15: cave waypoints ----
+	; ---- view 16: cave waypoints ----
 	;
 init_cave_waypoints:
  IFDEF _cave_mode

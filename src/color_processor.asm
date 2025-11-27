@@ -100,6 +100,8 @@ color_image_1:
 	movlw	0x22				; frame memory data write start
 	btfsc	screen_type4
 	movlw	0x2C				; Start Writing Data to GRAM (Display 4)
+	btfsc	screen_type5
+	movlw	0x2C				; Start Writing Data to GRAM (Display 5)
 	call	TFT_CmdWrite
 color_image_loop_xy:
 	; prepare to read next pixel count and color

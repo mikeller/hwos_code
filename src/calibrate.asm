@@ -19,30 +19,31 @@ calibrate1	CODE
 ;=============================================================================
 
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 ;-----------------------------------------------------------------------------
 ; Transmit current Setpoint from WREG (in cbar) to external Electronics
 ;
 	global	transmit_setpoint
 transmit_setpoint:
-	return									; !!!! FUNCTION IS CURRENTLY DISABLED !!!!
-
-;	btfsc	ext_input_optical				; optical input in use?
-;	return									; YES - setpoint - TX not supported
-;	TSTOSS	opt_s8_mode						; NO  - S8 mode selected?
-;	return									;       NO
-;	clrf	lo								;       YES - initialize checksum
-;	movff	char_I_const_ppO2,hi			;           - copy setpoint value to hi
-;	movlw	0xAA							;           - load start byte
-;	rcall	tx_to_HUD_chksum				;           - transmit to HUD
-;	movlw	0x60							;           - load command 'new SP'
-;	rcall	tx_to_HUD_chksum				;           - transmit to HUD
-;	movf	hi,W							;           - load SP in cbar
-;	rcall	tx_to_HUD_chksum				;           - transmit to HUD
-;	movf	lo,W							;           - load checksum
-;	rcall	tx_to_HUD						;           - transmit checksum
-;	return									;           - done
+	btfsc	ext_s8_full_digital			;  are we in external S8 full digital mode? 
+	bra	transmit_setpoint2				    ; Yes, alsway TX Setpoint	
+	btfsc	ext_input_optical				; optical input in use?
+	return									; YES - setpoint - TX not supported
+	TSTOSS	opt_s8_mode						; NO  - S8 mode selected?
+	return									;       NO
+transmit_setpoint2:
+	clrf	lo								;       YES - initialize checksum
+	movff	char_I_const_ppO2,hi			;           - copy setpoint value to hi
+	movlw	0xAA							;           - load start byte
+	rcall	tx_to_HUD_chksum				;           - transmit to HUD
+	movlw	0x70							;           - load command 'new SP'
+	rcall	tx_to_HUD_chksum				;           - transmit to HUD
+	movf	hi,W							;           - load SP in cbar
+	rcall	tx_to_HUD_chksum				;           - transmit to HUD
+	movf	lo,W							;           - load checksum
+	rcall	tx_to_HUD						;           - transmit checksum
+	return									;           - done
 
 
 ;-----------------------------------------------------------------------------
@@ -72,6 +73,8 @@ calibrate_mix:
 
 	; check for HUD
 	btfsc	ext_input_optical				; optical interface in use?
+	bra		calibrate_mix1					; YES - skip
+	btfsc	ext_s8_full_digital			;  are we in external S8 full digital mode? 
 	bra		calibrate_mix1					; YES - skip
 	TSTOSS	opt_s8_mode						; NO  - S8 interface in use?
 	bra		calibrate_mix1					;       NO  - skip HUD part
@@ -193,13 +196,13 @@ calibrate_mix_helper:
 
 	retlw	.0								; return signaling min/max ok
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
 ;=============================================================================
 calibrate2	CODE
 ;=============================================================================
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 ;-----------------------------------------------------------------------------
 ; Compute Sensor mV from Raw Values received via S8 digital Interface
@@ -234,7 +237,7 @@ compute_mvolts_from_rawdata:
 
 	return									; done
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
 ;-----------------------------------------------------------------------------
 

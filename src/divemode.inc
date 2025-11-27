@@ -21,7 +21,7 @@
 	extern	deco_setup_cc_diluents
  ENDIF
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	extern	calc_deko_divemode_sensor
  ENDIF
 
@@ -78,7 +78,7 @@
 #DEFINE dm_depth_col_large						.0								;   0
 #DEFINE dm_depth_bot_large						dm_depth_row_large+.61			;  75
 #DEFINE dm_depth_rgt_large						dm_depth_col_large+.59			;  59
-#DEFINE dm_depth_row_huge						.7								;   7
+#DEFINE dm_depth_row_huge						.8								;   8
 #DEFINE dm_depth_col_huge						.0								;   0
 #DEFINE dm_depth_bot_huge						dm_depth_row_huge+.90			;  97
 #DEFINE dm_depth_rgt_huge						dm_depth_col_huge+.90			;  90
@@ -304,6 +304,10 @@
 #DEFINE dm_custom_tissue_title_row				dm_customview_row+.1			; 102
 #DEFINE dm_custom_tissue_title_column			.120							; 120
 
+; Surf GF
+#DEFINE dm_custom_surfGF_title_row				dm_customview_row+.1			; 102
+#DEFINE dm_custom_surfGF_title_column			.110							; 116
+ 
 ; N2 / He values
 #DEFINE dm_custom_tissue_N2_row					dm_custom_ead_row+.5			; 122
 #DEFINE dm_custom_tissue_N2_column				.105							; 105
@@ -333,24 +337,31 @@
 
 ; Title
 #DEFINE dm_custom_compass_mask_row				dm_customview_row				; 101
-#DEFINE dm_custom_compass_mask_column			.65								;  65
+#DEFINE dm_custom_compass_mask_column			.5
 
 ; Head and arrows
-#DEFINE dm_custom_compass_head_row				dm_customview_row+.37			; 138
-#DEFINE dm_custom_compass_head_column			.62								;  62
-#DEFINE dm_custom_compass_ldir_column			.5								;   5
+#DEFINE dm_custom_compass_head_row			dm_customview_row			; 120
+#DEFINE dm_custom_compass_head_column			.75								;  62
+#DEFINE	dm_custom_compass_unit_row			dm_custom_compass_head_row+.2			; 138
+#DEFINE	dm_custom_compass_unit_column			dm_custom_compass_head_column+.36
+#DEFINE	dm_compass_bear_row				dm_customview_row+.14
+#DEFINE	dm_compass_bear_column				.20
+#DEFINE	dm_compass_stopwatch_row			dm_customview_row+.37
+#DEFINE	dm_compass_stopwatch_column			.20
+
+ #DEFINE dm_custom_compass_ldir_column			.5								;   5
 #DEFINE dm_custom_compass_rdir_column			.138							; 138
 
 ; Ruler
-#DEFINE dm_custom_compass_graph_row				dm_customview_row				; 101
-#DEFINE dm_custom_compass_graph_height			.33								;  33
-#DEFINE dm_custom_compass_tick_height			.3								;   3
-#DEFINE dm_custom_compass_tick_top_top			dm_custom_compass_graph_row+.1	; 102
-#DEFINE dm_custom_compass_tick_top_bot			dm_custom_compass_graph_row+.4	; 105
-#DEFINE dm_custom_compass_label_row				dm_custom_compass_graph_row+.6	; 107
-#DEFINE dm_custom_compass_label_height			.24								;  24
-#DEFINE dm_custom_compass_tick_bot_top			dm_custom_compass_graph_row+.30	; 131
-#DEFINE dm_custom_compass_tick_bot_bot			dm_custom_compass_graph_row+.33	; 134
+;#DEFINE dm_custom_compass_graph_row				dm_customview_row				; 101
+;#DEFINE dm_custom_compass_graph_height			.33								;  33
+;#DEFINE dm_custom_compass_tick_height			.3								;   3
+;#DEFINE dm_custom_compass_tick_top_top			dm_custom_compass_graph_row+.1	; 102
+;#DEFINE dm_custom_compass_tick_top_bot			dm_custom_compass_graph_row+.4	; 105
+;#DEFINE dm_custom_compass_label_row				dm_custom_compass_graph_row+.6	; 107
+;#DEFINE dm_custom_compass_label_height			.24								;  24
+;#DEFINE dm_custom_compass_tick_bot_top			dm_custom_compass_graph_row+.30	; 131
+;#DEFINE dm_custom_compass_tick_bot_bot			dm_custom_compass_graph_row+.33	; 134
 
 
 ;-----------------------------------------------------------------------------

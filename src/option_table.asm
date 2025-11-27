@@ -309,7 +309,7 @@ option_table_begin:
 	OPTION_ENUM8    oTr2ndPres,      tr_pres_options,                              .0,      tTrPresNone,     0x0F2,    0x80,  opt_TR_2nd_pres				; TR functions - 2nd pressure assignment
 	OPTION_ENUM8    oTrBailPres,     tr_pres_options,                              .1,      tTrPresNone,     0x0F3,    0x81,  opt_TR_Bail_pres				; TR functions - bailout pressure assignment
 	OPTION_UINT8p5  oTrMaxDeltaPres, max_pres_diff_min, max_pres_diff_max,         .5,      tbar,            0x0F4,    0x82,  char_I_max_pres_diff			; TR functions - maximum delta pressure in independent double mode
-	;                                                                                                        0x0F5											; not used
+	OPTION_BOOL     oBLE_Compatibility,					       .0,                       0x0F5,    0x83,  opt_BLE_compatibility			; =1: configure BLE name to hwOS style for dn hardware
 	;                                                                                                        0x0F6											; not used
 	OPTION_ENUM8    o2ndDepthDisp,       .2,                                       .0,      tMax,            0x0F7,    0x85,  opt_2ndDepthDisp				; =1: show average depth instead of max depth
 	OPTION_UINT8p3d oMaxDepth,          .30,            ostc_depth_max,    ostc_depth_max,  tMeters,         0x0F8,    0x86,  opt_max_depth					; depth at which a warning will be given
@@ -358,7 +358,7 @@ option_table_begin:
 	OPTION_UINT8    oSetHours,           .0,                  .23,                 .0,      nounit,       volatile,  nocomm,  rtc_latched_hour				; ...
 	OPTION_UINT8    oSetDay,             .1,                  .31,                 .0,      nounit,       volatile,  nocomm,  rtc_latched_day				; ...
 	OPTION_UINT8    oSetMonth,           .1,                  .12,                 .0,      nounit,       volatile,  nocomm,  rtc_latched_month				; ...
-	OPTION_UINT8    oSetYear,           .18,                  .24,                 .0,      nounit,       volatile,  nocomm,  rtc_latched_year				; ...
+	OPTION_UINT8    oSetYear,    firmware_creation_year, firmware_expire_year+.5,  .0,      nounit,       volatile,  nocomm,  rtc_latched_year				; ...
 
 	OPTION_UINT8    oFallback,           .0,                 .255,                 .0,      nounit,       volatile,    0x38,  opt_fallback					; unused dummy option for compatibility with 3rd party tools
 	OPTION_UINT8    oConservatism,       .0,                 .255,                 .0,      nounit,       volatile,    0x47,  opt_conservatism				; unused dummy option for compatibility with 3rd party tools

@@ -94,7 +94,7 @@ init_recording_params:
 	movwf	divisor_tank				; initialize divisor
  ENDIF
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	movlw	div_ppo2_sensors			; get divisor for ppO2 sensor
 	movwf	divisor_ppo2_sensors		; initialize divisor by default
 	btfsc	FLAG_ccr_mode				; in CCR mode?
@@ -155,7 +155,7 @@ check_extended2:
 	movlw	infolength_gf				; YES - get length of extra data
 	addwf	ProfileFlagByte,F			;     - add to ProfileFlagByte
 check_extended3:
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	decfsz	divisor_ppo2_sensors,W		; check divisor if it will become 0, dump decremented value to WREG
 	bra		check_extended4				; NO  - skip
 	movlw	infolength_ppo2_sensors		; YES - get length of extra data
@@ -313,7 +313,7 @@ store_dive_data4c:
 	btfsc	divisor_supersat,7			; did the timer under-run?
 	clrf	divisor_supersat			; YES - reset timer
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	decfsz	divisor_ppo2_sensors,F		; decrement timer, did it became 0 ?
 	bra		store_dive_data4d			; NO  - skip
 	rcall	store_dive_ppO2_sensors		; YES - store sensor data
@@ -384,7 +384,7 @@ store_dive_decoplan_loop:
 	return									;     - done
 
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 store_dive_ppO2_sensors:
 	FLASH_CC_PROFILE sensor1_ppO2			; store sensor 1 ppO2 (in 0.01 bar steps)
 	SMOVII	sensor1_mv,mpr					; ISR-safe 2 byte copy of o2_mv_sensor
@@ -763,7 +763,7 @@ end_dive_sat_gf_done:
 	;clrf	WREG
 	;MOVCC	WREG,header_buffer+index_decodistance
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	; store last HUD data (ISR-safe 3 byte copy)
 	SMOVTT	hud_status_byte,header_buffer+index_hud_data
  ELSE
@@ -948,7 +948,7 @@ ghostwriter_short_header_2:
 	FLASH_LIT_PROFILE .3						; type: ppO2 sensor data
 	FLASH_LIT_PROFILE infolength_ppo2_sensors	; get size of recording data
 	movlw	.0									; default to no ppO2 data
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	btfsc	FLAG_ccr_mode						; in CCR mode?
 	movlw	div_ppo2_sensors					; YES - get sampling rate
 	btfsc	FLAG_pscr_mode						; in pSCR mode?

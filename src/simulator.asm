@@ -441,7 +441,7 @@ deco_plan_show_nstd_stop_common:
 ;         decoplan_page = page number.
 ;
 deco_results_page:
-	FONT_COLOR color_greenish
+	FONT_COLOR color_green
  IFDEF _ccr_pscr
 	btfss	bailout_mode					; bailout results?
 	bra		deco_results_page_1				; NO
@@ -790,7 +790,7 @@ deco_results_gas_volumes_3:
 	cpfseq	gas_index						; all gases shown?
 	bra		deco_results_gas_loop			; NO - loop
 
-	FONT_COLOR color_greenish				; set color
+	FONT_COLOR color_green				; set color
 	TEXT_SMALL .80,.01,tGasUsage			; "Gas Usage"
 
 	btfsc	decoplan_show_pressures			; showing pressures in bar?

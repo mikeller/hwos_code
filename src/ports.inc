@@ -80,7 +80,7 @@
 
 ; PORTJ
 #DEFINE	RJ0_unused		PORTJ,0			; unused
-#DEFINE	RJ1_unused		PORTJ,1			; unused
+#DEFINE	vibration_en		PORTJ,1			; Vibration motor enable (OSTC X hardware)
 #DEFINE	CHRG_OUT		PORTJ,2			; CHRG_OUT
 #DEFINE	CHRG_IN 		PORTJ,3			; CHRG_IN
 #DEFINE	vusb_in			PORTJ,4			; external power supply detect, USB enumerated

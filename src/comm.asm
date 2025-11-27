@@ -104,8 +104,9 @@ comm_mode_bt:										; entry point for comm mode via BT
 ;
 comm_mode_common:
 	clrf	STKPTR									; reset addresses stack
+	call	enable_rs232							; enable serial comm, also sets CPU to normal speed (init here, we need the aux_flag valid)
 	call	TFT_ClearScreen							; clear screen
-	FONT_COLOR color_greenish						; set color
+	FONT_COLOR color_green						; set color
 
 	btfss	aux_flag								; shall show USB title?
 	bra		comm_mode_common_bt						; NO  - show BT  title
@@ -114,32 +115,32 @@ comm_mode_common:
 comm_mode_common_usb:
 	WIN_SMALL comm_title_column_usb, comm_title_row	; set   USB title position
 	STRCPY_TEXT_PRINT tUsbTitle						; print USB title text
-	bra		comm_mode_common_logo					; continue with logo
+	bra		comm_mode_common_start
 
 comm_mode_common_bt:
 	WIN_SMALL comm_title_column_ble, comm_title_row	; set   BT title position
 	STRCPY_TEXT_PRINT tBleTitle						; print BT title text
-	;bra	comm_mode_common_logo					; continue with logo
+	;bra	comm_mode_common_start
 
-comm_mode_common_logo:
-	WIN_TOP  .10									; set position of USB/BLE logo, row
-	WIN_LEFT .1										; set position of USB/BLE logo, column
-	btfss	battery_gauge_available					; "+" bootloader ?
-	bra		comm_mode_common_logo2					; YES - show logo type 2
-	;bra	comm_mode_common_logo1					; NO  - show logo type 1
-
-comm_mode_common_logo1:
-	TFT_WRITE_PROM_IMAGE_BY_ADDR comm_logo_1		; show USB/BT logo
-	bra		comm_mode_common_start					; continue with starting message
-
-comm_mode_common_logo2:
-	btfsc	dn_flag
-	bra	comm_mode_common_logo3
-	TFT_WRITE_PROM_IMAGE_BY_ADDR comm_logo_2		; show BT logo / OSTC+
-	bra	comm_mode_common_start					; continue with starting message
-
-comm_mode_common_logo3:
-	TFT_WRITE_PROM_IMAGE_BY_ADDR comm_logo_3		; show BT logo / dn
+;comm_mode_common_logo:
+;	WIN_TOP  .10									; set position of USB/BLE logo, row
+;	WIN_LEFT .1										; set position of USB/BLE logo, column
+;	btfss	battery_gauge_available					; "+" bootloader ?
+;	bra		comm_mode_common_logo2					; YES - show logo type 2
+;	;bra	comm_mode_common_logo1					; NO  - show logo type 1
+;
+;comm_mode_common_logo1:
+;    	btfsc	dn_flag
+;	bra	comm_mode_common_logo3
+;	TFT_WRITE_PROM_IMAGE_BY_ADDR comm_logo_1		; show USB/BT logo
+;	bra		comm_mode_common_start					; continue with starting message
+;
+;comm_mode_common_logo2:
+;	TFT_WRITE_PROM_IMAGE_BY_ADDR comm_logo_2		; show BT logo / OSTC+
+;	bra	comm_mode_common_start					; continue with starting message
+;
+;comm_mode_common_logo3:
+;	TFT_WRITE_PROM_IMAGE_BY_ADDR comm_logo_3		; show BT logo / dn
 	
 comm_mode_common_start:
 	WIN_SMALL comm_status1_column,comm_status1_row	; set position
@@ -154,8 +155,9 @@ comm_mode_common_start:
  ENDIF
 
 	bcf		switch_right							; clear potential left-over right button event
-	call	enable_rs232							; enable serial comm, also sets CPU to normal speed
-
+	TSTOSC	opt_BLE_compatibility				; Use BLE compatibility mode?
+	call	ble2_configure_name				; YES, setup BLE name (Will only do something for dn_mode flag set)
+	
 	WIN_SMALL comm_status1_column+.80,comm_status1_row	; set position after starting message
 	FONT_COLOR_MEMO										; set standard color
 	STRCPY_TEXT_PRINT tUsbStartDone						; print (adding to status message) "done..."
@@ -186,6 +188,8 @@ comm_mode_selection_loop_1:
 	bz		comm_download_mode						;             YES - enter command loop
 	;bra	comm_mode_selection_loop_2				;             NO  - check for comm mode termination
 comm_mode_selection_loop_2:
+	btfsc	dual_comm							; Dual comm hardware?
+	bra		comm_mode_selection_loop_3				; YES - skip USB check check since vusb_in is only used for usb here
 	btfsc	ble_available							; BT available?
 	bra		comm_mode_selection_loop_3				; YES - skip USB check check (required for very old OSTC sport)
 	btfss	vusb_in									; NO  - USB plugged in?
@@ -321,6 +325,8 @@ comm_command_loop_wait:
 	bra		comm_command_decode						; NO  - decode and execute the command
 	btfsc	comm_service_mode						; YES - service mode enabled?
 	btg		LEDr									;       YES - blink in service mode
+	btfsc	dual_comm							; Dual comm hardware?
+	bra		comm_command_loop_wait_1				; YES - skip USB check check since vusb_in is only used for usb here
 	btfsc	ble_available							;     - BT available?
 	bra		comm_command_loop_wait_1				;       YES - skip USB check (required for very old OSTC sport)
 	btfss	vusb_in									;       NO  - USB still plugged in?

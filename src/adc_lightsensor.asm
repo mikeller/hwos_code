@@ -47,17 +47,16 @@ get_battery_voltage:
 	btfss	battery_gauge_available			; battery gauge IC available?
 	bra		get_battery_voltage_2			; NO  - OSTC hardware without gauge IC
 	bsf		battery_is_36v					; YES - gauge IC available, 3.6V battery
-	call	lt2942_get_accumulated_charge	;     - read coulomb counter
-	call	lt2942_get_voltage				;     - read battery voltage
+	call	lt2942_get_voltage				;     - read battery voltage (and coulomb counter)
 	call	lt2942_get_temperature			;     - read battery temperature
 	tstfsz	batt_voltage+1					;     - read voltage < 256 mV ?
 	bra		get_battery_voltage_1			;       NO  - proceed
-	call	lt2942_get_accumulated_charge	;       YES - re-read coulomb counter
-	call	lt2942_get_voltage				;           - re-read battery voltage
+	call	lt2942_get_voltage				;           - re-read battery voltage  (and coulomb counter)
 	call	lt2942_get_temperature			;           - re-read battery temperature
 	;bra	get_battery_voltage_1			;           - proceed
 
 get_battery_voltage_1:
+;	rcall	double_check_battery_percent		; make sure batt_percent is adjusted when voltage does not comply with the computed value
 	rcall	get_battery_voltage_low			; check for battery low condition
 	btfsc	divemode						; in dive mode?
 	return									; YES - done
@@ -88,8 +87,8 @@ charge_cv_active:
 charge_cv_active1:
 	decfsz	get_bat_volt_counter,F			; decrement counter, became zero?
 	return									; NO  - not yet, done
-	movlw	.15								; YES - battery voltage >= 16*256mV (4.096V)
-	cpfsgt	batt_voltage+1					;     - ... ?
+	movlw	.16								; YES - battery voltage >= 16*256mV (4.096V) and < 17*256mV (4.352V)
+	cpfseq	batt_voltage+1					;     - ... ?
 	bra		charge_cc_active				;     NO
 	bsf		cc_active						;     YES - set CC charging status
 	bsf		cv_active						;         - set CV charging status
@@ -127,6 +126,53 @@ charge_cc_active2:
 	movlw	.10								;       NO  - set counter to 10
 	movwf	get_bat_volt_counter			;           - ...
 	return									;           - done
+	
+double_check_battery_percent:		; make sure batt_percent is adjusted when voltage does not comply with the computed value	
+	; batt_voltage:2 is in mV
+	; use thresholds rechargeable_36V_80 to rechargeable_36V_00
+	; return, if computed value is lower then fixed threshold
+	; overwrite batt_percent if computed value is bigger then threshold
+	; in 2024, it's no longer enough to explain the old behavior in the manual...
+	; used up as temp here
+	movlw	.100
+	movwf	up							; initialize
+	
+	MOVII	batt_voltage,sub_b
+	MOVLI	rechargeable_36V_80,sub_a				; load threshold 80%
+	call	cmpU16							; sub_a - sub_b
+	movlw	.80
+	btfss	neg_flag						; battery voltage > rechargeable_36V_80 ?
+	movwf	up							; no, overwrite up with a fix value
+	MOVII	batt_voltage,sub_b
+	MOVLI	rechargeable_36V_60,sub_a				; load threshold 60%
+	call	cmpU16							; sub_a - sub_b
+	movlw	.60
+	btfss	neg_flag						; battery voltage > rechargeable_36V_60 ?
+	movwf	up							; no, overwrite up with a fix value
+	MOVII	batt_voltage,sub_b
+	MOVLI	rechargeable_36V_40,sub_a				; load threshold 40%
+	call	cmpU16							; sub_a - sub_b
+	movlw	.40
+	btfss	neg_flag						; battery voltage > rechargeable_36V_40 ?
+	movwf	up							; no, overwrite up with a fix value
+	MOVII	batt_voltage,sub_b
+	MOVLI	rechargeable_36V_20,sub_a				; load threshold 20%
+	call	cmpU16							; sub_a - sub_b
+	movlw	.20
+	btfss	neg_flag						; battery voltage > rechargeable_36V_20 ?
+	movwf	up							; no, overwrite up with a fix value
+	MOVII	batt_voltage,sub_b
+	MOVLI	rechargeable_36V_00,sub_a				; load threshold 0%
+	call	cmpU16							; sub_a - sub_b
+	movlw	.0
+	btfss	neg_flag						; battery voltage > rechargeable_36V_0 ?
+	movwf	up							; no, overwrite up with a fix value
+	
+	movf	up,W
+	cpfsgt	batt_percent						; up < batt_percent
+	return
+	movwf	batt_percent						; YES, overwritze
+	return
 
 get_battery_voltage_2:						; no gauge IC available, use ADC to measure battery voltage
 	; additional charging disable in software
@@ -283,15 +329,15 @@ get_ambient_level:
 get_ambient_level0:	
 	banksel	isr_backup						;             NO  - back to ISR default bank
 	movff	brightness,isr_lo			;                 - get brightness selection
-	incf	isr_lo,F						;                 - 0-2 -> 1-3
-	movlw	ambient_light_max_high_cr		;                 - default selection to brightest setting
-	dcfsnz	isr_lo,F						;                 - level 0 (eco) selected?
-	movlw	ambient_light_max_eco			;                   YES - select eco brightness
-	dcfsnz	isr_lo,F						;                 - level 1 (medium) selected?
-	movlw	ambient_light_max_medium		;                   YES - select medium brightness
-	movwf	ambient_light+0					;                 - store selection
-	movwf	max_CCPR1L						;                 - store value for dimming in TMR7 interrupt
-	return									;                 - done
+	incf	isr_lo,F				;                 - 0-2 -> 1-3
+	movlw	ambient_no_sensor_high			;                 - default selection to brightest setting
+	dcfsnz	isr_lo,F				;                 - level 0 (eco) selected?
+	movlw	ambient_no_sensor_eco			;                   YES - select eco brightness
+	dcfsnz	isr_lo,F				;                 - level 1 (medium) selected?
+	movlw	ambient_no_sensor_medium		;                   YES - select medium brightness
+	movwf	ambient_light+0			    	;                 - store selection
+	movwf	max_CCPR1L				;                 - store value for dimming in TMR7 interrupt
+	return						;                 - done
 
 get_ambient_level1:							; using ambient sensor
 	banksel	isr_backup						; back to ISR default bank
@@ -299,13 +345,16 @@ get_ambient_level1:							; using ambient sensor
 	movlw	b'00011101'						; power on ADC, select AN7
 	rcall	wait_adc
 	MOVII	ADRESL,ambient_light
+;	MOVII	ADRESL,gp_debug	; for debugging only
 	bcf	ADCON0,0						; power off ADC
 
 	btfsc	ambient_light+1,7					; result negative?
 	return								; Yes, skip this measurement
 	; ambient_light:2 is between 4096 (direct sunlight) and about 200 (darkness)
 	; first: divide by 16
-	movlw	.4								; divide by 2^4 = 16
+	movlw	.4					; divide by 2^4 = 16
+	btfsc	dn_flag
+	movlw	.1					; divide by 1^4 = 4, increased sensitivity for dn hardware
 get_ambient_level1_loop:
 	bcf		STATUS,C						; clear carry
 	rrcf	ambient_light+1					; rotate right high byte, carry into MSB, LSB into carry
@@ -338,8 +387,10 @@ get_ambient_level2:
 	movlw	ambient_light_max_high_cr		; default to cR and 2 hardware brightest setting
 	btfss	battery_gauge_available			; battery gauge available?
 	movlw	ambient_light_max_high_15V		; NO  - change to 1.5V battery brightest setting
-	btfsc	battery_is_36v					; 3.6V battery in use?
+	btfsc	battery_is_36v				; 3.6V battery in use?
 	movlw	ambient_light_max_high_36V		; YES - change to 3.6V battery brightest setting
+	btfsc	dn_flag					; dn hardware
+	movlw	ambient_light_max_high_dn		; YES - change to dn hardware brightest setting
 	banksel	isr_backup						; back to ISR default bank
 
 	dcfsnz	isr_lo,F						; eco setting?
@@ -373,7 +424,7 @@ get_ambient_level2:
 ;
 ; called from outside ISR only
 ;
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 
 	global	get_analog_inputs
 get_analog_inputs:
@@ -433,7 +484,7 @@ get_analog_inputs_common_1:
 	clrf	mpr+0							;       NO - ignore this reading
 	return									;     - done
 
- ENDIF	; _external_sensor
+ ENDIF	; _external_sensor_eccr
 
 
 ;-----------------------------------------------------------------------------

@@ -30,7 +30,7 @@
 	TCODE	tLastDecostopSurf,	"UltimaTappa:"			; last deco stop surface custom view
 	TCODE	tDvSalinitySurf,	"Salinita':"			; Salinity
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	TCODE	tSensorMilliVolt,	"Sensori mV"			; Sensors mV
  ENDIF
 
@@ -49,7 +49,7 @@
 	TCODE	tDivemenu_Setpoint,	"Setpoint"				; Setpoint
  ENDIF
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	TCODE	tDivemenu_UseSensor,"Usa Sensori"			; Use Sensor
  ENDIF
 
@@ -103,7 +103,7 @@
 	TCODE	tTrMaxDeltaP,		"DeltaP Max: "			; independent double max diffenerce
  ENDIF
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 ;	TCODE	tCCRSensor,			"Sensori CCR"			; CCR Sensor
 	TCODE	tCalibrateMenu,		"Calibrazione"			; Calibration
 	TCODE	tCalibrationGas,	"Cal. Gas O2:"			; Cal. Gas O2:
@@ -454,6 +454,7 @@
 	TCODE	taGFactors,			"Valori aGF"			; aGF Values
 	TCODE	tGFInfo,			"Saturazione"			; Saturation
 	TCODE	tCeiling,			"Tetto"					; Ceiling
+	TCODE	tDiveSurfGF,			"Surface GF"				; Surface GF
 	TCODE	tDiveFallback,		"Fallback!"				; Fallback! (max. nine chars)
 	TCODE	tDecoInfo,			"Zona Deco" 			; Deco info ("Curva Deco")
 	TCODE	tSensorCheck,		"Testa Sensori"			; Sensor Check
@@ -493,7 +494,7 @@
 	TCODE	tswap,				"CambioGas"				; swap tank (max. 9 chars
  ENDIF
 
- IFDEF _external_sensor
+ IFDEF _external_sensor_eccr
 	TCODE	tDiveHudMask1,		"Sensore1"
 	TCODE	tDiveHudMask2,		"Sensore2"
 	TCODE	tDiveHudMask3,		"Sensore3"
@@ -575,7 +576,7 @@
 	TCODE	tBackingUp,			"backing up..."			; backing up current firmware
 	TCODE	tRestoring,			"restoring..."			; restoring  backup  firmware
  ENDIF
-
+	TCODE	tBLE_Compatibility,		"Legacy BLE:"
 
 ; Set Time Menu/Set Date Menu
 	TCODE	tSetHours,			"Imposta Ora"			; Set Hours
