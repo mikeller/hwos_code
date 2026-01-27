@@ -998,29 +998,29 @@ I2CReset:
 	clrf	SSP1CON1					; reset entire module
 	clrf	SSP1CON2					; ...
 	clrf	SSP1STAT					; ...
-	bcf		TRISC,3						; SCL as OUTPUT
-	bsf		TRISC,4						; SDA as input
-	bcf		PORTC,3						; SCL = 0
+	bcf	TRISC,3						; SCL as OUTPUT
+	bsf	TRISC,4						; SDA as input
+	bcf	PORTC,3						; SCL = 0
 	movlw	d'9'						; clock-out 9 clock cycles manually
 	movwf	i2c_temp1					; ...
 I2CReset_1:
-	bsf		PORTC,3						; SCL = 1
-	nop									; pause for 4 CPU cycles
-	nop									; ...
-	nop									; ...
-	nop									; ...
+	bsf	PORTC,3						; SCL = 1
+	nop							; pause for 4 CPU cycles
+	nop							; ...
+	nop							; ...
+	nop							; ...
 	btfsc	PORTC,4						; SDA = 1 ?
-	bra		I2CReset_2					; YES - SDA has been released from slave
-	bcf		PORTC,3						; NO  - set SCL = 0
-	nop									;     - pause for 2 CPU cycles
-	nop									;     - ...
-	bcf		PORTC,3						;     - SCL = 0
-	nop									;     - pause for 2 CPU cycles
-	nop									;     - ...
+	bra	I2CReset_2					; YES - SDA has been released from slave
+	bcf	PORTC,3						; NO  - set SCL = 0
+	nop							;     - pause for 2 CPU cycles
+	nop							;     - ...
+	bcf	PORTC,3						;     - SCL = 0
+	nop							;     - pause for 2 CPU cycles
+	nop							;     - ...
 	decfsz	i2c_temp1,F					;     - clock counter, all cycles done?
-	bra		I2CReset_1					;       NO - loop
+	bra	I2CReset_1					;       NO - loop
 I2CReset_2:
-	bsf		TRISC,3						; SCL as input
+	bsf	TRISC,3						; SCL as input
 	clrf	SSP1CON1					; setup I2C mode
 	rcall	I2C_WAIT_100US					; ISR-Safe 100µs wait
 	movlw	b'00000000'					; enable slew rate control
@@ -1032,12 +1032,16 @@ I2CReset_2:
 	movlw	i2c_speed_value
 	movwf	SSP1ADD						; ...
 	rcall	I2C_WAIT_100US					; ISR-Safe 100µs wait
+	banksel	i2c_error_counter
 	movlw	.1
-	addwf	i2c_error_counter+0
+	addwf	i2c_error_counter+0,F
 	movlw	.0
-	addwfc	i2c_error_counter+1				; +1 on the error counter
+	addwfc	i2c_error_counter+1,F				; +1 on the error counter
+	banksel	common
 	btfss	press_sensor_type				; =1: pressure sensor MS5837, =0: Pressure sensor MS5541
 	return							; MS5541, Done.
+	btfss	i2c_reinit_sensor2				; Sensor ok?
+	return							; Yes, Done.
 	; reset the sensor
 	rcall	I2C_SEN						; start condition
 	movlw	0xEC						; address byte + write bit
@@ -1045,7 +1049,13 @@ I2CReset_2:
 	movlw	0x1E
 	rcall	I2C_TX						; send byte
 	rcall	I2C_PEN						; stop condition
-	WAITMS	.5						; 2.8ms according to datasheet
+	movlw	.50
+	movwf	i2c_temp1
+I2CReset_3:	
+	rcall	I2C_WAIT_100US					; ISR-Safe 100µs wait
+	decfsz	i2c_temp1,F
+	bra	I2CReset_3					; ~5ms delay
+;	WAITMS	.5						; 2.8ms according to datasheet
 	return							; done
 
 

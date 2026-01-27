@@ -168,15 +168,16 @@ do_menu_ccr:
 
 	bcf		imprint_sensor_mv			; stop imprinting of live O2 sensor mV data
 	btfss	ext_input_s8_ana			; S8/analog sensor input available?
-	bra		do_menu_ccr_2				; NO  - do OSTC 2  menu
-	;bra	do_menu_ccr_cR				; YES - do OSTC cR menu
+	bra		do_menu_ccr_2				; NO  - Non-Bulkhead OSTC  menu
+	;bra	do_menu_ccr_cR				; YES - do Bulkhead OSTC menu
 
-do_menu_ccr_cR:							; OSTC cR menu
-	MENU_BEGIN	tCCRSetup, .6
+do_menu_ccr_cR:							; Bulkhead OSTC menu
+	MENU_BEGIN	tCCRSetup, .7
 		MENU_OPT_INC	tCCRMode,					oCCRMode
 		MENU_CALL		tCalibrateMenu,				do_menu_calibrate
 		MENU_CALL		tDiluentSetup,				do_menu_diluent
 		MENU_CALL		tFixedSetpoints,			do_menu_setpoints
+		MENU_CALL		tScrubberTimer,				do_menu_scrubbertimer
 		MENU_CALL		tMore,						do_menu_ccr_more
 		MENU_CALL		tBack,						do_return_main_menu
 	MENU_END
@@ -184,10 +185,11 @@ do_menu_ccr_cR:							; OSTC cR menu
  ENDIF	; _external_sensor_eccr
 
 do_menu_ccr_2:
-	MENU_BEGIN	tCCRSetup, .5			; OSTC 2 menu
+	MENU_BEGIN	tCCRSetup, .6			; Non-Bulkhead OSTC menu
 		MENU_OPT_INC	tCCRMode,					oCCRMode
 		MENU_CALL		tDiluentSetup,				do_menu_diluent
 		MENU_CALL		tFixedSetpoints,			do_menu_setpoints
+		MENU_CALL		tScrubberTimer,				do_menu_scrubbertimer
 		MENU_CALL		tMore,						do_menu_ccr_more
 		MENU_CALL		tBack,						do_return_main_menu
 	MENU_END
@@ -198,26 +200,75 @@ do_menu_ccr_2:
 ;
 do_menu_ccr_more:
  IFDEF _external_sensor_eccr
-	MENU_BEGIN	tCCRSetup, .7			; CCR/pSCR more menu
+	MENU_BEGIN	tCCRSetup, .7				; CCR/pSCR more menu
 		MENU_OPT_INC	tS8Mode,					oS8Mode
 		MENU_OPT_INC	tCCmaxFracO2,				oCCmaxFracO2
 		MENU_OPT_INC	tDilppO2Check,				oDilppO2Check
 		MENU_OPT_INC	tGasDensityCheck,			oGasDensityCheck
 		MENU_OPT_INC	tPSCR_O2_drop,				oPSCR_drop
 		MENU_OPT_INC	tPSCR_lungratio,			oPSCR_lungratio
-		MENU_CALL		tBack,						do_return_menu_ccr
+		MENU_CALL	tBack,					do_return_menu_ccr
 	MENU_END
  ELSE
-	MENU_BEGIN	tCCRSetup, .6			; CCR/pSCR more menu
+	MENU_BEGIN	tCCRSetup, .6				; CCR/pSCR more menu
 		MENU_OPT_INC	tCCmaxFracO2,				oCCmaxFracO2
 		MENU_OPT_INC	tDilppO2Check,				oDilppO2Check
 		MENU_OPT_INC	tGasDensityCheck,			oGasDensityCheck
 		MENU_OPT_INC	tPSCR_O2_drop,				oPSCR_drop
 		MENU_OPT_INC	tPSCR_lungratio,			oPSCR_lungratio
-		MENU_CALL		tBack,						do_return_menu_ccr
+		MENU_CALL	tBack,					do_return_menu_ccr
 	MENU_END
  ENDIF	; _external_sensor_eccr
 
+do_menu_scrubbertimer:
+	MENU_BEGIN	tScrubberTimer, .6			; The scrubber timer menu
+		MENU_DYNAMIC	dyn_Scrubber_Timer,			0			; Show current value
+		MENU_DYNAMIC	dyn_Scrubber_Date,			0			; Show last restart date
+		MENU_CALL	tScrubTmrReset,				do_resetScrubberTimer	; Reset to Scrubber Timer Time
+		MENU_OPT_INC	tScrubTmrEnable,			oEnable_ScrubTmr	; Scrubber Timer enable
+		MENU_OPT_INC	tScrubTmrTime,				oScrubTmrTime		; Increase Scrubber Timer Time
+		MENU_CALL	tBack,					do_return_menu_ccr
+	MENU_END
+    
+do_resetScrubberTimer:
+	movff	opt_ScrubberTime,WREG
+	mullw	.10
+	MOVII	PRODL,opt_scrubber_timer_mins			; opt_ScrubberTime is in 10 minutes increments
+	SMOVSS	rtc_year,rtc_latched_year			; ISR-safe 6 byte copy of date and time
+	movff	rtc_latched_day,opt_scrubber_timer_day
+	movff	rtc_latched_month,opt_scrubber_timer_month
+	movff	rtc_latched_year,opt_scrubber_timer_year		; Store scrubber restart date
+	return
+	
+;-----------------------------------------------------------------------------
+; dynamic Title - show current scrubber time
+;
+dyn_Scrubber_Timer:
+	STRCAT_TEXT tScrubTmrRemain			    ; "Remaining:"
+	MOVII	opt_scrubber_timer_mins,mpr			    ; Get the minutes into lo:hi
+	btfss	hi,7					    ; Negative timer?
+	bra	dyn_Scrubber_Timer2			    ; NO
+	FONT_COLOR_WARNING				    ; YES - print in Red (If enabled)
+	STRCAT	"-"					    ; And add a -
+dyn_Scrubber_Timer2:
+	TSTOSS	opt_ScrubTmrEnable			    ; Scrubber Timer Enabled?	   
+	FONT_COLOR_DISABLED				    ; NO - print in disabled color
+	bcf	hi,7					    ; Clear sign bit
+	output_999
+	STRCAT_TEXT tMinutes
+	return						    ; done
+
+	;-----------------------------------------------------------------------------
+; dynamic Title - show last restart date
+;
+dyn_Scrubber_Date:
+	STRCAT_TEXT tScrubTmrLast		; "Last restart:"
+    	movff	opt_scrubber_timer_year, lo		; copy year  to lo
+	movff	opt_scrubber_timer_month,hi		; copy month to hi
+	movff	opt_scrubber_timer_day,  up		; copy day   to up
+	call	output_date					; print date
+	return
+	
  ENDIF	; _ccr_pscr
 
 
@@ -1364,7 +1415,7 @@ dyn_show_battery_cycles:
 ;
 dyn_show_config:
 	STRCAT_TEXT tHardware				; print  text
-	call	I2C_init_compass			; start compass to get compass configuration
+;	call	I2C_init_compass			; start compass to get compass configuration
 	movf	HW_descriptor,W				; copy hardware descriptor to WREG
 	output_hex					; print as hex
 	movf	HW_variants,W				; copy hardware variants   to WREG
@@ -1718,7 +1769,7 @@ do_menu_syssets:
 	bra	do_menu_syssets_dn		; YES
 	btfsc	dual_comm			; Dual comm hardware?
 	bra	do_menu_syssets_dual_comm	; YES
-	btfsc	battery_gauge_available		; piezo buttons available?
+	btfsc	adjustable_buttons		; piezo buttons available?
 	bra	do_menu_syssets_piezo		; YES
 
 do_menu_syssets_dual_comm:	

@@ -2052,43 +2052,14 @@ static void init_output_vars(void)
 	char_I_sim_advance_time = 0;
 }
 
-//////////////////////////////////////////////////////////////////////////////
-// calc_GF_surface
-//
-// Calculates the instantaneous surface GF (GF_surf) for the leading compartment.
-//
-// Definition:
-//   GF_surf = (P_tissue - pres_surface) / (M_surf - pres_surface)
-//
-// - P_tissue  : current inert gas tissue pressure (N2 + He) in bar
-// - pres_surface : pres_surface (Ambient pressure at the surface, in bar)
-// - M_surf    : M-value on the surface (per calc_M_value_at_pressure)
-//
-// The maximum across all compartments is taken as GF_surf.
-// The result is written in percent (0..250) in int_O_GF_surface.
-//
-static float calc_M_value_at_pressure(float pres_surface)
-{
-    float a, b;
-    read_Buhlmann_coefficients();
-#ifdef _helium
-    adopt_Buhlmann_coefficients();
-    a = var_a;
-    b = var_b;
-#else    
-    a = var_N2_a;
-    b = var_N2_b;
-#endif
-    return a + b * pres_surface;
-}
-
 static void calc_GF_surface(void)
 {
     overlay float P_tissue;
     overlay float M_surf;
     overlay float gf_surf;
     overlay float gf_surf_max = 0.0f;
-
+    float a, b;
+    
     // Pass through all compartments
     for (ci = 0; ci < NUM_COMP; ci++)
     {
@@ -2097,10 +2068,21 @@ static void calc_GF_surface(void)
 #else
         P_tissue = real_pres_tissue_N2[ci];
 #endif
+      
+        read_Buhlmann_coefficients();
 
+#ifdef _helium
+        adopt_Buhlmann_coefficients();
+        a = var_a;
+        b = var_b;
+#else    
+        a = var_N2_a;
+        b = var_N2_b;
+#endif
+        
         // M-value on the surface for this compartment
-        M_surf = calc_M_value_at_pressure(pres_surface);
-
+        M_surf = pres_surface / b + a;
+        
         // Filtering out unnecessary cases
         if (M_surf <= pres_surface)
             continue;
@@ -2120,14 +2102,11 @@ static void calc_GF_surface(void)
     }
     else
     {
-        unsigned int tmp;
+        int_O_GF_surface = (unsigned int)(gf_surf_max * 100.0f + 0.5f);
 
-        tmp = (unsigned int)(gf_surf_max * 100.0f + 0.5f);
+        if (int_O_GF_surface > 999)
+            int_O_GF_surface = 999;
 
-        if (tmp > 999)
-            tmp = 999;
-
-        int_O_GF_surface = tmp;
     }
 }
 

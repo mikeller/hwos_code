@@ -562,6 +562,39 @@ update_divemode60:
 	movff	WREG,opt_brightness_divemode			;     - set brightness to ECO
 
 update_divemode60_1:
+ IFDEF _ccr_pscr
+	TSTOSS	opt_ScrubTmrEnable			; Scrubber Timer Enabled?	   
+	bra	update_divemode60_3			; NO  - skip next
+
+	btfsc	sensor_override_active			; in simulator mode?
+	bra	update_divemode60_3	    		; YES  - skip next
+	
+	btfsc	FLAG_ccr_mode				; check if we are in CCR mode
+	bra	update_divemode60_1_2			; YES - continue with further checks
+	btfsc	FLAG_pscr_mode				; check if we are in pSCR mode
+	bra	update_divemode60_1_2			; YES - continue with further checks
+	bra	update_divemode60_3			; NO  - skip next
+update_divemode60_1_2:
+	btfsc	bailout_mode				; =1: in bailout mode
+	bra	update_divemode60_3			; YES  - skip next
+	MOVII	opt_scrubber_timer_mins,mpr			; Get the minutes into lo:hi
+	btfss	hi,7					; already negative?
+	bra	update_divemode60_1_3			; No, count-down
+	; count up
+	INCI	mpr					; ++1
+	bra	update_divemode60_2			; done
+update_divemode60_1_3:
+	; count down
+	DECI	mpr					; --1
+	btfss	hi,7					; already negative?
+	bra	update_divemode60_2			; No, done
+	clrf	lo
+	movlw	b'10000000'
+	movwf	hi					; clear and set negative bit
+update_divemode60_2:
+	MOVII	mpr,opt_scrubber_timer_mins			; Copy result back into opt_scrubber_timer_mins:2
+update_divemode60_3:	
+ ENDIF	
 	; max allowed runtime in simulator is 254 minutes in
 	; order for the tissue calculation catch-up to work!
 
@@ -3194,7 +3227,7 @@ diveloop_boot:
 	call	restart_set_modes_and_flags	; basic settings depending on deco mode
 
 	; save on energy
-	call	I2C_sleep_compass			; stop accelerometer and compass
+;	call	I2C_sleep_compass			; stop accelerometer and compass
 
 	; do an early initialization of all deco engine output variables to
 	; avoid glitches in the display outputs during deco engine start-up
@@ -3481,6 +3514,12 @@ divemode_check_warnings1:
 	rcall	check_gas_density			; YES - check gas density
 	btfsc	FLAG_pscr_mode				; in pSCR mode?
 	rcall	check_gas_density			; YES - check gas density
+
+	btfsc	FLAG_ccr_mode				; in CCR mode?
+	rcall	check_scrubber_timer			; YES - check the scrubber (If it's enabled)
+	btfsc	FLAG_pscr_mode				; in pSCR mode?
+	rcall	check_scrubber_timer			; YES - check the scrubber (If it's enabled)
+
  ENDIF
 
 	btfsc	use_aGF						; using alternative GF factors?
@@ -4002,6 +4041,41 @@ check_OC_gas_avail:
 	incf	message_counter,F			;           - increase message counter
 	goto	TFT_message_no_BO_gas		;           - show message and return
 
+	
+;-----------------------------------------------------------------------------
+; Check the scrubber timer
+;
+check_scrubber_timer:	
+	bcf	attn_scrubber_timer		; clear warning by default
+	TSTOSS	opt_ScrubTmrEnable		; Scrubber Timer Enabled?	   
+	return					; NO  - Done.
+	MOVII	opt_scrubber_timer_mins,mpr	; Get the minutes into lo:hi
+	btfsc	hi,7				; Negative timer?
+	bra	check_scrubber_timer4		; YES, Show the warning
+check_scrubber_timer2:				; NO
+	movff	lo,sub_a+0
+	movff	hi,sub_a+1
+	movlw	low_scrubber_threshold+0
+	movwf	sub_b+0
+	movlw	low_scrubber_threshold+1
+	movwf	sub_b+1
+	call	cmpU16				; sub_a - sub_b
+	btfss	neg_flag			; theshold triggered?
+	bra	check_scrubber_timer4		; YES, Show the warning
+check_scrubber_timer3:				; NO
+    	movff	char_O_deco_info,WREG		; get the deco info vector
+	btfss	WREG,deco_stops_norm		; deco stops found?
+	return					; NO  - within NDL - Done.
+    	MOVII	int_O_TTS_norm,sub_b	    	; YES - use TTS as the threshold
+	call	cmpU16				; sub_a - sub_b
+	btfss	neg_flag			; theshold triggered?
+	return					; NO  - Done.
+check_scrubber_timer4:				; Show the warning
+	incf	message_counter,F		; YES - increase message counter
+	bsf	attn_scrubber_timer		; Set warning for scrubber timer
+	goto	TFT_message_scrubber		; - show message and return
+	
+	
  ENDIF	; _ccr_pscr
 
 

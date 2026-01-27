@@ -114,7 +114,8 @@ surfloop_1:
 	bsf		trigger_pres_cur_changed	; set flag to have pressure    written to display on first round of surface loop
 	bsf		trigger_temp_changed		; set flag to have temperature written to display on first round of surface loop
 
-	call	I2C_sleep_compass			; shut down compass
+;	call	I2C_sleep_compass			; shut down compass
+	call	I2C_init_compass				; start compass
 
  IFDEF _ccr_pscr
 	movlw	surface_sp					; load default surface setpoint (in cbar)

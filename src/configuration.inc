@@ -23,9 +23,9 @@
 ;
 #endif
 
-#define fw_version_major		.3
-#define fw_version_minor		.31
-#define fw_version_beta			0x01
+#define fw_version_major		.10
+#define fw_version_minor		.93
+#define fw_version_beta			0x00
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -42,11 +42,11 @@
 ;
 #endif
 
-#define firmware_creation_year	.25;0x18
-#define firmware_creation_month	.11;0x09
-#define firmware_creation_day	.24;0x06
+#define firmware_creation_year	.26;0x18
+#define firmware_creation_month	.01;0x09
+#define firmware_creation_day	.10;0x06
 
-#define firmware_expire_year	.28;0x18
+#define firmware_expire_year	.29;0x18
 #define firmware_expire_month	.08;0x08
 #define firmware_expire_day	.29;0x1C
 
@@ -64,7 +64,7 @@
 ;                                                                                    122.880 max. available
 #endif
 
-#define _hwos_tech_2_TR_cave
+#define _hwos_sport
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -80,7 +80,7 @@
 #endif
 
 #define _language_1		en
-#define _language_2		none
+#define _language_2		de
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -207,7 +207,7 @@
 #define _gas_contingency
 #define _cave_mode
 #define _big_divemenu
-#define _firmware_recovery
+#define NOT_INCLUDED_firmware_recovery
 #define NOT_INCLUDED_min_depth_option
 #define NOT_INCLUDED_screendump
 

@@ -99,7 +99,7 @@ OPTION_END	MACRO
 
 ;=============================================================================
 
-	extern	tPercent, tMeters, tMinutes, tGasDisabled, tbar, tNo, tTrModeOff, tTrPresNone, tDefName, tblank, tLogTunitC, tTissuePresSat
+	extern	tPercent, tMeters, tMinutes, t10Minutes, tGasDisabled, tbar, tNo, tTrModeOff, tTrPresNone, tDefName, tblank, tLogTunitC, tTissuePresSat
 	extern	char_I_bottom_time, char_I_bottom_depth
 	extern	char_I_model
 	extern	char_I_extra_time
@@ -330,12 +330,19 @@ option_table_begin:
 	OPTION_BOOL     oGasDensityCheck,                                              .1,                       0x107,    0x92,  opt_gas_density_check			; gas density is checked (effective in CCR / pSCR modes only)
 	OPTION_ENUM8	oWarningLevel,	     .2,                                       .0,      tLess,           0x108,    0x93,  opt_warning_level_divemode		; =0: Less, =1: All
 	OPTION_ENUM8    oTimeFormat,         .2,                                       .0,      tTimeformat,     0x109,    0x94,  opt_timeformat			; =0:24h, =1:12h
+	OPTION_UINT8    oScrubTmrTime,	     .6,		    .36,	       .12,     t10Minutes,      0x10A,    0x95,  opt_ScrubberTime			; Scrubber timer Time (in 10min increments)
+	OPTION_BOOL     oEnable_ScrubTmr,						.0,			 0x10B,	   0x96,  opt_ScrubTmrEnable			; =1: Use the Scrubber Timer, =0: Ignore the Scrubber Timer
+	OPTION_UINT8    oScubTmrCounter_LOW, .0,                 .255,                 .0,      nounit,          0x10C,    0x97,  opt_scrubber_timer_mins+0		; Actual scrubber time (LOW)
+	OPTION_UINT8    oScubTmrCounter_HIGH,.0,                 .255,                 .0,      nounit,          0x10D,    0x98,  opt_scrubber_timer_mins+1		; Actual scrubber time (HIGH)
+	OPTION_UINT8    oscrubber_timer_day, .0,                 .255,                 .0,      nounit,          0x10E,    0x99,  opt_scrubber_timer_day		; Last restart date
+	OPTION_UINT8    oscrubber_timer_month,.0,                .255,                 .0,      nounit,          0x10F,    0x9A,  opt_scrubber_timer_month		; Last restart date
+	OPTION_UINT8    oscrubber_timer_year, .0,                .255,                 .0,      nounit,          0x110,    0x9B,  opt_scrubber_timer_year		; Last restart date
 	;	+---------------------------------------------------------------------------------------------------------------------------------------------+
 	;	|  .                                                                                                                                          |
 	;	| /|\                                                                                                                                         |
 	;	|  |  add new options here!                                                                                                                   |
-	;	|  |  EEPROM address  min: 0x012, max: 0x1FF, last used: 0x109, spare: 0x0B7-0x0B9, 0x0F5-0x0F6, disused: 0x0A8, 0x0CE                        |
-	;	|  |  serial address  min:  0x20, max:  0xF9, last used:  0x94, spare: 0x84 (0xFA - 0xFE are reserved for internal use)			      |
+	;	|  |  EEPROM address  min: 0x012, max: 0x1FF, last used: 0x110, spare: 0x0B7-0x0B9, 0x0F5-0x0F6, disused: 0x0A8, 0x0CE                        |
+	;	|  |  serial address  min:  0x20, max:  0xF9, last used:  0x9B, spare: 0x84 (0xFA - 0xFE are reserved for internal use)			      |
 	;	+---------------------------------------------------------------------------------------------------------------------------------------------+
 
 	; ppO2 warnings, sorted by ppO2 levels

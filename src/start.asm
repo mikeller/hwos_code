@@ -128,6 +128,7 @@ start_clear_rambank:
 	bsf		cold_start
 
 	; get button type from bootloader info
+	bcf	adjustable_buttons					; assume non-adjustable by default
 	bsf		analog_switches					; assume analog buttons by default
 	movlw	0x7C							; set up read from 0x01F77C
 	movwf	TBLPTRL							; ...
@@ -139,6 +140,8 @@ start_clear_rambank:
 	movlw	0x07							; coding for analog buttons
 	cpfseq	TABLAT							; equal?
 	bcf		analog_switches					; NO - no analog buttons
+	btfsc	analog_switches						; analog buttons?
+	bsf	adjustable_buttons					; Yes! analog are always adjustable
 
 	; get screen type (2) from bootloader info
 	bsf		screen_type2					; set flags for later clear of the false one
@@ -237,11 +240,21 @@ start_common:
 	call	lt2942_get_status				; check for gauge IC
 	btfss	battery_gauge_available			; cR or 2 hardware?
 	bra		start_check_new_firmware		; NO  - skip next
+	
+	call    eeprom_serial_number_read		    ; read OSTC serial number
+	movff	lo,sub_a+0
+	movff	hi,sub_a+1
+	MOVLI	.15000,sub_b
+	call	cmpU16
+	btfss	neg_flag					; serial >14999
+	bra	    start_check_new_firmware		; YES  - skip next
+	
 	movlw	.30								; YES - load default button sensitivity
 	movff	WREG,opt_cR_button_right		;     - set default for left  button
 	movff	WREG,opt_cR_button_left			;     - set default for right button
 	call	piezo_config					;     - configure buttons, 1st pass
 	call	piezo_config					;     - configure buttons, 2nd pass
+	bsf	adjustable_buttons				; 2015-style adjustable digital
 
 start_check_new_firmware:
 	call	TFT_boot						; initialize TFT (includes clear screen & backlight switch-off)

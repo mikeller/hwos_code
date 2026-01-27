@@ -3313,6 +3313,20 @@ TFT_message_no_BO_gas:
 	STRCPY_TEXT tnoBOgas				; print "-B/O-Gas-"
 	bra		TFT_message_close			; finalize message output
 
+ IFDEF _ccr_pscr	
+;-----------------------------------------------------------------------------
+; Dive Mode - Scrubber timer
+;
+	global	TFT_message_scrubber
+TFT_message_scrubber:	
+	rcall	TFT_message_open			; set row and column for the message
+	tstfsz	WREG						; is there room for the message?
+	return								; NO  - skip message in this cycle
+
+	FONT_COLOR_WARNING					; set warning color
+	STRCPY_TEXT tScrubTmrWarn				; print "Scrubber!"
+	bra		TFT_message_close			; finalize message output
+ ENDIF	
 
 ;-----------------------------------------------------------------------------
 ; Message - open Message
@@ -3727,7 +3741,7 @@ TFT_surf_cv_lastdive:
 	STRCAT_TEXT_PRINT	tAvgDepth		; "Average"
 
 	FONT_COLOR_MEMO						; set color
-	WIN_SMALL surf_gaslist_column+.48,surf_gaslist_row
+	WIN_SMALL surf_gaslist_column+.53,surf_gaslist_row
 	SMOVII	int_O_desaturation_time,mpr	; ISR-safe copy of the desaturation time
 	movf	mpr+0,W						; get low byte into WREG
 	iorwf	mpr+1,W						; inclusive-or with high byte, check if desaturation time is zero
@@ -3756,7 +3770,7 @@ TFT_surface_lastdive_2:
 
 TFT_surface_lastdive_com:
 	; last dive duration
-	WIN_SMALL surf_gaslist_column+.48,surf_gaslist_row+(surf_gaslist_spacing*.1)
+	WIN_SMALL surf_gaslist_column+.53,surf_gaslist_row+(surf_gaslist_spacing*.1)
 	MOVII	lastdive_duration,mpr		; get duration of last dive, minutes
 	output_999							; print minutes
 	PUTC	":"							; print ":"
@@ -3765,15 +3779,42 @@ TFT_surface_lastdive_com:
 	PRINT								; dump to screen
 
 	; last dive max depth
-	WIN_SMALL	surf_gaslist_column+.48,surf_gaslist_row+(surf_gaslist_spacing*.2)
+	WIN_SMALL	surf_gaslist_column+.53,surf_gaslist_row+(surf_gaslist_spacing*.2)
 	MOVII	lastdive_maxdepth,mpr		; get max depth of last dive
 	rcall	TFT_surface_lastdive_depth	; print depth
 
 	; average depth
-	WIN_SMALL	surf_gaslist_column+.48,surf_gaslist_row+(surf_gaslist_spacing*.3)
+	WIN_SMALL	surf_gaslist_column+.53,surf_gaslist_row+(surf_gaslist_spacing*.3)
 	MOVII	lastdive_avgdepth,mpr		; get avg depth of last dive
-	;bra	TFT_surface_lastdive_depth	; print depth and return
+	rcall	TFT_surface_lastdive_depth	; print depth
 
+ IFDEF _ccr_pscr	
+	TSTOSS	opt_ScrubTmrEnable		; Scrubber Timer Enabled?	   
+	return					; NO  - Done.
+
+	FONT_COLOR color_green				; set menu title font color
+	; Scrubber timer
+	WIN_TINY surf_gaslist_column,surf_gaslist_row+(surf_gaslist_spacing*.4)+.5
+	STRCAT_TEXT_PRINT	tScrubTmrTime		; "Scubber Time:"
+	FONT_COLOR_MEMO						; set color
+	WIN_SMALL	surf_gaslist_column+.65,surf_gaslist_row+(surf_gaslist_spacing*.4)
+	MOVII	opt_scrubber_timer_mins,mpr			    ; Get the minutes into lo:hi
+	btfss	hi,7					    ; Negative timer?
+	bra	TFT_surface_lastdive_scrubber1		    ; NO
+	FONT_COLOR_WARNING				    ; YES - print in Red (If enabled)
+	STRCAT	"-"					    ; And add a -
+	bra	TFT_surface_lastdive_scrubber2		    ; Skip Space
+TFT_surface_lastdive_scrubber1:
+	STRCAT	" "					    ; Add a Space when positive
+TFT_surface_lastdive_scrubber2:    
+	bcf	hi,7					    ; Clear sign bit
+;	bcf	leftbind
+	output_999
+	STRCAT_TEXT_PRINT tMinutes
+	ENDIF	; _ccr_pscr
+
+	return
+	
 	; Helper Function - print depth
 TFT_surface_lastdive_depth:
 	TSTOSS	opt_units					; 0=Meter, 1=Feet
@@ -5016,7 +5057,10 @@ TFT_ceiling_GF_tissue_metric:
 	bra		TFT_ceiling_GF_tissue0		; continue
 
 TFT_ceiling_GF_tissue0:
-	PUTC_PRINT " "						; append a space and dump to screen
+	PUTC " "						; append a space
+	clrf	WREG						; load string terminator
+	movff	WREG,buffer+.4					; limit string length to 4
+	PRINT
 	return	
 
 	; Helper Function - draw a bargraph

@@ -127,9 +127,9 @@ surf_customview_toggle:
 	incf	active_customview,F			; set number of the next custom view to show
 
  IFDEF _compass
-	movlw	.6							; load index of surface custom view compass
-	cpfseq	active_customview			; will the compass be shown in custom view?
-	call	I2C_sleep_compass			; NO - can stop the compass to save on energy
+;	movlw	.6							; load index of surface custom view compass
+;	cpfseq	active_customview			; will the compass be shown in custom view?
+;	call	I2C_sleep_compass			; NO - can stop the compass to save on energy
  ENDIF
 
 	movlw	num_surface_cv				; load number of custom views available
@@ -258,7 +258,7 @@ surf_customview_init_view5:
 	;
 surf_customview_init_view6:
  IFDEF _compass
-	call	I2C_init_compass			; start compass
+;	call	I2C_init_compass			; start compass
 	btfss	compass_present
 	bra		surf_customview_toggle		; not available without compass compiled in, goto next view
 	call	TFT_surface_compass_mask	; show compass mask
@@ -602,9 +602,9 @@ dive_customview_toggle:
 ;
 	global	dive_customview_callup
 dive_customview_callup:
-	movlw	index_compass_dm			; get index of compass custom view
-	cpfseq	active_customview			; will compass be shown?
-	call	I2C_sleep_compass			; NO - stop compass to save on energy
+;	movlw	index_compass_dm			; get index of compass custom view
+;	cpfseq	active_customview			; will compass be shown?
+;	call	I2C_sleep_compass			; NO - stop compass to save on energy
 
 	; clear custom view area in dive mode
 	WIN_BOX_BLACK dm_customview_row, dm_customview_bot-.2, dm_customview_column, dm_customview_rgt ; top, bottom, left, right
@@ -614,7 +614,7 @@ dive_customview_callup:
 	dcfsnz	WREG,F						;
 	bra		init_avr_stopwatch			;  1: average depth and stopwatch
 	dcfsnz	WREG,F						;
-	bra		init_TFT_dive_compass		;  2: compass
+	bra		init_TFT_dive_compass			;  2: compass
 	dcfsnz	WREG,F						;
 	bra		init_ppo2_sensors			;  3: ppO2 sensors
 	dcfsnz	WREG,F						;
@@ -624,21 +624,21 @@ dive_customview_callup:
 	dcfsnz	WREG,F						;
 	bra		init_pressures_SAC			;  6: tank pressure and SAC rate
 	dcfsnz	WREG,F						;
-	bra		init_gas_needs_ascent		;  7: gas needs for ascent / cave return
+	bra		init_gas_needs_ascent			;  7: gas needs for ascent / cave return
 	dcfsnz	WREG,F						;
 	bra		init_cave_tts				;  8: cave mode TTS
 	dcfsnz	WREG,F						;
 	bra		init_decoplan				;  9: deco plan (next stops)
 	dcfsnz	WREG,F						;
-	bra		init_ceiling_GF_tissue		; 10: ceiling, current GF and tissues
+	bra		init_ceiling_GF_tissue			; 10: ceiling, current GF and tissues
 	dcfsnz	WREG,F						;
-	bra		init_ceiling_GF_surfGF		; 11: ceiling, current GF and surfGF
+	bra		init_ceiling_GF_surfGF			; 11: ceiling, current GF and surfGF
 	dcfsnz	WREG,F						;
-	bra		init_CNS					; 12: CNS values
+	bra		init_CNS				; 12: CNS values
 	dcfsnz	WREG,F						;
-	bra		init_ppo2_ead_end_cns		; 13: ppO2, END/EAD and CNS/gas density
+	bra		init_ppo2_ead_end_cns			; 13: ppO2, END/EAD and CNS/gas density
 	dcfsnz	WREG,F						;
-	bra		init_clock_batt_surfpress	; 14: clock, battery and surface pressure
+	bra		init_clock_batt_surfpress		; 14: clock, battery and surface pressure
 	dcfsnz	WREG,F						;
 	bra		init_gf_factors				; 15: GF factors
 	dcfsnz	WREG,F						;
@@ -664,7 +664,7 @@ init_avr_stopwatch:
 	;
 init_TFT_dive_compass:
  IFDEF _compass
-	call	I2C_init_compass			; start compass
+;	call	I2C_init_compass			; start compass
 	btfss	compass_present
 	bra		dive_customview_toggle		; not available without compass compiled in, goto next view
 	call	TFT_dive_compass_mask		; mask for compass
@@ -853,6 +853,8 @@ init_gf_factors:
 	;
 init_cave_waypoints:
  IFDEF _cave_mode
+ 	btfss	cave_mode					; cave mode switched on?
+	bra		dive_customview_toggle		;       NO - goto next view
 	call	TFT_cave_waypoints			; show waypoint graphics
 	bra		dive_cv_toggle_exit			; done
  ELSE

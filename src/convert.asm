@@ -588,8 +588,8 @@ TFT_convert_date_common:
 	call	output99x_call			; ...
 	PUTC	'.'						; print spacing dot
 	movff	up,lo					; print up (00-99)
-	call	output99x_call			; ...
-	return							; done
+	goto	output99x_call			; ... (And return)
+	;return							; done
 
 
 ;=============================================================================

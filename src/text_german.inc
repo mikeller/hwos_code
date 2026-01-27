@@ -354,6 +354,7 @@
 	TCODE	tFeets,				"ft"
 	TCODE	tFeets1,			"f"
 	TCODE	tMinutes,			"'"
+	TCODE	t10Minutes,			"0'"
 	TCODE	tPercent,			"%"
 	TCODE	tLitersMinute,		"l/min"
 	TCODE	tbar,				" bar"					; bar
@@ -617,6 +618,17 @@
 	TCODE	tColorSetName1,		"Rot"					; Red
 	TCODE	tColorSetName2,		"Grün"					; Green
 	TCODE	tColorSetName3,		"Blau"					; Blue
+
+ IFDEF _ccr_pscr	
+; Scrubber Timer menu
+	TCODE	tScrubberTimer,		"Scrubber Timer"			; Scrubber Timer
+	TCODE	tScrubTmrReset,		"Zurücksetzen"				; Reset Scrubber
+	TCODE	tScrubTmrEnable,	"Timer aktiv:"				; Timer Enabled:
+	TCODE	tScrubTmrTime,		"Kalkstandzeit:"			; Scubber Time:
+	TCODE	tScrubTmrRemain,	"Restzeit:"				; Remaining:
+	TCODE	tScrubTmrLast,		"Befüllt am:"				; Last set:
+	TCODE	tScrubTmrWarn,		"Kalkzeit!"				; Scrubber!
+ ENDIF
 
 
 ; Debug Stuff

@@ -141,6 +141,7 @@
 
  IFDEF _ccr_pscr
 	extern	TFT_message_gas_density				; gas density
+	extern	TFT_message_scrubber				; Scrubber warning
  ENDIF
 
  IFDEF _external_sensor_eccr

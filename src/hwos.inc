@@ -75,23 +75,24 @@
 #DEFINE	i2c_speed_value	    0x27		;0x9C = 100kHz @ 64MHz Fosc, 0x27 = 100kHz @ 16MHz Fosc 
 
 ; ---- Divemode Custom View Indexes - Attention: these numbers need to be in line with the jump tables in customview.asm!
-#DEFINE index_blank						 .0			; blank view
+#DEFINE index_blank					 .0			; blank view
 #DEFINE index_avr_stopwatch				 .1			; average depth and stopwatch
 #DEFINE index_compass_dm				 .2			; compass
 #DEFINE index_ppo2_sensors				 .3			; ppO2 sensors
 #DEFINE index_sensor_check				 .4			; sensor check
 #DEFINE index_pscr_info					 .5			; pSCR data
 #DEFINE index_pressures_SAC				 .6			; tank pressure and SAC rate
-#DEFINE index_gas_needs_ascent			 .7			; gas needs for ascent / cave return
+#DEFINE index_gas_needs_ascent				 .7			; gas needs for ascent / cave return
 #DEFINE index_cave_tts					 .8			; cave mode TTS
 #DEFINE index_decoplan					 .9			; deco plan
-#DEFINE index_ceiling_GF_tissue			.10			; ceiling, current GF and tissues
-#DEFINE index_CNS						.11			; CNS values
-#DEFINE index_ppo2_ead_end_cns			.12			; ppO2, END/EAD and CNS or gas density
-#DEFINE index_clock_batt_surfpress		.13			; clock, battery and surface pressure
-#DEFINE index_gf_factors				.14			; GF factors
-#DEFINE index_cave_waypoints			.15			; cave waypoints
-#DEFINE index_cv_dm_max					.13			; highest index used in normal custom view rotation
+#DEFINE index_ceiling_GF_tissue				.10			; ceiling, current GF and tissues
+#DEFINE	index_ceiling_GF_surfGF				.11			; ceiling, current GF and surface GF
+#DEFINE index_CNS					.12			; CNS values
+#DEFINE index_ppo2_ead_end_cns				.13			; ppO2, END/EAD and CNS or gas density
+#DEFINE index_clock_batt_surfpress			.14			; clock, battery and surface pressure
+#DEFINE index_gf_factors				.15			; GF factors
+#DEFINE index_cave_waypoints				.16			; cave waypoints
+#DEFINE index_cv_dm_max					.16			; highest index used in normal custom view rotation
 
 
 ; ---- Timing for button hold-down flags
@@ -378,6 +379,8 @@
 #DEFINE compass_fast_treshold			.9			; show new heading instantly if angular difference > compass_fast_treshold, else show animated turning of compass rose
 #DEFINE compass_averaging				.10			; number of averaging cycles
 
+; ---- Scrubber timer 
+#DEFINE	low_scrubber_threshold			.30			; [min] Scrubber low threshold (16bit value)
 
 ;-----------------------------------------------------------------------------
 ; Bit Flags
@@ -511,7 +514,7 @@
 
  ;---- Hardware - OSTC Model Variants3 (stored in access RAM, NOT cleared in restart)
 #DEFINE dual_comm			HW_variants3,0		; =1: dual comm hardware (USB and BLE-only)
- 
+#DEFINE	adjustable_buttons		HW_variants3,1		; =1: The buttons have adjustable sensitivity
  
 ;---- Hardware - States 1 (stored in access RAM, cleared on restart)
 #DEFINE analog_sw1_pressed		HW_flags_state1,0	; =1: analog switch 1 pressed
@@ -739,7 +742,7 @@
 #DEFINE attn_det_xmit1_bat		DM_flags_att3_det,0	; =1: xmitter 1 low batt attention issued
 #DEFINE attn_det_xmit2_bat		DM_flags_att3_det,1	; =1: xmitter 2 low batt attention issued
 #DEFINE attn_det_cns_eod		DM_flags_att3_det,2	; =1: end-of-dive CNS    attention threshold reached
-;								DM_flags_att3_det,3	; --- unused
+#DEFINE	attn_scrubber_timer		DM_flags_att3_det,3	; =1: Scrubber timer runs out or is negative
 ;								DM_flags_att3_det,4	; --- unused
 ;								DM_flags_att3_det,5	; --- unused
 ;								DM_flags_att3_det,6	; --- unused
@@ -920,7 +923,7 @@ MOVLI	macro literal,address		; MOVe Literal to Integer
 	endm							;
 
 
-; ---- arithetics
+; ---- arithmetics
 
 INCI	macro address				; INCrement Integer (version of incf for 2 byte integers)
 	infsnz	address+0,F				; Attention: must be in bank where target variable resides!
@@ -1625,7 +1628,7 @@ charge_cycles					res 2		; 16bit charge cycles counter
 ;---- IR/S8-Link
 ir_s8_buffer					res .64		; buffer for data received on IR/S8 interface,
 
-; 224 byte used, 25 byte free
+; 226 byte used, 23 byte free
 
 
 ;-----------------------------------------------------------------------------
@@ -1770,7 +1773,14 @@ opt_TR_1st_pres					res 1		; TR functions - 1st pressure assignment
 opt_TR_2nd_pres					res 1		; TR functions - 2nd pressure assignment
 opt_TR_Bail_pres				res 1		; TR functions - bailout pressure assignment
 
-; ==> 194 bytes used - 50 bytes free (244 usable bytes only in bank 14 as the upper 12
+;---- Scrubber timer				
+opt_ScrubberTime			res 1		; Scrubber timer time in 10min
+opt_ScrubTmrEnable			res 1		; =1: Use the Scrubber Timer, =0: Ignore the Scrubber Timer			
+opt_scrubber_timer_mins			res 2		; The Scrubber timer in mins
+opt_scrubber_timer_day			res 1		; Date when then Scrubber was restarted
+opt_scrubber_timer_month		res 1		; Date when then Scrubber was restarted
+opt_scrubber_timer_year			res 1		; Date when then Scrubber was restarted
+; ==> 201 bytes used - 43 bytes free (244 usable bytes only in bank 14 as the upper 12
 ;                                     bytes are reserved for special function registers)
 
 ;-----------------------------------------------------------------------------
