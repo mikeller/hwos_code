@@ -515,6 +515,8 @@
  ;---- Hardware - OSTC Model Variants3 (stored in access RAM, NOT cleared in restart)
 #DEFINE dual_comm			HW_variants3,0		; =1: dual comm hardware (USB and BLE-only)
 #DEFINE	adjustable_buttons		HW_variants3,1		; =1: The buttons have adjustable sensitivity
+#DEFINE ble_only			HW_variants3,2		; =1: ble-only comm hardware
+#DEFINE button_hold_down_allowed	HW_variants3,3		; =1: OSTC uses mechanical push buttons 
  
 ;---- Hardware - States 1 (stored in access RAM, cleared on restart)
 #DEFINE analog_sw1_pressed		HW_flags_state1,0	; =1: analog switch 1 pressed
@@ -527,8 +529,8 @@
 #DEFINE compass_enabled			HW_flags_state1,7	; =1: the compass and accelerometer chip is active
 
 ;---- Hardware - States 2 (stored in access RAM, NOT cleared on restart)
-#DEFINE cc_active				HW_flags_state2,0	; =1: constant current charging active (cR hardware only)
-#DEFINE cv_active				HW_flags_state2,1	; =1: constant voltage charging active (cR hardware only)
+#DEFINE cc_active				HW_flags_state2,0	; =1: constant current charging active
+#DEFINE cv_active				HW_flags_state2,1	; =1: constant voltage charging active
 #DEFINE i2c_error_flag			HW_flags_state2,2	; =1: an I2C error occurred
 #DEFINE rs232_rx_timeout		HW_flags_state2,3	; =1: RS232 receive timeout occurred
 #DEFINE battery_low_condition	HW_flags_state2,4	; =1: low battery condition detected
@@ -573,7 +575,7 @@
 #DEFINE count_divetime			OS_flags_ISR2,2		; =1: request ISR to count the dive time
 #DEFINE sensor_override_request	OS_flags_ISR2,3		; =1: request ISR to override the pressure sensor with a simulated depth
 #DEFINE tmr5_preemtion_allowed	OS_flags_ISR2,4		; =1: allow preemption of timeout counter
-#DEFINE button_hold_down_allowed OS_flags_ISR2,5	; =1: OSTC uses mechanical push buttons
+;OS_flags_ISR2,5	; =1: 
 #DEFINE sensor_override_active	OS_flags_ISR2,6		; =1: ISR output:    switch to override-mode confirmed
 #DEFINE divetime_longer_1min	OS_flags_ISR2,7		; =1: ISR output:    dive time is >= one minute
 

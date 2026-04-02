@@ -1088,7 +1088,7 @@ battery_gauge_init:
 	rcall	I2C_TX_GAUGE					; send byte to the gauge IC
 	movlw	b'11111000'					; automatic conversion every two seconds (LT2942)
 	btfsc	battery_gauge_type				; =1: Gauge IC LTC2959, =0: LT2942
-	movlw	b'00111000'					; ADC Mode to "Smart Sleep" (converts V, I, T every 52 seconds (tolerance < ±5%)) (LTC2959)
+	movlw	b'00111100'					; ADC Mode to "Smart Sleep" (converts V, I, T every 52 seconds (tolerance < ±5%)), ADC uses SENSEN as voltage input. (LTC2959)
 	rcall	I2C_TX						; send byte
 	btfsc	battery_gauge_type				; =1: Gauge IC LTC2959, =0: LT2942
 	movlw	b'01010000'					; 20µV deadband

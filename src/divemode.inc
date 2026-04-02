@@ -471,11 +471,11 @@
 
 ; Diluent gas
 #DEFINE dm_active_dil_row						dm_3rdrow_top+.21				; 186
-#DEFINE dm_active_dil_column					dm_3rdrow_lft					;   0
+#DEFINE dm_active_dil_column					dm_3rdrow_lft+.2					;   2
 
 ; OC gas, blinking better gas, setpoint or bailout for CCR/pSCR
 #DEFINE dm_active_gas_sp_value_row				.208							; 208
-#DEFINE dm_active_gas_sp_value_col				dm_3rdrow_lft					;   0
+#DEFINE dm_active_gas_sp_value_col				dm_3rdrow_lft+.2					;   2
 #DEFINE dm_active_sp_label_row					dm_active_gas_sp_value_row		; 208
 #DEFINE dm_active_sp_label_col					dm_active_gas_sp_value_col+.45	;  45
 

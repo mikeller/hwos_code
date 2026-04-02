@@ -1021,7 +1021,20 @@ isr_switch_common:
 	bsf		T1CON,TMR1ON				; start timer 1
 	bcf		INTCON3,INT1IF				; clear ext. int 1 request
 	bcf		INTCON,INT0IF				; clear ext. int 0 request
-	return								; done
+	btfsc	cc_active					; charging constant current?
+	bra	isr_switch_common2				; Yes
+	btfsc	cv_active					; charging constant voltage?
+	bra	isr_switch_common2				; Yes
+	return							; done
+isr_switch_common2:
+	btfss	adjustable_buttons				; Adjustable buttons?
+	return							; NO - done
+	; charging. Ignore (adjustable) buttons during charging
+	btfsc	vusb_in						; USB plugged in?
+	return							; YES, accept buttons during charge (For OSTC cR and nano)
+	bcf	switch_left
+	bcf	switch_right
+	return							; done
 
 
 ;-----------------------------------------------------------------------------

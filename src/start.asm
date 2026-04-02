@@ -171,8 +171,10 @@ start_clear_rambank:
 	bcf	dn_flag
 	btfsc	screen_type4
 	bsf	dn_flag
-	btfsc	screen_type5
-	bsf	dn_flag
+;	btfsc	screen_type5
+;	bsf	dn_flag
+	
+	
 	
 	; get button polarity from configuration data (EEPROM)
 	EEPROM_CC_READ eeprom_button_polarity,button_polarity
@@ -437,6 +439,34 @@ restart2:
 	btfsc	dual_comm
 	bcf	ambient_sensor						; dual-comm has no ambient sensor
 	
+	; BLE only hardware?
+	bsf	ble_only						; assume ble_only hardware by default
+	movlw	0xFC							; set up read from 0x01FFFC
+	movwf	TBLPTRL							; ...
+	movlw	0xFF							; ...
+	movwf	TBLPTRH							; ...
+	movlw	0x01							; ...
+	movwf	TBLPTRU							; ...
+	TBLRD*+								; read configuration byte
+	movlw	0x62							; coding for ble_only
+	cpfseq	TABLAT							; equal?
+	bcf	ble_only						; NO
+	TBLRD*+								; read configuration byte
+	movlw	0x6C							; coding for ble_only
+	cpfseq	TABLAT							; equal?
+	bcf	ble_only						; NO
+	TBLRD*+								; read configuration byte
+	movlw	0x65							; coding for ble_only
+	cpfseq	TABLAT							; equal?
+	bcf	ble_only						; NO
+	TBLRD*+								; read configuration byte
+	movlw	0x2B							; coding for ble_only
+	cpfseq	TABLAT							; equal?
+	bcf	ble_only						; NO
+	
+	btfsc	ble_only
+	bcf	ambient_sensor						; ble_only has no ambient sensor
+	
 	btfsc	less_io_cpu						; Less I/O CPU found?
 	bsf	ble_available						; Yes, must have BLE (old or new)
  IFNDEF _hwos_sport
@@ -559,6 +589,7 @@ restart4e:
 
 
 restart5:
+	bcf	button_hold_down_allowed		 ; clear on default
 	; configure button_hold_down_allowed flag
 	btfsc	lv_core
 	bsf	button_hold_down_allowed		; OSTC sport mod. 2019

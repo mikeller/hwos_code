@@ -351,6 +351,8 @@ disable_ir_s8_analog:
 	global	ir_s8_tx_single
 ir_s8_tx_single:
 	banksel	TXSTA2						; UART 2 is outside of the access RAM
+	btfss	RCSTA2,SPEN					; UART 2 active?
+	return							; NO - DONE.
 	movwf	TXREG2						; transmit byte
 ir_s8_tx_single_loop:
 	btfss	TXSTA2,TRMT					; TX completed?
@@ -418,6 +420,8 @@ disable_rs232:
 ;
 	global	rs232_wait_tx				; ++++ do not touch WREG here! ++++
 rs232_wait_tx:
+    	btfss	RCSTA1,SPEN					; UART 1 active?
+	return							; NO - DONE.
 	btfss	TXSTA1,TRMT					; last byte completely shifted out on TX pin?
 	bra		rs232_wait_tx				; NO  - wait...
 	btfss	ble_available				; YES - OSTC running with Bluetooth?
@@ -584,12 +588,26 @@ ble2_configure:
    
     btfsc	dual_comm		; dual-comm hardware?
     rcall   	ble2_configure_at4	; YES - BLE-only module in dual-comm hardware, overwrite TBLPTRx!
+
+    btfsc	ble_only		; ble-only hardware?
+    rcall   	ble2_configure_at5	; YES - BLE-only module overwrite TBLPTRx!
     
     rcall	ble_init_loop
     rcall	disable_rs232
     bcf		PORTB,6	    ; keep low for min. current consumption
     return		    ; done.
 
+
+ble2_configure_at5:    
+    ; point to config table
+    movlw	LOW     ble_AT5
+    movwf	TBLPTRL
+    movlw	HIGH    ble_AT5
+    movwf	TBLPTRH
+    movlw	UPPER   ble_AT5
+    movwf	TBLPTRU
+    return
+    
 ble2_configure_at4:    
     ; point to config table
     movlw	LOW     ble_AT4
@@ -623,6 +641,23 @@ ble_init_loop3:
 	movf	TABLAT,W
 	SERIAL_CC_SEND	WREG
 	bra	ble_init_loop
+    
+ble_AT5:	; config table
+    ; 0xFF at the end
+    ; 0xFE: 20ms delay
+    ; 0xFD: 1s delay
+    ; .13: cr character
+    db	"AT+UBTLN=OSTC+ BLE",.13,0xFE				; "name command"
+    ;db	"AT+UFACTORY",.13,0xFE,0xFE				; Set to factory defined configuration
+    db  "AT+UMSM=1",.13,0xFE,0xFE				; start in Data mode
+    db	"AT+UBTLE=2",.13,0xFE					; Bluetooth low energy Peripheral
+    db	"AT+UDSC=0,0",.13,0xFE,0xFE				; Disable SPS Server on ID0 (and wait 40ms)
+    db	"AT+UDSC=0,6",.13,0xFE,0xFE				; SPs Server on ID0 (and wait 40ms)
+    db	"AT+UDSC=1,0",.13,0xFE,0xFE				; Disable SPP Server on ID1 (and wait 40ms)
+    db	"AT+UDSC=1,3",.13,0xFE,0xFE				; SPP Server on ID1 (and wait 40ms)
+    db	"AT&W",.13,0xFE						; write settings into eeprom
+    db	"AT+CPWROFF",.13					; save and reboot    
+    db	0xFD, 0xFD, 0xFF
     
 ble_AT4:	; config table
     ; 0xFF at the end

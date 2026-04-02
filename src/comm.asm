@@ -188,7 +188,9 @@ comm_mode_selection_loop_1:
 	bz		comm_download_mode						;             YES - enter command loop
 	;bra	comm_mode_selection_loop_2				;             NO  - check for comm mode termination
 comm_mode_selection_loop_2:
-	btfsc	dual_comm							; Dual comm hardware?
+	btfsc	ble_only							; BLE-Only hardware?
+	bra		comm_mode_selection_loop_3				; YES - skip USB check check since vusb_in is only used for usb here
+        btfsc	dual_comm							; Dual comm hardware?
 	bra		comm_mode_selection_loop_3				; YES - skip USB check check since vusb_in is only used for usb here
 	btfsc	ble_available							; BT available?
 	bra		comm_mode_selection_loop_3				; YES - skip USB check check (required for very old OSTC sport)

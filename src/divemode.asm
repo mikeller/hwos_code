@@ -187,7 +187,8 @@ diveloop:
 
 	; boot tasks for all modes
 	call	diveloop_boot				; initialize dive mode
-
+	call	I2C_init_compass			; start compass
+	
 	; startup tasks for all modes
 	call	TFT_boot					; initialize TFT (includes clear screen)
 	call	TFT_load_dive_color_pallet	; load dive color pallet

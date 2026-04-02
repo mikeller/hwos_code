@@ -503,7 +503,7 @@
  ENDIF
 
  IFDEF _cave_mode
-	TCODE	tGasNeedsCaveMode,	"Gasbedarf -HÖHLE- "	; title for gas needs custom view (cave mode)		| need to be
+	TCODE	tGasNeedsCaveMode,	"Gasbedarf -HöHLE- "	; title for gas needs custom view (cave mode)		| need to be
 	TCODE	tGasNeedsAscent,	"Gasbedarf Aufstieg"	; title for gas needs custom view (open water mode)	| same length
 	TCODE	tCaveMode,			"Höhle"					; cave mode activated (max. 9 char)
 	TCODE	tCaveModeShutdown,	"X-Höhle-X"				; cave mode shut down (max. 9 char)
