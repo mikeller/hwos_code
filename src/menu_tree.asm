@@ -1165,6 +1165,13 @@ do_menu_dive_stops:
 
 
 ;-----------------------------------------------------------------------------
+; return to Settings Menu from Sub-Sub-Sub-Menu
+;
+do_return_settings_even_deeper:				; entry point for return from info menu 3
+	call	menu_processor_pop			; drop one more stack entry
+	;bra	do_return_menu_settings_deeper		; continue
+
+;-----------------------------------------------------------------------------
 ; return to Settings Menu from Sub-Sub-Menu
 ;
 do_return_menu_settings_deeper:			; entry point for return from info menu 2
@@ -1266,24 +1273,22 @@ do_menu_info:
 	btfss	ostc_rx_present				; TR model?
 	bra		do_menu_info_noRX			; NO
 
-	MENU_BEGIN	tInfoMenu, .7
-		MENU_DYNAMIC	dyn_show_uptime,			0
-		MENU_DYNAMIC	dyn_show_serial,			0
-		MENU_DYNAMIC	dyn_show_firmware_ostc,		0
-		MENU_DYNAMIC	dyn_show_fw_creation_date,	0
-		MENU_DYNAMIC	dyn_show_firmware_rx,		0
-		MENU_DYNAMIC	dyn_show_total_dives,		0
-		MENU_CALL		tMore,						do_menu_info2
-	MENU_END
- ENDIF
-
-do_menu_info_noRX:
 	MENU_BEGIN	tInfoMenu, .6
 		MENU_DYNAMIC	dyn_show_uptime,			0
 		MENU_DYNAMIC	dyn_show_serial,			0
 		MENU_DYNAMIC	dyn_show_firmware_ostc,		0
 		MENU_DYNAMIC	dyn_show_fw_creation_date,	0
-		MENU_DYNAMIC	dyn_show_total_dives,		0
+		MENU_DYNAMIC	dyn_show_firmware_rx,		0
+		MENU_CALL		tMore,						do_menu_info2
+	MENU_END
+ ENDIF
+
+do_menu_info_noRX:
+	MENU_BEGIN	tInfoMenu, .5
+		MENU_DYNAMIC	dyn_show_uptime,			0
+		MENU_DYNAMIC	dyn_show_serial,			0
+		MENU_DYNAMIC	dyn_show_firmware_ostc,		0
+		MENU_DYNAMIC	dyn_show_fw_creation_date,	0
 		MENU_CALL		tMore,						do_menu_info2
 	MENU_END
 
@@ -1347,16 +1352,6 @@ dyn_show_firmware_rx:
  ENDIF	; _rx_functions
 
 
-;-----------------------------------------------------------------------------
-; dynamic Title - show total Number of Dives
-;
-dyn_show_total_dives:
-	STRCAT_TEXT tTotalDives				; print title
-	call	eeprom_total_dives_read		; read total number of dives
-	bsf		leftbind					; print left-aligned
-	output_65535						; print number of total dives (0-65535)
-	return								; done
-
 
 ;-----------------------------------------------------------------------------
 ; Settings Menu - 2nd Layer - System Infos - Page 2
@@ -1370,7 +1365,7 @@ do_menu_info2:
 		MENU_DYNAMIC	dyn_show_config2,			0
 		MENU_DYNAMIC	dyn_show_sensor_calib,		0
 		MENU_DYNAMIC	dyn_show_sensor_offset,		0
-		MENU_CALL		tBack,						do_return_menu_settings_deeper
+		MENU_CALL	tMore,					do_menu_info3
 	MENU_END
  ELSE
 	MENU_BEGIN	tInfoMenu, .7
@@ -1380,7 +1375,7 @@ do_menu_info2:
 		MENU_DYNAMIC	dyn_show_sensor_calib,		0
 		MENU_DYNAMIC	dyn_show_sensor_offset,		0
 		MENU_OPT_INC	tCommTimeout,				oCommTimeout
-		MENU_CALL		tBack,						do_return_menu_settings_deeper
+		MENU_CALL	tMore,					do_menu_info3
 	MENU_END
  ENDIF
 
@@ -1460,7 +1455,6 @@ dyn_show_sensor_calib:
 	return								; MS5837, done
 	
 
-
 ;-----------------------------------------------------------------------------
 ; dynamic Title - show Pressure Sensor Offset Setting
 ;
@@ -1489,7 +1483,58 @@ dyn_show_sensor_offset_com:
 	STRCAT_TEXT tMBAR					; print unit
 	return								; done
 
+;-----------------------------------------------------------------------------
+; Settings Menu - 2nd Layer - System Infos - Page 3
+;
+do_menu_info3:
+	MENU_BEGIN	tLogbook, .4
+		MENU_DYNAMIC	dyn_show_total_dives,		0
+		MENU_DYNAMIC	dyn_show_logbook_pointer,	0
+		MENU_DYNAMIC	dyn_show_logbook_pointer_head,	0
+		MENU_CALL	tBack,				do_return_settings_even_deeper
+	MENU_END
+	
 
+;-----------------------------------------------------------------------------
+; dynamic Title - show total Number of Dives
+;
+dyn_show_total_dives:
+	STRCAT_TEXT tTotalDives					; print title
+	call	eeprom_total_dives_read				; read total number of dives
+	bsf		leftbind				; print left-aligned
+	output_65535						; print number of total dives (0-65535)
+	return							; done
+	
+;-----------------------------------------------------------------------------
+; dynamic Title - show current logbook header pointer values
+; fixed language (English)
+;	
+dyn_show_logbook_pointer:
+    EEPROM_TT_READ	eeprom_log_pointer,ext_flash_address
+    STRCAT  "Profile : 0x"
+dyn_show_logbook_pointer2:    
+    movf   ext_flash_address+2,W
+    output_hex							; print it
+    movf   ext_flash_address+1,W
+    output_hex							; print it
+    movf   ext_flash_address+0,W
+    output_hex							; print it
+    return
+
+;-----------------------------------------------------------------------------
+; dynamic Title - show current logbook profile pointer values
+; fixed language (English)
+;
+    extern  log_header_addr_by_index
+dyn_show_logbook_pointer_head:
+    call    eeprom_total_dives_read				; read total number of dives
+    decf    mpr+0,W						; compute index from low(total number of dives)
+    call    log_header_addr_by_index				; compute header start address
+    STRCAT  "Header  : 0x"
+    bra	    dyn_show_logbook_pointer2				; print it in HEX
+    
+    
+	
  IFDEF _rx_functions
 
 ;-----------------------------------------------------------------------------
@@ -2347,6 +2392,12 @@ do_new_battery_select:
 	cpfseq	HW_descriptor
 	bra		$+4
 	bra		do_menu_new_battery_AA_no_charge
+	
+	movlw	0x95						; OSTC+ BLE only (2026 model)
+	cpfseq	HW_descriptor
+	bra		$+4
+	bra		do_menu_new_battery_AA_charger2
+	
 
 	bra		do_menu_new_battery_other_model	; any other model
 
@@ -2383,6 +2434,17 @@ do_menu_new_battery_AA_charger:
 		MENU_CALL		tNew16650,					do_use_16650_battery			; OSTC 2 new model	TODO: remove when OSTC 2 new model can be separated from Plus
 	MENU_END
 
+;-----------------------------------------------------------------------------
+; Battery Selection for OSTC+ BLE 2016 (charging function)
+;
+do_menu_new_battery_AA_charger2:
+	MENU_BEGIN	tNewBattTitle, .3
+		MENU_CALL		tNewBattOld,				do_use_old_battery				; load data of old battery
+		MENU_CALL		tNewBattNew15,				do_use_15V_disposable			; not rechargeable
+;		MENU_CALL		tNewBattNew36,				do_use_36V_disposable			; not rechargeable  -> not allowed any more !!!
+		MENU_CALL		tNewBattAccu,				do_menu_new_battery_36V_charge	; rechargeable      -> goto safety question
+	MENU_END
+    
 
 ;-----------------------------------------------------------------------------
 ; Safety Question for 3.6 V rechargeable Battery
@@ -2454,6 +2516,9 @@ do_use_16650_battery:
 ; Call Function - build-in 18650
 ;
 use_18650_battery:
+    	btfsc	ble_only							; BLE-Only hardware?
+	bra	do_menu_new_battery_AA_charger2					; YES - likely an OSTC+ BLE 2026
+
 	rcall	setup_new_18650
 	bra	use_batt_exit
 

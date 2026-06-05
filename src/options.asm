@@ -210,7 +210,7 @@ option_check_nok:
 ;
 	global	option_check_and_store_all
 option_check_and_store_all:
-	bcf		PIR3,RC2IE						; disable EUSART interrupts								TODO: why???
+;	bcf		PIR3,RC2IE						; disable EUSART interrupts								TODO: why???
 	call	option_crosschecks				; do some crosschecks between option values
 	;bra	option_store_all				; continue storing all option values to EEPROM
 

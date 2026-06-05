@@ -26,8 +26,8 @@ mcp		code
 mcp_sleep:
 	bcf		INTCON3,INT3IE			; disable INT3
 	bcf		mcp_power				; power down IR receiver
-	btfsc	mcp_power				; power drained down?
-	bra		$-6						; NO  - loop waiting
+;	btfsc	mcp_power				; power drained down?
+;	bra		$-6						; NO  - loop waiting
 	return							; YES - done
 
 ;-----------------------------------------------------------------------------

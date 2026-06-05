@@ -24,7 +24,7 @@
 #endif
 
 #define fw_version_major		.3
-#define fw_version_minor		.34
+#define fw_version_minor		.37
 #define fw_version_beta			0x00
 
 
@@ -43,11 +43,11 @@
 #endif
 
 #define firmware_creation_year	.26;0x18
-#define firmware_creation_month	.03;0x09
-#define firmware_creation_day	.19;0x06
+#define firmware_creation_month	.05;0x09
+#define firmware_creation_day	.21;0x06
 
 #define firmware_expire_year	.29;0x18
-#define firmware_expire_month	.08;0x08
+#define firmware_expire_month	.09;0x08
 #define firmware_expire_day	.29;0x1C
 
 

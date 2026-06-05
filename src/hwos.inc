@@ -181,7 +181,7 @@
 
 
 ; ---- RS232 Timeout
-#DEFINE rx_timeout						.400		; [ms] timeout for RS232 RX, needs to be multiple of 50 ms
+#DEFINE rx_timeout						.800		; [ms] timeout for RS232 RX, needs to be multiple of 50 ms
 
 
 ; ---- End-of-Dive Timeouts
@@ -290,6 +290,8 @@
 #DEFINE lithium_36v_25					.2600		; [mV]
 #DEFINE lithium_36v_10					.2500		; [mV]
 
+; ---- 3.7 Volt LiIon Rechargeable LOW threshold
+#DEFINE	LiIon_Low_Threshold				.3200		; [mV] 
 
 ; ----  Capacity for 2.4 Ah Saft LS14500 and 0.8 Ah Panasonic UR14500P
 ; battery_gauge: 6 is nAs
@@ -334,14 +336,14 @@
 #DEFINE ambient_light_max_high_36V		.170
 #DEFINE ambient_light_max_high_cr		.240
 #DEFINE ambient_light_max_high_dn		.240 
-#DEFINE ambient_no_sensor_high			.190
+#DEFINE ambient_no_sensor_high			.200
 #DEFINE ambient_light_max_high_15V		.100
 #DEFINE ambient_light_min_high			.35
 #DEFINE ambient_light_max_medium		.90
 #DEFINE ambient_no_sensor_medium		.50
 #DEFINE ambient_light_min_medium		.25
 #DEFINE ambient_light_max_eco			.50
-#DEFINE ambient_no_sensor_eco			.20
+#DEFINE ambient_no_sensor_eco			.30
 #DEFINE ambient_light_min_eco			.10			; must be the lowest value!
 
 
@@ -533,7 +535,7 @@
 #DEFINE cv_active				HW_flags_state2,1	; =1: constant voltage charging active
 #DEFINE i2c_error_flag			HW_flags_state2,2	; =1: an I2C error occurred
 #DEFINE rs232_rx_timeout		HW_flags_state2,3	; =1: RS232 receive timeout occurred
-#DEFINE battery_low_condition	HW_flags_state2,4	; =1: low battery condition detected
+#DEFINE battery_low_condition	HW_flags_state2,4	; =1: low battery condition detected (% Value)
 #DEFINE flash_wrap_around		HW_flags_state2,5	; =1: address wrap-around control / signalling
 #DEFINE flash_wait				HW_flags_state2,6	; =1: wait for flash write operation to complete
 #DEFINE	i2c_busy_temperature			HW_flags_state2,7	; =1: Currently updating temperature from MS5837
@@ -545,7 +547,7 @@
 #DEFINE	lock_cycle_counter		HW_flags_state3,3	; =1: Do not count charge cycle (again), cleared when batt_percent<95%
 #DEFINE	i2c_error_flag_lock		HW_flags_state3,4	; =1: The last I2C error was not displayed yet
 #DEFINE	i2c_reinit_sensor2		HW_flags_state3,5	; =1: Do an I2C reset and reinitialize the pressure sensor type 2
-;					HW_flags_state3,6	; --- unused
+#DEFINE battery_low_condition2		HW_flags_state3,6	; =1: low battery condition detected (Volts)
 ;					HW_flags_state3,7	; --- unused
  
 ;---- Operating System - persistent Settings (stored in access RAM, NOT cleared in restart)

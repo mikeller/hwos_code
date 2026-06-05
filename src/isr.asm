@@ -113,7 +113,7 @@ isr_set_speed_to_fastest:
 
 	; Attention: fill-up the gap between the end of this section
 	;            and the next section which starts at 0x00080 !!
-;	nop
+	nop
 	
 block_0_code_end:						; marker to find end of code in block 0 in linker report file
 

@@ -414,7 +414,7 @@
 	TCODE	tSensorC,			"Sensor  : "			; Sensor  : (space)
 	TCODE	tSensorD,			"Offset  : "			; Offset  : (space)
 	TCODE	tUptime,			"Uptime  : "			; Uptime  : (space)
-
+	
  IFDEF _rx_functions
 	TCODE	tFirmware_rx,		"RX Ver  : "			; RX Ver  : (space)
  ENDIF

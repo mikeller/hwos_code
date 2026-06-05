@@ -554,8 +554,11 @@ update_divemode60:
 	bcf		trigger_full_minute			; clear flag
 
 	call	get_battery_voltage			; get battery voltage
-	btfss	battery_low_condition		; battery low condition detected?
+	btfsc	battery_low_condition		; battery low condition detected (%)?
+	bra		update_divemode60_0			; YES
+	btfss	battery_low_condition2		; battery low condition detected (V)?
 	bra		update_divemode60_1			; NO  - skip next
+update_divemode60_0:
 	movlw	d'7'						; YES - set type of alarm = battery low
 	movwf	alarm_type					;     - copy to alarm register
 	bsf		event_occured				;     - set event flag
@@ -3638,10 +3641,19 @@ divemode_check_sign:
 	global	check_battery
 check_battery:
 	bcf		warn_det_batt_low			; clear warning for battery low
+	btfss	battery_low_condition2		; NO  - battery low condition detected (V)?
+	bra	check_battery2
+	bsf		warn_det_batt_low		;       YES - set warning for battery low
+	movf	active_customview,W			;     - get current custom view
+	xorlw	index_clock_batt_surfpress	;     - battery shown in custom view?
+	bnz		check_battery_mesg			;       NO  - show message
+	return								;       YES - do not show twice, done
+
+check_battery2:	
 	movlw	battery_show_level+1		; get threshold for showing battery level, incremented by 1
 	cpfslt	batt_percent				; battery percentage ok?
 	return								; YES - done
-	btfsc	battery_low_condition		; NO  - battery low condition detected?
+	btfsc	battery_low_condition		; NO  - battery low condition detected (%)?
 	bsf		warn_det_batt_low			;       YES - set warning for battery low
 	movf	active_customview,W			;     - get current custom view
 	xorlw	index_clock_batt_surfpress	;     - battery shown in custom view?

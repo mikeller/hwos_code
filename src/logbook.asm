@@ -376,7 +376,7 @@ display_profile2:
 	FONT_COLOR_MEMO									; set font color
 
 	; show dive number
-	call	logbook_show_divenumber					; show the dive number in medium font
+	rcall	logbook_show_divenumber					; show the dive number in medium font
 
 	; show date
 	WIN_SMALL logbook_date_column, logbook_date_row
@@ -1194,8 +1194,7 @@ profile_no_second_eventbyte:
 logbook_event4:										; stored gas changed
 	FLASH_CC_READ_0x20 backup_color1				; read gas number, to be used as color index
 	decf	ul,F									; reduce counter
-	call	TFT_color_code_gas						; change profile color according to gas number (still in WREG)
-	return											; done
+	goto	TFT_color_code_gas						; change profile color according to gas number (still in WREG) (And return)
 
 logbook_event1:										; gas 6 used
 	bsf		event_gas_change_gas6					; set event flag
@@ -1225,8 +1224,7 @@ logbook_event3:										; setpoint change
 	return											; NO  - done
 	movff	backup_color2,backup_color1				; YES - restore color
 	movf	backup_color2,W							;     - copy gas number to WREG for color-coding
-	call	TFT_color_code_gas						;     - back to normal profile color
-	return											;     - done
+	goto	TFT_color_code_gas						;     - back to normal profile color (And return)
 
 
 ;-----------------------------------------------------------------------------

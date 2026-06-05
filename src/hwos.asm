@@ -355,6 +355,8 @@ init_ostc:
 								; bit   0:  1 = timer enabled
 								; 32768 Hz clock source, 1:1 prescaler -> timer counts at 30.51757813 µs/bit
 	movwf	T3CON				; ...
+ ELSE	
+	clrf	T3CON				; ...
  ENDIF
 
 

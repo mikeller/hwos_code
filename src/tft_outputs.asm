@@ -546,12 +546,20 @@ TFT_color_code_ppo2_hud_com1:
 ;
 TFT_color_code_battery:
 	movf	pallet_color_memo,W			; get memo color by default
-	btfsc	battery_low_condition		; battery low condition detected?
+	btfsc	battery_low_condition		; battery low condition detected (%)?
 	movf	pallet_color_warning,W		; YES - switch to warning color
 	movwf	font_color					; set font color
-	return								; done
+	return							; done
 
-
+TFT_color_code_battery2:
+	movf	pallet_color_memo,W			; get memo color by default
+	btfsc	battery_low_condition2		; battery low condition detected (V)?
+	movf	pallet_color_warning,W		; YES - switch to warning color
+	movwf	font_color					; set font color
+	btfsc	battery_low_condition2		; battery low condition detected (V)?
+	bsf		win_invert				; YES - set output to inverse
+	return							; done
+	
 ;-----------------------------------------------------------------------------
 ; Color-Code according to Gas Number
 ;
@@ -787,7 +795,7 @@ TFT_surfmode_batt:
 	STRCPY_TEXT_PRINT tBattery
 	return
 TFT_surfmode_batt2:	
-	FONT_COLOR_MEMO						; set color
+	call	TFT_color_code_battery2		; color-code according to battery_low_condition2 flag
 	movff	battery_type,lo				; get battery type
 	PUTC	"T"							; print "T"
 	output_9							; print battery type code (0-9)
@@ -800,18 +808,18 @@ TFT_surfmode_batt2:
 	return								; done
 	
 	
-	WIN_TINY batt_voltage_column+.15,batt_voltage_row
-	FONT_COLOR_MEMO						; set color
-	movff	battery_type,lo				; get battery type
-	PUTC	"T"							; print "T"
-	output_9							; print battery type code (0-9)
-	PUTC	":"							; print ":"
-	MOVII	batt_voltage,mpr			; get battery voltage
-	bsf		omit_digit_2				; do not print 2nd and 1st digit
-	bsf		decimal_digit3				; place a decimal point in front of digit 3
-	output_9999							; print x.x--
-	PUTC_PRINT 'V'						; append unit and dump to screen
-	return								; done
+;	WIN_TINY batt_voltage_column+.15,batt_voltage_row
+;	FONT_COLOR_MEMO						; set color
+;	movff	battery_type,lo				; get battery type
+;	PUTC	"T"							; print "T"
+;	output_9							; print battery type code (0-9)
+;	PUTC	":"							; print ":"
+;	MOVII	batt_voltage,mpr			; get battery voltage
+;	bsf		omit_digit_2				; do not print 2nd and 1st digit
+;	bsf		decimal_digit3				; place a decimal point in front of digit 3
+;	output_9999							; print x.x--
+;	PUTC_PRINT 'V'						; append unit and dump to screen
+;	return								; done
 
 ;update_battery_debug:
 ;	FONT_COLOR_MEMO	
@@ -1381,12 +1389,10 @@ TFT_sensor_mv_get_dig:
 	btfss	trigger_S8_data_update		; new data frame received?
 	return								; NO  - use old values
 	bcf		trigger_S8_data_update		; YES - clear update flag
-	call	compute_mvolts_from_rawdata	;     - compute mV values from received raw data
-	return								;     - done
+	goto	compute_mvolts_from_rawdata	;     - compute mV values from received raw data (And return)
 
 TFT_sensor_mv_get_ana:
-	call	get_analog_inputs			; read mV values from analog inputs
-	return								; done
+	goto	get_analog_inputs			; read mV values from analog inputs (And return)
 
 
 	; Helper Function - print mV value
@@ -3124,7 +3130,7 @@ TFT_display_ftts_9:
 ;
 	global	TFT_message_ppo2
 TFT_message_ppo2:
-	call	TFT_message_open			; set row and column for the message
+	rcall	TFT_message_open			; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
 	return								; NO - skip message in this cycle
 
@@ -3165,7 +3171,13 @@ TFT_message_battery_percent:
 	tstfsz	WREG						; is there room for the message?
 	return								; NO - skip message in this cycle
 
-	call	TFT_color_code_battery		; color-code according to battery_low_condition flag
+	; Show battery % warning or Battery V warning?
+	movlw	battery_show_level+1		; get threshold for showing battery level, incremented by 1
+	cpfslt	batt_percent				; battery percentage ok?
+	bra	TFT_message_battery_voltage		; YES - Show Voltage warning
+	
+	; show % Warning
+	call	TFT_color_code_battery		; color-code according to battery_low_condition flag (%)
 	STRCPY	"Batt:"						; print "Batt:"
 	bsf		leftbind					; print left-aligned
 	movff	batt_percent,lo				; get   battery % 
@@ -3173,13 +3185,26 @@ TFT_message_battery_percent:
 	PUTC	"%"							; print "%"
 	bra		TFT_message_close			; finalize message output
 
+TFT_message_battery_voltage:
+	call	TFT_color_code_battery2		; color-code according to battery_low_condition2 flag (V)
+	bcf	win_invert			; but ignore the win_invert flag for the text warning
+	STRCPY	"Batt:"						; print "Batt:"
+	bsf		leftbind					; print left-aligned
+	MOVII	batt_voltage,mpr			; get battery voltage
+	bsf		omit_digit_2				; do not print 2nd and 1st digit
+	bsf		decimal_digit3				; place a decimal point in front of digit 3
+	output_9999							; print x.x--
+	PUTC	'V'						; append unit and dump to screen
+	bra		TFT_message_close			; finalize message output
+    
+    
 
 ;-----------------------------------------------------------------------------
 ; Dive Mode - Message - current CNS
 ;
 	global	TFT_message_cns
 TFT_message_cns:
-	call	TFT_message_open			; set row and column for the message
+	rcall	TFT_message_open			; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
 	return								; NO - skip message in this cycle
 
@@ -3197,7 +3222,7 @@ TFT_message_cns:
 ;
 	global	TFT_message_cns_eod
 TFT_message_cns_eod:
-	call	TFT_message_open			; set row and column for the message
+	rcall	TFT_message_open			; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
 	return								; NO - skip message in this cycle
 
@@ -3244,7 +3269,7 @@ TFT_message_agf:
 ;
 	global	TFT_message_divetimeout
 TFT_message_divetimeout:
-	call	TFT_message_open			; set row and column for the message
+	rcall	TFT_message_open			; set row and column for the message
 	tstfsz	WREG						; is there room for the message?
 	return								; NO - skip message in this cycle
 
@@ -5347,8 +5372,7 @@ TFT_gf_factors_mask_2:
 	FONT_COLOR_DISABLED					; NO - switch to disabled color
 	movff	opt_aGF_low, lo				; get aGF low
 	movff	opt_aGF_high,hi				; get aGF high
-	rcall	TFT_gf_factors_mask_helper	; print GFs
-	return								; done
+	bra	TFT_gf_factors_mask_helper	; print GFs (And return)
 
 TFT_gf_factors_mask_3:
 	WIN_STD	dm_custom_gf_column3+.10, dm_custom_gf_row
@@ -5433,7 +5457,7 @@ TFT_clock_batt_surfpress24:
 TFT_clock_batt_surfpress_batt:
 	; show battery voltage
 	WIN_SMALL dm_custom_battery_column, dm_custom_battery_volt_row
-	;FONT_COLOR_MEMO						; select color
+	call	TFT_color_code_battery2		; color-code according to battery_low_condition2 flag
 	MOVII	batt_voltage,mpr			; get voltage
 	bsf		decimal_digit3				; place a decimal point in front of digit 3
 	bsf		omit_digit_1				; do not print 1st digit 
@@ -5484,8 +5508,7 @@ TFT_sensor_check:
 	; show ppO2 of the diluent in this depth
 	WIN_MEDIUM	dm_custom_ppDil_column, dm_custom_s_check_row
 	MOVII	int_O_pure_ppO2,mpr			; copy ppO2 of pure gas to hi:lo
-	rcall	TFT_sensor_check_helper		; print ppO2
-	return								; done
+	bra	TFT_sensor_check_helper		; print ppO2 (And return)
 
 TFT_sensor_check_helper:
 	call	TFT_color_code_ppo2			; color-code output

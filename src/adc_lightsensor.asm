@@ -46,7 +46,7 @@ wait_adc2:
 get_battery_voltage:
 	btfss	battery_gauge_available			; battery gauge IC available?
 	bra		get_battery_voltage_2			; NO  - OSTC hardware without gauge IC
-	bsf		battery_is_36v					; YES - gauge IC available, 3.6V battery
+
 	call	lt2942_get_voltage				;     - read battery voltage (and coulomb counter)
 	call	lt2942_get_temperature			;     - read battery temperature
 	tstfsz	batt_voltage+1					;     - read voltage < 256 mV ?
@@ -56,7 +56,13 @@ get_battery_voltage:
 	;bra	get_battery_voltage_1			;           - proceed
 
 get_battery_voltage_1:
-;	rcall	double_check_battery_percent		; make sure batt_percent is adjusted when voltage does not comply with the computed value
+    	bcf	battery_is_36v					; Assume no 3,6V battery as default
+	MOVII	batt_voltage,sub_b
+	MOVLI	lithium_36v_low,sub_a				; load 2000mV threshold
+	call	cmpU16						; sub_a - sub_b
+	btfsc	neg_flag					; battery voltage > 2000mV
+	bsf	battery_is_36v					; YES - 3.6V battery
+
 	rcall	get_battery_voltage_low			; check for battery low condition
 	btfsc	divemode						; in dive mode?
 	return									; YES - done
@@ -127,53 +133,6 @@ charge_cc_active2:
 	movwf	get_bat_volt_counter			;           - ...
 	return									;           - done
 	
-double_check_battery_percent:		; make sure batt_percent is adjusted when voltage does not comply with the computed value	
-	; batt_voltage:2 is in mV
-	; use thresholds rechargeable_36V_80 to rechargeable_36V_00
-	; return, if computed value is lower then fixed threshold
-	; overwrite batt_percent if computed value is bigger then threshold
-	; in 2024, it's no longer enough to explain the old behavior in the manual...
-	; used up as temp here
-	movlw	.100
-	movwf	up							; initialize
-	
-	MOVII	batt_voltage,sub_b
-	MOVLI	rechargeable_36V_80,sub_a				; load threshold 80%
-	call	cmpU16							; sub_a - sub_b
-	movlw	.80
-	btfss	neg_flag						; battery voltage > rechargeable_36V_80 ?
-	movwf	up							; no, overwrite up with a fix value
-	MOVII	batt_voltage,sub_b
-	MOVLI	rechargeable_36V_60,sub_a				; load threshold 60%
-	call	cmpU16							; sub_a - sub_b
-	movlw	.60
-	btfss	neg_flag						; battery voltage > rechargeable_36V_60 ?
-	movwf	up							; no, overwrite up with a fix value
-	MOVII	batt_voltage,sub_b
-	MOVLI	rechargeable_36V_40,sub_a				; load threshold 40%
-	call	cmpU16							; sub_a - sub_b
-	movlw	.40
-	btfss	neg_flag						; battery voltage > rechargeable_36V_40 ?
-	movwf	up							; no, overwrite up with a fix value
-	MOVII	batt_voltage,sub_b
-	MOVLI	rechargeable_36V_20,sub_a				; load threshold 20%
-	call	cmpU16							; sub_a - sub_b
-	movlw	.20
-	btfss	neg_flag						; battery voltage > rechargeable_36V_20 ?
-	movwf	up							; no, overwrite up with a fix value
-	MOVII	batt_voltage,sub_b
-	MOVLI	rechargeable_36V_00,sub_a				; load threshold 0%
-	call	cmpU16							; sub_a - sub_b
-	movlw	.0
-	btfss	neg_flag						; battery voltage > rechargeable_36V_0 ?
-	movwf	up							; no, overwrite up with a fix value
-	
-	movf	up,W
-	cpfsgt	batt_percent						; up < batt_percent
-	return
-	movwf	batt_percent						; YES, overwritze
-	return
-
 get_battery_voltage_2:						; no gauge IC available, use ADC to measure battery voltage
 	; additional charging disable in software
 	bsf		charge_disable					; set      charging-inhibit signal
@@ -285,14 +244,24 @@ get_battery_voltage_8:
 	;bra	get_battery_voltage_low			; check for battery low condition (and return)
 
 get_battery_voltage_low:
-	; check for battery low condition
+	; check for battery low condition (%)
 	movlw	battery_warn_level_36+1			; get threshold for 3.6 Volt battery warning, incremented by 1
 	btfss	battery_is_36v					; actually a 3.6 Volt battery detected?
 	movlw	battery_warn_level_15+1			; NO - replace with 1.5 Volt battery warning, incremented by 1
 	bsf		battery_low_condition			; set battery low condition by default
 	cpfslt	batt_percent					; current battery level <= warning threshold ?
 	bcf		battery_low_condition			; NO  - clear battery low condition
-	return									;     - done
+	
+	; check for battery low condition (V)
+	btfss	battery_is_36v					; actually a 3.6 Volt battery detected?
+	return									;     - No, done
+	bsf		battery_low_condition2			; set battery low condition by default
+	MOVII	batt_voltage,sub_b
+	MOVLI	LiIon_Low_Threshold,sub_a			; load threshold
+	call	cmpU16						; sub_a - sub_b
+	btfsc	neg_flag					; battery voltage > LiIon_Low_Threshold ?
+	bcf		battery_low_condition2			; YES  - clear battery low condition
+	return							; done
 
 get_battery_voltage_9:
 	; use 1.5V battery voltage mode
@@ -331,6 +300,8 @@ get_ambient_level0:
 	movff	brightness,isr_lo			;                 - get brightness selection
 	incf	isr_lo,F				;                 - 0-2 -> 1-3
 	movlw	ambient_no_sensor_high			;                 - default selection to brightest setting
+        btfss	battery_is_36v				; battery > 2000mV?
+	movlw	ambient_no_sensor_medium		; NO - select medium brightness
 	dcfsnz	isr_lo,F				;                 - level 0 (eco) selected?
 	movlw	ambient_no_sensor_eco			;                   YES - select eco brightness
 	dcfsnz	isr_lo,F				;                 - level 1 (medium) selected?
@@ -386,11 +357,19 @@ get_ambient_level2:
 	banksel	HW_descriptor					; select bank where hardware descriptor and model variant are stored
 	movlw	ambient_light_max_high_cr		; default to cR and 2 hardware brightest setting
 	btfss	battery_gauge_available			; battery gauge available?
-	movlw	ambient_light_max_high_15V		; NO  - change to 1.5V battery brightest setting
-	btfsc	battery_is_36v				; 3.6V battery in use?
+	bra	get_ambient_level3			; NO, use old-hardware levels
+	; YES
+	movlw	ambient_light_max_high_15V		; change to 1.5V battery brightest setting
+        btfsc	battery_is_36v				; battery > 2000mV?
 	movlw	ambient_light_max_high_36V		; YES - change to 3.6V battery brightest setting
 	btfsc	dn_flag					; dn hardware
 	movlw	ambient_light_max_high_dn		; YES - change to dn hardware brightest setting
+	bra	get_ambient_level4
+get_ambient_level3:
+	movlw	ambient_light_max_high_15V		; NO  - change to 1.5V battery brightest setting
+        btfsc	battery_is_36v				; 3.6V battery in use?
+	movlw	ambient_light_max_high_36V		; YES - change to 3.6V battery brightest setting
+get_ambient_level4:	
 	banksel	isr_backup						; back to ISR default bank
 
 	dcfsnz	isr_lo,F						; eco setting?
@@ -548,8 +527,7 @@ piezo_config_tx_loop:						; LSB first
 	decfsz	hi,F							; decrement bit counter, all done?
 	bra		piezo_config_tx_loop			; NO  - loop
 	bsf		TX3_PIEZO_CFG					; YES - stop bit
-	rcall	piezo_config_wait_bit			;     - wait
-	return									;     - done
+	bra	piezo_config_wait_bit			;     - wait (And return)
 
 piezo_config_wait_bit:
 	setf	TMR5H							; set TMR5H first (to 255)
