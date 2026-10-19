@@ -1,0 +1,7 @@
+"heinrichs weikamp"="heinrichsweikamp <unknown@heinrichsweikamp.com>"
+"heinrichsweikamp"="heinrichsweikamp <unknown@heinrichsweikamp.com>"
+"jDG"="jDG <jDG@unknown.com>"
+"jdg@air"="jDG <jDG@unknown.com>"
+"janos_kovacs <kovjanos@gmail.com>"="Janos Kovacs <kovjanos@gmail.com>"
+"mh@mh-THINK"="mh <mh@mh-THINK.localdomain>"
+"mh@mh-THINK.fritz.box"="mh <mh@mh-THINK.localdomain>"
