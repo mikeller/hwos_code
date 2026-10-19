@@ -175,9 +175,15 @@ The initial import (660/660 hg changesets, 4 branches) was checked by:
   against the checked-out `development` branch here with
   `diff -rq --exclude=.hg --exclude=.git`: identical, modulo the git-only
   tooling files added on `development`.
-- Confirming `git rev-list --all | sort -u | wc -l` reports 661: the 660
-  imported hg changesets plus the one local commit that added the tooling
-  files on `development`, with no duplicates or silently dropped hg commits.
+- Confirming `git rev-list --all | sort -u | wc -l` reports exactly 660 (the
+  imported hg changesets) plus the number of local, `development`-only
+  commits (check with
+  `git rev-list development ^master ^new_screen_layout
+  ^ClaudeDive_Translations ^compass3-3.01-orphan --count`), with no
+  duplicates or silently dropped hg commits. Deliberately not hard-coding
+  the combined total here: it grows by one every time a new
+  `development`-only commit is added, so a fixed number would go stale
+  again, as it already did once.
 - Spot-checking commit metadata (hash, author, author email, date/timezone,
   message) for the hg tip and for the `compass3-3.01-orphan` head against
   the equivalent `hg log` output.
