@@ -11,7 +11,8 @@
 #      instead of risking a silently mis-imported branch if new, unhandled
 #      extra heads show up.
 #   3. Runs import_from_hg.sh (incremental; only new hg changesets are
-#      exported, using the state kept in .git/hg2git-*).
+#      exported, including upstream vendor packer/runtime files at tools/, using
+#      the state kept in .git/hg2git-*).
 #   4. Fast-forwards the currently checked-out branch's working tree/index
 #      to match its ref (hg-fast-export only moves refs, it never touches
 #      the working tree).
