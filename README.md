@@ -40,6 +40,9 @@ history to export new changesets.
   recorded once at the initial import).
 - `.gitignore` - carried over from upstream's `.hgignore`.
 
+These tooling/doc files live only on the `development` branch (see below),
+never on the branches `hg-fast-export` manages directly.
+
 ## Branch mapping
 
 `hg-fast-export` exports one git branch per named hg branch, with hg's
@@ -51,6 +54,26 @@ unchanged here, matching `~/git/ostc4`):
 | `default`                  | `master`                   |
 | `new_screen_layout`         | `new_screen_layout`        |
 | `ClaudeDive_Translations`   | `ClaudeDive_Translations`  |
+
+`master`, `new_screen_layout`, and `ClaudeDive_Translations` (and
+`compass3-3.01-orphan`, below) are **pristine, hg-fast-export-managed
+mirrors**. `hg-fast-export` records what it last wrote to each of these
+refs and refuses to extend a branch that was "modified outside
+hg-fast-export" (i.e. by a manually added commit) on the next incremental
+run. So nothing else is ever committed onto them directly.
+
+The sync tooling and this README instead live on a separate `development`
+branch, created from `master`'s initial import tip, the same way
+`~/git/ostc4`'s GitHub-facing `development` branch sits on top of its
+`master` mirror. `development` is the branch normally checked out day to
+day. To pick up newly imported upstream commits from `master` (or the other
+mirror branches) into `development`, merge/rebase them in deliberately,
+same as any other fork workflow:
+
+```sh
+git checkout development
+git merge master   # or: git rebase master
+```
 
 ### The `compass3-3.01-orphan` branch
 
@@ -73,6 +96,13 @@ If a *future* upstream sync introduces another branch with more than one
 head, `sync_from_hg.sh` detects it up front and refuses to run (see below)
 rather than relying on `hg-fast-export`'s undocumented fallback behaviour
 for unhandled extra heads.
+
+Because this orphan head still exists in the hg repository, every run of
+`import_from_hg.sh` prints `Error: repository has an unnamed head: hg r626`
+to stderr. This is expected and non-fatal: `--ignore-unnamed-heads` is
+already in effect, the message is printed unconditionally regardless, and
+`sync_from_hg.sh`'s own pre-flight check (not this message) is what decides
+whether it is safe to proceed.
 
 ## Usage
 
@@ -111,9 +141,13 @@ This:
    exports new changesets).
 4. Resets the currently checked-out branch's working tree/index to match
    its (possibly advanced) ref -- `hg-fast-export`/`git fast-import` only
-   ever move refs, they never touch the working tree.
+   ever move refs, they never touch the working tree. In normal use this is
+   run from `development`, whose ref `hg-fast-export` never touches, so this
+   step is a no-op; it only matters if `master` (or another mirror branch)
+   happens to be checked out directly.
 5. Updates `base_upstream_revision.txt` and commits that one file, only if
-   the hg tip actually moved.
+   the hg tip actually moved. This commit always lands on whatever branch
+   was checked out when the script was run, which should be `development`.
 
 Run `./import_from_hg.sh` directly (without `sync_from_hg.sh`) only if you
 want the raw, low-level import step without the safety checks or the
@@ -138,11 +172,17 @@ orphan-head situation before wiring up a permanent fix in
 The initial import (660/660 hg changesets, 4 branches) was checked by:
 
 - Comparing `hg -R ~/hg/hwos_code` (updated to the `default` branch tip)
-  against the checked-out `master` branch here with
+  against the checked-out `development` branch here with
   `diff -rq --exclude=.hg --exclude=.git`: identical, modulo the git-only
-  tooling files added by this mirror.
-- Confirming `git rev-list --all | sort -u | wc -l` reports 660, matching
-  the 660 hg changesets, with no duplicates or silently dropped commits.
+  tooling files added on `development`.
+- Confirming `git rev-list --all | sort -u | wc -l` reports 661: the 660
+  imported hg changesets plus the one local commit that added the tooling
+  files on `development`, with no duplicates or silently dropped hg commits.
 - Spot-checking commit metadata (hash, author, author email, date/timezone,
   message) for the hg tip and for the `compass3-3.01-orphan` head against
   the equivalent `hg log` output.
+- Confirming `master`, `new_screen_layout`, `ClaudeDive_Translations`, and
+  `compass3-3.01-orphan` still point at exactly the commits `hg-fast-export`
+  produced (i.e. unmodified by the tooling commit living only on
+  `development`), so a later incremental `sync_from_hg.sh` run does not hit
+  `hg-fast-export`'s "modified outside hg-fast-export" guard.
