@@ -1,0 +1,65 @@
+
+Rules for Gas Switching in the Deco Calculation
+===============================================
+
+The deco calculation switches gases on the following rules and conditions.
+
+
+A new gas to eventually switch to is searched for:
+--------------------------------------------------
+
+a) Whenever arriving or staying on a deco stop.
+
+   If a new gas is found, it will be taken.
+
+or
+
+b) On each calculation step, given:
+
+   1) Cave mode is activated.
+
+      If a new gas is found, it will be taken.
+
+   or
+
+   2) - extended stops are activated, or
+      - the dive is in bailout mode.
+
+      If a new gas is found, it will only be taken if
+
+      + the change depth of the new gas has not been passed yet (i.e. the
+        diver has not passed the change depth of this gas without actually
+        switching to it, so on purpose is breathing another gas),
+
+     and
+
+      + the dive is not on the final ascent. (i.e. no gas change will be
+        considered any more after leaving the last deco stop for surfacing)
+
+
+When searching for a new gas, in order to qualify a gas must:
+-------------------------------------------------------------
+
+a) Be available, i.e. neither be disabled, lost, nor staged,
+
+b) not be of type 'deco gas' unless:
+
+   - extended stops are activated, or
+   - the ascent calculation has arrived on a deco stop, or
+   - the dive is in bailout mode,
+
+c) have a change depth that is not shallower than the current depth,
+   (i.e. it must be breathable by configured change depth)
+
+d) have the shallowest change depth among all new gas candidates that
+   have qualified so far,
+
+e) not yet be fully used up in case contingency mode* is activated.
+
+For a gas to become elected as the new gas, it must match all of the above criteria.
+
+If none of the configured gases qualifies to become a new gas, the deco calculation
+will continue on the current (last selected) gas.
+
+____
+* contingency mode is auto-activated in case the dive started in cave mode

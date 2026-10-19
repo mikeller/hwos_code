@@ -1,0 +1,265 @@
+
+Supplemental Manual for the Cave Mode Function (V1.0)
+=====================================================
+
+The intended use of hwos Cave Mode is to monitor if the gases that are carried
+by the diver are sufficient to end the dive, especially taking into account the
+amount of gases that will be needed to finish decompression stops.
+
+The Cave Mode function extends the normal deco and gas needs calculating made for
+open water vertical ascent, by tracking back the whole depth profile of the dive
+and including final and/or intermediate deco stops that may become necessary.
+The cave mode function may be used in OC diving as well as in CCR/pSCR mode. When
+using it in CCR/pSCR mode, it will calculate the way back in bailout mode.
+
+  || NOTICE:
+  || With cave mode switched on, the normal 3 meter step size of deco stop spacing
+  || changes to a 1 meter spacing, reducing the indicated required stop time in front
+  || of passages that are less than 3 meters shallower than the current stop depth.
+
+In order to produce accurate results, the user has to understand the following
+concepts and settings, and has to configure these settings with appropriate values:
+
+- While on the way in, the depth profile will be sampled once every minute. For
+  the return way calculation, it is assumed that the diver will travel at the same
+  speed as on the way in and will travel along the same depth profile as on the way
+  in.
+
+  || IMPORTANT:
+  || The cave mode provides capacity for 4 hours of depth profile recording.
+  || 10 minutes before storage capacity is exhausted (i.e. after 4 hours), an
+  || attention message will be given. When the storage capacity becomes fully
+  || used up, the cave mode function switches itself off and a respective warning
+  || is shown.
+
+  If the cave mode function has switched itself off due to running out of storage
+  capacity, it can be recovered on exiting the cave: When manually switching it on
+  again, it comes back on again in turned state (see below), showing gas needs and
+  TTS as of the position where it had switched off.
+
+- Gas needs for the travel portions of the return way are calculated using the SAC
+  work rate. While spending time on required deco stops, the SAC deco rate is used.
+  Both SAC values, SAC work and SAC deco, need to be set by the diver to consumption
+  rates that match personal rates, taking into account elevated rates due to stress
+  etc., especially when using the cave mode function for bailout capacity checking.
+
+  || WARNING:
+  || If the actual SAC rate is higher than the configured on, or if traveling back
+  || slower than on the way in, the real needs will be under-estimated and the
+  || diver may run into an out-of-air situation if taking the dive to the limits!
+
+- Every tank needs to be configured with its size and with the amount of pressure
+  that is in it. The cave function will use these numbers to calculate how much gas
+  will be available from each tank to be used for the way back.
+
+  || IMPORTANT:
+  || For tanks that is breathed from while on the way in, the tank pressures have
+  || to be set to the turn pressures that have been determined for the respective
+  || tanks during dive planning!
+
+- While on the way in, the cave function constantly recalculates how much gas from
+  each tank will be needed to exit the cave. Upon reaching 70% utilization on any
+  tank, an attention message (color-coded in yellow) will be given. Upon reaching
+  100% utilization, a warning message (color-coded in red) will be issued.
+  
+- In case Dive Setup -> SAC Setup -> Swap on empty is set to yes, at the time a tank
+  is calculated to be fully used up, the calculations will try to switch to another
+  tank that still contains some gas according to the calculations. If such a tank
+  exists, the remaining way out will be calculated based on this tank and hence on the
+  gas in that tank, which may be sub-optimal in terms of decompression. If such a tank
+  does not exist, or if the swap-function is set no 'no', the remaining gas needs will
+  continue to get added on the depleted tank, resulting in displayed required tank
+  pressure higher than configured pressure available.
+
+- When turning the dive, i.e. upon starting on the way back out of the cave again,
+  the cave function needs to set into 'turned' state. This will stop the cave function
+  to assume that the actual way out is still part of the way in and subsequently will
+  stop taking further depth recordings and figuring them in for gas needs calculation.
+
+  || WARNING:
+  || The diver shall turn the dive ultimately latest when any one of the gases
+  || calculates to be fully needed! In this situation, the diver will be without
+  || any reserves! It is advised to set the tank pressures a bit lower than their
+  || actual fill pressure is, and to set the SAC rates a bit higher, to put the
+  || calculation results onto the safe side.
+
+- When setting the dive as 'turned', the indicated gas needs are likely to still rise.
+  This will be due to the fact that the cave function still calculates the gas needs
+  for all the way back from turn point to the surface, not knowing how much of this
+  way has been traveled already. In consequence, the tissue saturations that are gained
+  on the portion of the way back that has already been traveled are calculated twice,
+  resulting in an increased estimated deco obligation at the end of the dive. This
+  effect can be overcome by using 'waypoints' (see below).
+
+  || IMPORTANT:
+  || Without having set at least one waypoint (see below) before setting the dive
+  || as turned, it is not possible to revoke the 'turned' state again!
+
+- When the cave mode is switched off, the gas needs calculation reverts to the open
+  water vertical ascent mode, i.e. no dedicated time for horizontal movement is
+  figured in any more. It is appropriate to switch off cave mode when the remaining
+  horizontal movements (further swimming out of the cave) can be done in parallel with
+  doing the decompression "stops". This way, calculation results will become independent
+  of the remaining way to go, and thus accurate again.
+
+  || NOTICE:
+  || When being back near the cave entrance, with only final decompression stops
+  || remaining to be done, and with the remaining way being doable while doing the
+  || decompression stops, it is appropriate to switch off the cave mode.
+
+- The cave mode function can be switched off and on again at any time of the dive.
+  Temporary switching off the cave mode while the dive is not set as turned yet can
+  be used to pause the recording, e.g. while undertaking some tasks that take time
+  on the way in, but not while on the way out, e.g. fixing the line or doing survey
+  tasks.
+
+- To tell the cave mode calculations where the diver is while on the way out, waypoints
+  can be set while on the way in. Initially on setting the dive as turned, the gas needs
+  are calculated for the full way back. Then the diver can select one of the waypoints
+  and the cave mode function will calculate how much gas will be needed to return from
+  this waypoint. Upon physically reaching the respective waypoint, indicated gas needs
+  will become accurate again for this position in the cave, given that the rules discussed
+  above are obeyed.
+
+  || IMPORTANT:
+  || Waypoints should be set at regular distances and/or important features in the cave
+  || profile, e.g. at places where intermediate deco stops are expected. While on the
+  || way back out of the cave, whenever a waypoint is reached, the cave function shall
+  || be updated to this waypoint. This way the indicated gas needs will always stay near
+  || the expected real needs, but on the safe side, given that the rules discussed above
+  || are met.
+
+  || IMPORTANT:
+  || The cave mode function provides for 30 waypoints. Every waypoint that is set
+  || reduces the available storage capacity by the equivalent of four minutes of depth
+  || profile recording time. Thus, when all 30 waypoints are used, the depth profile
+  || storage capacity reduces to 2 hours for the inwards part of the dive.
+
+  || IMPORTANT:
+  || To establish a relationship between the numbering of the waypoints within the cave
+  || mode function and their physical positions in the cave, it is recommended to place
+  || cookies that are marked with the respective waypoint numbers.
+
+- Every time a waypoint is set, also a marker will be set in the normal logbook recording.
+
+- If at least one waypoint has been set, the 'turned' state of the dive can be revoked
+  again. To revoke the turned state and thus continue the dive in inward direction, the
+  diver has to physically go back to a previously created waypoint in the cave and select
+  that waypoint in the cave mode function, too, to keep the backtracking data in sync with
+  reality.
+
+  || NOTICE:
+  || The turned state can not be revoked while being at the original turn point of
+  || the dive. Going back to a previous waypoint is required.
+  
+- When the 'turned' state is revoked, the depth profile recording resumes. The new recordings
+  are appended after the waypoint where the dive was resumed.
+
+  || IMPORTANT:
+  || The depth profile and all waypoints that were originally recorded after the waypoint
+  || from which the dive is resumed again in inward direction are lost. The respective
+  || recording space will be freed up and used for the recording of the new leg.
+
+- This feature can e.g. be used for exploring different branches of a cave:
+
+  1) set a waypoint at the forking point of the branches,
+  2) explore the first branch (further waypoints may be set),
+  3) when done, set the dive as turned,
+  4) return to the forking point,
+  5) recall the respective waypoint that was set at the forking point,
+  6) check if gas reserves allow for exploring another branch,
+  7) select 'continue' to revoke the turned state and start the recording
+     for the next branch to be explored now.
+
+  Steps 2) to 7) may be repeated several times.
+
+- The cave mode function can account for gases that are temporary unavailable because
+  their tanks have been staged. On page two of the dive menu item 'Gaslist', tanks
+  can be toggled between available, staged (disabled color and "S" marking for staged),
+  and lost (disabled color and "x" marking aka crossed-out).
+
+- If a tank is set to lost state, it will not be considered in deco as well as gas
+  needs calculation any more. This state is revocable.
+
+- If a tank is set to staged state, it will currently not be considered any more,
+  but: Whenever a waypoint is set, a snapshot of the staged / not staged state of
+  all tanks is taken. When the cave mode function works it way through the stored
+  cave profile recording and hits a waypoint entry, it extracts this snapshots again
+  and continues choosing gases for deco and gas needs calculation based on these
+  snapshots.
+
+  || IMNPORTANT:
+  || When staging a tank:
+  ||
+  || 1) Set a waypoint.
+  ||
+  ||    Within this waypoint the tank will be recorded as (still) being available,
+  ||    that is it will be available (again) upon passing this waypoint on the way
+  ||    out again.
+  ||
+  || 2) Set the tank as staged.
+  ||
+  ||    This will set the tank as being not available during the portion of the dive
+  ||    that lies to the inside of the above waypoint.
+
+  || NOTICE:
+  || While a tank is set as staged, no better gas cue will be generated for it!
+
+  || IMPORTANT:
+  || When a tank is picked up again, it needs to be set to available state again
+  || in order to positively confirm that it really is available again!
+
+- When diving in OC mode or when in bailout mode, selecting a gas that is still set
+  as staged automatically reverts that gas to the available state. The same holds
+  true for gases that were declared as lost: on selecting them, they are also set
+  to the available state again.
+
+  || IMPORTANT:
+  || When diving in CCR or pSCR mode and initiating a bailout, the dive will be
+  || automatically set to turned state (given cave mode is switch on and the dive
+  || is not already turned)!
+
+  || IMPORTANT:
+  || While the cave mode is switched on and the dive is in turned state, the fTTS
+  || calculation will be suppressed - gas needs are calculated on the basis of an
+  || immediate return to the exit.
+
+
+
+Operating the Cave Mode Function:
+---------------------------------
+
+The Cave Mode Function is activated by setting the the surface menu item
+
+         Dive Setup -> Dive Setup (again) -> Cave Mode to 'on'
+
+It will then be active right from the start of the following dives. All further
+operation is done during the dive via a dedicated cave mode menu. This menu can
+be accessed via the left button: after pressing the left button for 'Menu?',
+press it again to show up 'Cave?', then press the right button to enter the cave
+mode menu. In OC mode, the cave mode menu is also reachable via the main dive menu,
+using the menu item 'Cave Mode'.
+
+Depending on the 'dive turned' state, certain menu items are available or not.
+This will be indicated by the color coding of the respective menu items.
+
+When the cave mode menu is active, the custom view is temporary replaced by a
+graphical representation of the waypoint situation. The last waypoint placed is
+shown in the middle of the display. The "-|" symbol depicts the end of the line,
+representing the deepest penetration point during the dive. The green arrow shows
+for which position in the cave the return gas needs are calculated.
+
+In the message field, either a "cTTS xx'" or "WPyy xx'" is shown. While the dive
+is not turned yet, cTTS (Cave Time-to-Surface) is shown, with xx being the total
+time in minutes required for swimming all the way back and doing the decompression
+stops, if required. When the dive is turned, WP is shown to indicate that the TTS
+is computed from off the waypoint yy. If yy reads the symbol -|, the TTS is computed
+from off the turn point of the dive.
+
+All cave mode functions are usable in simulator mode, too. Opposite to that, the
+deco calculator does not support cave mode, it calculates vertical open water ascents
+only.
+
+|| IMPORTANT:
+|| It is strongly advised to familiarize with the cave mode functions by using
+|| the OSTC simulator mode!

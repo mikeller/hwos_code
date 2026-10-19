@@ -1,0 +1,26 @@
+
+Deco Engine Calculation Schedules:
+==================================
+
+Schedule	Dive Mode	Bailout	fTTS	Gas Needs	Plan	Deco Mode	Planning Modes
+-----------------------------------------------------------------------------------------------
+
+1a)			OC			no		 no		(yes)		norm	OC						(gas needs)
+													alt		--			--
+
+1b)			OC			no		 YES	(yes)		norm	OC			--
+													alt		OC			fTTS,		(gas needs)
+
+2a)			Loop		no		 no		 no			norm	Loop		--
+													alt		--			--
+
+2b)			Loop		no		 yes	 no			norm	Loop		--
+													alt		Loop		fTTS
+
+2c)			Loop		no		(yes)	 YES		norm	Loop		--
+													alt		OC			gas needs,	(fTTS)
+
+3)			Loop		YES		 n/a	(yes)		norm	OC			bailout,	(gas needs)
+													alt		--			--
+_______________________________________________________________________________________________
+norm: normal plan, alt: alternative plan, -- none, (): optional, n/a: not applicable

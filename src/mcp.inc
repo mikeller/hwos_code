@@ -1,0 +1,12 @@
+;=============================================================================
+;
+;   File mcp.inc                              combined next generation V3.06.1
+;
+;
+;   Copyright (c) 2011, JD Gascuel, heinrichs weikamp gmbh, all right reserved.
+;=============================================================================
+; HISTORY
+;  2012-09-03 : [mH] creation
+
+
+	extern	mcp_sleep				; power down IR receiver

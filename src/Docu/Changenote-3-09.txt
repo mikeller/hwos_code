@@ -1,0 +1,102 @@
+Change Note hwos Firmware 3.09.4
+================================
+
+- When diving in CCR or pSCR mode: An attention and a warning for the gas
+  density has been added. The attention will be given when the density
+  of the current gas mixture reaches 6.0 grams per liter. Upon reaching
+  6.5 grams per liter, a warning will be given. The checks can be enabled
+  or disabled via the menu CCR/pSCR setup > more.
+
+- Incremented upper limit for SAC Work to 80 l/min to ease usage of the
+  OSTC gas needs calculation in Rock-Bottom mode.
+
+- Faster response to button events while in dive mode.
+
+- Hardened all USB/Bluetooth communication against data losses and timeouts.
+
+- Fixed Bluetooth item disappearing from menu.
+
+- A new Firmware Recovery Feature has been added: the currently active firmware
+  can be backed-up and restored later on while other firmwares have been loaded
+  thereafter. The feature is accessible via Settings -> System Settings ->
+  Reset Menu -> Reboot and becomes available with the first firmware load after
+  the V3.09 beta 4 (or later) is already on the unit.
+
+
+Change Note hwos Firmware 3.09.2 + 3.09.3
+=========================================
+
+- Added a function to acknowledge pending alarms, attentions and advices
+  so that the exclamation-mark sign disappears: after pressing the left
+  button until "Ackn?" appears, a press on the right button acknowledges
+  the current alarm, attention or advice and suppresses the related sign.
+
+- Bugfixes: NDL not shown in big layout, external sensor not selectable,
+  flash-write operation on some OSTC hardware, graphical garbage in depth
+  output in big layout when deeper than 100 m.
+
+
+Change Note hwos Firmware 3.09.1
+================================
+
+- Removed option 'ascent speed', ascent calculation is done with a fixed
+  speed of 10 meters/minute now (equals the ascent speed limit by Bühlmann).
+
+- Improved calculation accuracy of the initial ascent. Remark: this will
+  have a slight impact on the resulting deco schedule compared to firmware
+  3.07.
+
+- The deco calculator now figures in the salinity setting.
+
+- Aligned logbook and last dive summery of avg and max depth regarding
+  rounding and incorporation of salinity setting.
+
+- Done some fine-tuning of depth outputs when using imperial units (feet).
+
+- In dive mode, sometimes the temperature was not shown any more after a
+  gas change - fixed now.
+
+- The menu system around setting up the dive mode & settings has been
+  decluttered. All settings are now sorted into the groups dive setup,
+  deco setup, SAC (gas needs) setup, ppO2 setup and stops & depths setup.
+
+- There is a new option "Swap on empty" in Dive Setup -> SAC Setup.
+  It is only effective if "CalcGas(B/O)" is switched on, too. If both
+  options are switched on, the deco calculation will switch to another
+  tank (i.e. gas) once the tank of the current gas is calculated to be
+  used up.
+  This function can be used to automatically calculate a contingency in
+  case of running out of a deco gas, as the deco calculation will then
+  continue to calculate a deco making use of the spares from the another
+  gases carried. Another application is with two or more tanks holding
+  the same gas (i.e. independent double configuration, side-mount), as
+  the calculations will then take the cumulative amount of gas carried
+  into account before raising a gas needs attention or alarm.
+
+- Fixed the urge of the better gas hint to always favor one specific gas
+  out of a set of two or more gases that have the same change depth.
+
+- For dives done on firmware >= 3.09 the logbook will have one more page
+  showing the tissue pressures and supersaturation levels as of at the
+  end of dive (i.e. when surfacing).
+
+- As long as a gas or diluent is currently selected as breathed, it can
+  not be set into the lost state any more.
+
+- When changing the battery or doing a cold start, the current CNS value
+  does not get lost any more.
+
+- During loading of a new firmware the clock will not loose time any more
+  (on old firmware it became late by about 15 sec on each firmware update).
+
+- When run from a 3.6 V battery (either replaceable or built-in), the
+  surface mode timeout is now extended to 4 minutes before going to sleep
+  mode. If the OSTC is run from 1.5 V disposables, the timeout remains at
+  the previous 90 seconds to save on battery runtime.
+
+- Internal improvement: the code for the internal storage system and for
+  the communication system (firmware uploading, dive data downloading)
+  has been re-factored to secure maintainability for the next years to come.
+
+- Internal improvement: the scheduler for the dive mode calculation plans
+  (fTTS, bailout) has been completely rewritten for better maintainability.

@@ -1,0 +1,59 @@
+
+		MENU_CALL																; Dive  Setup
+		MENU_CALL																; Deco  Setup
+		MENU_CALL																; Gas   Setup
+		MENU_CALL																; ppO2  Setup
+		MENU_CALL																; Stops Setup
+
+
+
+	Dive Setup
+		MENU_OPTION		tDvMode,					oDiveMode,				0	; Dive Mode
+		MENU_OPTION		tCaveMode,					oCaveMode,				0	; cave mode
+		MENU_OPTION		tFTTSMenu,					oExtraTime,				0	; fTTS/Delay
+		MENU_OPTION		tTimeoutDive,				oDiveTimeout,			0	; dive timeout
+		MENU_OPTION		tStoreApnoeDive,			oStoreApnoeDive,		0	; store Apnoe
+
+
+	Deco Setup
+		MENU_OPTION		tDkMode,					oDecoMode,				0	; ZH-L16 /GF
+		MENU_OPTION		tSaturationMult,			osatmultgf,				0	; saturation
+		MENU_OPTION		tDesaturationMult,			odesatmultgf,			0	; desaturation
+		MENU_CALL																; GF Settings
+		MENU_OPTION		taGFenable,					oEnable_aGF,			0	; aGF selectable
+
+	GF Setup
+		MENU_OPTION		tGF_low,					oGF_low,				0	; GF low
+		MENU_OPTION		tGF_high,					oGF_high,				0	; GF high
+		MENU_OPTION		taGF_low,					oaGF_low,				0	; aGF low
+		MENU_OPTION		taGF_high,					oaGF_high,				0	; aGF high
+
+
+	Gas Setup
+		MENU_OPTION		tCalcGasNeeds,				oCalcAscGas,			0	; calc.gas
+		MENU_OPTION		tSetWorkSAC,				oWork_SAC,				0	; work SAC
+		MENU_OPTION		tSetDecoSAC,				oDeco_SAC,				0	; deco SAC
+																				; (bailout SAC)
+		MENU_OPTION		tGasChangeTime,				oGasChangeTime,			0	; gas change time
+
+
+	ppO2 Setup
+		MENU_DYNAMIC	divesets_ppo2_max,			do_toggle_ppo2_max_work		; max work
+		MENU_DYNAMIC	divesets_ppo2_max_deco,		do_toggle_ppo2_max_deco		; max deco
+		MENU_DYNAMIC	divesets_ppo2_min,			do_toggle_ppo2_min			; min oc
+		MENU_DYNAMIC	divesets_ppo2_min_cc,		do_toggle_ppo2_min_cc		; min loop
+																				;
+
+
+	Stops Setup
+		MENU_OPTION		tSafetyStop,				oSafetyStop,			0	; safety stop
+		MENU_OPTION		tExtendedStops,				oExtendedStops,			0	; extended stops
+		MENU_OPTION		tLastDecostop,				oLastDeco,				0	; last deco stop
+																				;
+																				;
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+ -> Display Settings 2nd Page
+		MENU_OPTION		tShowppO2,					oShowppO2,				0	; always show ppO2

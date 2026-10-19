@@ -1,0 +1,66 @@
+// ****************************************************************************
+// **          Common definitions for the OSTC decompression code            **
+// ****************************************************************************
+
+//                                                       next generation V3.0.1
+
+//////////////////////////////////////////////////////////////////////////////
+// OSTC - diving computer code
+// Copyright (C) 2008 heinrichs weikamp gmbh
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+//
+//////////////////////////////////////////////////////////////////////////////
+
+
+
+// ***********************************************
+// **         P R O T O T Y P E S               **
+// ***********************************************
+
+extern void deco_calc_hauptroutine(void);
+extern void deco_clear_tissue(void);
+extern void deco_calc_dive_interval(void);
+extern void deco_calc_dive_interval_1min(void);
+extern void deco_calc_dive_interval_10min(void);
+extern void deco_calc_desaturation_time(void);
+extern void deco_push_tissues_to_vault(void);
+extern void deco_pull_tissues_from_vault(void);
+extern void deco_init_output_vars(void);
+
+
+// ***********************************************
+// **         Allow compile on VisualC          **
+// ***********************************************
+
+#if defined(WIN32) || defined(UNIX)
+    // Some keywords just do not exists on Visual C++:
+#   define CROSS_COMPILE
+#   define __18CXX
+#   define ram
+#   define rom
+#   define overlay
+#   define PARAMETER
+
+#   include <assert.h>
+#else
+#   define PARAMETER static
+#   ifdef _DEBUG
+#       define assert(predicate) if( !(predicate) ) assert_failed(__LINE__)
+#   else
+#       define assert(predicate)
+#   endif
+#endif
+
+//////////////////////////////////////////////////////////////////////////////

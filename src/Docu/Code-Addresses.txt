@@ -1,0 +1,20 @@
+    fixed Start Addresses
+--------------------------------
+reset_v				CODE 0x00000
+start_v				CODE 0x00004
+isr_high			CODE 0x00008
+fingerprint			CODE 0x0000A
+isr_low				CODE 0x00018
+restore				CODE 0x00080
+isr_handler			CODE 0x00084
+surf_menu			CODE 0x01000	; menu call addresses need to be within 0x0xxxx
+dive_menu			CODE 0x02000	; menu call addresses need to be within 0x0xxxx
+option_table		CODE 0x08000	; all table data      need to be within 0x08xxx
+text_1_base			CODE 0x09000	; all text indices    need to be within 0x09yxx, y = 0...3
+text_2_base			CODE 0x09400	; all text indices    need to be within 0x09yxx, y = 4...7
+pallet_table		CODE 0x09800
+p2deco				CODE 0x0B000
+fonts_data			CODE 0x10000
+rx_firmware_storage	CODE 0x18000
+Buhlmann Tables		CODE 0x1DC00
+(bootloader)		CODE 0x1E000

@@ -1,0 +1,61 @@
+
+Compass Memory Footprint
+------------------------
+
+Section       Size Hex   Size Dec   Source           Function
+------------  ---------  ---------  ---------------  ----------------------------------------------------------
+compass_cal   0x001340      4.928   compass_calib.c  calibrate hard-iron for magnetic compass measurements
+compass_run   0x00074e      1.870   compass.c        compute north direction from magnetic/acceleration measures
+compass_ops1  0x00008a        138   compass_ops.asm  compass_filter
+compass_ops2  0x00006e        110   compass_ops.asm  compass_umul & compass_imul
+compass_ops3  0x000250        592   compass_ops.asm  compass_calibration_loop
+compass_ops4  0x00008c        140   compass_ops.asm  TFT_surface_compass_mask & TFT_surface_compass_heading
+compass_ops5  0x0006b8      1.720   compass_ops.asm  TFT_dive_compass_mask    & TFT_dive_compass_heading 
+compass_ops6  0x000102        258   compass_ops.asm  compass_heading_common
+                              746   embedded in menus, texts, operations, etc.
+
+
+
+
+   Program Memory Usage for
+------------------------------
+     _hwos_tech_3_cR_cave
+
+Block-Start  used up to  Spare
+-----------  ----------  -----
+ 0x000000     0x008b01   1.278
+ 0x009000     0x00fffb       4
+ 0x010000     0x01dcfb       4
+ 0x01dd00     0x01dfff       0
+
+
+
+; Features Selection
+; ------------------
+; base code witout any features, 1 language (en)                      mem:   97.500 byte
+; _compass            compass function                                mem: + 10.502 byte
+; _helium             helium (trimix) gases and diluents              mem: +  2.162 byte || both together:
+; _ccr_pscr           CCR & pSCR modes, basic functionality           mem: +  4.540 byte || + 6.724 byte
+; _external_sensor    CCR & pSCR modes, external sensor support       mem: +  3.690 byte
+; _gauge_mode         gauge mode                                      mem: -     30 byte
+; _high_ppO2_max      raised ppO2 max limit (2.0 bar)                 mem:        0 byte (neutral)
+; _rx_functions       RX function        (OSTC TR)                    mem: +  4.776 byte
+; _rx_update          RX firmware update (OSTC TR)                    mem: +  2.438 byte (dependent on RX firmware size)
+; _gas_contingency    auto-switch to alternative tanks on depleption  mem: +    814 byte
+; _cave_mode          cave mode return calculation                    mem: +  2.366 byte
+; _min_depth_option   resettable min. and max. depth                  mem: -      6 byte  ## special user group only ##
+; _screendump         screen dump function                            mem: +    348 byte  ## special user group only ##
+
+
+
+; global Version Selection
+; ------------------------
+;
+; _hwos_tech_2_TR      *) compile Tech  version for OSTC 2, Plus and TR (1 language en) memory: 120.492 used, 2.388 free
+; _hwos_tech_2_TR_cave *) compile Tech  version for OSTC 2, Plus and TR (1 language en) memory: 122.854 used,    26 free
+; _hwos_tech_3_cR         compile Tech  version for OSTC 3       and cR (1 language en) memory: 119.244 used, 3.636 free
+; _hwos_tech_3_cR_cave    compile Tech  version for OSTC 3       and cR (1 language en) memory: 121.600 used, 1.280 free
+; _hwos_sport             compile Sport version for all models          (1 language en) memory: 116.016 used, 6.864 free
+; _hwos_sport             compile Sport version for all models          (2 lang. en+de) memory: 120.292 used, 2.588 free
+;                                                                                               122.880 max. available
+; *) without _rx_update (does not fit)
