@@ -1081,7 +1081,9 @@ option_cleanup_autosp_done:
 	return
 
 option_cleanup_autosp_invalid:
+	banksel	opt_ccr_mode
 	clrf	opt_ccr_mode						; fail safe: Fixed SP
+	banksel	common
 	bsf		option_changed						; persist the correction
 	return
  ENDIF	; _ccr_pscr
