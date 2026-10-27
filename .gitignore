@@ -8,6 +8,9 @@ src/Tests/build/
 # Local sync tooling noise.
 __pycache__/
 
+# Site-specific Windows builder connection and checkout settings.
+tools/build_hwos.remote.conf
+
 # Local firmware build output (including the upload artefact).
 build/
 

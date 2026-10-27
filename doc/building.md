@@ -120,21 +120,67 @@ An explicit `-C18Root` or individual executable parameters can be used for a
 non-canonical forensic comparison. Such a result is not a vendor-matched build
 and must not be packaged or installed.
 
-## POSIX automation
+## Linux orchestration of the Windows build
 
-`make build` and `tools/build_hwos.sh` are retained for an existing compatible
-C18 installation. No Microchip-hosted Linux C18 v3.42 installer has been
-verified, so the Windows build above is the supported acquisition path. The
-POSIX script accepts explicit `MCC18`, `MPASM`, `MPLINK`, and `SREC_CAT` paths.
+`make build` and `tools/build_hwos.sh` build the currently checked-out commit
+on the authorised Windows C18 builder, then copy verified artefacts back to the
+local checkout. They do not attempt to run C18 on Linux.
+
+The local worktree must be clean, on a branch, and exactly match the branch at
+`origin`; the script refuses uncommitted or unpushed commits rather than
+silently building different source. It creates an isolated detached Windows Git
+worktree for that commit, runs the canonical PowerShell script, copies only the
+HEX files, linker map, and `build-info.txt` into:
 
 ```sh
-make build MCC18=/path/to/mcc18 MPASM=/path/to/mpasmx MPLINK=/path/to/mplink SREC_CAT=/path/to/srec_cat
+build/windows/<full-commit-id>/
 ```
 
-The build compiles every top-level `src/*.asm` and `src/*.c` source, links them
-with `src/18F87K22_hwos.lkr`, and writes these untracked files on success. It
-runs MPLINK from the authorised C18 `lib` directory so the project's `LIBPATH
-.` resolves only the installation's `clib.lib` and `p18F87K22.lib`.
+It verifies the copied full/upload HEX files and, when packaging occurs, the
+OSTC3 container against the SHA-256 values in the copied metadata. On success,
+it removes only the dedicated builder worktree it created. On a failed remote
+build or failed copy, that worktree is retained for diagnosis. Each invocation
+uses a unique local `.staging-...` directory and an attempt-specific remote
+worktree, so an SSH failure or retained failed worktree cannot block a retry.
+Only a fully hash-verified staging directory is promoted to the final commit
+directory. An existing verified directory is reused without rebuilding; an
+incomplete legacy directory is renamed to `failed-...` and preserved before a
+new attempt begins. Failed staging directories contain `failure.log` and, once
+SSH was invoked, `remote-build.log`. Because the isolated checkout is detached,
+the orchestrator explicitly supplies the local branch and changeset-derived
+`UNVALIDATED` package filename.
+
+Inspect retained `build/windows/failed-*` and `build/windows/.staging-*`
+directories before removing them manually. `make clean` removes all local build
+output, including retained diagnostics; it never touches the Windows builder.
+
+Before the first build, create the ignored local configuration from the tracked
+template. It contains the builder hostname or SSH alias and Windows checkout
+paths, and must be owned by the current local user. It must not contain
+credentials. Use SSH keys and `~/.ssh/config` for authentication.
+
+```sh
+cp tools/build_hwos.remote.conf.example tools/build_hwos.remote.conf
+$EDITOR tools/build_hwos.remote.conf
+```
+
+`tools/build_hwos.remote.conf` is ignored and is required. Its three values are
+`WINDOWS_BUILDER`, `WINDOWS_REPO`, and `WINDOWS_WORKTREE_ROOT`; paths must be
+absolute Windows paths with forward slashes. Use a DNS name or SSH alias rather
+than an address where possible. A one-off environment assignment overrides the
+local configuration without editing it:
+
+```sh
+WINDOWS_BUILDER=windows-builder-alias make build
+```
+
+`REMOTE_BUILD_CONFIG`, `GIT_REMOTE`, and `ARTIFACT_DIR` are also optional
+environment overrides for an alternate local configuration, Git remote, or
+artefact retention location.
+
+The remote checkout must have an `origin` that can fetch the same pushed branch
+and the Windows host must have PowerShell, Git, C18 v3.42, SRecord, and SSH/SCP
+access. The orchestration script never pushes, flashes, uploads, or opens a PR.
 
 | File | Purpose |
 | --- | --- |
@@ -152,11 +198,10 @@ behaviour and this script never uploads firmware.
 
 ## Cloud CI assessment
 
-This Git checkout is deliberately a local mirror with no Git remote. It cannot
-run hosted CI in its current form. More importantly, MPLAB C18 is a legacy
-licensed toolchain and no redistributable, pinned Linux installation is held in
-this repository. A workflow that silently substituted XC8 could produce a
-materially different firmware and is not acceptable.
+This repository has no hosted CI configuration. More importantly, MPLAB C18 is
+a legacy licensed toolchain and no redistributable, pinned Linux installation
+is held in this repository. A workflow that silently substituted XC8 could
+produce a materially different firmware and is not acceptable.
 
 If the layout incompatibility is resolved and this source is later hosted in a
 CI-capable repository, use a private Windows runner or licensed Windows VM

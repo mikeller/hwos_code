@@ -19,6 +19,7 @@ param(
     [switch]$BuildOnly,
     [string]$O3Pack,
     [string]$Ostc3Package,
+    [string]$SourceBranch,
     [string]$BuildDir = 'build'
 )
 
@@ -144,9 +145,12 @@ $SourceCommit = ((& $Git.Path -C $RepoRoot rev-parse HEAD) | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $SourceCommit) {
     throw "Unable to determine the source commit in $RepoRoot."
 }
-$SourceBranch = ((& $Git.Path -C $RepoRoot branch --show-current) | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or -not $SourceBranch) {
-    $SourceBranch = 'detached'
+$DetectedSourceBranch = ((& $Git.Path -C $RepoRoot branch --show-current) | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $DetectedSourceBranch) {
+    $DetectedSourceBranch = 'detached'
+}
+if (-not $SourceBranch) {
+    $SourceBranch = $DetectedSourceBranch
 }
 $SourceChangeset = ((& $Git.Path -C $RepoRoot rev-parse --short=12 HEAD) | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $SourceChangeset) {
