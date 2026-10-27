@@ -17,6 +17,9 @@ fi
 
 export PYTHON
 
+# Import the complete upstream manifest, including the vendor-supplied OSTC3
+# packer and its runtime files at tools/. Do not add path filters here: these
+# files are required by the repository-relative Windows packaging workflow.
 # The hg "default" branch has one genuine orphan head (hg r626,
 # be8787f2034d..., "compass3 support for 3.01 branch"): a dead-end commit
 # based on the older 3.01 release that was never merged back and never

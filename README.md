@@ -1,10 +1,11 @@
-# hwOS code - local git mirror
+# hwOS firmware source and build helpers
 
-This is a local git "fork" of the heinrichsweikamp `hwOS` firmware, built the
-same way as `~/git/ostc4` is a git fork of `~/hg/ostc4`: a Mercurial
-repository converted and kept in sync with
-[`hg-fast-export`](https://github.com/frej/fast-export) (shared checkout at
-`~/git/fast-export`, used as `../fast-export` from here).
+This working repository is a local Git conversion of the heinrichsweikamp
+`hwOS` Mercurial source, maintained with
+[`hg-fast-export`](https://github.com/frej/fast-export). Its local import
+branches retain the original converted history. A separate orphan branch,
+`github/main`, is prepared as a clean public snapshot for a GitHub clone and
+Windows build. See [`doc/publishing.md`](doc/publishing.md) before publishing.
 
 ## Provenance
 
@@ -12,9 +13,9 @@ repository converted and kept in sync with
 - Read-only local mirror of that upstream: `~/hg/hwos_code` (a plain `hg`
   clone; `hg paths` in it points at the URL above)
 - This repository: a git conversion of `~/hg/hwos_code`, for local
-  development/inspection with git tooling. It has **no git remote
-  configured** and must not be pushed anywhere; it exists purely as a local
-  working copy.
+  development/inspection with git tooling. Its import branches must not be
+  pushed; `github/main` is the separately prepared publication snapshot and
+  may be pushed only as described in [`doc/publishing.md`](doc/publishing.md).
 
 `~/hg/hwos_code` must be treated as read-only from this repository's point of
 view: never commit into it or run `hg update` with outstanding local
@@ -53,11 +54,14 @@ unchanged here, matching `~/git/ostc4`):
 |----------------------------|----------------------------|
 | `default`                  | `master`                   |
 | `new_screen_layout`         | `new_screen_layout`        |
+| public GitHub snapshot      | `github/main`              |
 | `ClaudeDive_Translations`   | `ClaudeDive_Translations`  |
 
 `master`, `new_screen_layout`, and `ClaudeDive_Translations` (and
 `compass3-3.01-orphan`, below) are **pristine, hg-fast-export-managed
-mirrors**. `hg-fast-export` records what it last wrote to each of these
+mirrors**. `github/main` is not an import branch: it is a deliberately
+history-free publication snapshot and must never be passed to
+`hg-fast-export`. `hg-fast-export` records what it last wrote to each of these
 refs and refuses to extend a branch that was "modified outside
 hg-fast-export" (i.e. by a manually added commit) on the next incremental
 run. So nothing else is ever committed onto them directly.
@@ -157,8 +161,11 @@ orphan-head situation before wiring up a permanent fix in
 
 ### Do not
 
-- Do not add a git remote to this repository, push it anywhere, or open a
-  pull/merge request from it; it is a local-only working copy.
+- Do not add a remote from, or push, an import branch (`master`,
+  `development`, `new_screen_layout`, `ClaudeDive_Translations`, or
+  `compass3-3.01-orphan`). When publication is authorised, first switch to
+  `github/main`, then add the publication remote and push only that branch as
+  described in [`doc/publishing.md`](doc/publishing.md).
 - Do not `hg commit` or `hg update` with outstanding changes in
   `~/hg/hwos_code`; it must stay a clean mirror of the real upstream so that
   `sync_from_hg.sh`'s pre-flight checks remain meaningful.
