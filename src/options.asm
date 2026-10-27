@@ -907,6 +907,7 @@ option_crosschecks:
 
  IFDEF _ccr_pscr
 	rcall	option_cleanup_oCCRMode			; check and correct CCR / pSCR mode
+	rcall	option_cleanup_autosp			; check Auto-SP ladder configuration
  ENDIF	; _ccr_pscr
 
  IFDEF _helium
@@ -999,6 +1000,90 @@ option_cleanup_oCCRMode_CCR:				; continue from above & jump-in from start.asm i
 	banksel	common							;                  - back to bank common
 	bsf		option_changed					;                  - flag that EEPROM needs to be updated
 	return									;                  - done
+ ENDIF	; _ccr_pscr
+
+
+;-----------------------------------------------------------------------------
+; Check Auto-SP ladder configuration.
+; SP1 depth zero retains the legacy descent-only mode. Otherwise SP1 is the
+; ascent-return threshold. Enabled SP2 to SP5 entries must be contiguous, and
+; enabled setpoints require strictly increasing depth and ppO2 values.
+;
+; TRASH: FSR0, FSR1, WREG, lo, hi, xA, eeprom_loop
+;
+ IFDEF _ccr_pscr
+option_cleanup_autosp:
+	movff	opt_ccr_mode,WREG
+	xorlw	.2								; Auto-SP selected?
+	bnz		option_cleanup_autosp_done			; NO  - done
+
+	; SP1's non-zero return depth must leave one metre for hysteresis.
+	movff	opt_setpoint_change,lo
+	tstfsz	lo
+	bra		option_cleanup_autosp_sp1_depth
+	bra		option_cleanup_autosp_init
+option_cleanup_autosp_sp1_depth:
+	movlw	.1
+	cpfsgt	lo								; SP1 depth > 1 m?
+	bra		option_cleanup_autosp_invalid		; NO  - disable Auto-SP
+
+option_cleanup_autosp_init:
+	movff	opt_setpoint_cbar,hi				; previous ppO2 = SP1
+	lfsr	FSR0,opt_setpoint_change+1
+	lfsr	FSR1,opt_setpoint_cbar+1
+	clrf	xA+0								; no disabled SP2-SP5 slot seen
+	movlw	.4
+	movwf	eeprom_loop
+option_cleanup_autosp_loop:
+	movff	POSTINC0,xA+1						; current change depth
+	movff	POSTINC1,xA+2						; current ppO2
+	tstfsz	xA+1								; enabled slot?
+	bra		option_cleanup_autosp_enabled		; YES - validate it
+	movlw	.1
+	movwf	xA+0								; NO  - later enabled slots are invalid
+	bra		option_cleanup_autosp_next
+
+option_cleanup_autosp_enabled:
+	tstfsz	xA+0								; disabled slot seen earlier?
+	bra		option_cleanup_autosp_invalid		; YES - non-contiguous ladder
+	; ppO2 must be strictly higher than the preceding enabled SP.
+	movff	xA+2,WREG
+	cpfseq	hi
+	bra		option_cleanup_autosp_ppo2_ne
+	bra		option_cleanup_autosp_invalid
+option_cleanup_autosp_ppo2_ne:
+	cpfsgt	hi								; previous ppO2 > current ppO2?
+	bra		option_cleanup_autosp_depth			; NO  - ppO2 ordered
+	bra		option_cleanup_autosp_invalid
+
+option_cleanup_autosp_depth:
+	; SP1 depth zero is excluded from descent-threshold ordering.
+	tstfsz	lo
+	bra		option_cleanup_autosp_depth_check
+	bra		option_cleanup_autosp_store
+option_cleanup_autosp_depth_check:
+	movff	xA+1,WREG
+	cpfseq	lo
+	bra		option_cleanup_autosp_depth_ne
+	bra		option_cleanup_autosp_invalid
+option_cleanup_autosp_depth_ne:
+	cpfsgt	lo								; previous depth > current depth?
+	bra		option_cleanup_autosp_store			; NO  - depth ordered
+	bra		option_cleanup_autosp_invalid
+
+option_cleanup_autosp_store:
+	movff	xA+1,lo
+	movff	xA+2,hi
+option_cleanup_autosp_next:
+	decfsz	eeprom_loop,F
+	bra		option_cleanup_autosp_loop
+option_cleanup_autosp_done:
+	return
+
+option_cleanup_autosp_invalid:
+	clrf	opt_ccr_mode						; fail safe: Fixed SP
+	bsf		option_changed						; persist the correction
+	return
  ENDIF	; _ccr_pscr
 
 

@@ -2888,7 +2888,80 @@ check_dive_autosp5a:
 	bsf		FLAG_SP5_used				;     - set SP 5 used flag
 
 check_dive_autosp6:
-	return								; done
+	; A zero SP1 depth is the legacy descent-only Auto-SP configuration.
+	; A non-zero SP1 depth enables the reversible ladder. Each setpoint
+	; depth is the return threshold for the next higher setpoint; returning
+	; one metre shallower provides fixed hysteresis around the threshold.
+	movff	opt_setpoint_change+0,lo
+	tstfsz	lo
+	bra		check_dive_autosp_asc5
+	return
+
+check_dive_autosp_asc5:
+	btfss	FLAG_SP5_used				; currently using SP5?
+	bra		check_dive_autosp_asc4			; NO  - continue with SP4
+	movff	opt_setpoint_change+3,lo	; get SP4 return depth
+	tstfsz	lo
+	bra		check_dive_autosp_asc5a
+	bra		check_dive_autosp_asc4
+check_dive_autosp_asc5a:
+	decf	lo,W								; return one metre shallower
+	cpfsgt	depth_meter						; depth <= return depth?
+	bra		check_dive_autosp_asc5b			; YES - switch down
+	bra		check_dive_autosp_asc4			; NO  - continue
+check_dive_autosp_asc5b:
+	movff	opt_setpoint_cbar+3,char_I_const_ppO2	; use SP4
+	rcall	xmit_sp_set_flag
+	bcf		FLAG_SP5_used
+
+check_dive_autosp_asc4:
+	btfss	FLAG_SP4_used				; currently using SP4?
+	bra		check_dive_autosp_asc3			; NO  - continue with SP3
+	movff	opt_setpoint_change+2,lo	; get SP3 return depth
+	tstfsz	lo
+	bra		check_dive_autosp_asc4a
+	bra		check_dive_autosp_asc3
+check_dive_autosp_asc4a:
+	decf	lo,W
+	cpfsgt	depth_meter
+	bra		check_dive_autosp_asc4b
+	bra		check_dive_autosp_asc3
+check_dive_autosp_asc4b:
+	movff	opt_setpoint_cbar+2,char_I_const_ppO2	; use SP3
+	rcall	xmit_sp_set_flag
+	bcf		FLAG_SP4_used
+
+check_dive_autosp_asc3:
+	btfss	FLAG_SP3_used				; currently using SP3?
+	bra		check_dive_autosp_asc2			; NO  - continue with SP2
+	movff	opt_setpoint_change+1,lo	; get SP2 return depth
+	tstfsz	lo
+	bra		check_dive_autosp_asc3a
+	bra		check_dive_autosp_asc2
+check_dive_autosp_asc3a:
+	decf	lo,W
+	cpfsgt	depth_meter
+	bra		check_dive_autosp_asc3b
+	bra		check_dive_autosp_asc2
+check_dive_autosp_asc3b:
+	movff	opt_setpoint_cbar+1,char_I_const_ppO2	; use SP2
+	rcall	xmit_sp_set_flag
+	bcf		FLAG_SP3_used
+
+check_dive_autosp_asc2:
+	btfss	FLAG_SP2_used				; currently using SP2?
+	return								; NO  - done
+	; SP1's configured depth is its ascent-return threshold.
+	movff	opt_setpoint_change+0,lo
+	decf	lo,W
+	cpfsgt	depth_meter
+	bra		check_dive_autosp_asc2a
+	return
+check_dive_autosp_asc2a:
+	movff	opt_setpoint_cbar+0,char_I_const_ppO2	; use SP1
+	rcall	xmit_sp_set_flag
+	bcf		FLAG_SP2_used
+	return
 
 
 ;-----------------------------------------------------------------------------
