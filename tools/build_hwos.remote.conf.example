@@ -1,0 +1,10 @@
+# Local configuration for tools/build_hwos.sh. Copy this file to
+# tools/build_hwos.remote.conf and replace the placeholder values. The real
+# file is ignored because it identifies local build infrastructure.
+#
+# Environment assignments supplied before invoking the script take precedence,
+# for example: WINDOWS_BUILDER=builder-alias make build
+
+WINDOWS_BUILDER=${WINDOWS_BUILDER:-windows-builder.example.invalid}
+WINDOWS_REPO=${WINDOWS_REPO:-C:/path/to/hwos_code}
+WINDOWS_WORKTREE_ROOT=${WINDOWS_WORKTREE_ROOT:-C:/path/to/hwos-build-worktrees}

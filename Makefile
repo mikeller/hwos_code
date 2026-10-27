@@ -1,7 +1,7 @@
 .PHONY: build clean
 
-# Override C18_BIN or individual tool variables for a non-default C18 install.
-# Example: make build C18_BIN=/opt/microchip/mplabc18/v3.47/bin
+# Builds the checked-out, pushed commit on the configured Windows C18 builder.
+# Copy tools/build_hwos.remote.conf.example to the ignored .conf file first.
 build:
 	./tools/build_hwos.sh
 
