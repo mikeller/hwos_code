@@ -16,6 +16,12 @@ src/Tests/build/
 __pycache__/
 tools/build_hwos.remote.conf
 
+# sync_from_hg.sh stages hg-fast-export_metadata.zip in a same-filesystem
+# temporary directory under the repository root so the replacement is an
+# atomic rename; it removes this directory on exit. This is a belt-and-braces
+# entry in case a killed process ever leaves one behind.
+.sync-metadata-tmp.*
+
 # --- Output of the legacy upstream crop scripts, if ever run manually ---
 # tools/crop_hwos_hex.bat and tools/crop_ostc3_hex.bat are upstream tools
 # we do not invoke from our own build/sync process and do not modify; if

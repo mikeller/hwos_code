@@ -114,7 +114,7 @@ if [ "$new_tip" != "$old_recorded" ]; then
 	# and only stage it, and the new sync point, once that succeeds, so a
 	# failed zip never leaves METADATA_FILE missing/truncated or
 	# base_upstream_revision.txt staged without a matching archive.
-	tmp_dir="$(mktemp -d)"
+	tmp_dir="$(mktemp -d "$GIT_REPO/.sync-metadata-tmp.XXXXXX")"
 	trap 'rm -rf "$tmp_dir"' EXIT
 	tmp_metadata="$tmp_dir/$(basename "$METADATA_FILE")"
 	(cd "$GIT_REPO" && zip -q -j -X "$tmp_metadata" \
