@@ -15,9 +15,12 @@
 #      the state kept in .git/hg2git-*).
 #   4. Fast-forwards the currently checked-out branch's working tree/index
 #      to match its ref (hg-fast-export only moves refs, it never touches
-#      the working tree).
-#   5. Records the new hg sync point in base_upstream_revision.txt and
-#      commits that single-file change, so the file never goes stale.
+#      the working tree). If this moved refs/heads/master, prints a hint
+#      to merge master into development; it never merges automatically.
+#   5. If the hg tip moved, records the new sync point in
+#      base_upstream_revision.txt and refreshes hg-fast-export_metadata.zip
+#      from .git/hg2git-*, committing both together in one bookkeeping
+#      commit so the file never goes stale.
 #
 # This script never touches the hg clone's working copy, and never
 # creates or pushes to any git/hg remote. To actually fetch new changesets
@@ -32,6 +35,7 @@ set -euo pipefail
 HG_REPO="$HOME/hg/hwos_code"
 GIT_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_REV_FILE="$GIT_REPO/base_upstream_revision.txt"
+METADATA_FILE="$GIT_REPO/hg-fast-export_metadata.zip"
 KNOWN_ORPHAN_HASH="be8787f2034d9d439a9dafff56a8d0083d0eb6b6"
 
 cd "$GIT_REPO"
@@ -82,11 +86,17 @@ before_tip="$(hg -R "$HG_REPO" log -r tip --template '{rev}:{node}\n')"
 echo "$before_tip"
 
 current_branch="$(git symbolic-ref --short HEAD)"
+before_master="$(git rev-parse --verify -q refs/heads/master || true)"
 
 ./import_from_hg.sh
 
 echo "== syncing working tree of '$current_branch' to its updated ref =="
 git reset --hard "refs/heads/$current_branch"
+
+after_master="$(git rev-parse --verify -q refs/heads/master || true)"
+if [ "$before_master" != "$after_master" ]; then
+	echo "== development is behind master; run: git switch development && git merge master =="
+fi
 
 new_tip="$(hg -R "$HG_REPO" log -r tip --template '{rev}:{node}\n')"
 old_recorded="$(cat "$BASE_REV_FILE" 2>/dev/null || true)"
@@ -94,9 +104,17 @@ old_recorded="$(cat "$BASE_REV_FILE" 2>/dev/null || true)"
 if [ "$new_tip" != "$old_recorded" ]; then
 	echo "$new_tip" > "$BASE_REV_FILE"
 	git add "$BASE_REV_FILE"
-	git commit -m "Record hg upstream sync at hg r${new_tip%%:*}
 
-Signed-off-by: $(git config user.name) <$(git config user.email)>"
+	# Refresh the committed hg-to-git import state alongside the sync
+	# point, so .git/hg2git-* can always be recovered from the last
+	# bookkeeping commit instead of forcing a destructive full
+	# re-import if it is ever lost.
+	rm -f "$METADATA_FILE"
+	(cd "$GIT_REPO" && zip -q -j -X "$METADATA_FILE" \
+		.git/hg2git-marks .git/hg2git-mapping .git/hg2git-heads .git/hg2git-state)
+	git add "$METADATA_FILE"
+
+	git commit -s -m "Record hg upstream sync at hg r${new_tip%%:*}"
 	echo "== recorded new sync point: $new_tip =="
 else
 	echo "== no new hg changesets; base_upstream_revision.txt unchanged =="
