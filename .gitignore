@@ -16,6 +16,14 @@ src/Tests/build/
 __pycache__/
 tools/build_hwos.remote.conf
 
+# --- Output of the legacy upstream crop scripts, if ever run manually ---
+# tools/crop_hwos_hex.bat and tools/crop_ostc3_hex.bat are upstream tools
+# we do not invoke from our own build/sync process and do not modify; if
+# someone runs them manually they write straight into tools/. Upstream's
+# own .hgignore already covers tools/o3_tiny.hex (ported above); this adds
+# the missing counterpart so neither generated file is ever committed.
+tools/hwos_tiny.hex
+
 # --- Build output we generate -------------------------------------------
 build/
 
