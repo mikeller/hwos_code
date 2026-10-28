@@ -20,6 +20,12 @@ the upstream project or by this fork's build tooling:
 - `tools/hex2bin.exe` is hex2bin v2.3 by Jacques Pelletier and contributors
   (`https://sourceforge.net/projects/hex2bin/`), covered by its BSD-2-Clause
   terms.
+- `tools/o3pack.exe` is the vendor-supplied OSTC Companion packer, and
+  `tools/1.dll` is its co-located runtime library, both retained exactly as
+  published by the upstream project. Unlike the entries above, this
+  repository holds no licence for either file; see
+  [`doc/firmware-packaging.md`](doc/firmware-packaging.md) for the build and
+  redistribution limits that follow from that.
 
 No additional rights are asserted by this mirror over any of the above, or
 over any other upstream-published file it retains.
