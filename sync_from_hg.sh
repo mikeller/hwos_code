@@ -50,6 +50,11 @@ if [ -n "$(hg -R "$HG_REPO" status)" ]; then
 	exit 1
 fi
 
+if ! command -v zip >/dev/null 2>&1; then
+	echo "Refusing to sync: 'zip' is required to refresh $METADATA_FILE and was not found in PATH." >&2
+	exit 1
+fi
+
 # hg-fast-export can only handle one head per named branch. hwos_code has
 # exactly one known, already-handled exception (see import_from_hg.sh).
 # If upstream history now contains any other branch with more than one
@@ -102,17 +107,24 @@ new_tip="$(hg -R "$HG_REPO" log -r tip --template '{rev}:{node}\n')"
 old_recorded="$(cat "$BASE_REV_FILE" 2>/dev/null || true)"
 
 if [ "$new_tip" != "$old_recorded" ]; then
-	echo "$new_tip" > "$BASE_REV_FILE"
-	git add "$BASE_REV_FILE"
-
 	# Refresh the committed hg-to-git import state alongside the sync
 	# point, so .git/hg2git-* can always be recovered from the last
 	# bookkeeping commit instead of forcing a destructive full
-	# re-import if it is ever lost.
-	rm -f "$METADATA_FILE"
-	(cd "$GIT_REPO" && zip -q -j -X "$METADATA_FILE" \
+	# re-import if it is ever lost. Build the archive in a temporary file
+	# and only stage it, and the new sync point, once that succeeds, so a
+	# failed zip never leaves METADATA_FILE missing/truncated or
+	# base_upstream_revision.txt staged without a matching archive.
+	tmp_dir="$(mktemp -d)"
+	trap 'rm -rf "$tmp_dir"' EXIT
+	tmp_metadata="$tmp_dir/$(basename "$METADATA_FILE")"
+	(cd "$GIT_REPO" && zip -q -j -X "$tmp_metadata" \
 		.git/hg2git-marks .git/hg2git-mapping .git/hg2git-heads .git/hg2git-state)
-	git add "$METADATA_FILE"
+	mv -f "$tmp_metadata" "$METADATA_FILE"
+	rm -rf "$tmp_dir"
+	trap - EXIT
+
+	echo "$new_tip" > "$BASE_REV_FILE"
+	git add "$BASE_REV_FILE" "$METADATA_FILE"
 
 	git commit -s -m "Record hg upstream sync at hg r${new_tip%%:*}"
 	echo "== recorded new sync point: $new_tip =="
