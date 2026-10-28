@@ -72,10 +72,9 @@ workflow remains reproducible. The repository does not contain their source,
 key material, or a redistribution licence. Retention mirrors the public
 upstream manifest only; it does not grant publication or redistribution rights.
 
-The current source links with the vendor-matched C18 v3.42 toolchain, as
-documented in [building.md](building.md). Packaging uses the vendor-supplied
-`tools/o3pack.exe` and its co-located runtime files by default; `-O3Pack`
-remains available for an explicit authorised override. `-BuildOnly` skips
-packaging. The script does not search `PATH` or reproduce the packer protocol.
-The output name contains `UNVALIDATED` and remains a test container until it
-has passed the vendor-approved hardware and recovery procedure.
+This repository is a mirror and working fork of the upstream Mercurial
+repository. It retains the upstream packer, `tools/o3pack.exe` and
+`tools/o3pack.bat`, and their co-located runtime DLLs exactly as published
+upstream. It asserts no rights beyond that publication, and it does not
+reproduce, modify, or substitute the packaging protocol those files
+implement.
