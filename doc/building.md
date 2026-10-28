@@ -198,16 +198,25 @@ behaviour and this script never uploads firmware.
 
 ## Cloud CI assessment
 
-This repository has no hosted CI configuration. More importantly, MPLAB C18 is
-a legacy licensed toolchain and no redistributable, pinned Linux installation
-is held in this repository. A workflow that silently substituted XC8 could
-produce a materially different firmware and is not acceptable.
+`development` on GitHub is already the hosted repository; no further
+repository migration is needed before CI can be considered. MPLAB C18 is a
+legacy licensed toolchain, however, and no redistributable, pinned Linux
+installation of it is held in this repository, or could be. A workflow that
+silently substituted XC8 could produce a materially different firmware and is
+not acceptable, so the C18 firmware link cannot run on a standard hosted
+Linux runner.
 
-If the layout incompatibility is resolved and this source is later hosted in a
-CI-capable repository, use a private Windows runner or licensed Windows VM
-containing a pinned C18 v3.42 installation and Windows SRecord. The workflow
-should run `powershell -File .\tools\build_hwos.ps1`, retain
-`build/hwos_tiny.hex`, `build/hwos.production.hex`, `build/hwos.map`, and
-`build/build-info.txt` as CI artefacts, and must not flash or upload firmware
-to a device. Pin the VM image/toolchain version and record their checksums so
-CI artefacts remain traceable to a source commit.
+A GitHub Actions workflow for the C18 link therefore needs a private Windows
+runner or a licensed Windows VM, containing a pinned C18 v3.42 installation
+and Windows SRecord. The workflow should run
+`powershell -File .\tools\build_hwos.ps1`, retain `build/hwos_tiny.hex`,
+`build/hwos.production.hex`, `build/hwos.map`, and `build/build-info.txt` as
+CI artefacts, and must not flash or upload firmware to a device. Pin the VM
+image and toolchain version and record their checksums so CI artefacts
+remain traceable to a source commit.
+
+`mikeller/ostc4` already runs GitHub Actions workflows from this same fleet,
+so there is in-fleet precedent for the parts of hwOS CI that do not need
+C18, for example lint/format checks on scripts and documentation, or
+packaging-script unit tests that do not touch the vendor toolchain. The C18
+link step itself remains gated on the private Windows runner above.
