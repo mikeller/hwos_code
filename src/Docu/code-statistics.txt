@@ -51,11 +51,15 @@ Block-Start  used up to  Spare
 ; global Version Selection
 ; ------------------------
 ;
-; _hwos_tech_2_TR      *) compile Tech  version for OSTC 2, Plus and TR (1 language en) memory: 120.492 used, 2.388 free
-; _hwos_tech_2_TR_cave *) compile Tech  version for OSTC 2, Plus and TR (1 language en) memory: 122.854 used,    26 free
-; _hwos_tech_3_cR         compile Tech  version for OSTC 3       and cR (1 language en) memory: 119.244 used, 3.636 free
-; _hwos_tech_3_cR_cave    compile Tech  version for OSTC 3       and cR (1 language en) memory: 121.600 used, 1.280 free
-; _hwos_sport             compile Sport version for all models          (1 language en) memory: 116.016 used, 6.864 free
-; _hwos_sport             compile Sport version for all models          (2 lang. en+de) memory: 120.292 used, 2.588 free
-;                                                                                               122.880 max. available
+; _hwos_tech_2_TR      *) compile Tech  version for OSTC 2, Plus and TR (1 language en)
+; _hwos_tech_2_TR_cave *) compile Tech  version for OSTC 2, Plus and TR (1 language en)
+; _hwos_tech_3_cR         compile Tech  version for OSTC 3       and cR (1 language en)
+; _hwos_tech_3_cR_cave    compile Tech  version for OSTC 3       and cR (1 language en)
+; _hwos_sport             compile Sport version for all models          (1 language en)
+; _hwos_sport             compile Sport version for all models          (2 lang. en+de)
+;
+; The used/free program-flash figures that used to be listed here disagreed with
+; src/configuration.inc and were not reproducible from a real build. See the generated
+; report in build/build-info.txt (flash_budget_* keys) for the figures of whichever
+; configuration is currently selected in src/configuration.inc instead.
 ; *) without _rx_update (does not fit)

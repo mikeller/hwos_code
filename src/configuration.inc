@@ -56,12 +56,16 @@
 ; global Version Selection
 ; ------------------------
 ;
-; _hwos_tech_2_TR        compile Tech  version for OSTC 2, Plus and TR en    memory: 118.656 used, 4.224 free
-; _hwos_tech_2_TR_cave   compile Tech  version for OSTC 2, Plus and TR en    memory: 120.883 used, 1.997 free
-; _hwos_tech_3_cR        compile Tech  version for OSTC 3       and cR en+de memory: 119.496 used, 3.384 free
-; _hwos_tech_3_cR_cave   compile Tech  version for OSTC 3       and cR en+de memory: 122.079 used,   801 free *
-; _hwos_sport            compile Sport version for all models          en+de memory: 116.365 used, 6.515 free
-;                                                                                    122.880 max. available
+; _hwos_tech_2_TR        compile Tech  version for OSTC 2, Plus and TR en
+; _hwos_tech_2_TR_cave   compile Tech  version for OSTC 2, Plus and TR en
+; _hwos_tech_3_cR        compile Tech  version for OSTC 3       and cR en+de
+; _hwos_tech_3_cR_cave   compile Tech  version for OSTC 3       and cR en+de
+; _hwos_sport            compile Sport version for all models          en+de
+;
+; The used/free program-flash figures that used to be listed here disagreed with
+; src/Docu/code-statistics.txt and were not reproducible from a real build. See the
+; generated report in build/build-info.txt (flash_budget_* keys) for the figures of
+; whichever configuration above is currently selected below.
 #endif
 
 #define _hwos_tech_3_cR
@@ -85,30 +89,30 @@
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ;
-; Features Selection												 CODE SIZES ARE OUTDATED
+; Features Selection
 ; ------------------
-; base code without any features, 1 language (en)						mem:   93.964 byte
-; _compass				compass function								mem: + 10.404 byte
-; _helium				helium (trimix) gases and diluents				mem: +  2.113 byte || both together
-; _ccr_pscr				CCR & pSCR modes, basic functionality			mem: +  4.117 byte ||  + 6.250 byte
-; _external_sensor_eccr		CCR & pSCR modes, external sensor and eccr support		mem: +  3.343 byte (OUTDATED)!
-; _gauge_mode			gauge mode										mem: -     28 byte (less)
-; _high_ppO2_max		raised ppO2 max limit (2.0 bar)					mem:        0 byte (neutral)
-; _rx_functions			RX function        (OSTC TR)					mem: +  4.497 byte
-; _rx_update			RX firmware update (OSTC TR)					mem: +  2.282 byte (dependent on RX firmware size)
-; _gas_contingency		auto-switch to alternative tanks on depleption	mem: +    804 byte
-; _cave_mode			cave mode return calculation					mem: +  3.035 byte
+; base code without any features, 1 language (en)
+; _compass				compass function
+; _helium				helium (trimix) gases and diluents
+; _ccr_pscr				CCR & pSCR modes, basic functionality
+; _external_sensor_eccr		CCR & pSCR modes, external sensor and eccr support
+; _gauge_mode			gauge mode
+; _high_ppO2_max		raised ppO2 max limit (2.0 bar)
+; _rx_functions			RX function        (OSTC TR)
+; _rx_update			RX firmware update (OSTC TR), dependent on RX firmware size
+; _gas_contingency		auto-switch to alternative tanks on depleption
+; _cave_mode			cave mode return calculation
 ; _big_divemenu			big font dive menu -- UNDER DEVELOPMENT YET
-; _firmware_recovery	means for backing up and restoring 2nd firmware mem: +    472 byte
-; _min_depth_option		resettable min. and max. depth					mem: +      4 byte  ## special user group only ##
-; _screendump			screen dump function							mem: +    348 byte  ## special user group only ##
+; _firmware_recovery	means for backing up and restoring 2nd firmware
+; _min_depth_option		resettable min. and max. depth					## special user group only ##
+; _screendump			screen dump function							## special user group only ##
 ;
+; The hand-counted per-feature byte deltas that used to be listed above went stale and
+; are retired. See the generated report in build/build-info.txt (flash_budget_* keys)
+; for the actual program-flash usage of whichever configuration is currently selected.
 ;
 ; NOTES: - exclude features by prepending NOT_INCLUDED to the label,
-;        - sizes may be incorrect by a couple of bytes,
 ;        - not all features will fit concurrently at the same time or if two languages are slected,
-;        - feature sizes are based on single language (english)
-;        - feature sizes will increase with 2nd language and will differ slightly between languages,
 ;        - combinations of features will yield code sizes that differ
 ;          slightly from the simple sum of the individual sizes.
 #endif
