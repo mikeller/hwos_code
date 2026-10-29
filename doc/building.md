@@ -120,6 +120,100 @@ An explicit `-C18Root` or individual executable parameters can be used for a
 non-canonical forensic comparison. Such a result is not a vendor-matched build
 and must not be packaged or installed.
 
+### Memory budget report and gates
+
+Program flash is the binding constraint on this target: the currently
+selected configuration has only a few hundred to a few thousand bytes free out
+of the 122,880-byte application budget (`0x00000..0x1DFFF`), and some flash
+regions are permanently reserved so their spare space cannot migrate
+elsewhere. After every successful link, the script parses `build/hwos.map` and
+reports:
+
+- per-flash-block used-to address and spare bytes. Block boundaries are
+  derived at build time from the fixed `CODE <address>` anchors in
+  `src/Docu/Code-Addresses.txt` and the `CODEPAGE` directives in
+  `src/18F87K22_hwos.lkr`, not hardcoded, so a future change to either file
+  (for example a `grp15` resize) is picked up automatically. A conditionally
+  compiled anchor that this particular build did not emit (for example an
+  unused second text-table language) does not fabricate a false, permanently
+  empty block;
+- per-RAM-bank bytes used and free, derived from the `DATABANK`/`ACCESSBANK`
+  directives in the same linker script;
+- the resolved extent of the `p2_deco` section (start, end, size): how much
+  room the C deco engine has;
+- the resolved address of the `block_0_code_end` label (`src/isr.asm`);
+- total application flash used and free against the 122,880-byte budget.
+
+A readable summary is printed to the console, and the same figures are
+appended to `build/build-info.txt` as `key=value` lines (`flash_budget_*`,
+`flash_block_<n>_*`, `ram_bank_<n>_*`, `p2_deco_*`, `block_0_code_end_*`).
+
+To raise or lower the warn/fail thresholds for a specific investigation:
+
+```powershell
+.\tools\build_hwos.ps1 -BuildOnly -FlashSpareWarnBytes 512 -FlashSpareFailBytes 32
+```
+
+The build is gated on this report:
+
+- a flash block warns when its spare falls below `-FlashSpareWarnBytes`
+  (default 256) and fails below `-FlashSpareFailBytes` (default 0, i.e. an
+  actual overflow). Only blocks larger than the warn threshold are gated at
+  all: a fixed-width hardware vector (a handful of bytes, always fully used by
+  design) can never carry that much spare and would otherwise warn on every
+  single build;
+- the build fails if `block_0_code_end` resolves to at or past the `restore`
+  vector (`0x00080`): the high-priority ISR dispatcher must fit between
+  `0x00008` and `restore`, and that boundary is currently held by hand-counted
+  `nop` padding in `src/isr.asm` with no margin to spare;
+- the build fails if any section is placed at or above the bootloader-reserved
+  region (`0x1E000`), before `srec_cat` crops the upload image, so an overflow
+  is a build failure instead of a silently truncated HEX file;
+- the build fails if any RAM allocation falls outside the GPR ranges declared
+  in the linker script (the C18 SFR shadow structures that legitimately live
+  in the protected `accesssfr` bank are not GPR allocations and are not
+  flagged).
+
+Every one of these gates can be bypassed for a forensic or non-canonical build
+with `-BypassMemoryBudgetGates`, consistent with how `-BuildOnly` already
+relaxes packaging. A bypassed build still computes and records the full
+report; `build-info.txt` additionally records
+`memory_budget_gate_bypassed=true` so a bypassed result is traceable.
+
+With the thresholds above, the source checked in at the time of writing fails
+the `block_0_code_end` gate by default: it resolves to exactly `0x00080`, i.e.
+zero margin before `restore`, confirming the existing report that this ISR
+dispatcher has no room left. A canonical release build needs either more
+`nop` padding removed from `src/isr.asm` (a separate, ticketed change; this
+script does not edit `.asm` files) or an explicit `-BypassMemoryBudgetGates`
+for a knowingly non-canonical result.
+
+MPASM's default message level is 0, meaning it reports every message, not
+only errors and warnings; the existing `/q` passed to `mpasmx`/`MPASMWIN.exe`
+only silences its own console echo; it does not change what MPASM writes to
+the `.err`/`.lst` files it always produces in `build/obj/`, and this change
+leaves it untouched. `/q` is unrelated to MPLINK's `/w`, which is also
+unchanged and only suppresses `.cod`/`.lst` generation, not warnings. The
+script now:
+
+- prints the contents of a non-empty `.err` file immediately after each
+  `mpasmx`/`mcc18` invocation;
+- prints a per-file error/warning/message count summary at the end of the
+  run, and the same totals (`asm_diagnostics_total_*`) in `build-info.txt`;
+- keeps every `build/obj/*.err` and `*.lst` file instead of discarding them
+  (they were already being generated; only their survival past a single
+  build is new).
+
+`build/build-info.txt` also records the `mcc18` banner
+(`mcc18_banner`) captured by running `mcc18` with no source file, and a
+best-effort guess at whether it is running in a licensed or free/Lite mode
+(`mcc18_licensed_mode_guess`), since C18 in unlicensed/free mode disables most
+optimizations and, with flash this tight, that can be the difference between
+an image fitting and not fitting. The exact banner wording has not been
+confirmed against a real Windows C18 v3.42 installation at the time of
+writing; treat `mcc18_licensed_mode_guess` as a hint to check, not a
+certainty, until it has been.
+
 ## Linux orchestration of the Windows build
 
 `make build` and `tools/build_hwos.sh` build the currently checked-out commit
@@ -129,8 +223,9 @@ local checkout. They do not attempt to run C18 on Linux.
 The local worktree must be clean, on a branch, and exactly match the branch at
 `origin`; the script refuses uncommitted or unpushed commits rather than
 silently building different source. It creates an isolated detached Windows Git
-worktree for that commit, runs the canonical PowerShell script, copies only the
-HEX files, linker map, and `build-info.txt` into:
+worktree for that commit, runs the canonical PowerShell script, copies the
+HEX files, linker map, `build-info.txt`, and the `build/obj/` diagnostics
+directory (the retained MPASM/mcc18 `.err`/`.lst` files) into:
 
 ```sh
 build/windows/<full-commit-id>/
@@ -165,10 +260,11 @@ $EDITOR tools/build_hwos.remote.conf
 ```
 
 `tools/build_hwos.remote.conf` is ignored and is required. Its three values are
-`WINDOWS_BUILDER`, `WINDOWS_REPO`, and `WINDOWS_WORKTREE_ROOT`; paths must be
-absolute Windows paths with forward slashes. Use a DNS name or SSH alias rather
-than an address where possible. A one-off environment assignment overrides the
-local configuration without editing it:
+`WINDOWS_BUILDER`, `WINDOWS_REPO`, and `WINDOWS_WORKTREE_ROOT`; none of the
+three may contain whitespace, and paths must be absolute Windows paths with
+forward slashes. Use a DNS name or SSH alias rather than an address where
+possible. A one-off environment assignment overrides the local configuration
+without editing it:
 
 ```sh
 WINDOWS_BUILDER=windows-builder-alias make build
@@ -227,8 +323,9 @@ builds and is not exercised by this repository's validation.
 | --- | --- |
 | `build/hwos.production.hex` | Complete MPLAB-linked Intel HEX output. |
 | `build/hwos_tiny.hex` | **Upload artefact for TinyBld.** It contains only `0x00000..0x1DFFF`, matching the existing `tools/crop_hwos_hex.bat` release step. |
-| `build/hwos.map` | Linker map for size/address investigation. |
-| `build/build-info.txt` | Source commit, tool paths/hashes, HEX SHA-256 checksums, and, when requested, packer/container provenance. |
+| `build/hwos.map` | Linker map for size/address investigation; also the source of the memory budget report. |
+| `build/build-info.txt` | Source commit, tool paths/hashes, HEX SHA-256 checksums, the `mcc18` banner/licence-mode guess, the memory budget report, and, when requested, packer/container provenance. |
+| `build/obj/*.err`, `build/obj/*.lst` | Retained MPASM/mcc18 per-file diagnostics and listings (see [Memory budget report and gates](#memory-budget-report-and-gates)). |
 
 `make clean` removes only `build/`.
 
@@ -251,10 +348,14 @@ A GitHub Actions workflow for the C18 link therefore needs a private Windows
 runner or a licensed Windows VM, containing a pinned C18 v3.42 installation
 and Windows SRecord. The workflow should run
 `powershell -File .\tools\build_hwos.ps1`, retain `build/hwos_tiny.hex`,
-`build/hwos.production.hex`, `build/hwos.map`, and `build/build-info.txt` as
-CI artefacts, and must not flash or upload firmware to a device. Pin the VM
-image and toolchain version and record their checksums so CI artefacts
-remain traceable to a source commit.
+`build/hwos.production.hex`, `build/hwos.map`, `build/build-info.txt`, and
+`build/obj/*.err`/`*.lst` as CI artefacts, and must not flash or upload
+firmware to a device. Pin the VM image and toolchain version and record their
+checksums so CI artefacts remain traceable to a source commit. The memory
+budget gates above mean a CI run on the checked-in source fails by default
+until the `block_0_code_end` margin is restored; a CI job must not pass
+`-BypassMemoryBudgetGates` routinely to work around that, since it exists to
+surface exactly this condition.
 
 `mikeller/ostc4` already runs GitHub Actions workflows from this same fleet,
 so there is in-fleet precedent for the parts of hwOS CI that do not need

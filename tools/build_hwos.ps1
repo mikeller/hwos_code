@@ -20,7 +20,17 @@ param(
     [string]$O3Pack,
     [string]$Ostc3Package,
     [string]$SourceBranch,
-    [string]$BuildDir = 'build'
+    [string]$BuildDir = 'build',
+    # A flash block is only warned/failed on if its own size exceeds the warn
+    # threshold; fixed-width hardware vectors (a handful of bytes each) can
+    # never carry this much spare and are reported, but not gated, instead.
+    [int]$FlashSpareWarnBytes = 256,
+    [int]$FlashSpareFailBytes = 0,
+    # Bypasses every memory-budget gate below (block_0_code_end, bootloader
+    # overflow, GPR overflow, flash-spare thresholds) for a forensic or
+    # non-canonical build. The report is still computed and still written to
+    # build-info.txt, with the bypass itself recorded there.
+    [switch]$BypassMemoryBudgetGates
 )
 
 Set-StrictMode -Version Latest
@@ -82,6 +92,287 @@ function Invoke-BuildTool {
     }
 }
 
+function Invoke-ToolForBanner {
+    param(
+        [string]$Tool,
+        [string[]]$Arguments = @()
+    )
+
+    # Some legacy tools (mcc18 with no input file) print their version/licence
+    # banner and exit non-zero because no compilation happened. That is
+    # expected here: only the banner text is wanted, so the exit code is
+    # deliberately ignored, unlike Invoke-BuildTool.
+    $PreviousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $Output = & $Tool @Arguments 2>&1 | Out-String
+    } finally {
+        $ErrorActionPreference = $PreviousErrorActionPreference
+    }
+    return $Output
+}
+
+function Get-LinkerScriptMemoryLayout {
+    <#
+    .SYNOPSIS
+    Parses the CODEPAGE/DATABANK/ACCESSBANK directives from the hwOS linker
+    script, so flash and RAM boundaries are derived at build time instead of
+    being duplicated as literals in this script.
+    #>
+    param([Parameter(Mandatory)][string]$LinkerScriptPath)
+
+    $CodePages = [System.Collections.Generic.List[pscustomobject]]::new()
+    $RamRegions = [System.Collections.Generic.List[pscustomobject]]::new()
+
+    foreach ($Line in (Get-Content -LiteralPath $LinkerScriptPath)) {
+        if ($Line -match '^\s*CODEPAGE\s+NAME=(?<name>\S+)\s+START=0x(?<start>[0-9A-Fa-f]+)\s+END=0x(?<end>[0-9A-Fa-f]+)(?<prot>\s+PROTECTED)?\s*$') {
+            $CodePages.Add([pscustomobject]@{
+                Name      = $Matches['name']
+                Start     = [Convert]::ToInt64($Matches['start'], 16)
+                End       = [Convert]::ToInt64($Matches['end'], 16)
+                Protected = [bool]$Matches['prot']
+            })
+        } elseif ($Line -match '^\s*(?:DATABANK|ACCESSBANK)\s+NAME=(?<name>\S+)\s+START=0x(?<start>[0-9A-Fa-f]+)\s+END=0x(?<end>[0-9A-Fa-f]+)(?<prot>\s+PROTECTED)?\s*$') {
+            $RamRegions.Add([pscustomobject]@{
+                Name      = $Matches['name']
+                Start     = [Convert]::ToInt64($Matches['start'], 16)
+                End       = [Convert]::ToInt64($Matches['end'], 16)
+                Protected = [bool]$Matches['prot']
+            })
+        }
+    }
+
+    if ($CodePages.Count -eq 0) {
+        throw "No CODEPAGE directives were found in linker script: $LinkerScriptPath"
+    }
+    if ($RamRegions.Count -eq 0) {
+        throw "No DATABANK/ACCESSBANK directives were found in linker script: $LinkerScriptPath"
+    }
+
+    return [pscustomobject]@{
+        CodePages  = $CodePages.ToArray()
+        RamRegions = $RamRegions.ToArray()
+    }
+}
+
+function Get-FixedCodeAnchor {
+    <#
+    .SYNOPSIS
+    Parses the fixed `<name> CODE 0x<address>` anchors from
+    src/Docu/Code-Addresses.txt, including the `(bootloader)` sentinel that
+    documents where the bootloader-reserved region begins.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+
+    $Anchors = [System.Collections.Generic.List[pscustomobject]]::new()
+    foreach ($Line in (Get-Content -LiteralPath $Path)) {
+        if ($Line -match '^(?<name>.+?)\s+CODE\s+0x(?<addr>[0-9A-Fa-f]+)\b') {
+            $Anchors.Add([pscustomobject]@{
+                Name    = $Matches['name'].Trim()
+                Address = [Convert]::ToInt64($Matches['addr'], 16)
+            })
+        }
+    }
+    if ($Anchors.Count -eq 0) {
+        throw "No fixed CODE anchors were found in: $Path"
+    }
+    return ($Anchors | Sort-Object Address)
+}
+
+function Get-LinkerMapReport {
+    <#
+    .SYNOPSIS
+    Parses the Section Info table, the Program Memory Usage table, and the
+    Symbols table out of an MPLINK .map file.
+    #>
+    param([Parameter(Mandatory)][string]$MapPath)
+
+    $SectionInfo = [System.Collections.Generic.List[pscustomobject]]::new()
+    $ProgramUsage = [System.Collections.Generic.List[pscustomobject]]::new()
+    $Symbols = @{}
+    $Mode = 'none'
+
+    foreach ($Line in (Get-Content -LiteralPath $MapPath)) {
+        if ($Line -match '^\s*Section\s+Type\s+Address\s+Location\s+Size') { $Mode = 'section'; continue }
+        if ($Line -match '^\s*Program Memory Usage\s*$') { $Mode = 'usage-pending'; continue }
+        if ($Mode -eq 'usage-pending' -and $Line -match '^\s*Start\s+End\s*$') { $Mode = 'usage'; continue }
+        if ($Line -match '^\s*Name\s+Address\s+Location\s+Storage\s+File') { $Mode = 'symbols'; continue }
+        if ($Line -match '^\s*Symbols - Sorted by Address\s*$') { break }
+
+        switch ($Mode) {
+            'section' {
+                if ($Line -match '^\s*(?<name>\S+)\s+(?<type>code|romdata|udata|idata|actrec|near)\s+0x(?<addr>[0-9A-Fa-f]+)\s+(?<loc>program|data)\s+0x(?<size>[0-9A-Fa-f]+)\s*$') {
+                    $SectionInfo.Add([pscustomobject]@{
+                        Name     = $Matches['name']
+                        Type     = $Matches['type']
+                        Address  = [Convert]::ToInt64($Matches['addr'], 16)
+                        Location = $Matches['loc']
+                        Size     = [Convert]::ToInt64($Matches['size'], 16)
+                    })
+                } elseif ($Line -match '^\s*$' -and $SectionInfo.Count -gt 0) {
+                    $Mode = 'none'
+                }
+            }
+            'usage' {
+                if ($Line -match '^\s*0x(?<start>[0-9A-Fa-f]+)\s+0x(?<end>[0-9A-Fa-f]+)\s*$') {
+                    $ProgramUsage.Add([pscustomobject]@{
+                        Start = [Convert]::ToInt64($Matches['start'], 16)
+                        End   = [Convert]::ToInt64($Matches['end'], 16)
+                    })
+                } elseif ($Line -match '^\s*$' -and $ProgramUsage.Count -gt 0) {
+                    $Mode = 'none'
+                }
+            }
+            'symbols' {
+                if ($Line -match '^\s*(?<name>\S+)\s+0x(?<addr>[0-9A-Fa-f]+)\s+(?<loc>program|data)\s+\S+') {
+                    if (-not $Symbols.ContainsKey($Matches['name'])) {
+                        $Symbols[$Matches['name']] = [Convert]::ToInt64($Matches['addr'], 16)
+                    }
+                }
+            }
+        }
+    }
+
+    if ($SectionInfo.Count -eq 0) { throw "No Section Info table was found in linker map: $MapPath" }
+    if ($ProgramUsage.Count -eq 0) { throw "No Program Memory Usage table was found in linker map: $MapPath" }
+
+    return [pscustomobject]@{
+        Sections     = $SectionInfo.ToArray()
+        ProgramUsage = $ProgramUsage.ToArray()
+        Symbols      = $Symbols
+    }
+}
+
+function Get-FlashMemoryBudgetReport {
+    <#
+    .SYNOPSIS
+    Derives per-flash-block used-to/spare figures from the fixed CODE anchors
+    and CODEPAGE directives, scoped to the application flash budget that ends
+    where the bootloader-reserved region (the `(bootloader)` anchor) begins.
+    A candidate anchor only becomes a block boundary if this particular build
+    actually placed a section there; a conditionally-compiled anchor (for
+    example an unused second text-table language) must not fabricate a false,
+    permanently-empty block with misleading spare.
+    #>
+    param(
+        [Parameter(Mandatory)][pscustomobject]$Regions,
+        [Parameter(Mandatory)][pscustomobject[]]$Anchors,
+        [Parameter(Mandatory)][pscustomobject]$MapReport,
+        [Parameter(Mandatory)][int]$WarnBytes
+    )
+
+    $BootloaderAnchor = $Anchors | Where-Object { $_.Name -eq '(bootloader)' } | Select-Object -First 1
+    if (-not $BootloaderAnchor) {
+        throw "Code-Addresses.txt has no '(bootloader)' sentinel entry to derive the application flash budget from."
+    }
+    $BootloaderStart = [int64]$BootloaderAnchor.Address
+
+    $AppCodePages = $Regions.CodePages | Where-Object { $_.Start -lt $BootloaderStart }
+    $CandidateBoundaries = [System.Collections.Generic.List[int64]]::new()
+    foreach ($A in ($Anchors | Where-Object { $_.Address -gt 0 -and $_.Address -lt $BootloaderStart })) { $CandidateBoundaries.Add([int64]$A.Address) }
+    foreach ($C in $AppCodePages) { $CandidateBoundaries.Add([int64]$C.Start) }
+
+    $OccupiedStarts = [System.Collections.Generic.HashSet[int64]]::new()
+    foreach ($Row in ($MapReport.Sections | Where-Object { $_.Location -eq 'program' })) {
+        [void]$OccupiedStarts.Add([int64]$Row.Address)
+    }
+
+    $Boundaries = [System.Collections.Generic.List[int64]]::new()
+    $Boundaries.Add([int64]0)
+    foreach ($B in ($CandidateBoundaries | Sort-Object -Unique)) {
+        if ($OccupiedStarts.Contains($B)) { $Boundaries.Add($B) }
+    }
+    $Boundaries.Add($BootloaderStart)
+    $Boundaries = $Boundaries | Sort-Object -Unique
+
+    $NameByAddress = @{}
+    foreach ($A in $Anchors) { if (-not $NameByAddress.ContainsKey([int64]$A.Address)) { $NameByAddress[[int64]$A.Address] = $A.Name } }
+    foreach ($C in $Regions.CodePages) { if (-not $NameByAddress.ContainsKey([int64]$C.Start)) { $NameByAddress[[int64]$C.Start] = "codepage:$($C.Name)" } }
+
+    $Blocks = for ($i = 0; $i -lt ($Boundaries.Count - 1); $i++) {
+        $BlockStart = [int64]$Boundaries[$i]
+        $BlockEnd = [int64]$Boundaries[$i + 1] - 1
+        $Rows = $MapReport.Sections | Where-Object { $_.Location -eq 'program' -and $_.Address -ge $BlockStart -and $_.Address -le $BlockEnd }
+        $Measured = ($Rows | ForEach-Object { $_.Address + $_.Size - 1 } | Measure-Object -Maximum).Maximum
+        $UsedTo = if ($null -eq $Measured) { $BlockStart - 1 } else { [int64]$Measured }
+        $Size = $BlockEnd - $BlockStart + 1
+        [pscustomobject]@{
+            Name   = if ($NameByAddress.ContainsKey($BlockStart)) { $NameByAddress[$BlockStart] } else { '0x{0:x6}' -f $BlockStart }
+            Start  = $BlockStart
+            End    = $BlockEnd
+            Size   = $Size
+            UsedTo = $UsedTo
+            Spare  = $BlockEnd - $UsedTo
+            Gated  = $Size -gt $WarnBytes
+        }
+    }
+
+    $Used = ($MapReport.ProgramUsage | Where-Object { $_.End -lt $BootloaderStart } | ForEach-Object { $_.End - $_.Start + 1 } | Measure-Object -Sum).Sum
+    if ($null -eq $Used) { $Used = 0 }
+    $Used = [int64]$Used
+
+    $NextProtectedStart = $Regions.CodePages | Where-Object { $_.Protected -and $_.Start -gt $BootloaderStart } | Select-Object -ExpandProperty Start | Sort-Object | Select-Object -First 1
+    if ($null -eq $NextProtectedStart) { $NextProtectedStart = [int64]::MaxValue }
+    $BootloaderOverflows = @($MapReport.ProgramUsage | Where-Object { $_.Start -ge $BootloaderStart -and $_.Start -lt $NextProtectedStart })
+
+    return [pscustomobject]@{
+        Blocks              = @($Blocks)
+        BudgetTotalBytes    = $BootloaderStart
+        BudgetUsedBytes     = $Used
+        BudgetFreeBytes     = $BootloaderStart - $Used
+        BootloaderStart     = $BootloaderStart
+        BootloaderOverflows = $BootloaderOverflows
+    }
+}
+
+function Get-RamMemoryBudgetReport {
+    <#
+    .SYNOPSIS
+    Derives per-RAM-bank used/free figures directly from the DATABANK and
+    ACCESSBANK directives, and flags any data allocation that spills out of
+    its own non-protected (GPR) bank. accesssfr is PROTECTED and intentionally
+    holds the C18 SFR shadow structures, so allocations that start there are
+    not a GPR concern.
+    #>
+    param(
+        [Parameter(Mandatory)][pscustomobject]$Regions,
+        [Parameter(Mandatory)][pscustomobject]$MapReport
+    )
+
+    $Banks = $Regions.RamRegions | Sort-Object Start
+    $BankReports = foreach ($Bank in $Banks) {
+        $Rows = $MapReport.Sections | Where-Object { $_.Location -eq 'data' -and $_.Address -ge $Bank.Start -and $_.Address -le $Bank.End }
+        $Measured = ($Rows | ForEach-Object { $_.Address + $_.Size - 1 } | Measure-Object -Maximum).Maximum
+        $UsedTo = if ($null -eq $Measured) { $Bank.Start - 1 } else { [int64]$Measured }
+        $UsedBytes = [Math]::Max(0, $UsedTo - $Bank.Start + 1)
+        $Size = $Bank.End - $Bank.Start + 1
+        [pscustomobject]@{
+            Name      = $Bank.Name
+            Start     = $Bank.Start
+            End       = $Bank.End
+            Size      = $Size
+            UsedBytes = $UsedBytes
+            FreeBytes = $Size - $UsedBytes
+            Protected = $Bank.Protected
+        }
+    }
+
+    $Violations = @(foreach ($Row in ($MapReport.Sections | Where-Object { $_.Location -eq 'data' -and $_.Size -gt 0 })) {
+        $RowEnd = $Row.Address + $Row.Size - 1
+        $Bank = $Banks | Where-Object { $Row.Address -ge $_.Start -and $Row.Address -le $_.End } | Select-Object -First 1
+        if (-not $Bank) {
+            $Row
+        } elseif (-not $Bank.Protected -and $RowEnd -gt $Bank.End) {
+            $Row
+        }
+    })
+
+    return [pscustomobject]@{
+        Banks      = @($BankReports)
+        Violations = $Violations
+    }
+}
+
 $C18Roots = @()
 if ($C18Root) {
     $C18Roots += $C18Root
@@ -133,6 +424,17 @@ foreach ($Library in @('clib.lib', 'p18F87K22.lib')) {
     }
 }
 
+# C18 in unlicensed/free (Lite) mode disables most optimizations, which on
+# this flash-constrained target can be the difference between an image
+# fitting and not fitting. Capture whatever banner mcc18 prints with no
+# source file given; this is the only provenance for which mode produced the
+# object files below. Record the verbatim text rather than guessing at its
+# exact wording, which has not been confirmed against every C18 v3.42 build.
+$Mcc18BannerRaw = Invoke-ToolForBanner -Tool $Mcc18
+$Mcc18Banner = (($Mcc18BannerRaw -split '\r?\n') | Where-Object { $_.Trim() } | Select-Object -First 3) -join ' | '
+if (-not $Mcc18Banner) { $Mcc18Banner = '(no banner text captured)' }
+$Mcc18LicensedModeGuess = -not ($Mcc18Banner -imatch 'lite|free|unlicensed|evaluation|student')
+
 $Git = Get-Command git.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $Git) {
     $Git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -172,23 +474,60 @@ if ([System.IO.Path]::IsPathRooted($Ostc3Package)) {
 Remove-Item -LiteralPath $ObjectDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $ObjectDir -Force | Out-Null
 
+# MPASM's default message level is 0 (every message, not just errors and
+# warnings); /q (line below) only silences its own console echo, it does not
+# suppress or change what is recorded in the .err/.lst files it always
+# writes. Surface a non-empty .err immediately, and keep every .err/.lst
+# (nothing here deletes them again) so tools/build_hwos.sh can copy them back.
+function Show-NonEmptyDiagnosticsFile {
+    param([string]$SourceName, [string]$ErrFile)
+    if ((Test-Path -LiteralPath $ErrFile -PathType Leaf) -and (Get-Item -LiteralPath $ErrFile).Length -gt 0) {
+        Write-Host "---- ${SourceName}: $(Split-Path -Leaf $ErrFile) ----"
+        Get-Content -LiteralPath $ErrFile | ForEach-Object { Write-Host $_ }
+        Write-Host '----'
+    }
+}
+
+function Get-DiagnosticsFileCount {
+    param([string]$ErrFile)
+    $Counts = [pscustomobject]@{ Errors = 0; Warnings = 0; Messages = 0 }
+    if (Test-Path -LiteralPath $ErrFile -PathType Leaf) {
+        foreach ($Line in (Get-Content -LiteralPath $ErrFile)) {
+            if ($Line -match '^\s*Error\b') { $Counts.Errors++ }
+            elseif ($Line -match '^\s*Warning\b') { $Counts.Warnings++ }
+            elseif ($Line -match '^\s*Message\b') { $Counts.Messages++ }
+        }
+    }
+    return $Counts
+}
+
+$DiagnosticsSummary = [System.Collections.Generic.List[pscustomobject]]::new()
+
 $Objects = [System.Collections.Generic.List[string]]::new()
 Get-ChildItem -LiteralPath $SourceDir -Filter '*.asm' -File | Sort-Object Name | ForEach-Object {
     $Object = Join-Path $ObjectDir ($_.BaseName + '.o')
+    $ErrFile = "$ObjectDir\$($_.BaseName).err"
     Write-Host ('ASM  src\{0}' -f $_.Name)
     Push-Location -LiteralPath $SourceDir
     try {
-        Invoke-BuildTool -Tool $Mpasm -Arguments @('/q', "/p$Processor", "/o$Object", "/e$ObjectDir\$($_.BaseName).err", "/l$ObjectDir\$($_.BaseName).lst", $_.Name)
+        Invoke-BuildTool -Tool $Mpasm -Arguments @('/q', "/p$Processor", "/o$Object", "/e$ErrFile", "/l$ObjectDir\$($_.BaseName).lst", $_.Name)
     } finally {
         Pop-Location
     }
+    Show-NonEmptyDiagnosticsFile -SourceName $_.Name -ErrFile $ErrFile
+    $Counts = Get-DiagnosticsFileCount -ErrFile $ErrFile
+    $DiagnosticsSummary.Add([pscustomobject]@{ File = $_.Name; Errors = $Counts.Errors; Warnings = $Counts.Warnings; Messages = $Counts.Messages })
     $Objects.Add($Object)
 }
 
 Get-ChildItem -LiteralPath $SourceDir -Filter '*.c' -File | Sort-Object Name | ForEach-Object {
     $Object = Join-Path $ObjectDir ($_.BaseName + '.o')
+    $ErrFile = "$ObjectDir\$($_.BaseName).err"
     Write-Host ('C18  src\{0}' -f $_.Name)
-    Invoke-BuildTool -Tool $Mcc18 -Arguments @("-p=$Processor", "-I=$SourceDir", "-I=$C18IncludeDir", "-fo=$Object", "-fe=$ObjectDir\$($_.BaseName).err", $_.FullName)
+    Invoke-BuildTool -Tool $Mcc18 -Arguments @("-p=$Processor", "-I=$SourceDir", "-I=$C18IncludeDir", "-fo=$Object", "-fe=$ErrFile", $_.FullName)
+    Show-NonEmptyDiagnosticsFile -SourceName $_.Name -ErrFile $ErrFile
+    $Counts = Get-DiagnosticsFileCount -ErrFile $ErrFile
+    $DiagnosticsSummary.Add([pscustomobject]@{ File = $_.Name; Errors = $Counts.Errors; Warnings = $Counts.Warnings; Messages = $Counts.Messages })
     $Objects.Add($Object)
 }
 
@@ -208,6 +547,152 @@ try {
 } finally {
     Pop-Location
 }
+
+#region Memory budget report and gates
+#
+# Program flash is the binding constraint on this target: every figure below
+# is derived from the just-produced map file, the fixed CODE anchors in
+# src/Docu/Code-Addresses.txt, and the CODEPAGE/DATABANK/ACCESSBANK
+# directives in the linker script, never hardcoded, so the report tracks a
+# future change to any of those files (for example a grp15 resize)
+# automatically.
+$CodeAddressesPath = Join-Path $SourceDir 'Docu\Code-Addresses.txt'
+$MemoryRegions = Get-LinkerScriptMemoryLayout -LinkerScriptPath $LinkerScript
+$FixedAnchors = Get-FixedCodeAnchor -Path $CodeAddressesPath
+$MapReport = Get-LinkerMapReport -MapPath $MapFile
+$FlashReport = Get-FlashMemoryBudgetReport -Regions $MemoryRegions -Anchors $FixedAnchors -MapReport $MapReport -WarnBytes $FlashSpareWarnBytes
+$RamReport = Get-RamMemoryBudgetReport -Regions $MemoryRegions -MapReport $MapReport
+
+$P2DecoSection = $MapReport.Sections | Where-Object { $_.Name -eq 'p2_deco' -and $_.Type -eq 'code' } | Select-Object -First 1
+
+$RestoreAnchor = $FixedAnchors | Where-Object { $_.Name -eq 'restore' } | Select-Object -First 1
+if (-not $RestoreAnchor) {
+    throw "Code-Addresses.txt has no 'restore' anchor to derive the high-priority ISR dispatcher limit from."
+}
+$BlockZeroCodeEndSymbol = 'block_0_code_end'
+$BlockZeroCodeEndAddress = $MapReport.Symbols[$BlockZeroCodeEndSymbol]
+
+$GateFailures = [System.Collections.Generic.List[string]]::new()
+$GateWarnings = [System.Collections.Generic.List[string]]::new()
+
+if ($null -eq $BlockZeroCodeEndAddress) {
+    $GateFailures.Add("Symbol '$BlockZeroCodeEndSymbol' (src/isr.asm) was not found in $MapFile; the high-priority ISR dispatcher fit cannot be verified.")
+} elseif ($BlockZeroCodeEndAddress -ge $RestoreAnchor.Address) {
+    $GateFailures.Add(('block_0_code_end resolved to 0x{0:X6}, which is at or past the restore vector at 0x{1:X6}; the high-priority ISR dispatcher no longer fits in 0x00008..0x{1:X6}.' -f $BlockZeroCodeEndAddress, $RestoreAnchor.Address))
+}
+
+if ($FlashReport.BootloaderOverflows.Count -gt 0) {
+    foreach ($Row in $FlashReport.BootloaderOverflows) {
+        $GateFailures.Add(('Program memory range 0x{0:X6}..0x{1:X6} is placed at or above the bootloader-reserved region starting at 0x{2:X6}.' -f $Row.Start, $Row.End, $FlashReport.BootloaderStart))
+    }
+}
+
+if ($RamReport.Violations.Count -gt 0) {
+    foreach ($Row in $RamReport.Violations) {
+        $GateFailures.Add(('RAM allocation {0} at 0x{1:X4} (size {2}) falls outside the GPR ranges declared in {3}.' -f $Row.Name, $Row.Address, $Row.Size, $LinkerScript))
+    }
+}
+
+foreach ($Block in ($FlashReport.Blocks | Where-Object { $_.Gated })) {
+    if ($Block.Spare -lt $FlashSpareFailBytes) {
+        $GateFailures.Add(('Flash block {0} (0x{1:X6}..0x{2:X6}) has only {3} byte(s) spare, below the fail threshold of {4}.' -f $Block.Name, $Block.Start, $Block.End, $Block.Spare, $FlashSpareFailBytes))
+    } elseif ($Block.Spare -lt $FlashSpareWarnBytes) {
+        $GateWarnings.Add(('Flash block {0} (0x{1:X6}..0x{2:X6}) has only {3} byte(s) spare, below the warn threshold of {4}.' -f $Block.Name, $Block.Start, $Block.End, $Block.Spare, $FlashSpareWarnBytes))
+    }
+}
+
+Write-Host "`nMemory budget report (derived from $MapFile):"
+Write-Host ('  Flash budget: {0} used, {1} free, of {2} bytes (0x00000-0x{3:X5})' -f $FlashReport.BudgetUsedBytes, $FlashReport.BudgetFreeBytes, $FlashReport.BudgetTotalBytes, ($FlashReport.BootloaderStart - 1))
+foreach ($Block in $FlashReport.Blocks) {
+    Write-Host ('    {0,-22} start=0x{1:X6} end=0x{2:X6} used_to=0x{3:X6} spare={4,6}{5}' -f $Block.Name, $Block.Start, $Block.End, $Block.UsedTo, $Block.Spare, $(if ($Block.Gated) { '' } else { ' (fixed-width, not gated)' }))
+}
+if ($P2DecoSection) {
+    $P2DecoEnd = $P2DecoSection.Address + $P2DecoSection.Size - 1
+    Write-Host ('  p2_deco (C deco engine): start=0x{0:X6} end=0x{1:X6} size={2} bytes' -f $P2DecoSection.Address, $P2DecoEnd, $P2DecoSection.Size)
+} else {
+    Write-Host '  p2_deco section was not found in this build (informational only; not gated).'
+}
+if ($null -ne $BlockZeroCodeEndAddress) {
+    Write-Host ('  block_0_code_end: 0x{0:X6} (must stay below restore at 0x{1:X6})' -f $BlockZeroCodeEndAddress, $RestoreAnchor.Address)
+}
+Write-Host '  RAM banks:'
+foreach ($Bank in $RamReport.Banks) {
+    Write-Host ('    {0,-12} start=0x{1:X4} end=0x{2:X4} used={3,5} free={4,5}{5}' -f $Bank.Name, $Bank.Start, $Bank.End, $Bank.UsedBytes, $Bank.FreeBytes, $(if ($Bank.Protected) { ' (protected, not GPR)' } else { '' }))
+}
+
+foreach ($Warning in $GateWarnings) {
+    Write-Warning $Warning
+}
+
+$MemoryBudgetGateBypassed = $false
+if ($GateFailures.Count -gt 0) {
+    if ($BypassMemoryBudgetGates) {
+        $MemoryBudgetGateBypassed = $true
+        Write-Warning 'Memory budget gate failure(s) bypassed by -BypassMemoryBudgetGates; this build is not a canonical release candidate:'
+        foreach ($Failure in $GateFailures) { Write-Warning "  $Failure" }
+    } else {
+        foreach ($Failure in $GateFailures) { Write-Host "FAIL: $Failure" }
+        throw "Memory budget gate(s) failed; rerun with -BypassMemoryBudgetGates for a forensic/non-canonical build, or free up the flagged space."
+    }
+}
+
+$MemoryBudgetMetadata = [System.Collections.Generic.List[string]]::new()
+$MemoryBudgetMetadata.Add("flash_budget_total_bytes=$($FlashReport.BudgetTotalBytes)")
+$MemoryBudgetMetadata.Add("flash_budget_used_bytes=$($FlashReport.BudgetUsedBytes)")
+$MemoryBudgetMetadata.Add("flash_budget_free_bytes=$($FlashReport.BudgetFreeBytes)")
+$MemoryBudgetMetadata.Add("flash_spare_warn_threshold_bytes=$FlashSpareWarnBytes")
+$MemoryBudgetMetadata.Add("flash_spare_fail_threshold_bytes=$FlashSpareFailBytes")
+$MemoryBudgetMetadata.Add("flash_block_count=$($FlashReport.Blocks.Count)")
+for ($i = 0; $i -lt $FlashReport.Blocks.Count; $i++) {
+    $Block = $FlashReport.Blocks[$i]
+    $N = $i + 1
+    $MemoryBudgetMetadata.Add(("flash_block_{0}_name={1}" -f $N, $Block.Name))
+    $MemoryBudgetMetadata.Add(("flash_block_{0}_start=0x{1:x6}" -f $N, $Block.Start))
+    $MemoryBudgetMetadata.Add(("flash_block_{0}_end=0x{1:x6}" -f $N, $Block.End))
+    $MemoryBudgetMetadata.Add(("flash_block_{0}_used_to=0x{1:x6}" -f $N, $Block.UsedTo))
+    $MemoryBudgetMetadata.Add(("flash_block_{0}_spare_bytes={1}" -f $N, $Block.Spare))
+    $MemoryBudgetMetadata.Add(("flash_block_{0}_gated={1}" -f $N, $Block.Gated.ToString().ToLowerInvariant()))
+}
+$MemoryBudgetMetadata.Add("ram_bank_count=$($RamReport.Banks.Count)")
+for ($i = 0; $i -lt $RamReport.Banks.Count; $i++) {
+    $Bank = $RamReport.Banks[$i]
+    $N = $i + 1
+    $MemoryBudgetMetadata.Add(("ram_bank_{0}_name={1}" -f $N, $Bank.Name))
+    $MemoryBudgetMetadata.Add(("ram_bank_{0}_start=0x{1:x4}" -f $N, $Bank.Start))
+    $MemoryBudgetMetadata.Add(("ram_bank_{0}_end=0x{1:x4}" -f $N, $Bank.End))
+    $MemoryBudgetMetadata.Add(("ram_bank_{0}_used_bytes={1}" -f $N, $Bank.UsedBytes))
+    $MemoryBudgetMetadata.Add(("ram_bank_{0}_free_bytes={1}" -f $N, $Bank.FreeBytes))
+    $MemoryBudgetMetadata.Add(("ram_bank_{0}_protected={1}" -f $N, $Bank.Protected.ToString().ToLowerInvariant()))
+}
+if ($P2DecoSection) {
+    $MemoryBudgetMetadata.Add('p2_deco_section_found=true')
+    $MemoryBudgetMetadata.Add(("p2_deco_start=0x{0:x6}" -f $P2DecoSection.Address))
+    $MemoryBudgetMetadata.Add(("p2_deco_end=0x{0:x6}" -f ($P2DecoSection.Address + $P2DecoSection.Size - 1)))
+    $MemoryBudgetMetadata.Add(("p2_deco_size_bytes={0}" -f $P2DecoSection.Size))
+} else {
+    $MemoryBudgetMetadata.Add('p2_deco_section_found=false')
+}
+if ($null -ne $BlockZeroCodeEndAddress) {
+    $MemoryBudgetMetadata.Add(("block_0_code_end_address=0x{0:x6}" -f $BlockZeroCodeEndAddress))
+}
+$MemoryBudgetMetadata.Add(("block_0_code_end_limit_address=0x{0:x6}" -f $RestoreAnchor.Address))
+$MemoryBudgetMetadata.Add("memory_budget_gate_bypassed=$($MemoryBudgetGateBypassed.ToString().ToLowerInvariant())")
+
+$TotalAsmErrors = ($DiagnosticsSummary | Measure-Object -Property Errors -Sum).Sum
+$TotalAsmWarnings = ($DiagnosticsSummary | Measure-Object -Property Warnings -Sum).Sum
+$TotalAsmMessages = ($DiagnosticsSummary | Measure-Object -Property Messages -Sum).Sum
+if ($null -eq $TotalAsmErrors) { $TotalAsmErrors = 0 }
+if ($null -eq $TotalAsmWarnings) { $TotalAsmWarnings = 0 }
+if ($null -eq $TotalAsmMessages) { $TotalAsmMessages = 0 }
+Write-Host "`nAssembler/compiler diagnostics summary:"
+foreach ($Entry in ($DiagnosticsSummary | Where-Object { $_.Errors -gt 0 -or $_.Warnings -gt 0 -or $_.Messages -gt 0 })) {
+    Write-Host ('  {0,-24} errors={1} warnings={2} messages={3}' -f $Entry.File, $Entry.Errors, $Entry.Warnings, $Entry.Messages)
+}
+Write-Host ('  Total: {0} file(s) compiled, {1} error(s), {2} warning(s), {3} message(s).' -f $DiagnosticsSummary.Count, $TotalAsmErrors, $TotalAsmWarnings, $TotalAsmMessages)
+$MemoryBudgetMetadata.Add("asm_diagnostics_total_errors=$TotalAsmErrors")
+$MemoryBudgetMetadata.Add("asm_diagnostics_total_warnings=$TotalAsmWarnings")
+$MemoryBudgetMetadata.Add("asm_diagnostics_total_messages=$TotalAsmMessages")
+#endregion Memory budget report and gates
 
 # TinyBld must not receive the logo/program area beginning at 0x1E000.
 Write-Host ('CROP {0}' -f $TinyHex)
@@ -301,6 +786,9 @@ $BuildInfo = Join-Path $BuildDir 'build-info.txt'
     "srec_cat_sha256=$((Get-FileHash -LiteralPath $SrecCat -Algorithm SHA256).Hash.ToLowerInvariant())"
     "full_hex_sha256=$FullHash"
     "upload_hex_sha256=$TinyHash"
+    "mcc18_banner=$Mcc18Banner"
+    "mcc18_licensed_mode_guess=$($Mcc18LicensedModeGuess.ToString().ToLowerInvariant())"
+    $MemoryBudgetMetadata
     $PackagingMetadata
 ) | Set-Content -LiteralPath $BuildInfo -Encoding ascii
 
