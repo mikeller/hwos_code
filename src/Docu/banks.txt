@@ -18,4 +18,4 @@ Bank    Use                                        free Bytes
  12     tissue pressures "vault"                        0
  13     C stack                                         0
  14     options table                                  51
- 15     SFRs + 16 unused bytes                         16
+ 15     SFRs + 22 unused bytes                         22
