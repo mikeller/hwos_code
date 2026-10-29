@@ -262,6 +262,221 @@
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ;
+; Feature and Debug Flag Assertions
+; ----------------------------------
+;
+; For each flag above, exactly one of _flag / NOT_INCLUDED_flag must be
+; defined. Leaving both undefined (e.g. a typo, or a rename done in one
+; place and not the other) must not silently fall back to feature
+; disabled, since the first evidence of a missing feature such as
+; _cave_mode or _ccr_pscr would otherwise be in the water. Checked here,
+; before the auto-includes below, so it validates what was configured
+; above, not what the auto-includes then derive from it.
+;
+; C18 has no equivalent to the MPASM ERROR directive used below (#error
+; is C-only, ERROR is MPASM-only), so this check runs on the assembler
+; side only. Every .asm translation unit still goes through this file,
+; so a misconfigured build is caught at assembly time, before linking.
+;
+#endif
+
+#ifndef __18CXX
+
+#ifdef _compass
+#ifdef NOT_INCLUDED_compass
+ERROR "_compass and NOT_INCLUDED_compass both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_compass
+ERROR "neither _compass nor NOT_INCLUDED_compass defined"
+#endif
+#endif
+
+#ifdef _helium
+#ifdef NOT_INCLUDED_helium
+ERROR "_helium and NOT_INCLUDED_helium both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_helium
+ERROR "neither _helium nor NOT_INCLUDED_helium defined"
+#endif
+#endif
+
+#ifdef _ccr_pscr
+#ifdef NOT_INCLUDED_ccr_pscr
+ERROR "_ccr_pscr and NOT_INCLUDED_ccr_pscr both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_ccr_pscr
+ERROR "neither _ccr_pscr nor NOT_INCLUDED_ccr_pscr defined"
+#endif
+#endif
+
+#ifdef _external_sensor_eccr
+#ifdef NOT_INCLUDED_external_sensor_eccr
+ERROR "_external_sensor_eccr and NOT_INCLUDED_external_sensor_eccr both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_external_sensor_eccr
+ERROR "neither _external_sensor_eccr nor NOT_INCLUDED_external_sensor_eccr defined"
+#endif
+#endif
+
+#ifdef _gauge_mode
+#ifdef NOT_INCLUDED_gauge_mode
+ERROR "_gauge_mode and NOT_INCLUDED_gauge_mode both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_gauge_mode
+ERROR "neither _gauge_mode nor NOT_INCLUDED_gauge_mode defined"
+#endif
+#endif
+
+#ifdef _high_ppO2_max
+#ifdef NOT_INCLUDED_high_ppO2_max
+ERROR "_high_ppO2_max and NOT_INCLUDED_high_ppO2_max both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_high_ppO2_max
+ERROR "neither _high_ppO2_max nor NOT_INCLUDED_high_ppO2_max defined"
+#endif
+#endif
+
+#ifdef _rx_functions
+#ifdef NOT_INCLUDED_rx_functions
+ERROR "_rx_functions and NOT_INCLUDED_rx_functions both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_rx_functions
+ERROR "neither _rx_functions nor NOT_INCLUDED_rx_functions defined"
+#endif
+#endif
+
+#ifdef _rx_update
+#ifdef NOT_INCLUDED_rx_update
+ERROR "_rx_update and NOT_INCLUDED_rx_update both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_rx_update
+ERROR "neither _rx_update nor NOT_INCLUDED_rx_update defined"
+#endif
+#endif
+
+#ifdef _gas_contingency
+#ifdef NOT_INCLUDED_gas_contingency
+ERROR "_gas_contingency and NOT_INCLUDED_gas_contingency both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_gas_contingency
+ERROR "neither _gas_contingency nor NOT_INCLUDED_gas_contingency defined"
+#endif
+#endif
+
+#ifdef _cave_mode
+#ifdef NOT_INCLUDED_cave_mode
+ERROR "_cave_mode and NOT_INCLUDED_cave_mode both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_cave_mode
+ERROR "neither _cave_mode nor NOT_INCLUDED_cave_mode defined"
+#endif
+#endif
+
+#ifdef _big_divemenu
+#ifdef NOT_INCLUDED_big_divemenu
+ERROR "_big_divemenu and NOT_INCLUDED_big_divemenu both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_big_divemenu
+ERROR "neither _big_divemenu nor NOT_INCLUDED_big_divemenu defined"
+#endif
+#endif
+
+#ifdef _firmware_recovery
+#ifdef NOT_INCLUDED_firmware_recovery
+ERROR "_firmware_recovery and NOT_INCLUDED_firmware_recovery both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_firmware_recovery
+ERROR "neither _firmware_recovery nor NOT_INCLUDED_firmware_recovery defined"
+#endif
+#endif
+
+#ifdef _min_depth_option
+#ifdef NOT_INCLUDED_min_depth_option
+ERROR "_min_depth_option and NOT_INCLUDED_min_depth_option both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_min_depth_option
+ERROR "neither _min_depth_option nor NOT_INCLUDED_min_depth_option defined"
+#endif
+#endif
+
+#ifdef _screendump
+#ifdef NOT_INCLUDED_screendump
+ERROR "_screendump and NOT_INCLUDED_screendump both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_screendump
+ERROR "neither _screendump nor NOT_INCLUDED_screendump defined"
+#endif
+#endif
+
+#ifdef _DEBUG
+#ifdef NOT_INCLUDED_DEBUG
+ERROR "_DEBUG and NOT_INCLUDED_DEBUG both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_DEBUG
+ERROR "neither _DEBUG nor NOT_INCLUDED_DEBUG defined"
+#endif
+#endif
+
+#ifdef _profiling
+#ifdef NOT_INCLUDED_profiling
+ERROR "_profiling and NOT_INCLUDED_profiling both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_profiling
+ERROR "neither _profiling nor NOT_INCLUDED_profiling defined"
+#endif
+#endif
+
+#ifdef _debug_output
+#ifdef NOT_INCLUDED_debug_output
+ERROR "_debug_output and NOT_INCLUDED_debug_output both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_debug_output
+ERROR "neither _debug_output nor NOT_INCLUDED_debug_output defined"
+#endif
+#endif
+
+#ifdef _comm_debug
+#ifdef NOT_INCLUDED_comm_debug
+ERROR "_comm_debug and NOT_INCLUDED_comm_debug both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_comm_debug
+ERROR "neither _comm_debug nor NOT_INCLUDED_comm_debug defined"
+#endif
+#endif
+
+#ifdef _rx_functions_debug
+#ifdef NOT_INCLUDED_rx_functions_debug
+ERROR "_rx_functions_debug and NOT_INCLUDED_rx_functions_debug both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_rx_functions_debug
+ERROR "neither _rx_functions_debug nor NOT_INCLUDED_rx_functions_debug defined"
+#endif
+#endif
+
+#endif
+
+
+#ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+;
 ; Auto-Includes (serve functional dependencies)
 ;
 #endif
