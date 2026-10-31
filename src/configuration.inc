@@ -80,7 +80,7 @@
 #endif
 
 #define _language_1		en
-#define _language_2		de
+#define _language_2		none
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
