@@ -131,6 +131,15 @@ store_dive_data:
 	return								;       NO  - done
 
 store_dive_data_1:
+	; double check 0x1FFFFF boundary
+	movlw	0x1F
+	cpfsgt	ext_flash_address+2		; Within 0x1FFFFF range?
+	bra	store_dive_data_2		; Yes, continue
+	; work-around: Start at 0x000000 again
+	clrf	ext_flash_address+0
+	clrf	ext_flash_address+1
+	clrf	ext_flash_address+2
+store_dive_data_2:	
 	; store depth with every sample
 	MOVII	pressure_rel_cur_cached,mpr	; copy current relative pressure to MPR
 	call	convert_pres_to_depth		; convert pressure in [mbar] to depth in [cm]

@@ -576,7 +576,6 @@
 	TCODE	tBackingUp,			"backing up..."			; backing up current firmware
 	TCODE	tRestoring,			"restoring..."			; restoring  backup  firmware
  ENDIF
-	TCODE	tBLE_Compatibility,		"Legacy BLE:"
 
 ; Set Time Menu/Set Date Menu
 	TCODE	tSetHours,			"Set   Hours"			; Set   Hours

@@ -858,8 +858,6 @@ do_return_menu_dive:
 ; Dive Settings Menu - 1st Layer
 ;
 do_menu_dive:
-	btfsc	dn_flag	; force menu all caps in dn hardware
-	bsf	force_all_caps
 	MENU_BEGIN	tDiveModeMenu, .6
 		MENU_CALL		tDiveSetup,					do_menu_dive_dive		; dive setup
 		MENU_CALL		tDecoSetup,					do_menu_dive_deco		; deco setup
@@ -1009,8 +1007,6 @@ do_menu_dive_ppO2:
 		MENU_OPT_INC	tIBCDwarning,				oEnable_IBCD				; IBCD warning
 		MENU_CALL		tBack,						do_return_menu_dive
  ELSE
-	btfsc	dn_flag	; force menu all caps in dn hardware
-	bsf	force_all_caps
 	MENU_BEGIN	tppO2Setup, .4
 		MENU_DYNAMIC	dyn_ppo2_max,				do_toggle_ppO2_max_work		; max work
 		MENU_DYNAMIC	dyn_ppo2_max_deco,			do_toggle_ppO2_max_deco		; max deco
@@ -1512,6 +1508,7 @@ dyn_show_total_dives:
 dyn_show_logbook_pointer:
     EEPROM_TT_READ	eeprom_log_pointer,ext_flash_address
     STRCAT  "Profile : 0x"
+ global	    dyn_show_logbook_pointer2				; Output a three byte hex number from ext_flash_address:3
 dyn_show_logbook_pointer2:    
     movf   ext_flash_address+2,W
     output_hex							; print it
@@ -1767,8 +1764,6 @@ do_menu_dispsets_more:
 		MENU_CALL		tBack,						do_return_menu_settings_deeper
 	MENU_END
  ELSE
-	btfsc	dn_flag	; force menu all caps in dn hardware
-	bsf	force_all_caps
 	MENU_BEGIN	tDispSets, .6
 		MENU_OPT_INC	tVSIgraph,					oVSIgraph
 		MENU_OPT_INC	tVSItext2,					oVSItext
@@ -1810,8 +1805,6 @@ do_return_menu_syssets_piezo:
 ; Settings Menu - 2nd Layer - System Settings
 ;
 do_menu_syssets:
-	btfsc	dn_flag				; dn hardware?
-	bra	do_menu_syssets_dn		; YES
 	btfsc	dual_comm			; Dual comm hardware?
 	bra	do_menu_syssets_dual_comm	; YES
 	btfsc	adjustable_buttons		; piezo buttons available?
@@ -1835,25 +1828,6 @@ do_menu_syssets_mechanical:
  ENDIF	; _compass
 
 	
-do_menu_syssets_dn:
- IFDEF _compass
-	MENU_BEGIN	tSystSets, .5													; All MENU_CALLs in this menu
-		MENU_CALL		tCompassMenu,				do_menu_compass				; need to stay together on this
-		MENU_CALL		tLogOffset,					do_menu_log_offset			; menu level in order to not
-		MENU_CALL		tResetMenu,					do_menu_reset				; mess up the menu stack on doing
-		MENU_OPT_INC		tBLE_Compatibility,				oBLE_Compatibility			; BLE Compatibility mode
-		MENU_CALL		tBack,						do_return_menu_settings		; the do_return_menu_settings !
-	MENU_END
- ELSE
-	MENU_BEGIN	tSystSets, .4													; see above
-		MENU_CALL		tLogOffset,					do_menu_log_offset			;
-		MENU_CALL		tResetMenu,					do_menu_reset				;
-		MENU_OPT_INC		tBLE_Compatibility,				oBLE_Compatibility			; BLE Compatibility mode
-		MENU_CALL		tBack,						do_return_menu_settings		;
-	MENU_END
- ENDIF	; _compass
- 
- 
 do_menu_syssets_piezo:
  IFDEF _compass
 	MENU_BEGIN	tSystSets, .5
@@ -2058,8 +2032,6 @@ do_menu_piezo:
 ; Settings Menu - 3rd Layer - System Settings - Reset Menus
 ;
 do_menu_reset:
-       	btfsc	dn_flag
-	bra	do_menu_reset_dn
 	MENU_BEGIN	tResetMenu, .7
 		MENU_CALL		tBack,						do_return_menu_syssets_more
 		MENU_CALL		tReboot,					do_menu_reset_reboot	; confirm
@@ -2067,16 +2039,6 @@ do_menu_reset:
 		MENU_CALL		tResetSettings,				do_menu_reset_settings	; confirm
 		MENU_CALL		tResetLogbook,				do_menu_reset_logbook	; confirm
 		MENU_CALL		tResetBattery,				do_menu_reset_battery	; confirm
-		MENU_CALL		tResetBLE2,				do_menu_reset_ble2	; (Re-) Configure the new BLE module
-	MENU_END
-
-do_menu_reset_dn:	; no reset battery for dn
-	MENU_BEGIN	tResetMenu, .6
-		MENU_CALL		tBack,						do_return_menu_syssets_more
-		MENU_CALL		tReboot,					do_menu_reset_reboot	; confirm
-		MENU_CALL		tResetDeco,					do_menu_reset_deco		; confirm
-		MENU_CALL		tResetSettings,				do_menu_reset_settings	; confirm
-		MENU_CALL		tResetLogbook,				do_menu_reset_logbook	; confirm
 		MENU_CALL		tResetBLE2,				do_menu_reset_ble2	; (Re-) Configure the new BLE module
 	MENU_END
 
@@ -2325,11 +2287,11 @@ do_new_battery_select:
 	; 0x02:                           ambient sensor                   ---> OSTC Sport (USB model)   YES    NO     1.5V  3.6V disposable  3.6V rechargeable
 	; 0x52: BLE                   and ambient sensor and low volt core ---> OSTC Sport (BLE model)   YES    NO     1.5V  3.6V disposable  3.6V rechargeable
 
-	btfsc	dn_flag
-	bra	use_404050_battery
-	
 	btfsc	dual_comm
 	bra	use_404050_battery
+	
+	btfsc	screen_type6
+	bra	use_18650_battery2				; OSTC 2 (Mod. 2016)
 	
 	movlw	0x11						; OSTC 2 (2015 model)
 	cpfseq	HW_descriptor
@@ -2339,7 +2301,8 @@ do_new_battery_select:
 	movlw	0x91						; OSTC 2 (2015 model) with block write
 	cpfseq	HW_descriptor
 	bra		$+4
-	bra		use_18650_battery
+	;bra		use_18650_battery
+	bra	    do_menu_new_battery_other_model		; Work-around for non-detecting the ambient light sensor in the OSTC plus
 
 	movlw	0x05						; OSTC 2 cR
 	cpfseq	HW_descriptor
@@ -2519,6 +2482,7 @@ use_18650_battery:
     	btfsc	ble_only							; BLE-Only hardware?
 	bra	do_menu_new_battery_AA_charger2					; YES - likely an OSTC+ BLE 2026
 
+use_18650_battery2:
 	rcall	setup_new_18650
 	bra	use_batt_exit
 
@@ -2548,6 +2512,7 @@ use_batt_exit_1:
 ;
 	global	get_battery_data
 get_battery_data:
+	bcf	high_brightness_lcd				; =1: a high brightness LCD is used
 	call	eeprom_battery_gauge_read	; retrieve stored battery gauge value from EEPROM
 	movff	battery_type,lo				; copy retrieved battery type to lo
 	rcall	setup_new_saft				; default battery configuration
@@ -2615,6 +2580,7 @@ setup_new_18650:
 	MOVLI	offset_ncr18650,   battery_offset
 	movlw	.3
 	movwf	battery_type
+	bsf	high_brightness_lcd				; =1: a high brightness LCD is used
 	btfss	use_old_batt_flag				; In a power-on-reset run?
 	clrf	batt_percent					; YES: Start with 0%
 	return

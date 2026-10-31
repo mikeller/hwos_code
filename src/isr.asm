@@ -1,4 +1,4 @@
-;=============================================================================
+ ;=============================================================================
 ;
 ;   File isr.asm                            * combined next generation V3.11.1
 ;
@@ -513,10 +513,33 @@ isr_sensor_state2:
 	; export averaged pressure
 	tstfsz	pressure_abs_avg+2					; must be zero for all depths < 262m
 	bra	isr_sensor_state_sensor_error				; assume a false reading if <> 0
-	
-	MOVII	pressure_abs_avg,pressure_abs		; export result (Which is 16 bit for all depths < 262m)
 
-isr_sensor_state_sensor_resume:
+	; Compare with pressure_abs_last to catch any glitches
+	movf	pressure_abs_last+1,W
+	cpfslt	pressure_abs_avg+1
+	bra	isr_sensor_press_smaller
+	; pressure_abs_avg+1 is > pressure_abs_last+1
+	; threshold is in 255hPa (2,55m)
+	subwf	pressure_abs_avg+1,W
+	sublw	.11	; 28,05m
+	btfss	STATUS,N
+	bra	isr_sensor_press_delta_ok				; delta us small enough
+	bra	isr_sensor_press_sensor_resume				; delta too high -> Skip
+	
+isr_sensor_press_smaller:	
+	; pressure_abs_avg+1 is < pressure_abs_last+1
+	movf	pressure_abs_avg+1,W
+	; threshold is in 255hPa (2,55m)
+	subwf	pressure_abs_last+1,W
+	sublw	.11	; 28,05m
+	btfss	STATUS,N
+	bra	isr_sensor_press_delta_ok				; delta us small enough
+	bra	isr_sensor_press_sensor_resume				; delta too high -> Skip
+
+isr_sensor_press_delta_ok:	
+	MOVII	pressure_abs_avg,pressure_abs				; export result (Which is 16 bit for all depths < 262m)
+	
+isr_sensor_press_sensor_resume:
 	; build average for temperature
 	bcf		STATUS,C							; clear carry bit by default
 	btfsc	temperature_avg+1,7					; sign bit set?
@@ -532,8 +555,32 @@ isr_sensor_state_sensor_resume:
 	btfsc	i2c_reinit_sensor2					; Sensor ok?
 	bra	isr_sensor_state_skip_temp				; likely not, skip updating the temperature
 	
-	MOVII	temperature_avg,temperature_cur		; store final result
+	; Compare with temperature_last to catch any glitches
+	movf	temperature_last+1,W
+	cpfslt	temperature_avg+1
+	bra	isr_sensor_temp_smaller
+	; temperature_avg+1 is > temperature_last+1
+	; threshold is in 25.5°C
+	subwf	temperature_avg+1,W
+	sublw	.3	; 76,5°C
+	btfss	STATUS,N
+	bra	isr_sensor_temp_delta_ok				; delta us small enough
+	bra	isr_sensor_temp_sensor_resume				; delta too high -> Skip
+	
+isr_sensor_temp_smaller:	
+	; pressure_abs_avg+1 is < pressure_abs_last+1
+	movf	temperature_avg+1,W
+	; threshold is in 25.5°C
+	subwf	temperature_last+1,W
+	sublw	.3	; 76,5°C
+	btfss	STATUS,N
+	bra	isr_sensor_temp_delta_ok				; delta us small enough
+	bra	isr_sensor_temp_sensor_resume				; delta too high -> Skip
 
+isr_sensor_temp_delta_ok:	
+	MOVII	temperature_avg,temperature_cur		; store final result
+	
+isr_sensor_temp_sensor_resume:
 isr_sensor_state_skip_temp:
 	; check for temperature change
 	movf	temperature_cur+0,W					; get current temperature, low  byte
@@ -647,7 +694,7 @@ sensor_int_state_exit:
 isr_sensor_state_sensor_error:
 	bsf	i2c_reinit_sensor2				; Do an I2C reset and reinitialize the pressure sensor type 2 
 								; Done in I2C_get_press_val_MS5837 and I2C_get_temp_val_MS5837
-	bra	isr_sensor_state_sensor_resume			; Ignore the reading and continue
+	bra	isr_sensor_press_sensor_resume			; Ignore the reading and continue
 ;-----------------------------------------------------------------------------
 ; Helper Function for Display Dimming
 ;

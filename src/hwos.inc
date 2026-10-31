@@ -335,7 +335,6 @@
 ; ---- Brightness Thresholds (between zero (off) and 255 (max. power consumption))
 #DEFINE ambient_light_max_high_36V		.170
 #DEFINE ambient_light_max_high_cr		.240
-#DEFINE ambient_light_max_high_dn		.240 
 #DEFINE ambient_no_sensor_high			.200
 #DEFINE ambient_light_max_high_15V		.100
 #DEFINE ambient_light_min_high			.35
@@ -508,7 +507,7 @@
 #DEFINE press_sensor_type		HW_variants2,0		; =1: pressure sensor MS5837, =0: Pressure sensor MS5541
 #DEFINE	less_io_cpu			HW_variants2,1		; =1: OSTC has a CPU with less I/O pins
 #DEFINE screen_type4			HW_variants2,2		; =1: display type 4, =0: display type 0 or 1 or 2 or 3
-#DEFINE	dn_flag				HW_variants2,3		; =1: dn
+;   HW_variants2,3		; =1: 
 #DEFINE screen_type5			HW_variants2,4		; =1: display type 5, =0: display type 0 or 1 or 2 or 3 or 4
 #DEFINE compass_type0			HW_variants2,5		; =1: compass type 0, =0: compass type 1 or 2
 #DEFINE compass_present			HW_variants2,6		; =1: a compass is present, =0: hardware w/o compass
@@ -519,6 +518,9 @@
 #DEFINE	adjustable_buttons		HW_variants3,1		; =1: The buttons have adjustable sensitivity
 #DEFINE ble_only			HW_variants3,2		; =1: ble-only comm hardware
 #DEFINE button_hold_down_allowed	HW_variants3,3		; =1: OSTC uses mechanical push buttons 
+#DEFINE high_brightness_lcd		HW_variants3,4		; =1: A high brightness LCD is used
+#DEFINE screen_type6			HW_variants3,5		; =1: display type 6, =0: display type 0 or 1 or 2 or 3 or 4 or 5
+
  
 ;---- Hardware - States 1 (stored in access RAM, cleared on restart)
 #DEFINE analog_sw1_pressed		HW_flags_state1,0	; =1: analog switch 1 pressed
@@ -1759,7 +1761,6 @@ opt_fallback					res 1		; unused dummy option for compatibility with 3rd party t
 opt_conservatism				res 1		; unused dummy option for compatibility with 3rd party tools
 opt_warning_level_divemode			res 1		; warning verbose level (divemode) =0: Less, =1: All				
 opt_timeformat					res 1		; =0:24h, =1:12h
-opt_BLE_compatibility				res 1		; =1: configure BLE name to hwOS style for dn hardware					
 					
 ;---- RX Function Settings
 opt_transmitter_id_1			res 2		; 16 bit transmitter ID for Gas 1

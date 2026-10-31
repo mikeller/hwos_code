@@ -840,8 +840,8 @@ reset_MS5541:
 	rcall	reset_MS5541_zero
 	rcall	reset_MS5541_zero
 	rcall	reset_MS5541_zero
-	rcall	reset_MS5541_zero			; 20
-	return
+	bra	reset_MS5541_zero			; 20 (And return)
+	
 
 
 ;-----------------------------------------------------------------------------

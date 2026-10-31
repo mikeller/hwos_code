@@ -80,14 +80,10 @@ surfloop:
 
 	; show heinrichs weikamp gmbh logo
 	movlw	.40
-	btfsc	dn_flag
-	movlw	.100
 	movwf	win_top
 	WIN_LEFT .10
 	TFT_WRITE_PROM_IMAGE_BY_ADDR hw_logo_block
 
-	btfsc	dn_flag
-	bra	surfloop_0
 	; set font color
 	FONT_COLOR color_white
 
@@ -159,8 +155,6 @@ surfloop_2:
 
 
 	;---- logo in upper right corner -----------------------------------------
-	btfsc	dn_flag
-	bra	surfloop_3
 	; show textual OSTC logo
 	WIN_STD .100,.2						; set output position
 	FONT_COLOR color_white				; set text color to white
@@ -175,13 +169,6 @@ surfloop_2:
  ELSE
 	STRCPY_PRINT "tech"					; show "tech"
  ENDIF
-	bra	surfloop_4
-surfloop_3:
-	WIN_TINY .105,.5						; set output position
-	FONT_COLOR color_grey				; set text color to white
-	STRCPY_PRINT "DYNAMICNORD"					; show "OSTC"
-	
-surfloop_4:	
 	; firmware version
 	WIN_TINY .100,.32					; set output position
 	FONT_COLOR color_white				; set text color to white

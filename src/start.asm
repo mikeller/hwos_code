@@ -148,6 +148,7 @@ start_clear_rambank:
 	bsf		screen_type3					; ...
 	bsf		screen_type4					; ...
 	bsf		screen_type5					; ...
+	bsf		screen_type6					; ...
 	movlw	0x80							; set up read from 0x01F780
 	movwf	TBLPTRL							; ...
 	;movlw	0xF7							; high and upper are still at 0x01F7xx
@@ -167,12 +168,12 @@ start_clear_rambank:
 	movlw	0x86							; coding for screen type 5
 	cpfseq	TABLAT							; equal?
 	bcf		screen_type5					; NO  -  not screen type 5
-
-	bcf	dn_flag
-	btfsc	screen_type4
-	bsf	dn_flag
-;	btfsc	screen_type5
-;	bsf	dn_flag
+	movlw	0x87							; coding for screen type 6
+	cpfseq	TABLAT							; equal?
+	bcf		screen_type6					; NO  -  not screen type 6
+	
+	btfsc	screen_type6						; Screen Type 6?
+	bsf	screen_type5						; YES, set type 5 flag since type 6 is (almost) identical
 	
 	
 	
@@ -199,7 +200,10 @@ start_clear_rambank:
 	btfsc	press_sensor_type			; New sensor found?
 	call	I2C_get_press_val_MS5837		; (Will clear ms5837_state)
 	WAITMS	.250
-
+	MOVII	pressure_abs_avg,pressure_abs	; get result, bypassing the averaging
+	MOVII	pressure_abs_avg,pressure_abs_last
+	MOVII	temperature_avg,temperature_cur
+	MOVII	temperature_avg,temperature_last
 	; sensor calibration completed, first valid pressure value is available
 	bcf		LEDr							; turn off red LED
 
@@ -460,12 +464,9 @@ restart2:
 	cpfseq	TABLAT							; equal?
 	bcf	ble_only						; NO
 	TBLRD*+								; read configuration byte
-	movlw	0x2B							; coding for ble_only
+	movlw	0x32							; coding for ble_only OSTC 2
 	cpfseq	TABLAT							; equal?
-	bcf	ble_only						; NO
-	
-	btfsc	ble_only
-	bcf	ambient_sensor						; ble_only has no ambient sensor
+	bcf	ambient_sensor						; NO, ble_only OSTC+ has no ambient sensor
 	
 	btfsc	less_io_cpu						; Less I/O CPU found?
 	bsf	ble_available						; Yes, must have BLE (old or new)
@@ -589,7 +590,6 @@ restart4e:
 
 
 restart5:
-	bcf	button_hold_down_allowed		 ; clear on default
 	; configure button_hold_down_allowed flag
 	btfsc	lv_core
 	bsf	button_hold_down_allowed		; OSTC sport mod. 2019

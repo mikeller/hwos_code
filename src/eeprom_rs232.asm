@@ -511,56 +511,6 @@ serial_rx_stream_tmr_loop:
 	bra		serial_rx_stream_tmr_loop	;       NO  - continue waiting
 	bra		serial_rx_timeout			;       YES - timeout
 
-;-----------------------------------------------------------------------------
-
-;------------------------------------------
-; Setup BLE name to new BLE (type 2) module
-;------------------------------------------
-    global  ble2_configure_name
-ble2_configure_name:
-    btfss   dn_flag		; dn mode?
-    return			; no, return
-    ;rcall    enable_rs232
-    bcf         NCTS            ; Clear to send
-    call	wait_1s
-    call	wait_1s
-    call	wait_1s
-    call	wait_1s
-    bcf	PORTB,6
-    nop
-    bsf	PORTB,6			; rising edge -> Command mode
-    ; point to config table
-    movlw   LOW     ble_AT2
-    movwf   TBLPTRL
-    movlw   HIGH    ble_AT2
-    movwf   TBLPTRH
-    movlw   UPPER   ble_AT2
-    movwf   TBLPTRU
-    rcall   ble_init_loop
-     ; Read serial from EEPROM
-    call    eeprom_serial_number_read	; read OSTC serial number
-    movff	mpr+0, lo
-    movff	mpr+1, hi
-    lfsr	FSR2,buffer+0
-    output_65535			; lo:hi converted to ascii into POSTINC2
-    SERIAL_CC_SEND  buffer+0
-    SERIAL_CC_SEND  buffer+1
-    SERIAL_CC_SEND  buffer+2
-    SERIAL_CC_SEND  buffer+3
-    SERIAL_CC_SEND  buffer+4
-    SERIAL_LC_SEND  .13				; CR
-    WAITMS      d'200'    
-    bcf	    PORTB,6			; falling edge -> Data mode
-    movlw   LOW     ble_AT3
-    movwf   TBLPTRL
-    movlw   HIGH    ble_AT3
-    movwf   TBLPTRH
-    movlw   UPPER   ble_AT3
-    movwf   TBLPTRU
-    rcall   ble_init_loop
-    return
-    
-	
 	
 ;-----------------------------------------------------------------------------
 ; Add new services and characteristics to new BLE (type 2) module
@@ -688,9 +638,6 @@ ble_AT1:	; config table
     db	"AT+UDSC=1,3",.13,0xFE,0xFE				; SPP Server on ID1 (and wait 40ms)
     db	"AT&W",.13,0xFE						; write settings into eeprom (and wait 20ms)
     db	"AT+CPWROFF",.13,0xFD,0xFD,0xFF				; save and reboot  (and wait 2 seconds)
-ble_AT2:	; config table
-    db	0xFD,0xFD,0xFD,0xFD					; Wait 4 seconds
-    db	"AT+UBTLN=OSTC+ ",0xFF	    				; Start of "name command"
 ble_AT3:	; config table	
     db	"ATO1",.13,0xFF						; Enable Data mode    
     

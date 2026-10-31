@@ -324,8 +324,6 @@ get_ambient_level1:							; using ambient sensor
 	; ambient_light:2 is between 4096 (direct sunlight) and about 200 (darkness)
 	; first: divide by 16
 	movlw	.4					; divide by 2^4 = 16
-	btfsc	dn_flag
-	movlw	.1					; divide by 1^4 = 4, increased sensitivity for dn hardware
 get_ambient_level1_loop:
 	bcf		STATUS,C						; clear carry
 	rrcf	ambient_light+1					; rotate right high byte, carry into MSB, LSB into carry
@@ -359,11 +357,11 @@ get_ambient_level2:
 	btfss	battery_gauge_available			; battery gauge available?
 	bra	get_ambient_level3			; NO, use old-hardware levels
 	; YES
+	btfsc	high_brightness_lcd			; high brigtness LCD used?
+	bra	get_ambient_level4			; YES, use more brightness for these models
 	movlw	ambient_light_max_high_15V		; change to 1.5V battery brightest setting
         btfsc	battery_is_36v				; battery > 2000mV?
 	movlw	ambient_light_max_high_36V		; YES - change to 3.6V battery brightest setting
-	btfsc	dn_flag					; dn hardware
-	movlw	ambient_light_max_high_dn		; YES - change to dn hardware brightest setting
 	bra	get_ambient_level4
 get_ambient_level3:
 	movlw	ambient_light_max_high_15V		; NO  - change to 1.5V battery brightest setting

@@ -613,6 +613,8 @@ display45_init_loop2:
 	movlw	b'00001000'	    ; NO, 0x08 (normal orientation)
 	btfss	flip_screen	    ; 180° rotation?
 	movlw	b'11001000'	    ; 0xC8 (flipped orientation)
+	btfsc	screen_type6	    ; Screen Type 6?
+	bcf	WREG,3		    ; YES, clear this flag (The only difference to screen 5)
 	rcall	TFT_DataWrite
 
 display45_init_loop3:    

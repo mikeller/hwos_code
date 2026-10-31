@@ -1735,7 +1735,7 @@ display_details2_loop:
 logbook_page4:
 	MOVCC	header_buffer+index_divemode,WREG		; get dive mode (0=OC, 1=CC, 2=Gauge, 3=Apnea, 4= pSCR)
 	decfsz	WREG,W									; =1 (CC)?
-	goto	display_profile2						; NO - skip setpoints
+	bra	logbook_page5						; NO - skip setpoints
 
 	rcall	log_details_header						; show number, time/date and basic dive data
 
@@ -1763,13 +1763,72 @@ logbook_page4:
 	rcall	logbook_preloop_tasks					; clear timeout, some flags and set to Speed_eco
 display_details3_loop:
 	btfsc	switch_right							; right button pressed?
-	goto	display_profile2						; YES - show the profile view again
+	bra	logbook_page5						; YES - show more info
 	btfsc	switch_left								; left button pressed?
 	bra		exit_profileview						; YES - back to list
 	call	housekeeping							; NO to both - handle screen dump request, timeout and entering dive mode
 	bra		display_details3_loop					;            - loop waiting for something to do
 
 
+;-----------------------------------------------------------------------------
+; 5th Details Page after Profile: Technical data
+;
+logbook_page5:	
+	rcall	log_details_header						; show number, time/date and basic dive data
+
+	; set ext_flash_address to the begin of the profile data
+	MOVTT	header_buffer+index_profile_start_address,ext_flash_address
+	FONT_COLOR_MEMO								; set font color
+	WIN_SMALL .5,.90							; set position
+        STRCAT  "Start  : 0x"
+	call	dyn_show_logbook_pointer2				; Output a three byte hex number from ext_flash_address:3
+	PRINT 
+
+	; set ext_flash_address to the end of the profile data
+	MOVTT	header_buffer+index_profile_end_address,ext_flash_address
+	WIN_SMALL .5,.115							; set position
+        STRCAT  "End    : 0x"
+	call	dyn_show_logbook_pointer2				; Output a three byte hex number from ext_flash_address:3
+	PRINT 
+	
+	; set ext_flash_address to the length of the profile
+	MOVTT	header_buffer+index_profile_byte_count,ext_flash_address
+	WIN_SMALL .5,.140							; set position
+        STRCAT  "Length : 0x"
+	call	dyn_show_logbook_pointer2				; Output a three byte hex number from ext_flash_address:3
+	PRINT 
+	
+	; set ext_flash_address to the header (start) address
+	movf	divenumber,W						; number of the dive to show
+	call	log_header_addr_by_index				; compute the start address of the header belonging to the dive whose index is in WREG
+	WIN_SMALL .5,.165						; set position
+        STRCAT  "Header : 0x"
+	call	dyn_show_logbook_pointer2				; Output a three byte hex number from ext_flash_address:3
+	PRINT 
+	
+	; #DEFINE logbook_profile_version			0x40+0x24	; logbook recording format: internal (2 bit) + external (6 bit)
+	WIN_SMALL .5,.190						; set position
+        STRCAT  "Version: 0x"
+	movff	header_buffer+index_profile_version,WREG
+	output_hex
+	PRINT 
+	
+	WIN_SMALL .5,.65							; set title position
+	FONT_COLOR color_greenish						; set title color
+	STRCPY_TEXT_PRINT tLogbook						; print title
+	
+	movlw	color_lightblue							; select frame color
+	WIN_FRAME_COLOR .63,.220,.2,.128				; draw frame (top, bottom, left, right)
+	; handle HMI
+	rcall	logbook_preloop_tasks					; clear timeout, some flags and set to Speed_eco
+display_details4_loop:
+	btfsc	switch_right							; right button pressed?
+	goto	display_profile2						; YES - show the profile view again
+	btfsc	switch_left								; left button pressed?
+	bra		exit_profileview						; YES - back to list
+	call	housekeeping							; NO to both - handle screen dump request, timeout and entering dive mode
+	bra		display_details4_loop					;            - loop waiting for something to do
+	
 ;-----------------------------------------------------------------------------
 ; Helper Function - show Dive Number, Time/Date and basic Dive Data
 ;

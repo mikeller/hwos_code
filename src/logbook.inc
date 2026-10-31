@@ -8,7 +8,8 @@
 ; HISTORY
 ;  2011-11-12 : [mH] moving from OSTC code
 
-
+ extern	dyn_show_logbook_pointer2				; Output a three byte hex number from ext_flash_address:3
+    
  #ifndef inside_loogbook
 	extern	logbook
 	extern	log_header_addr_by_index

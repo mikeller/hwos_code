@@ -788,13 +788,6 @@ TFT_surfmode_batt:
 	STRCAT_PRINT "% "					; append unit with trailing space and dump to screen
 
 	WIN_TINY batt_voltage_column+.15,batt_voltage_row
-	btfss	dn_flag
-	bra	TFT_surfmode_batt2
-	WIN_TINY batt_voltage_column+.15,.5
-	FONT_COLOR color_green				; set menu title font color
-	STRCPY_TEXT_PRINT tBattery
-	return
-TFT_surfmode_batt2:	
 	call	TFT_color_code_battery2		; color-code according to battery_low_condition2 flag
 	movff	battery_type,lo				; get battery type
 	PUTC	"T"							; print "T"

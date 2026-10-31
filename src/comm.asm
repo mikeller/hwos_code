@@ -155,8 +155,6 @@ comm_mode_common_start:
  ENDIF
 
 	bcf		switch_right							; clear potential left-over right button event
-	TSTOSC	opt_BLE_compatibility				; Use BLE compatibility mode?
-	call	ble2_configure_name				; YES, setup BLE name (Will only do something for dn_mode flag set)
 	
 	WIN_SMALL comm_status1_column+.80,comm_status1_row	; set position after starting message
 	FONT_COLOR_MEMO										; set standard color

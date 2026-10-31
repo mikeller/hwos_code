@@ -454,7 +454,9 @@ pressuretest_sleep_fast2:
 	call	calculate_compensation			; calculate temperature compensated pressure (27 us)
 
 	MOVII	pressure_abs_avg,pressure_abs	; get result, bypassing the averaging
-
+	MOVII	pressure_abs_avg,pressure_abs_last
+	MOVII	temperature_avg,temperature_cur
+	MOVII	temperature_avg,temperature_last
 	banksel	common							; back to bank common
 	return
 
