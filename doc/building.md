@@ -182,6 +182,31 @@ The remote checkout must have an `origin` that can fetch the same pushed branch
 and the Windows host must have PowerShell, Git, C18 v3.42, SRecord, and SSH/SCP
 access. The orchestration script never pushes, flashes, uploads, or opens a PR.
 
+## Explicit OSTC3 installation
+
+`make install` is intentionally separate from `make` and `make build`. It uses
+the local `subsurface-downloader`, modelled on OSTC4's firmware-install
+workflow, only after it has built or reused the verified package for the exact
+current pushed commit. It never enables `--force-update-firmware`.
+
+The target has no default device. Supply the exact device identifier and the
+literal confirmation below. The default downloader selection is vendor
+`Heinrichs Weikamp`, product `OSTC 3`; `FIRMWARE_INSTALLER`, `DC_VENDOR`, and
+`DC_PRODUCT` can be explicitly overridden for a compatible local downloader.
+
+```sh
+make install \
+  DEVICE=AA:BB:CC:DD:EE:FF \
+  CONFIRM_UNVALIDATED_OSTC3=YES
+```
+
+The command rejects an empty or automatic device selector, an uncommitted or
+detached source worktree, missing provenance metadata, a non-`UNVALIDATED`
+package, or a package hash mismatch before invoking the downloader. Do not run
+it unless the target device, recovery procedure, and risks of installing this
+unvalidated firmware have been independently checked. The installer is not run
+by normal builds and is not exercised by this repository's validation.
+
 | File | Purpose |
 | --- | --- |
 | `build/hwos.production.hex` | Complete MPLAB-linked Intel HEX output. |
