@@ -577,8 +577,11 @@ $GateWarnings = [System.Collections.Generic.List[string]]::new()
 
 if ($null -eq $BlockZeroCodeEndAddress) {
     $GateFailures.Add("Symbol '$BlockZeroCodeEndSymbol' (src/isr.asm) was not found in $MapFile; the high-priority ISR dispatcher fit cannot be verified.")
-} elseif ($BlockZeroCodeEndAddress -ge $RestoreAnchor.Address) {
-    $GateFailures.Add(('block_0_code_end resolved to 0x{0:X6}, which is at or past the restore vector at 0x{1:X6}; the high-priority ISR dispatcher no longer fits in 0x00008..0x{1:X6}.' -f $BlockZeroCodeEndAddress, $RestoreAnchor.Address))
+} elseif ($BlockZeroCodeEndAddress -gt $RestoreAnchor.Address) {
+    # block_0_code_end is a label after the final dispatcher instruction, so
+    # it is an exclusive end address. Equality means that the final byte is
+    # at restore - 1 and is safe, albeit with no spare instruction space.
+    $GateFailures.Add(('block_0_code_end resolved to 0x{0:X6}, beyond the restore vector at 0x{1:X6}; the high-priority ISR dispatcher overlaps the restore vector.' -f $BlockZeroCodeEndAddress, $RestoreAnchor.Address))
 }
 
 if ($FlashReport.BootloaderOverflows.Count -gt 0) {
@@ -613,7 +616,7 @@ if ($P2DecoSection) {
     Write-Host '  p2_deco section was not found in this build (informational only; not gated).'
 }
 if ($null -ne $BlockZeroCodeEndAddress) {
-    Write-Host ('  block_0_code_end: 0x{0:X6} (must stay below restore at 0x{1:X6})' -f $BlockZeroCodeEndAddress, $RestoreAnchor.Address)
+    Write-Host ('  block_0_code_end (exclusive): 0x{0:X6} (must not exceed restore at 0x{1:X6})' -f $BlockZeroCodeEndAddress, $RestoreAnchor.Address)
 }
 Write-Host '  RAM banks:'
 foreach ($Bank in $RamReport.Banks) {
@@ -674,6 +677,7 @@ if ($P2DecoSection) {
 }
 if ($null -ne $BlockZeroCodeEndAddress) {
     $MemoryBudgetMetadata.Add(("block_0_code_end_address=0x{0:x6}" -f $BlockZeroCodeEndAddress))
+    $MemoryBudgetMetadata.Add('block_0_code_end_is_exclusive=true')
 }
 $MemoryBudgetMetadata.Add(("block_0_code_end_limit_address=0x{0:x6}" -f $RestoreAnchor.Address))
 $MemoryBudgetMetadata.Add("memory_budget_gate_bypassed=$($MemoryBudgetGateBypassed.ToString().ToLowerInvariant())")

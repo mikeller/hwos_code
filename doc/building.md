@@ -141,7 +141,8 @@ reports:
   directives in the same linker script;
 - the resolved extent of the `p2_deco` section (start, end, size): how much
   room the C deco engine has;
-- the resolved address of the `block_0_code_end` label (`src/isr.asm`);
+- the resolved exclusive end address of the `block_0_code_end` label
+  (`src/isr.asm`);
 - total application flash used and free against the 122,880-byte budget.
 
 A readable summary is printed to the console, and the same figures are
@@ -162,10 +163,10 @@ The build is gated on this report:
   all: a fixed-width hardware vector (a handful of bytes, always fully used by
   design) can never carry that much spare and would otherwise warn on every
   single build;
-- the build fails if `block_0_code_end` resolves to at or past the `restore`
-  vector (`0x00080`): the high-priority ISR dispatcher must fit between
-  `0x00008` and `restore`, and that boundary is currently held by hand-counted
-  `nop` padding in `src/isr.asm` with no margin to spare;
+- the build fails if `block_0_code_end` resolves beyond the `restore` vector
+  (`0x00080`): the label is the exclusive end of the high-priority ISR
+  dispatcher, so equality means its final byte is at `0x0007F` and does not
+  overlap `restore`. The dispatcher must fit in `0x00008..0x0007F`;
 - the build fails if any section is placed at or above the bootloader-reserved
   region (`0x1E000`), before `srec_cat` crops the upload image, so an overflow
   is a build failure instead of a silently truncated HEX file;
@@ -180,13 +181,10 @@ relaxes packaging. A bypassed build still computes and records the full
 report; `build-info.txt` additionally records
 `memory_budget_gate_bypassed=true` so a bypassed result is traceable.
 
-With the thresholds above, the source checked in at the time of writing fails
-the `block_0_code_end` gate by default: it resolves to exactly `0x00080`, i.e.
-zero margin before `restore`, confirming the existing report that this ISR
-dispatcher has no room left. A canonical release build needs either more
-`nop` padding removed from `src/isr.asm` (a separate, ticketed change; this
-script does not edit `.asm` files) or an explicit `-BypassMemoryBudgetGates`
-for a knowingly non-canonical result.
+The source checked in at the time of writing resolves `block_0_code_end` to
+exactly `0x00080`. This is an exact fit: the preceding `isr_low` section ends
+at `0x0007F`, so it does not overlap the `restore` vector. Any growth that
+moves the exclusive end beyond `0x00080` fails the gate.
 
 MPASM's default message level is 0, meaning it reports every message, not
 only errors and warnings; the existing `/q` passed to `mpasmx`/`MPASMWIN.exe`
@@ -352,10 +350,9 @@ and Windows SRecord. The workflow should run
 `build/obj/*.err`/`*.lst` as CI artefacts, and must not flash or upload
 firmware to a device. Pin the VM image and toolchain version and record their
 checksums so CI artefacts remain traceable to a source commit. The memory
-budget gates above mean a CI run on the checked-in source fails by default
-until the `block_0_code_end` margin is restored; a CI job must not pass
-`-BypassMemoryBudgetGates` routinely to work around that, since it exists to
-surface exactly this condition.
+budget gates above reject an ISR dispatcher that overlaps the restore vector;
+a CI job must not pass `-BypassMemoryBudgetGates` routinely to work around
+such a failure.
 
 `mikeller/ostc4` already runs GitHub Actions workflows from this same fleet,
 so there is in-fleet precedent for the parts of hwOS CI that do not need
