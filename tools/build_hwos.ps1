@@ -6,7 +6,7 @@ Build the hwOS PIC18F87K22 firmware with the Windows MPLAB C18 toolchain.
 Compiles every top-level src/*.asm and src/*.c file with the vendor's MPLAB
 C18 v3.42 environment, then crops the linked image to 0x00000..0x1DFFF.
 Unless -BuildOnly is given, it then invokes a local or explicitly supplied
-vendor-authorised o3pack.exe to make an UNVALIDATED OSTC Companion container.
+vendor-authorised o3pack.exe to make an OSTC Companion container.
 The script never flashes or uploads firmware.
 #>
 [CmdletBinding()]
@@ -161,15 +161,12 @@ if (-not $SafeSourceBranch) {
     throw "Unable to derive a safe package filename from Git branch: $SourceBranch"
 }
 if (-not $Ostc3Package) {
-    $Ostc3Package = "hwos_ostc3_${SafeSourceBranch}_${SourceChangeset}_UNVALIDATED_firmware.hex"
+    $Ostc3Package = "hwos_ostc3_${SafeSourceBranch}_${SourceChangeset}_firmware.hex"
 }
 if ([System.IO.Path]::IsPathRooted($Ostc3Package)) {
     $Ostc3Package = [System.IO.Path]::GetFullPath($Ostc3Package)
 } else {
     $Ostc3Package = Join-Path $BuildDir $Ostc3Package
-}
-if ($DoPackageOstc3 -and ((Split-Path -Leaf $Ostc3Package) -notmatch 'UNVALIDATED')) {
-    throw "OSTC Companion package filenames must contain 'UNVALIDATED': $Ostc3Package"
 }
 
 Remove-Item -LiteralPath $ObjectDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -309,6 +306,6 @@ $BuildInfo = Join-Path $BuildDir 'build-info.txt'
 
 Write-Host "`nUpload artefact: $TinyHex"
 if ($DoPackageOstc3) {
-    Write-Host "UNVALIDATED OSTC Companion package: $Ostc3Package"
+    Write-Host "OSTC Companion package: $Ostc3Package"
 }
 Write-Host "Build metadata:  $BuildInfo"

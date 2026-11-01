@@ -1,0 +1,7 @@
+# Optional local installation settings for `make install`.
+#
+# Copy this file to local.mk and replace the placeholder with the exact target
+# Bluetooth address. local.mk is ignored. `make install DEVICE=...` overrides
+# this value for one invocation.
+
+DEVICE := AA:BB:CC:DD:EE:FF

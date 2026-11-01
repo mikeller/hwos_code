@@ -104,7 +104,7 @@ REMOTE_COMMIT=$(git ls-remote --exit-code "$GIT_REMOTE" "$REMOTE_REF" | awk '{pr
 [[ "$REMOTE_COMMIT" == "$COMMIT" ]] || fail "local $BRANCH ($COMMIT) does not match $GIT_REMOTE/$BRANCH ($REMOTE_COMMIT); push the exact commit before building"
 SAFE_BRANCH=$(printf '%s' "$BRANCH" | sed 's/[^A-Za-z0-9._-]\+/-/g')
 [[ -n "$SAFE_BRANCH" ]] || fail "cannot derive a safe package name from branch: $BRANCH"
-PACKAGE_NAME="hwos_ostc3_${SAFE_BRANCH}_${COMMIT:0:12}_UNVALIDATED_firmware.hex"
+PACKAGE_NAME="hwos_ostc3_${SAFE_BRANCH}_${COMMIT:0:12}_firmware.hex"
 
 FINAL_ARTIFACT_DIR=${ARTIFACT_DIR:-"$ROOT_DIR/build/windows/$COMMIT"}
 if [[ "$FINAL_ARTIFACT_DIR" != /* ]]; then

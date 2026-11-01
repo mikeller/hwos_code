@@ -15,6 +15,7 @@ src/Tests/build/
 # --- Local tooling noise, never upstream --------------------------------
 __pycache__/
 tools/build_hwos.remote.conf
+local.mk
 
 # sync_from_hg.sh stages hg-fast-export_metadata.zip in a same-filesystem
 # temporary directory under the repository root so the replacement is an
