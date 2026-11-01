@@ -29,6 +29,7 @@ for setting in WINDOWS_BUILDER WINDOWS_REPO WINDOWS_WORKTREE_ROOT; do
 	[[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || fail "Windows builder configuration contains a newline in $setting"
 done
 [[ "$WINDOWS_BUILDER" != *[[:space:]]* ]] || fail "WINDOWS_BUILDER must not contain whitespace: $REMOTE_BUILD_CONFIG"
+[[ "$WINDOWS_WORKTREE_ROOT" != *[[:space:]]* ]] || fail "WINDOWS_WORKTREE_ROOT must not contain whitespace: $REMOTE_BUILD_CONFIG"
 [[ "$WINDOWS_REPO" =~ ^[A-Za-z]:/ ]] || fail "WINDOWS_REPO must be an absolute Windows path using forward slashes: $REMOTE_BUILD_CONFIG"
 [[ "$WINDOWS_WORKTREE_ROOT" =~ ^[A-Za-z]:/ ]] || fail "WINDOWS_WORKTREE_ROOT must be an absolute Windows path using forward slashes: $REMOTE_BUILD_CONFIG"
 readonly REMOTE_BUILD_CONFIG WINDOWS_BUILDER WINDOWS_REPO WINDOWS_WORKTREE_ROOT
@@ -45,9 +46,18 @@ run_remote_powershell() {
 		powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "$encoded"
 }
 
+# Quote the complete source specification locally. This keeps a path containing
+# spaces in one scp argument without adding quote characters to the pathname
+# sent by OpenSSH. In particular, Windows OpenSSH does not treat single quotes
+# as shell quotes, and SFTP transmits them as literal filename characters.
 remote_copy() {
 	local remote_path=$1
 	scp -p -- "${WINDOWS_BUILDER}:${remote_path}" "$ARTIFACT_DIR/"
+}
+
+remote_copy_dir() {
+	local remote_path=$1
+	scp -pr -- "${WINDOWS_BUILDER}:${remote_path}" "$ARTIFACT_DIR/"
 }
 
 metadata_value() {
@@ -88,6 +98,7 @@ artifact_set_is_verified() {
 	hash_matches "$directory/hwos_tiny.hex" "$(metadata_value upload_hex_sha256 "$info_file")" || return 1
 	[[ -s "$directory/hwos.map" ]] || return 1
 	[[ "$(metadata_value ostc3_package_input_sha256 "$info_file")" == "$(metadata_value full_hex_sha256 "$info_file")" ]] || return 1
+	[[ -d "$directory/obj" ]] || return 1
 	package=$(metadata_value ostc3_package "$info_file")
 	[[ -n "$package" && "$package" != not_created_build_only ]] || return 1
 	package_name=${package//\\//\/}
@@ -158,7 +169,7 @@ New-Item -ItemType Directory -Path (Split-Path -Parent \$worktree) -Force | Out-
 & git -C \$repo worktree add --detach \$worktree \$commit
 if (\$LASTEXITCODE -ne 0) { throw 'git worktree add failed' }
 try {
-    & (Join-Path \$worktree 'tools\\build_hwos.ps1') -Ostc3Package '$PACKAGE_NAME' -SourceBranch \$branch
+    & (Join-Path \$worktree 'tools\\build_hwos.ps1') -Ostc3Package '$(ps_quote "$PACKAGE_NAME")' -SourceBranch \$branch
     if (\$LASTEXITCODE -ne 0) { throw 'Windows firmware build failed' }
     \$info = Join-Path \$worktree 'build\\build-info.txt'
     if (-not (Test-Path -LiteralPath \$info -PathType Leaf)) { throw "missing build metadata: \$info" }
@@ -200,6 +211,13 @@ remote_copy "$REMOTE_WORKTREE/build/hwos.map"
 verify_hash "$ARTIFACT_DIR/hwos.production.hex" "$(metadata_value full_hex_sha256)"
 verify_hash "$ARTIFACT_DIR/hwos_tiny.hex" "$(metadata_value upload_hex_sha256)"
 [[ -s "$ARTIFACT_DIR/hwos.map" ]] || fail 'copied linker map is missing or empty'
+
+# build/obj holds the retained per-file .err/.lst MPASM/mcc18 diagnostics
+# (tools/build_hwos.ps1 no longer discards them). They are not individually
+# hashed in build-info.txt like the release artefacts above; copy the whole
+# directory back for inspection.
+remote_copy_dir "$REMOTE_WORKTREE/build/obj"
+[[ -d "$ARTIFACT_DIR/obj" ]] || fail 'copied build/obj diagnostics directory is missing'
 
 REMOTE_PACKAGE=$(metadata_value ostc3_package)
 [[ -n "$REMOTE_PACKAGE" && "$REMOTE_PACKAGE" != not_created_build_only ]] || \

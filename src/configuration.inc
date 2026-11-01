@@ -56,12 +56,16 @@
 ; global Version Selection
 ; ------------------------
 ;
-; _hwos_tech_2_TR        compile Tech  version for OSTC 2, Plus and TR en    memory: 118.656 used, 4.224 free
-; _hwos_tech_2_TR_cave   compile Tech  version for OSTC 2, Plus and TR en    memory: 120.883 used, 1.997 free
-; _hwos_tech_3_cR        compile Tech  version for OSTC 3       and cR en+de memory: 119.496 used, 3.384 free
-; _hwos_tech_3_cR_cave   compile Tech  version for OSTC 3       and cR en+de memory: 122.079 used,   801 free *
-; _hwos_sport            compile Sport version for all models          en+de memory: 116.365 used, 6.515 free
-;                                                                                    122.880 max. available
+; _hwos_tech_2_TR        compile Tech  version for OSTC 2, Plus and TR en
+; _hwos_tech_2_TR_cave   compile Tech  version for OSTC 2, Plus and TR en
+; _hwos_tech_3_cR        compile Tech  version for OSTC 3       and cR en+de
+; _hwos_tech_3_cR_cave   compile Tech  version for OSTC 3       and cR en+de
+; _hwos_sport            compile Sport version for all models          en+de
+;
+; The used/free program-flash figures that used to be listed here disagreed with
+; src/Docu/code-statistics.txt and were not reproducible from a real build. See the
+; generated report in build/build-info.txt (flash_budget_* keys) for the figures of
+; whichever configuration above is currently selected below.
 #endif
 
 #define _hwos_tech_3_cR
@@ -85,30 +89,30 @@
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ;
-; Features Selection												 CODE SIZES ARE OUTDATED
+; Features Selection
 ; ------------------
-; base code without any features, 1 language (en)						mem:   93.964 byte
-; _compass				compass function								mem: + 10.404 byte
-; _helium				helium (trimix) gases and diluents				mem: +  2.113 byte || both together
-; _ccr_pscr				CCR & pSCR modes, basic functionality			mem: +  4.117 byte ||  + 6.250 byte
-; _external_sensor_eccr		CCR & pSCR modes, external sensor and eccr support		mem: +  3.343 byte (OUTDATED)!
-; _gauge_mode			gauge mode										mem: -     28 byte (less)
-; _high_ppO2_max		raised ppO2 max limit (2.0 bar)					mem:        0 byte (neutral)
-; _rx_functions			RX function        (OSTC TR)					mem: +  4.497 byte
-; _rx_update			RX firmware update (OSTC TR)					mem: +  2.282 byte (dependent on RX firmware size)
-; _gas_contingency		auto-switch to alternative tanks on depleption	mem: +    804 byte
-; _cave_mode			cave mode return calculation					mem: +  3.035 byte
+; base code without any features, 1 language (en)
+; _compass				compass function
+; _helium				helium (trimix) gases and diluents
+; _ccr_pscr				CCR & pSCR modes, basic functionality
+; _external_sensor_eccr		CCR & pSCR modes, external sensor and eccr support
+; _gauge_mode			gauge mode
+; _high_ppO2_max		raised ppO2 max limit (2.0 bar)
+; _rx_functions			RX function        (OSTC TR)
+; _rx_update			RX firmware update (OSTC TR), dependent on RX firmware size
+; _gas_contingency		auto-switch to alternative tanks on depleption
+; _cave_mode			cave mode return calculation
 ; _big_divemenu			big font dive menu -- UNDER DEVELOPMENT YET
-; _firmware_recovery	means for backing up and restoring 2nd firmware mem: +    472 byte
-; _min_depth_option		resettable min. and max. depth					mem: +      4 byte  ## special user group only ##
-; _screendump			screen dump function							mem: +    348 byte  ## special user group only ##
+; _firmware_recovery	means for backing up and restoring 2nd firmware
+; _min_depth_option		resettable min. and max. depth					## special user group only ##
+; _screendump			screen dump function							## special user group only ##
 ;
+; The hand-counted per-feature byte deltas that used to be listed above went stale and
+; are retired. See the generated report in build/build-info.txt (flash_budget_* keys)
+; for the actual program-flash usage of whichever configuration is currently selected.
 ;
 ; NOTES: - exclude features by prepending NOT_INCLUDED to the label,
-;        - sizes may be incorrect by a couple of bytes,
 ;        - not all features will fit concurrently at the same time or if two languages are slected,
-;        - feature sizes are based on single language (english)
-;        - feature sizes will increase with 2nd language and will differ slightly between languages,
 ;        - combinations of features will yield code sizes that differ
 ;          slightly from the simple sum of the individual sizes.
 #endif
@@ -254,6 +258,221 @@
 #define NOT_INCLUDED_debug_output
 #define NOT_INCLUDED_comm_debug
 #define NOT_INCLUDED_rx_functions_debug
+
+
+#ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+;
+; Feature and Debug Flag Assertions
+; ----------------------------------
+;
+; For each flag above, exactly one of _flag / NOT_INCLUDED_flag must be
+; defined. Leaving both undefined (e.g. a typo, or a rename done in one
+; place and not the other) must not silently fall back to feature
+; disabled, since the first evidence of a missing feature such as
+; _cave_mode or _ccr_pscr would otherwise be in the water. Checked here,
+; before the auto-includes below, so it validates what was configured
+; above, not what the auto-includes then derive from it.
+;
+; C18 has no equivalent to the MPASM ERROR directive used below (#error
+; is C-only, ERROR is MPASM-only), so this check runs on the assembler
+; side only. Every .asm translation unit still goes through this file,
+; so a misconfigured build is caught at assembly time, before linking.
+;
+#endif
+
+#ifndef __18CXX
+
+#ifdef _compass
+#ifdef NOT_INCLUDED_compass
+ERROR "_compass and NOT_INCLUDED_compass both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_compass
+ERROR "neither _compass nor NOT_INCLUDED_compass defined"
+#endif
+#endif
+
+#ifdef _helium
+#ifdef NOT_INCLUDED_helium
+ERROR "_helium and NOT_INCLUDED_helium both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_helium
+ERROR "neither _helium nor NOT_INCLUDED_helium defined"
+#endif
+#endif
+
+#ifdef _ccr_pscr
+#ifdef NOT_INCLUDED_ccr_pscr
+ERROR "_ccr_pscr and NOT_INCLUDED_ccr_pscr both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_ccr_pscr
+ERROR "neither _ccr_pscr nor NOT_INCLUDED_ccr_pscr defined"
+#endif
+#endif
+
+#ifdef _external_sensor_eccr
+#ifdef NOT_INCLUDED_external_sensor_eccr
+ERROR "_external_sensor_eccr and NOT_INCLUDED_external_sensor_eccr both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_external_sensor_eccr
+ERROR "neither _external_sensor_eccr nor NOT_INCLUDED_external_sensor_eccr defined"
+#endif
+#endif
+
+#ifdef _gauge_mode
+#ifdef NOT_INCLUDED_gauge_mode
+ERROR "_gauge_mode and NOT_INCLUDED_gauge_mode both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_gauge_mode
+ERROR "neither _gauge_mode nor NOT_INCLUDED_gauge_mode defined"
+#endif
+#endif
+
+#ifdef _high_ppO2_max
+#ifdef NOT_INCLUDED_high_ppO2_max
+ERROR "_high_ppO2_max and NOT_INCLUDED_high_ppO2_max both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_high_ppO2_max
+ERROR "neither _high_ppO2_max nor NOT_INCLUDED_high_ppO2_max defined"
+#endif
+#endif
+
+#ifdef _rx_functions
+#ifdef NOT_INCLUDED_rx_functions
+ERROR "_rx_functions and NOT_INCLUDED_rx_functions both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_rx_functions
+ERROR "neither _rx_functions nor NOT_INCLUDED_rx_functions defined"
+#endif
+#endif
+
+#ifdef _rx_update
+#ifdef NOT_INCLUDED_rx_update
+ERROR "_rx_update and NOT_INCLUDED_rx_update both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_rx_update
+ERROR "neither _rx_update nor NOT_INCLUDED_rx_update defined"
+#endif
+#endif
+
+#ifdef _gas_contingency
+#ifdef NOT_INCLUDED_gas_contingency
+ERROR "_gas_contingency and NOT_INCLUDED_gas_contingency both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_gas_contingency
+ERROR "neither _gas_contingency nor NOT_INCLUDED_gas_contingency defined"
+#endif
+#endif
+
+#ifdef _cave_mode
+#ifdef NOT_INCLUDED_cave_mode
+ERROR "_cave_mode and NOT_INCLUDED_cave_mode both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_cave_mode
+ERROR "neither _cave_mode nor NOT_INCLUDED_cave_mode defined"
+#endif
+#endif
+
+#ifdef _big_divemenu
+#ifdef NOT_INCLUDED_big_divemenu
+ERROR "_big_divemenu and NOT_INCLUDED_big_divemenu both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_big_divemenu
+ERROR "neither _big_divemenu nor NOT_INCLUDED_big_divemenu defined"
+#endif
+#endif
+
+#ifdef _firmware_recovery
+#ifdef NOT_INCLUDED_firmware_recovery
+ERROR "_firmware_recovery and NOT_INCLUDED_firmware_recovery both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_firmware_recovery
+ERROR "neither _firmware_recovery nor NOT_INCLUDED_firmware_recovery defined"
+#endif
+#endif
+
+#ifdef _min_depth_option
+#ifdef NOT_INCLUDED_min_depth_option
+ERROR "_min_depth_option and NOT_INCLUDED_min_depth_option both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_min_depth_option
+ERROR "neither _min_depth_option nor NOT_INCLUDED_min_depth_option defined"
+#endif
+#endif
+
+#ifdef _screendump
+#ifdef NOT_INCLUDED_screendump
+ERROR "_screendump and NOT_INCLUDED_screendump both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_screendump
+ERROR "neither _screendump nor NOT_INCLUDED_screendump defined"
+#endif
+#endif
+
+#ifdef _DEBUG
+#ifdef NOT_INCLUDED_DEBUG
+ERROR "_DEBUG and NOT_INCLUDED_DEBUG both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_DEBUG
+ERROR "neither _DEBUG nor NOT_INCLUDED_DEBUG defined"
+#endif
+#endif
+
+#ifdef _profiling
+#ifdef NOT_INCLUDED_profiling
+ERROR "_profiling and NOT_INCLUDED_profiling both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_profiling
+ERROR "neither _profiling nor NOT_INCLUDED_profiling defined"
+#endif
+#endif
+
+#ifdef _debug_output
+#ifdef NOT_INCLUDED_debug_output
+ERROR "_debug_output and NOT_INCLUDED_debug_output both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_debug_output
+ERROR "neither _debug_output nor NOT_INCLUDED_debug_output defined"
+#endif
+#endif
+
+#ifdef _comm_debug
+#ifdef NOT_INCLUDED_comm_debug
+ERROR "_comm_debug and NOT_INCLUDED_comm_debug both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_comm_debug
+ERROR "neither _comm_debug nor NOT_INCLUDED_comm_debug defined"
+#endif
+#endif
+
+#ifdef _rx_functions_debug
+#ifdef NOT_INCLUDED_rx_functions_debug
+ERROR "_rx_functions_debug and NOT_INCLUDED_rx_functions_debug both defined"
+#endif
+#else
+#ifndef NOT_INCLUDED_rx_functions_debug
+ERROR "neither _rx_functions_debug nor NOT_INCLUDED_rx_functions_debug defined"
+#endif
+#endif
+
+#endif
 
 
 #ifdef xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

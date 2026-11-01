@@ -530,7 +530,7 @@ static float			float_value;					// input value,   float
 static unsigned short	int_value;						// output value, 16 bit
 
 
-// 251 byte used, 5 byte left in this bank (4 bytes per float, 2 bytes per short, 1 byte per char)
+// RAM use is configuration-dependent; see the generated memory-budget report.
 
 
 //---- Bank 6 parameters -----------------------------------------------------
@@ -637,7 +637,7 @@ static unsigned char	time_interval
 */
 
 
-// 238 byte used, 18 byte left in this bank (4 bytes per float, 2 bytes per short, 1 byte per char)
+// RAM use is configuration-dependent; see the generated memory-budget report.
 
 
 
