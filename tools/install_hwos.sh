@@ -50,7 +50,10 @@ PACKAGE="$FINAL_ARTIFACT_DIR/$PACKAGE_NAME"
 [[ -f "$BUILD_INFO" ]] || fail "build metadata is missing: $BUILD_INFO"
 [[ "$(metadata_value source_commit "$BUILD_INFO")" == "$COMMIT" ]] || fail 'build metadata does not identify the current commit'
 [[ "$(metadata_value source_branch "$BUILD_INFO")" == "$BRANCH" ]] || fail 'build metadata does not identify the current branch'
-[[ "$(basename -- "$(metadata_value ostc3_package "$BUILD_INFO")")" == "$PACKAGE_NAME" ]] || fail 'build metadata does not identify the expected OSTC3 package'
+METADATA_PACKAGE=$(metadata_value ostc3_package "$BUILD_INFO")
+METADATA_PACKAGE_NAME=${METADATA_PACKAGE//\\//\/}
+METADATA_PACKAGE_NAME=$(basename -- "$METADATA_PACKAGE_NAME")
+[[ "$METADATA_PACKAGE_NAME" == "$PACKAGE_NAME" ]] || fail 'build metadata does not identify the expected OSTC3 package'
 [[ -s "$PACKAGE" ]] || fail "expected package is missing or empty: $PACKAGE"
 EXPECTED_HASH=$(metadata_value ostc3_package_sha256 "$BUILD_INFO")
 [[ -n "$EXPECTED_HASH" ]] || fail 'build metadata has no OSTC3 package hash'
