@@ -76,12 +76,14 @@ verify_hash() {
 artifact_set_is_verified() {
 	local directory=$1
 	local expected_commit=$2
-	local expected_package=$3
+	local expected_branch=$3
+	local expected_package=$4
 	local info_file="$directory/build-info.txt"
 	local package package_name
 
 	[[ -f "$info_file" ]] || return 1
 	[[ "$(metadata_value source_commit "$info_file")" == "$expected_commit" ]] || return 1
+	[[ "$(metadata_value source_branch "$info_file")" == "$expected_branch" ]] || return 1
 	hash_matches "$directory/hwos.production.hex" "$(metadata_value full_hex_sha256 "$info_file")" || return 1
 	hash_matches "$directory/hwos_tiny.hex" "$(metadata_value upload_hex_sha256 "$info_file")" || return 1
 	[[ -s "$directory/hwos.map" ]] || return 1
@@ -116,7 +118,7 @@ mkdir -p "$ARTIFACT_PARENT"
 
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$-$RANDOM"
 if [[ -e "$FINAL_ARTIFACT_DIR" ]]; then
-	if artifact_set_is_verified "$FINAL_ARTIFACT_DIR" "$COMMIT" "$PACKAGE_NAME"; then
+	if artifact_set_is_verified "$FINAL_ARTIFACT_DIR" "$COMMIT" "$BRANCH" "$PACKAGE_NAME"; then
 		printf 'Verified Windows build artefacts already exist: %s\n' "$FINAL_ARTIFACT_DIR"
 		exit 0
 	fi
