@@ -13,7 +13,7 @@
 ;
 ; 0x000000 - 0x1FFFFF    2 MB dive profile data, shared ring buffer
 ; 0x200000 - 0x2FFFFF    1 MB dive header  data, last 256 dives, 4 kB / dive
-; 0x300000 - 0x3DFFFF  896 kB unused
+; 0x300000 - 0x3BFFFF  768 kB unused
 ; 0x3C0000 - 0x3DDFFF  120 kB backup firmware
 ; 0x3DE000 - 0x3DFFFF    8 kb unused
 ; 0x3E0000 - 0x3FDFFF  120 kB firmware buffer

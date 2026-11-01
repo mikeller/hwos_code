@@ -93,7 +93,7 @@
 	// Attention: keep the first block of variables on position and also do not change
 	//            their relative position - this block goes into the deco data vault!
 	//
-	// Memory usage: 253 Byte used, 3 Byte free
+	// Memory usage: Configuration-dependent; see the generated memory-budget report.
 	//
 #   pragma udata overlay bank3=0x300
 #else
@@ -237,7 +237,7 @@ VAR_UINT  (int_O_GF_surface);					// instantaneous surface GF (GF_surf) for the 
 #ifdef __18CXX
 	//---- BANK 4 DATA -------------------------------------------------------
 	// Gather all Data ASM-Code --> C-Code
-	// Memory usage: 96 Byte used, 160 byte free
+	// Memory usage: Configuration-dependent; see the generated memory-budget report.
 	//
 #   pragma udata overlay bank4=0x400
 #else

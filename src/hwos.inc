@@ -1242,7 +1242,7 @@ pressure_rel_max_trip			res 2		; resettable maximum relative pressure
 debounce_counter			res 1		; multiples of 16ms 
 isr_tmr7_helper				res 1		; used for 1/4 second trigger
 			
-; 150 byte used, 10 byte free
+; RAM use is configuration-dependent; see the generated memory-budget report.
 
 
 ;-----------------------------------------------------------------------------
@@ -1491,7 +1491,7 @@ gp_debug				res 2		; General Purpose debug registers
 
 gauge_status_byte				res 1		; gauge IC status byte
 				
-; 208 byte used, 1 byte free (208 byte total)
+; RAM use is configuration-dependent; see the generated memory-budget report.
 
 
 ;-----------------------------------------------------------------------------
@@ -1634,7 +1634,7 @@ charge_cycles					res 2		; 16bit charge cycles counter
 ;---- IR/S8-Link
 ir_s8_buffer					res .64		; buffer for data received on IR/S8 interface,
 
-; 226 byte used, 23 byte free
+; RAM use is configuration-dependent; see the generated memory-budget report.
 
 
 ;-----------------------------------------------------------------------------
@@ -1785,7 +1785,7 @@ opt_scrubber_timer_mins			res 2		; The Scrubber timer in mins
 opt_scrubber_timer_day			res 1		; Date when then Scrubber was restarted
 opt_scrubber_timer_month		res 1		; Date when then Scrubber was restarted
 opt_scrubber_timer_year			res 1		; Date when then Scrubber was restarted
-; ==> 201 bytes used - 43 bytes free (244 usable bytes only in bank 14 as the upper 12
-;                                     bytes are reserved for special function registers)
+; ==> RAM use is configuration-dependent; see the generated memory-budget report.
+;      Bank 14 (0xE00-0xEFF) is entirely GPR; the SFR boundary is in bank 15.
 
 ;-----------------------------------------------------------------------------
