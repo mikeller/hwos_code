@@ -395,10 +395,17 @@ function Get-RamMemoryBudgetReport {
         }
     }
 
+    # MPLINK C18 v3.42 emits SFR_BANKED0 for the PIC18F87K22 SFR interval
+    # that overlaps the historical grp15 linker range. It is the only valid
+    # allocation in the report's virtual grp15:sfr bank; any other section
+    # there is an unsafe use of device registers.
+    $AllowedVirtualSfrSections = @('SFR_BANKED0')
     $Violations = @(foreach ($Row in ($MapReport.Sections | Where-Object { $_.Location -eq 'data' -and $_.Size -gt 0 })) {
         $RowEnd = $Row.Address + $Row.Size - 1
         $Bank = $Banks | Where-Object { $Row.Address -ge $_.Start -and $Row.Address -le $_.End } | Select-Object -First 1
         if (-not $Bank) {
+            $Row
+        } elseif ($Bank.Name -eq 'grp15:sfr' -and ($Row.Name -notin $AllowedVirtualSfrSections -or $RowEnd -gt $Bank.End)) {
             $Row
         } elseif (-not $Bank.Protected -and $RowEnd -gt $Bank.End) {
             $Row
