@@ -334,7 +334,11 @@ function Get-FlashMemoryBudgetReport {
         }
     }
 
-    $Used = ($MapReport.ProgramUsage | Where-Object { $_.End -lt $BootloaderStart } | ForEach-Object { $_.End - $_.Start + 1 } | Measure-Object -Sum).Sum
+    $Used = ($MapReport.ProgramUsage | ForEach-Object {
+        $Start = [Math]::Max([int64]0, [int64]$_.Start)
+        $End = [Math]::Min([int64]($BootloaderStart - 1), [int64]$_.End)
+        if ($Start -le $End) { $End - $Start + 1 }
+    } | Measure-Object -Sum).Sum
     if ($null -eq $Used) { $Used = 0 }
     $Used = [int64]$Used
 
@@ -560,8 +564,8 @@ Get-ChildItem -LiteralPath $SourceDir -Filter '*.asm' -File | Sort-Object Name |
         Invoke-BuildTool -Tool $Mpasm -Arguments @('/q', "/p$Processor", "/o$Object", "/e$ErrFile", "/l$ObjectDir\$($_.BaseName).lst", $_.Name)
     } finally {
         Pop-Location
+        Show-NonEmptyDiagnosticsFile -SourceName $_.Name -ErrFile $ErrFile
     }
-    Show-NonEmptyDiagnosticsFile -SourceName $_.Name -ErrFile $ErrFile
     $Counts = Get-DiagnosticsFileCount -ErrFile $ErrFile
     $DiagnosticsSummary.Add([pscustomobject]@{ File = $_.Name; Errors = $Counts.Errors; Warnings = $Counts.Warnings; Messages = $Counts.Messages })
     $Objects.Add($Object)
@@ -571,8 +575,11 @@ Get-ChildItem -LiteralPath $SourceDir -Filter '*.c' -File | Sort-Object Name | F
     $Object = Join-Path $ObjectDir ($_.BaseName + '.o')
     $ErrFile = "$ObjectDir\$($_.BaseName).err"
     Write-Host ('C18  src\{0}' -f $_.Name)
-    Invoke-BuildTool -Tool $Mcc18 -Arguments @("-p=$Processor", "-I=$SourceDir", "-I=$C18IncludeDir", "-fo=$Object", "-fe=$ErrFile", $_.FullName)
-    Show-NonEmptyDiagnosticsFile -SourceName $_.Name -ErrFile $ErrFile
+    try {
+        Invoke-BuildTool -Tool $Mcc18 -Arguments @("-p=$Processor", "-I=$SourceDir", "-I=$C18IncludeDir", "-fo=$Object", "-fe=$ErrFile", $_.FullName)
+    } finally {
+        Show-NonEmptyDiagnosticsFile -SourceName $_.Name -ErrFile $ErrFile
+    }
     $Counts = Get-DiagnosticsFileCount -ErrFile $ErrFile
     $DiagnosticsSummary.Add([pscustomobject]@{ File = $_.Name; Errors = $Counts.Errors; Warnings = $Counts.Warnings; Messages = $Counts.Messages })
     $Objects.Add($Object)
