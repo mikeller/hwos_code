@@ -1,32 +1,30 @@
-                  Bank Overview (FW 3.37)
-                  =======================
+                   Bank Overview
+                   =============
 
-Figures below are derived from the MPLINK linker map (build/hwos.map) for the
-currently selected configuration (_hwos_tech_2_TR_cave, see src/configuration.inc),
-using the memory-budget report tooling in tools/build_hwos.ps1. They are
-configuration-dependent: enabling or disabling a feature shifts bank usage, so
-re-derive these numbers from a fresh build/hwos.map rather than editing them by hand.
+The linker layout below is configuration-independent. Actual RAM use and free
+space are emitted from the MPLINK map of each build by tools/build_hwos.ps1;
+inspect its `Memory budget report` and build/build-info.txt rather than keeping
+static figures here.
 
-Bank        Use                                             Start    End  Size  Used  Free
-------------------------------------------------------------------------------------------
-access RAM  ASM/C/math-lib scratch data (shared)            0x000  0x05F    96    96     0
-0           ASM (ISR) vars                                  0x060  0x0FF   160   139    21
-1           ASM vars "common" + local1/local2/local3        0x100  0x1FF   256   256     0
-2           buffer                                          0x200  0x2FF   256   256     0
-3           ASM / C shared vars                             0x300  0x3FF   256   255     1
-4           ASM / C shared vars                             0x400  0x4FF   256   153   103
-5           C vars p2_deco                                  0x500  0x5FF   256   246    10
-6           C vars p2_deco                                  0x600  0x6FF   256   239    17
-7           tissue pressures "real"                         0x700  0x7FF   256   256     0
-8           tissue pressures "sim"                          0x800  0x8FF   256   256     0
-9a          C vars compass                                  0x900  0x97F   128    28   100
-9b          C vars compass_calib                            0x980  0x9FF   128   103    25
-10          ASM vars "common2"                              0xA00  0xAFF   256   154   102
-11          ASM / C shared vars (buffer2, backtracking)     0xB00  0xBFF   256   256     0
-12          tissue pressures "vault"                        0xC00  0xCFF   256   256     0
-13          C stack                                         0xD00  0xDFF   256   256     0
-14          options table                                   0xE00  0xEFF   256   214    42
-15          GPR remainder below the SFR boundary            0xF00  0xF15    22     0    22
+Bank        Use                                             Start    End  Size
+-------------------------------------------------------------------------------
+access RAM  ASM/C/math-lib scratch data (shared)            0x000  0x05F    96
+0           ASM (ISR) vars                                  0x060  0x0FF   160
+1           ASM vars "common" + local1/local2/local3        0x100  0x1FF   256
+2           buffer                                          0x200  0x2FF   256
+3           ASM / C shared vars                             0x300  0x3FF   256
+4           ASM / C shared vars                             0x400  0x4FF   256
+5           C vars p2_deco                                  0x500  0x5FF   256
+6           C vars p2_deco                                  0x600  0x6FF   256
+7           tissue pressures "real"                         0x700  0x7FF   256
+8           tissue pressures "sim"                          0x800  0x8FF   256
+9           C vars compass and compass_calib                 0x900  0x9FF   256
+10          ASM vars "common2"                              0xA00  0xAFF   256
+11          ASM / C shared vars (buffer2, backtracking)     0xB00  0xBFF   256
+12          tissue pressures "vault"                        0xC00  0xCFF   256
+13          C stack                                         0xD00  0xDFF   256
+14          options table                                   0xE00  0xEFF   256
+15          GPR remainder below the SFR boundary            0xF00  0xF5F    96
 
-accesssfr (0xF16-0xFFF, 234 bytes) is PROTECTED C18 SFR shadow space, not a GPR bank;
+accesssfr (0xF60-0xFFF, 160 bytes) is PROTECTED C18 SFR shadow space, not a GPR bank;
 it is not usable for variables and is listed here only for completeness.

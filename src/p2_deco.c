@@ -530,7 +530,7 @@ static float			float_value;					// input value,   float
 static unsigned short	int_value;						// output value, 16 bit
 
 
-// 246 byte used, 10 byte left in this bank (per build/hwos.map, config _hwos_tech_2_TR_cave)
+// RAM use is configuration-dependent; see the generated memory-budget report.
 
 
 //---- Bank 6 parameters -----------------------------------------------------
@@ -637,7 +637,7 @@ static unsigned char	time_interval
 */
 
 
-// 239 byte used, 17 byte left in this bank (per build/hwos.map, config _hwos_tech_2_TR_cave)
+// RAM use is configuration-dependent; see the generated memory-budget report.
 
 
 

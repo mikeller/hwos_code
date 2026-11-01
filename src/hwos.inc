@@ -1242,7 +1242,7 @@ pressure_rel_max_trip			res 2		; resettable maximum relative pressure
 debounce_counter			res 1		; multiples of 16ms 
 isr_tmr7_helper				res 1		; used for 1/4 second trigger
 			
-; 139 byte used, 21 byte free (per build/hwos.map, config _hwos_tech_2_TR_cave)
+; RAM use is configuration-dependent; see the generated memory-budget report.
 
 
 ;-----------------------------------------------------------------------------
@@ -1491,7 +1491,7 @@ gp_debug				res 2		; General Purpose debug registers
 
 gauge_status_byte				res 1		; gauge IC status byte
 				
-; 207 byte used, 1 byte free (208 byte total; per build/hwos.map, config _hwos_tech_2_TR_cave)
+; RAM use is configuration-dependent; see the generated memory-budget report.
 
 
 ;-----------------------------------------------------------------------------
@@ -1634,7 +1634,7 @@ charge_cycles					res 2		; 16bit charge cycles counter
 ;---- IR/S8-Link
 ir_s8_buffer					res .64		; buffer for data received on IR/S8 interface,
 
-; 154 byte used, 102 byte free (per build/hwos.map, config _hwos_tech_2_TR_cave)
+; RAM use is configuration-dependent; see the generated memory-budget report.
 
 
 ;-----------------------------------------------------------------------------
@@ -1785,7 +1785,7 @@ opt_scrubber_timer_mins			res 2		; The Scrubber timer in mins
 opt_scrubber_timer_day			res 1		; Date when then Scrubber was restarted
 opt_scrubber_timer_month		res 1		; Date when then Scrubber was restarted
 opt_scrubber_timer_year			res 1		; Date when then Scrubber was restarted
-; ==> 214 bytes used, 42 bytes free (bank 14 is 0xE00-0xEFF and is entirely GPR; the SFR
-;      boundary is in bank 15, not bank 14; per build/hwos.map, config _hwos_tech_2_TR_cave)
+; ==> RAM use is configuration-dependent; see the generated memory-budget report.
+;      Bank 14 (0xE00-0xEFF) is entirely GPR; the SFR boundary is in bank 15.
 
 ;-----------------------------------------------------------------------------

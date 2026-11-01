@@ -24,7 +24,9 @@ param(
     # A flash block is only warned/failed on if its own size exceeds the warn
     # threshold; fixed-width hardware vectors (a handful of bytes each) can
     # never carry this much spare and are reported, but not gated, instead.
+    [ValidateRange(0, [int]::MaxValue)]
     [int]$FlashSpareWarnBytes = 256,
+    [ValidateRange(0, [int]::MaxValue)]
     [int]$FlashSpareFailBytes = 0,
     # Bypasses every memory-budget gate below (block_0_code_end, bootloader
     # overflow, GPR overflow, flash-spare thresholds) for a forensic or
@@ -47,6 +49,9 @@ if ([System.IO.Path]::IsPathRooted($BuildDir)) {
 }
 $ObjectDir = Join-Path $BuildDir 'obj'
 $DoPackageOstc3 = -not $BuildOnly
+if ($BypassMemoryBudgetGates -and $DoPackageOstc3) {
+    throw '-BypassMemoryBudgetGates is only permitted with -BuildOnly; non-canonical builds must not produce an OSTC package.'
+}
 
 function Resolve-BuildTool {
     param(
@@ -197,7 +202,7 @@ function Get-LinkerMapReport {
         if ($Line -match '^\s*Program Memory Usage\s*$') { $Mode = 'usage-pending'; continue }
         if ($Mode -eq 'usage-pending' -and $Line -match '^\s*Start\s+End\s*$') { $Mode = 'usage'; continue }
         if ($Line -match '^\s*Name\s+Address\s+Location\s+Storage\s+File') { $Mode = 'symbols'; continue }
-        if ($Line -match '^\s*Symbols - Sorted by Address\s*$') { break }
+        if ($Line -match '^\s*Symbols - Sorted by Address\s*$') { $Mode = 'symbols'; continue }
 
         switch ($Mode) {
             'section' {
@@ -311,9 +316,13 @@ function Get-FlashMemoryBudgetReport {
     if ($null -eq $Used) { $Used = 0 }
     $Used = [int64]$Used
 
-    $NextProtectedStart = $Regions.CodePages | Where-Object { $_.Protected -and $_.Start -gt $BootloaderStart } | Select-Object -ExpandProperty Start | Sort-Object | Select-Object -First 1
-    if ($null -eq $NextProtectedStart) { $NextProtectedStart = [int64]::MaxValue }
-    $BootloaderOverflows = @($MapReport.ProgramUsage | Where-Object { $_.Start -ge $BootloaderStart -and $_.Start -lt $NextProtectedStart })
+    # The first CODEPAGE after the bootloader area is the device metadata
+    # region (idlocs on PIC18F87K22). Only the interval before it can contain
+    # application code, so do not mistake protected config/devid/eeprom ranges
+    # in the map for a bootloader overflow.
+    $ApplicationAddressLimit = $Regions.CodePages | Where-Object { $_.Start -gt $BootloaderStart } | Select-Object -ExpandProperty Start | Sort-Object | Select-Object -First 1
+    if ($null -eq $ApplicationAddressLimit) { $ApplicationAddressLimit = [int64]::MaxValue }
+    $BootloaderOverflows = @($MapReport.ProgramUsage | Where-Object { $_.Start -lt $ApplicationAddressLimit -and $_.End -ge $BootloaderStart })
 
     return [pscustomobject]@{
         Blocks              = @($Blocks)
@@ -586,7 +595,7 @@ if ($null -eq $BlockZeroCodeEndAddress) {
 
 if ($FlashReport.BootloaderOverflows.Count -gt 0) {
     foreach ($Row in $FlashReport.BootloaderOverflows) {
-        $GateFailures.Add(('Program memory range 0x{0:X6}..0x{1:X6} is placed at or above the bootloader-reserved region starting at 0x{2:X6}.' -f $Row.Start, $Row.End, $FlashReport.BootloaderStart))
+        $GateFailures.Add(('Program memory range 0x{0:X6}..0x{1:X6} overlaps the bootloader-reserved region starting at 0x{2:X6}.' -f $Row.Start, $Row.End, $FlashReport.BootloaderStart))
     }
 }
 
