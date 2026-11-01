@@ -124,7 +124,10 @@ function Get-LinkerScriptMemoryLayout {
     script, so flash and RAM boundaries are derived at build time instead of
     being duplicated as literals in this script.
     #>
-    param([Parameter(Mandatory)][string]$LinkerScriptPath)
+    param(
+        [Parameter(Mandatory)][string]$LinkerScriptPath,
+        [Parameter(Mandatory)][string]$ProcessorIncludePath
+    )
 
     $CodePages = [System.Collections.Generic.List[pscustomobject]]::new()
     $RamRegions = [System.Collections.Generic.List[pscustomobject]]::new()
@@ -154,9 +157,26 @@ function Get-LinkerScriptMemoryLayout {
         throw "No DATABANK/ACCESSBANK directives were found in linker script: $LinkerScriptPath"
     }
 
+    # MPLINK needs SFR_BANKED0 to fit in the historical grp15 range, but the
+    # device map reserves 0xF16 and above for SFRs. Derive that boundary from
+    # the processor include so the RAM report does not call SFRs free GPR.
+    $SfrStart = $null
+    foreach ($Line in (Get-Content -LiteralPath $ProcessorIncludePath)) {
+        if ($Line -match '^\s*\S+\s+EQU\s+H''(?<addr>[0-9A-Fa-f]+)''') {
+            $Address = [Convert]::ToInt64($Matches['addr'], 16)
+            if ($Address -ge 0xF00 -and ($null -eq $SfrStart -or $Address -lt $SfrStart)) {
+                $SfrStart = $Address
+            }
+        }
+    }
+    if ($null -eq $SfrStart) {
+        throw "No SFR addresses at or above 0xF00 were found in processor include: $ProcessorIncludePath"
+    }
+
     return [pscustomobject]@{
         CodePages  = $CodePages.ToArray()
         RamRegions = $RamRegions.ToArray()
+        SfrStart   = [int64]$SfrStart
     }
 }
 
@@ -348,7 +368,16 @@ function Get-RamMemoryBudgetReport {
         [Parameter(Mandatory)][pscustomobject]$MapReport
     )
 
-    $Banks = $Regions.RamRegions | Sort-Object Start
+    $Banks = [System.Collections.Generic.List[pscustomobject]]::new()
+    foreach ($Region in ($Regions.RamRegions | Sort-Object Start)) {
+        if ($Region.Start -lt $Regions.SfrStart -and $Region.End -ge $Regions.SfrStart) {
+            $Banks.Add([pscustomobject]@{ Name = $Region.Name; Start = $Region.Start; End = $Regions.SfrStart - 1; Protected = $Region.Protected })
+            $Banks.Add([pscustomobject]@{ Name = "$($Region.Name):sfr"; Start = $Regions.SfrStart; End = $Region.End; Protected = $true })
+        } else {
+            $Banks.Add($Region)
+        }
+    }
+    $Banks = $Banks.ToArray()
     $BankReports = foreach ($Bank in $Banks) {
         $Rows = $MapReport.Sections | Where-Object { $_.Location -eq 'data' -and $_.Address -ge $Bank.Start -and $_.Address -le $Bank.End }
         $Measured = ($Rows | ForEach-Object { $_.Address + $_.Size - 1 } | Measure-Object -Maximum).Maximum
@@ -566,7 +595,8 @@ try {
 # future change to any of those files (for example a grp15 resize)
 # automatically.
 $CodeAddressesPath = Join-Path $SourceDir 'Docu\Code-Addresses.txt'
-$MemoryRegions = Get-LinkerScriptMemoryLayout -LinkerScriptPath $LinkerScript
+$ProcessorInclude = Join-Path $SourceDir 'P18F87K22.INC'
+$MemoryRegions = Get-LinkerScriptMemoryLayout -LinkerScriptPath $LinkerScript -ProcessorIncludePath $ProcessorInclude
 $FixedAnchors = Get-FixedCodeAnchor -Path $CodeAddressesPath
 $MapReport = Get-LinkerMapReport -MapPath $MapFile
 $FlashReport = Get-FlashMemoryBudgetReport -Regions $MemoryRegions -Anchors $FixedAnchors -MapReport $MapReport -WarnBytes $FlashSpareWarnBytes
