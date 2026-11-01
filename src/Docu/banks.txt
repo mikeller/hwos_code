@@ -24,9 +24,11 @@ access RAM  ASM/C/math-lib scratch data (shared)            0x000  0x05F    96
 12          tissue pressures "vault"                        0xC00  0xCFF   256
 13          C stack                                         0xD00  0xDFF   256
 14          options table                                   0xE00  0xEFF   256
-15          Linker allocation range; F16-F5F are device SFRs  0xF00  0xF5F    96
+15          GPR (grp15); 0xF16-0xF5F are banked SFRs        0xF00  0xF15    22
+SFRs        banked SFRs (sfrbanked, PROTECTED)              0xF16  0xF5F    74
 
 Only 0xF00-0xF15 of bank 15 is usable GPR. The PIC18F87K22 device include maps
-0xF16-0xF5F as SFRs, which the build report marks protected even though MPLINK
-requires its SFR sections to fit in the grp15 linker range. accesssfr (0xF60-0xFFF,
-160 bytes) is also PROTECTED C18 SFR space, not a GPR bank.
+0xF16-0xF5F as SFRs; the linker script declares them as the PROTECTED sfrbanked
+region, which MPLINK requires for C18's absolute SFR_BANKED0 section, and which
+accepts no relocatable allocations. accesssfr (0xF60-0xFFF, 160 bytes) is also
+PROTECTED C18 SFR space, not a GPR bank.
