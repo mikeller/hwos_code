@@ -47,6 +47,8 @@ if ([System.IO.Path]::IsPathRooted($BuildDir)) {
 } else {
     $BuildDir = [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $BuildDir))
 }
+$BuildInfo = Join-Path $BuildDir 'build-info.txt'
+Remove-Item -LiteralPath $BuildInfo -Force -ErrorAction SilentlyContinue
 $ObjectDir = Join-Path $BuildDir 'obj'
 $DoPackageOstc3 = -not $BuildOnly
 if ($BypassMemoryBudgetGates -and $DoPackageOstc3) {
@@ -823,7 +825,6 @@ if ($DoPackageOstc3) {
     )
 }
 
-$BuildInfo = Join-Path $BuildDir 'build-info.txt'
 @(
     "source_commit=$SourceCommit"
     "source_branch=$SourceBranch"
