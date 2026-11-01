@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+# Install a verified OSTC3 package using Subsurface.
+# This is deliberately invoked only by `make install`, never by `make`.
+set -euo pipefail
+
+ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+readonly ROOT_DIR
+readonly GIT_REMOTE=${GIT_REMOTE:-origin}
+
+fail() {
+	printf 'error: %s\n' "$*" >&2
+	exit 1
+}
+
+metadata_value() {
+	local key=$1
+	local info_file=$2
+	awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); sub(/\r$/, ""); print; exit }' "$info_file"
+}
+
+DEVICE=${DEVICE:-}
+FIRMWARE_INSTALLER=${FIRMWARE_INSTALLER:-subsurface-downloader}
+DC_VENDOR=${DC_VENDOR:-'Heinrichs Weikamp'}
+DC_PRODUCT=${DC_PRODUCT:-'OSTC 3'}
+
+[[ -n "$DEVICE" ]] || fail 'DEVICE is required; specify the exact device, for example: make install DEVICE=AA:BB:CC:DD:EE:FF'
+[[ "$DEVICE" != *$'\n'* && "$DEVICE" != *$'\r'* ]] || fail 'DEVICE must not contain a newline'
+[[ "${DEVICE,,}" != auto ]] || fail 'automatic device selection is not permitted; provide the exact DEVICE'
+[[ -n "$DC_VENDOR" && -n "$DC_PRODUCT" ]] || fail 'DC_VENDOR and DC_PRODUCT must be non-empty'
+
+cd "$ROOT_DIR"
+[[ -z "$(git status --porcelain)" ]] || fail 'refusing to install from a worktree with uncommitted changes'
+BRANCH=$(git symbolic-ref --quiet --short HEAD) || fail 'refusing to install from a detached HEAD'
+COMMIT=$(git rev-parse HEAD)
+VALIDATION_MODEL=$(printf '%s' "$DC_VENDOR-$DC_PRODUCT" | LC_ALL=C tr '[:upper:] ' '[:lower:]-' | LC_ALL=C tr -cs 'a-z0-9._-' '-')
+VALIDATION_MODEL=${VALIDATION_MODEL#-}
+VALIDATION_MODEL=${VALIDATION_MODEL%-}
+[[ -n "$VALIDATION_MODEL" ]] || fail 'cannot derive a release-validation model name'
+VALIDATION_TAG="validated/$VALIDATION_MODEL/$COMMIT"
+REMOTE_TAGS=$(git ls-remote --tags --exit-code "$GIT_REMOTE" \
+	"refs/tags/$VALIDATION_TAG" "refs/tags/$VALIDATION_TAG^{}") || \
+	fail "missing published annotated release-validation tag: $VALIDATION_TAG"
+REMOTE_TAG_OBJECT=$(awk -v tag="refs/tags/$VALIDATION_TAG" '$2 == tag { print $1; exit }' <<<"$REMOTE_TAGS")
+REMOTE_TAG_COMMIT=$(awk -v tag="refs/tags/$VALIDATION_TAG^{}" '$2 == tag { print $1; exit }' <<<"$REMOTE_TAGS")
+[[ -n "$REMOTE_TAG_OBJECT" && -n "$REMOTE_TAG_COMMIT" && "$REMOTE_TAG_OBJECT" != "$REMOTE_TAG_COMMIT" ]] || \
+	fail "published release-validation tag is not annotated: $VALIDATION_TAG"
+[[ "$REMOTE_TAG_COMMIT" == "$COMMIT" ]] || \
+	fail "published release-validation tag does not identify the current commit: $VALIDATION_TAG"
+INSTALLER_PATH=$(command -v "$FIRMWARE_INSTALLER") || fail "subsurface-downloader was not found: $FIRMWARE_INSTALLER"
+SAFE_BRANCH=$(printf '%s' "$BRANCH" | sed 's/[^A-Za-z0-9._-]\+/-/g')
+[[ -n "$SAFE_BRANCH" ]] || fail "cannot derive a safe package name from branch: $BRANCH"
+PACKAGE_NAME="hwos_ostc3_${SAFE_BRANCH}_${COMMIT:0:12}_firmware.hex"
+FINAL_ARTIFACT_DIR=${ARTIFACT_DIR:-"$ROOT_DIR/build/windows/$COMMIT"}
+if [[ "$FINAL_ARTIFACT_DIR" != /* ]]; then
+	FINAL_ARTIFACT_DIR="$ROOT_DIR/$FINAL_ARTIFACT_DIR"
+fi
+
+# This verifies that the exact current pushed commit is built, or reuses its
+# already verified package. It never flashes or uploads.
+"$ROOT_DIR/tools/build_hwos.sh"
+
+BUILD_INFO="$FINAL_ARTIFACT_DIR/build-info.txt"
+PACKAGE="$FINAL_ARTIFACT_DIR/$PACKAGE_NAME"
+FULL_HEX="$FINAL_ARTIFACT_DIR/hwos.production.hex"
+[[ -f "$BUILD_INFO" ]] || fail "build metadata is missing: $BUILD_INFO"
+[[ "$(metadata_value source_commit "$BUILD_INFO")" == "$COMMIT" ]] || fail 'build metadata does not identify the current commit'
+[[ "$(metadata_value source_branch "$BUILD_INFO")" == "$BRANCH" ]] || fail 'build metadata does not identify the current branch'
+METADATA_PACKAGE=$(metadata_value ostc3_package "$BUILD_INFO")
+METADATA_PACKAGE_NAME=${METADATA_PACKAGE//\\//\/}
+METADATA_PACKAGE_NAME=$(basename -- "$METADATA_PACKAGE_NAME")
+[[ "$METADATA_PACKAGE_NAME" == "$PACKAGE_NAME" ]] || fail 'build metadata does not identify the expected OSTC3 package'
+EXPECTED_FULL_HASH=$(metadata_value full_hex_sha256 "$BUILD_INFO")
+[[ -n "$EXPECTED_FULL_HASH" ]] || fail 'build metadata has no full firmware hash'
+[[ -s "$FULL_HEX" ]] || fail "full firmware is missing or empty: $FULL_HEX"
+ACTUAL_FULL_HASH=$(sha256sum "$FULL_HEX" | awk '{print $1}')
+[[ "$ACTUAL_FULL_HASH" == "$EXPECTED_FULL_HASH" ]] || fail "full firmware SHA-256 mismatch: expected $EXPECTED_FULL_HASH, got $ACTUAL_FULL_HASH"
+[[ "$(metadata_value ostc3_package_input_sha256 "$BUILD_INFO")" == "$EXPECTED_FULL_HASH" ]] || \
+	fail 'OSTC3 package provenance does not identify the verified full firmware'
+[[ -s "$PACKAGE" ]] || fail "expected package is missing or empty: $PACKAGE"
+EXPECTED_HASH=$(metadata_value ostc3_package_sha256 "$BUILD_INFO")
+[[ -n "$EXPECTED_HASH" ]] || fail 'build metadata has no OSTC3 package hash'
+ACTUAL_HASH=$(sha256sum "$PACKAGE" | awk '{print $1}')
+[[ "$ACTUAL_HASH" == "$EXPECTED_HASH" ]] || fail "package SHA-256 mismatch: expected $EXPECTED_HASH, got $ACTUAL_HASH"
+
+printf 'Installing verified OSTC3 package for %s/%s on explicit device %s\n' "$DC_VENDOR" "$DC_PRODUCT" "$DEVICE"
+exec "$INSTALLER_PATH" \
+	--update-firmware \
+	--dc-vendor="$DC_VENDOR" \
+	--dc-product="$DC_PRODUCT" \
+	--device="$DEVICE" \
+	--firmware-file="$PACKAGE"

@@ -93,9 +93,8 @@ only makes the existing source visible under its existing notices.
 
 ## Safety position
 
-A successful build proves only that the C18 toolchain linked an image. It
-does not validate device behaviour. Packaged OSTC Companion containers carry
-`UNVALIDATED` in their filename and remain test containers until they have
-passed the vendor-approved hardware and recovery procedure. See
+A successful build proves only that the C18 toolchain linked an image. The
+current packaging workflow has been tested on real hardware, but each release
+still requires model-specific device and recovery validation. See
 [`building.md`](building.md) and [`firmware-packaging.md`](firmware-packaging.md)
 for the build and packaging detail behind this position.

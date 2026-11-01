@@ -9,8 +9,7 @@ image for TinyBld and is not an OSTC Companion package.
 
 The repository does not contain source code for `o3pack.exe`, its key material,
 or a specification of its cryptographic protocol. Do not attempt to recreate,
-modify, decrypt, or substitute this packaging step. In particular, a package
-created from unvalidated firmware must not be offered for device installation.
+modify, decrypt, or substitute this packaging step.
 
 ## Evidence
 

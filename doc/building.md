@@ -60,9 +60,9 @@ machine-wide environment configuration:
 The script reports missing tools and C18 headers/libraries before compiling. It
 does not alter PATH, install software, flash hardware, or upload firmware.
 
-### Default OSTC Companion test package
+### Default OSTC Companion package
 
-The default invocation builds and packages an OSTC Companion test container:
+The default invocation builds and packages an OSTC Companion container:
 
 ```powershell
 .\tools\build_hwos.ps1
@@ -83,7 +83,7 @@ The default package name follows the underscore-separated OSTC4 Makefile naming
 style and is derived from the Git worktree:
 
 ```text
-build/hwos_ostc3_<sanitised-branch>_<12-char-changeset>_UNVALIDATED_firmware.hex
+build/hwos_ostc3_<sanitised-branch>_<12-char-changeset>_firmware.hex
 ```
 
 For example, build-only operation is explicit:
@@ -92,13 +92,13 @@ For example, build-only operation is explicit:
 .\tools\build_hwos.ps1 -BuildOnly
 ```
 
-`-Ostc3Package` may select another filename, but it must contain
-`UNVALIDATED`. The script rejects a missing runtime file or malformed packer
-output. It records the packer path/hash, input HEX hash, container hash, branch,
-and changeset in `build-info.txt`.
+`-Ostc3Package` may select another filename. The script rejects a missing
+runtime file or malformed packer output. It records the packer path/hash, input
+HEX hash, container hash, branch, and changeset in `build-info.txt`.
 
-The resulting encrypted container is only suitable for the vendor-approved
-test and recovery procedure. It is not hardware-validated or safe for diving.
+The container format and packaging workflow have been tested on real hardware,
+but each generated firmware image requires validation on its target model.
+Installation remains subject to the recovery procedure and dive-safety checks.
 `hwos_tiny.hex` remains the separate TinyBld upload image. For format and
 authorisation limits, see [firmware-packaging.md](firmware-packaging.md).
 
@@ -148,7 +148,7 @@ incomplete legacy directory is renamed to `failed-...` and preserved before a
 new attempt begins. Failed staging directories contain `failure.log` and, once
 SSH was invoked, `remote-build.log`. Because the isolated checkout is detached,
 the orchestrator explicitly supplies the local branch and changeset-derived
-`UNVALIDATED` package filename.
+package filename.
 
 Inspect retained `build/windows/failed-*` and `build/windows/.staging-*`
 directories before removing them manually. `make clean` removes all local build
@@ -181,6 +181,47 @@ artefact retention location.
 The remote checkout must have an `origin` that can fetch the same pushed branch
 and the Windows host must have PowerShell, Git, C18 v3.42, SRecord, and SSH/SCP
 access. The orchestration script never pushes, flashes, uploads, or opens a PR.
+
+## Explicit OSTC3 installation
+
+`make install` is intentionally separate from `make` and `make build`. It uses
+the local `subsurface-downloader`, modelled on OSTC4's firmware-install
+workflow, only after it has built or reused the verified package for the exact
+current pushed commit and found an annotated release-validation tag for the
+exact target model and commit. It never enables `--force-update-firmware`.
+
+The required tag is named
+`validated/<normalised-vendor>-<normalised-product>/<full-commit-id>`. For the
+default downloader selection this is
+`validated/heinrichs-weikamp-ostc-3/<full-commit-id>`. A release maintainer may
+create and publish that annotated tag only after the exact commit has completed
+the target-model hardware and recovery validation procedure. The installer
+checks the annotated tag and its peeled commit directly on `origin` (or the
+explicit `GIT_REMOTE`), not against local tags. Normal branch builds have no
+such tag and the installer rejects them before it builds or invokes the
+downloader.
+
+The target has no device default until a local configuration supplies one. Copy
+the tracked template to the ignored `local.mk` and set an exact Bluetooth
+address, following OSTC4's local configuration convention. An explicit
+`DEVICE=...` command-line value overrides the local default. The default
+downloader selection is vendor `Heinrichs Weikamp`, product `OSTC 3`;
+`FIRMWARE_INSTALLER`, `DC_VENDOR`, and `DC_PRODUCT` can be explicitly
+overridden for a compatible local downloader.
+
+```sh
+cp local.mk.example local.mk
+$EDITOR local.mk
+
+make install \
+  DEVICE=AA:BB:CC:DD:EE:FF
+```
+
+The command rejects an empty or automatic device selector, an uncommitted or
+detached source worktree, a missing or mismatched annotated release-validation
+tag, missing provenance metadata, an unexpected package name, or a package hash
+mismatch before invoking the downloader. The installer is not run by normal
+builds and is not exercised by this repository's validation.
 
 | File | Purpose |
 | --- | --- |

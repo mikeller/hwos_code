@@ -76,15 +76,18 @@ verify_hash() {
 artifact_set_is_verified() {
 	local directory=$1
 	local expected_commit=$2
-	local expected_package=$3
+	local expected_branch=$3
+	local expected_package=$4
 	local info_file="$directory/build-info.txt"
 	local package package_name
 
 	[[ -f "$info_file" ]] || return 1
 	[[ "$(metadata_value source_commit "$info_file")" == "$expected_commit" ]] || return 1
+	[[ "$(metadata_value source_branch "$info_file")" == "$expected_branch" ]] || return 1
 	hash_matches "$directory/hwos.production.hex" "$(metadata_value full_hex_sha256 "$info_file")" || return 1
 	hash_matches "$directory/hwos_tiny.hex" "$(metadata_value upload_hex_sha256 "$info_file")" || return 1
 	[[ -s "$directory/hwos.map" ]] || return 1
+	[[ "$(metadata_value ostc3_package_input_sha256 "$info_file")" == "$(metadata_value full_hex_sha256 "$info_file")" ]] || return 1
 	package=$(metadata_value ostc3_package "$info_file")
 	[[ -n "$package" && "$package" != not_created_build_only ]] || return 1
 	package_name=${package//\\//\/}
@@ -104,7 +107,7 @@ REMOTE_COMMIT=$(git ls-remote --exit-code "$GIT_REMOTE" "$REMOTE_REF" | awk '{pr
 [[ "$REMOTE_COMMIT" == "$COMMIT" ]] || fail "local $BRANCH ($COMMIT) does not match $GIT_REMOTE/$BRANCH ($REMOTE_COMMIT); push the exact commit before building"
 SAFE_BRANCH=$(printf '%s' "$BRANCH" | sed 's/[^A-Za-z0-9._-]\+/-/g')
 [[ -n "$SAFE_BRANCH" ]] || fail "cannot derive a safe package name from branch: $BRANCH"
-PACKAGE_NAME="hwos_ostc3_${SAFE_BRANCH}_${COMMIT:0:12}_UNVALIDATED_firmware.hex"
+PACKAGE_NAME="hwos_ostc3_${SAFE_BRANCH}_${COMMIT:0:12}_firmware.hex"
 
 FINAL_ARTIFACT_DIR=${ARTIFACT_DIR:-"$ROOT_DIR/build/windows/$COMMIT"}
 if [[ "$FINAL_ARTIFACT_DIR" != /* ]]; then
@@ -116,7 +119,7 @@ mkdir -p "$ARTIFACT_PARENT"
 
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$-$RANDOM"
 if [[ -e "$FINAL_ARTIFACT_DIR" ]]; then
-	if artifact_set_is_verified "$FINAL_ARTIFACT_DIR" "$COMMIT" "$PACKAGE_NAME"; then
+	if artifact_set_is_verified "$FINAL_ARTIFACT_DIR" "$COMMIT" "$BRANCH" "$PACKAGE_NAME"; then
 		printf 'Verified Windows build artefacts already exist: %s\n' "$FINAL_ARTIFACT_DIR"
 		exit 0
 	fi
