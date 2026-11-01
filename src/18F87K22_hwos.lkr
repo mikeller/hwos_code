@@ -40,4 +40,8 @@ DATABANK   NAME=gpr12      START=0xC00          END=0xCFF
 DATABANK   NAME=grp13      START=0xD00          END=0xDFF
 DATABANK   NAME=grp14      START=0xE00          END=0xEFF
 DATABANK   NAME=grp15      START=0xF00          END=0xF15
-ACCESSBANK NAME=accesssfr  START=0xF16          END=0xFFF          PROTECTED
+// C18's absolute SFR_BANKED0 section occupies the banked SFRs at 0xF16-0xF5F.
+// It must be a DATABANK for MPLINK to accept that section, but must not accept
+// relocatable data allocations.
+DATABANK   NAME=sfrbanked  START=0xF16          END=0xF5F          PROTECTED
+ACCESSBANK NAME=accesssfr  START=0xF60          END=0xFFF          PROTECTED
