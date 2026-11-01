@@ -198,7 +198,7 @@ function Get-LinkerMapReport {
     $Mode = 'none'
 
     foreach ($Line in (Get-Content -LiteralPath $MapPath)) {
-        if ($Line -match '^\s*Section\s+Type\s+Address\s+Location\s+Size') { $Mode = 'section'; continue }
+        if ($Line -match '^\s*Section\s+Type\s+Address\s+Location\s+Size(?:\s*\(Bytes\))?\s*$') { $Mode = 'section'; continue }
         if ($Line -match '^\s*Program Memory Usage\s*$') { $Mode = 'usage-pending'; continue }
         if ($Mode -eq 'usage-pending' -and $Line -match '^\s*Start\s+End\s*$') { $Mode = 'usage'; continue }
         if ($Line -match '^\s*Name\s+Address\s+Location\s+Storage\s+File') { $Mode = 'symbols'; continue }

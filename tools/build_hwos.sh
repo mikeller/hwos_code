@@ -29,7 +29,6 @@ for setting in WINDOWS_BUILDER WINDOWS_REPO WINDOWS_WORKTREE_ROOT; do
 	[[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || fail "Windows builder configuration contains a newline in $setting"
 done
 [[ "$WINDOWS_BUILDER" != *[[:space:]]* ]] || fail "WINDOWS_BUILDER must not contain whitespace: $REMOTE_BUILD_CONFIG"
-[[ "$WINDOWS_REPO" != *[[:space:]]* ]] || fail "WINDOWS_REPO must not contain whitespace: $REMOTE_BUILD_CONFIG"
 [[ "$WINDOWS_WORKTREE_ROOT" != *[[:space:]]* ]] || fail "WINDOWS_WORKTREE_ROOT must not contain whitespace: $REMOTE_BUILD_CONFIG"
 [[ "$WINDOWS_REPO" =~ ^[A-Za-z]:/ ]] || fail "WINDOWS_REPO must be an absolute Windows path using forward slashes: $REMOTE_BUILD_CONFIG"
 [[ "$WINDOWS_WORKTREE_ROOT" =~ ^[A-Za-z]:/ ]] || fail "WINDOWS_WORKTREE_ROOT must be an absolute Windows path using forward slashes: $REMOTE_BUILD_CONFIG"
