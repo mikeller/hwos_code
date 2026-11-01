@@ -1,0 +1,18 @@
+# This source tree is CP1252, not UTF-8, and line endings are mixed both
+# across and within files (some files carry CRLF on older lines and LF on
+# more recent ones). This is the historical, working state of the code and
+# is left as-is deliberately: it is not an oversight to "fix".
+#
+# The display-string tables (src/text_*.inc) rely on their exact CP1252 byte
+# values to index into the generated font tables (src/Fonts/*.inc). Any
+# re-encoding to UTF-8 or line-ending normalisation would corrupt those
+# tables and silently change what the device renders on screen. This
+# repository also mirrors an upstream master, so any byte drift here would
+# create needless merge conflicts on every sync.
+#
+# `-text` tells Git to leave these files alone: no line-ending conversion,
+# no encoding conversion, on checkout or checkin.
+*.asm -text
+*.inc -text
+*.INC -text
+*.lkr -text
