@@ -186,7 +186,17 @@ access. The orchestration script never pushes, flashes, uploads, or opens a PR.
 `make install` is intentionally separate from `make` and `make build`. It uses
 the local `subsurface-downloader`, modelled on OSTC4's firmware-install
 workflow, only after it has built or reused the verified package for the exact
-current pushed commit. It never enables `--force-update-firmware`.
+current pushed commit and found an annotated release-validation tag for the
+exact target model and commit. It never enables `--force-update-firmware`.
+
+The required tag is named
+`validated/<normalised-vendor>-<normalised-product>/<full-commit-id>`. For the
+default downloader selection this is
+`validated/heinrichs-weikamp-ostc-3/<full-commit-id>`. A release maintainer may
+create and publish that annotated tag only after the exact commit has completed
+the target-model hardware and recovery validation procedure. Normal branch
+builds have no such tag and the installer rejects them before it builds or
+invokes the downloader.
 
 The target has no device default until a local configuration supplies one. Copy
 the tracked template to the ignored `local.mk` and set an exact Bluetooth
@@ -205,11 +215,10 @@ make install \
 ```
 
 The command rejects an empty or automatic device selector, an uncommitted or
-detached source worktree, missing provenance metadata, an unexpected package
-name, or a package hash mismatch before invoking the downloader. Do not run it
-unless the target device, recovery procedure, and risks of installation have
-been independently checked. The installer is not run by normal builds and is
-not exercised by this repository's validation.
+detached source worktree, a missing or mismatched annotated release-validation
+tag, missing provenance metadata, an unexpected package name, or a package hash
+mismatch before invoking the downloader. The installer is not run by normal
+builds and is not exercised by this repository's validation.
 
 | File | Purpose |
 | --- | --- |

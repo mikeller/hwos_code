@@ -24,15 +24,23 @@ DC_PRODUCT=${DC_PRODUCT:-'OSTC 3'}
 
 [[ -n "$DEVICE" ]] || fail 'DEVICE is required; specify the exact device, for example: make install DEVICE=AA:BB:CC:DD:EE:FF'
 [[ "$DEVICE" != *$'\n'* && "$DEVICE" != *$'\r'* ]] || fail 'DEVICE must not contain a newline'
-[[ "$DEVICE" != auto && "$DEVICE" != AUTO ]] || fail 'automatic device selection is not permitted; provide the exact DEVICE'
+[[ "${DEVICE,,}" != auto ]] || fail 'automatic device selection is not permitted; provide the exact DEVICE'
 [[ -n "$DC_VENDOR" && -n "$DC_PRODUCT" ]] || fail 'DC_VENDOR and DC_PRODUCT must be non-empty'
-
-INSTALLER_PATH=$(command -v "$FIRMWARE_INSTALLER") || fail "subsurface-downloader was not found: $FIRMWARE_INSTALLER"
 
 cd "$ROOT_DIR"
 [[ -z "$(git status --porcelain)" ]] || fail 'refusing to install from a worktree with uncommitted changes'
 BRANCH=$(git symbolic-ref --quiet --short HEAD) || fail 'refusing to install from a detached HEAD'
 COMMIT=$(git rev-parse HEAD)
+VALIDATION_MODEL=$(printf '%s' "$DC_VENDOR-$DC_PRODUCT" | LC_ALL=C tr '[:upper:] ' '[:lower:]-' | LC_ALL=C tr -cs 'a-z0-9._-' '-')
+VALIDATION_MODEL=${VALIDATION_MODEL#-}
+VALIDATION_MODEL=${VALIDATION_MODEL%-}
+[[ -n "$VALIDATION_MODEL" ]] || fail 'cannot derive a release-validation model name'
+VALIDATION_TAG="validated/$VALIDATION_MODEL/$COMMIT"
+git cat-file -e "refs/tags/$VALIDATION_TAG^{tag}" 2>/dev/null || \
+	fail "missing annotated release-validation tag: $VALIDATION_TAG"
+[[ "$(git rev-parse --verify "$VALIDATION_TAG^{}")" == "$COMMIT" ]] || \
+	fail "release-validation tag does not identify the current commit: $VALIDATION_TAG"
+INSTALLER_PATH=$(command -v "$FIRMWARE_INSTALLER") || fail "subsurface-downloader was not found: $FIRMWARE_INSTALLER"
 SAFE_BRANCH=$(printf '%s' "$BRANCH" | sed 's/[^A-Za-z0-9._-]\+/-/g')
 [[ -n "$SAFE_BRANCH" ]] || fail "cannot derive a safe package name from branch: $BRANCH"
 PACKAGE_NAME="hwos_ostc3_${SAFE_BRANCH}_${COMMIT:0:12}_firmware.hex"
