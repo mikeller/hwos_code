@@ -16,10 +16,10 @@ build:
 	./tools/build_hwos.sh
 
 # No device is selected unless local.mk or an explicit DEVICE= value supplies one.
-install: export DEVICE := $(DEVICE)
-install: export FIRMWARE_INSTALLER := $(FIRMWARE_INSTALLER)
-install: export DC_VENDOR := $(DC_VENDOR)
-install: export DC_PRODUCT := $(DC_PRODUCT)
+install: export DEVICE := $(value DEVICE)
+install: export FIRMWARE_INSTALLER := $(value FIRMWARE_INSTALLER)
+install: export DC_VENDOR := $(value DC_VENDOR)
+install: export DC_PRODUCT := $(value DC_PRODUCT)
 install:
 	./tools/install_hwos.sh
 

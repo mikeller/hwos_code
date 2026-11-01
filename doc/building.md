@@ -194,9 +194,11 @@ The required tag is named
 default downloader selection this is
 `validated/heinrichs-weikamp-ostc-3/<full-commit-id>`. A release maintainer may
 create and publish that annotated tag only after the exact commit has completed
-the target-model hardware and recovery validation procedure. Normal branch
-builds have no such tag and the installer rejects them before it builds or
-invokes the downloader.
+the target-model hardware and recovery validation procedure. The installer
+checks the annotated tag and its peeled commit directly on `origin` (or the
+explicit `GIT_REMOTE`), not against local tags. Normal branch builds have no
+such tag and the installer rejects them before it builds or invokes the
+downloader.
 
 The target has no device default until a local configuration supplies one. Copy
 the tracked template to the ignored `local.mk` and set an exact Bluetooth

@@ -87,6 +87,7 @@ artifact_set_is_verified() {
 	hash_matches "$directory/hwos.production.hex" "$(metadata_value full_hex_sha256 "$info_file")" || return 1
 	hash_matches "$directory/hwos_tiny.hex" "$(metadata_value upload_hex_sha256 "$info_file")" || return 1
 	[[ -s "$directory/hwos.map" ]] || return 1
+	[[ "$(metadata_value ostc3_package_input_sha256 "$info_file")" == "$(metadata_value full_hex_sha256 "$info_file")" ]] || return 1
 	package=$(metadata_value ostc3_package "$info_file")
 	[[ -n "$package" && "$package" != not_created_build_only ]] || return 1
 	package_name=${package//\\//\/}

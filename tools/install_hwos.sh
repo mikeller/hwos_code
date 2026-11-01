@@ -5,6 +5,7 @@ set -euo pipefail
 
 ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 readonly ROOT_DIR
+readonly GIT_REMOTE=${GIT_REMOTE:-origin}
 
 fail() {
 	printf 'error: %s\n' "$*" >&2
@@ -36,10 +37,15 @@ VALIDATION_MODEL=${VALIDATION_MODEL#-}
 VALIDATION_MODEL=${VALIDATION_MODEL%-}
 [[ -n "$VALIDATION_MODEL" ]] || fail 'cannot derive a release-validation model name'
 VALIDATION_TAG="validated/$VALIDATION_MODEL/$COMMIT"
-git cat-file -e "refs/tags/$VALIDATION_TAG^{tag}" 2>/dev/null || \
-	fail "missing annotated release-validation tag: $VALIDATION_TAG"
-[[ "$(git rev-parse --verify "$VALIDATION_TAG^{}")" == "$COMMIT" ]] || \
-	fail "release-validation tag does not identify the current commit: $VALIDATION_TAG"
+REMOTE_TAGS=$(git ls-remote --tags --exit-code "$GIT_REMOTE" \
+	"refs/tags/$VALIDATION_TAG" "refs/tags/$VALIDATION_TAG^{}") || \
+	fail "missing published annotated release-validation tag: $VALIDATION_TAG"
+REMOTE_TAG_OBJECT=$(awk -v tag="refs/tags/$VALIDATION_TAG" '$2 == tag { print $1; exit }' <<<"$REMOTE_TAGS")
+REMOTE_TAG_COMMIT=$(awk -v tag="refs/tags/$VALIDATION_TAG^{}" '$2 == tag { print $1; exit }' <<<"$REMOTE_TAGS")
+[[ -n "$REMOTE_TAG_OBJECT" && -n "$REMOTE_TAG_COMMIT" && "$REMOTE_TAG_OBJECT" != "$REMOTE_TAG_COMMIT" ]] || \
+	fail "published release-validation tag is not annotated: $VALIDATION_TAG"
+[[ "$REMOTE_TAG_COMMIT" == "$COMMIT" ]] || \
+	fail "published release-validation tag does not identify the current commit: $VALIDATION_TAG"
 INSTALLER_PATH=$(command -v "$FIRMWARE_INSTALLER") || fail "subsurface-downloader was not found: $FIRMWARE_INSTALLER"
 SAFE_BRANCH=$(printf '%s' "$BRANCH" | sed 's/[^A-Za-z0-9._-]\+/-/g')
 [[ -n "$SAFE_BRANCH" ]] || fail "cannot derive a safe package name from branch: $BRANCH"
@@ -55,6 +61,7 @@ fi
 
 BUILD_INFO="$FINAL_ARTIFACT_DIR/build-info.txt"
 PACKAGE="$FINAL_ARTIFACT_DIR/$PACKAGE_NAME"
+FULL_HEX="$FINAL_ARTIFACT_DIR/hwos.production.hex"
 [[ -f "$BUILD_INFO" ]] || fail "build metadata is missing: $BUILD_INFO"
 [[ "$(metadata_value source_commit "$BUILD_INFO")" == "$COMMIT" ]] || fail 'build metadata does not identify the current commit'
 [[ "$(metadata_value source_branch "$BUILD_INFO")" == "$BRANCH" ]] || fail 'build metadata does not identify the current branch'
@@ -62,6 +69,13 @@ METADATA_PACKAGE=$(metadata_value ostc3_package "$BUILD_INFO")
 METADATA_PACKAGE_NAME=${METADATA_PACKAGE//\\//\/}
 METADATA_PACKAGE_NAME=$(basename -- "$METADATA_PACKAGE_NAME")
 [[ "$METADATA_PACKAGE_NAME" == "$PACKAGE_NAME" ]] || fail 'build metadata does not identify the expected OSTC3 package'
+EXPECTED_FULL_HASH=$(metadata_value full_hex_sha256 "$BUILD_INFO")
+[[ -n "$EXPECTED_FULL_HASH" ]] || fail 'build metadata has no full firmware hash'
+[[ -s "$FULL_HEX" ]] || fail "full firmware is missing or empty: $FULL_HEX"
+ACTUAL_FULL_HASH=$(sha256sum "$FULL_HEX" | awk '{print $1}')
+[[ "$ACTUAL_FULL_HASH" == "$EXPECTED_FULL_HASH" ]] || fail "full firmware SHA-256 mismatch: expected $EXPECTED_FULL_HASH, got $ACTUAL_FULL_HASH"
+[[ "$(metadata_value ostc3_package_input_sha256 "$BUILD_INFO")" == "$EXPECTED_FULL_HASH" ]] || \
+	fail 'OSTC3 package provenance does not identify the verified full firmware'
 [[ -s "$PACKAGE" ]] || fail "expected package is missing or empty: $PACKAGE"
 EXPECTED_HASH=$(metadata_value ostc3_package_sha256 "$BUILD_INFO")
 [[ -n "$EXPECTED_HASH" ]] || fail 'build metadata has no OSTC3 package hash'
