@@ -96,10 +96,11 @@ For example, build-only operation is explicit:
 runtime file or malformed packer output. It records the packer path/hash, input
 HEX hash, container hash, branch, and changeset in `build-info.txt`.
 
-The resulting encrypted container has been tested on real hardware, but each
-installation remains subject to the target model, recovery procedure, and dive
-safety checks. `hwos_tiny.hex` remains the separate TinyBld upload image. For
-format and authorisation limits, see [firmware-packaging.md](firmware-packaging.md).
+The container format and packaging workflow have been tested on real hardware,
+but each generated firmware image requires validation on its target model.
+Installation remains subject to the recovery procedure and dive-safety checks.
+`hwos_tiny.hex` remains the separate TinyBld upload image. For format and
+authorisation limits, see [firmware-packaging.md](firmware-packaging.md).
 
 ### Current verification status
 
