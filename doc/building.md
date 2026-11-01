@@ -340,11 +340,48 @@ legacy licensed toolchain, however, and no redistributable, pinned Linux
 installation of it is held in this repository, or could be. A workflow that
 silently substituted XC8 could produce a materially different firmware and is
 not acceptable, so the C18 firmware link cannot run on a standard hosted
-Linux runner.
+Linux runner, and `.github/workflows/host-checks.yml` deliberately does not
+attempt one: it never builds, links, flashes, or uploads firmware, and it
+requires no secret.
 
-A GitHub Actions workflow for the C18 link therefore needs a private Windows
-runner or a licensed Windows VM, containing a pinned C18 v3.42 installation
-and Windows SRecord. The workflow should run
+Instead, `host-checks.yml` runs three checks that need no licence and prove
+nothing about the C18 link:
+
+1. **A host build of the C sources.** `src/p2_deco.c`, `src/compass.c` and
+   `src/compass_calib.c` already have a cross-compile path for Visual
+   C/host GCC (see `src/p2_definitions.h`, lines 47-56, and the `#ifndef
+   UNIX` guards around their `#pragma udata`/`#pragma romdata` blocks).
+   `make check` compiles all three with
+   `gcc -DUNIX -Wall -Wextra -c` into the ignored `build/host-check/`
+   directory. It only compiles: it never links and never runs the
+   resulting objects, and it writes nothing into the tracked tree. This
+   catches outright compile breakage (syntax errors, missing definitions)
+   in source that is otherwise never exercised on any toolchain other than
+   the Windows C18 build.
+2. **`shellcheck`** on `sync_from_hg.sh`, `import_from_hg.sh`, and
+   `tools/build_hwos.sh`.
+3. **`PSScriptAnalyzer`** (a pinned module version) on
+   `tools/build_hwos.ps1`.
+
+**Warning/finding policy.** `-Wall -Wextra` on this 2010s embedded C source
+has a pre-existing backlog (23 warnings in `p2_deco.c`, 1 each in
+`compass.c` and `compass_calib.c` as of this writing, none of them fixed by
+this change). `shellcheck` and `PSScriptAnalyzer` likewise had pre-existing
+findings (1 shellcheck style finding in `sync_from_hg.sh`; 8
+`PSAvoidUsingWriteHost` findings in `tools/build_hwos.ps1`). None of this is
+fixed or suppressed here: fixing deco/compass source under a CI ticket is
+out of scope for a dive computer, and `tools/build_hwos.ps1`/
+`tools/build_hwos.sh` behaviour must not change either. All three checks
+therefore run non-blocking for now: a compile *error* still fails the `make
+check` step, but warnings and lint findings are reported in the job log and
+do not fail the workflow. Tightening this (for example gating on warning
+*count* not increasing, or triaging and fixing the backlog) is a follow-up,
+not part of this change, and no warning or finding should be silenced
+wholesale when that follow-up happens.
+
+A GitHub Actions workflow for the actual C18 link would still need a
+private Windows runner or a licensed Windows VM, containing a pinned C18
+v3.42 installation and Windows SRecord. That workflow should run
 `powershell -File .\tools\build_hwos.ps1`, retain `build/hwos_tiny.hex`,
 `build/hwos.production.hex`, `build/hwos.map`, `build/build-info.txt`, and
 `build/obj/*.err`/`*.lst` as CI artefacts, and must not flash or upload
@@ -354,8 +391,6 @@ budget gates above reject an ISR dispatcher that overlaps the restore vector;
 a CI job must not pass `-BypassMemoryBudgetGates` routinely to work around
 such a failure.
 
-`mikeller/ostc4` already runs GitHub Actions workflows from this same fleet,
-so there is in-fleet precedent for the parts of hwOS CI that do not need
-C18, for example lint/format checks on scripts and documentation, or
-packaging-script unit tests that do not touch the vendor toolchain. The C18
-link step itself remains gated on the private Windows runner above.
+`mikeller/ostc4` already runs GitHub Actions workflows from this same
+fleet; `host-checks.yml` follows its action-pinning convention (every
+action pinned to a commit SHA, e.g. `actions/checkout`).
