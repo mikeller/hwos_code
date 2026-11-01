@@ -47,19 +47,18 @@ run_remote_powershell() {
 		powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "$encoded"
 }
 
-# The remote path is single-quoted so the remote (Windows OpenSSH) shell
-# receives it as one argument even when it contains a space; WINDOWS_REPO and
-# WINDOWS_WORKTREE_ROOT are now validated above to never contain one, but
-# other inputs (for example a future package naming convention) should not
-# have to rely on that alone.
+# Quote the complete source specification locally. This keeps a path containing
+# spaces in one scp argument without adding quote characters to the pathname
+# sent by OpenSSH. In particular, Windows OpenSSH does not treat single quotes
+# as shell quotes, and SFTP transmits them as literal filename characters.
 remote_copy() {
 	local remote_path=$1
-	scp -p -- "${WINDOWS_BUILDER}:'${remote_path}'" "$ARTIFACT_DIR/"
+	scp -p -- "${WINDOWS_BUILDER}:${remote_path}" "$ARTIFACT_DIR/"
 }
 
 remote_copy_dir() {
 	local remote_path=$1
-	scp -pr -- "${WINDOWS_BUILDER}:'${remote_path}'" "$ARTIFACT_DIR/"
+	scp -pr -- "${WINDOWS_BUILDER}:${remote_path}" "$ARTIFACT_DIR/"
 }
 
 metadata_value() {
