@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the current pushed hwOS commit on the authorised Windows C18 builder.
+# Build the current committed hwOS state on the authorised Windows C18 builder.
 #
 # This script never pushes. It creates a detached, per-commit worktree on the
 # builder, invokes tools/build_hwos.ps1 there, verifies copied artefacts against
@@ -8,8 +8,6 @@ set -euo pipefail
 
 ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 readonly ROOT_DIR
-readonly GIT_REMOTE=${GIT_REMOTE:-origin}
-
 fail() {
 	printf 'error: %s\n' "$*" >&2
 	exit 1
@@ -60,6 +58,12 @@ remote_copy_dir() {
 	scp -pr -- "${WINDOWS_BUILDER}:${remote_path}" "$ARTIFACT_DIR/"
 }
 
+remote_upload() {
+	local local_path=$1
+	local remote_path=$2
+	scp -p -- "$local_path" "${WINDOWS_BUILDER}:${remote_path}"
+}
+
 metadata_value() {
 	local key=$1
 	local info_file=${2:-"$ARTIFACT_DIR/build-info.txt"}
@@ -108,14 +112,11 @@ artifact_set_is_verified() {
 }
 
 cd "$ROOT_DIR"
-[[ -z "$(git status --porcelain)" ]] || fail 'refusing to build uncommitted local changes; commit and push them first'
+[[ -z "$(git status --porcelain)" ]] || fail 'refusing to build uncommitted local changes; commit them first'
 
-BRANCH=$(git symbolic-ref --quiet --short HEAD) || fail 'refusing to build a detached HEAD; check out the pushed branch to build'
+BRANCH=$(git symbolic-ref --quiet --short HEAD) || fail 'refusing to build a detached HEAD; check out a branch to build'
 COMMIT=$(git rev-parse HEAD)
 REMOTE_REF="refs/heads/$BRANCH"
-REMOTE_COMMIT=$(git ls-remote --exit-code "$GIT_REMOTE" "$REMOTE_REF" | awk '{print $1}') || \
-	fail "branch '$BRANCH' is not available from remote '$GIT_REMOTE'; push it before building"
-[[ "$REMOTE_COMMIT" == "$COMMIT" ]] || fail "local $BRANCH ($COMMIT) does not match $GIT_REMOTE/$BRANCH ($REMOTE_COMMIT); push the exact commit before building"
 SAFE_BRANCH=$(printf '%s' "$BRANCH" | sed 's/[^A-Za-z0-9._-]\+/-/g')
 [[ -n "$SAFE_BRANCH" ]] || fail "cannot derive a safe package name from branch: $BRANCH"
 PACKAGE_NAME="hwos_ostc3_${SAFE_BRANCH}_${COMMIT:0:12}_firmware.hex"
@@ -139,29 +140,79 @@ if [[ -e "$FINAL_ARTIFACT_DIR" ]]; then
 	printf 'Preserved incomplete artefacts for diagnosis: %s\n' "$FAILED_ARTIFACT_DIR" >&2
 fi
 
+SOURCE_BUNDLE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/hwos-${COMMIT:0:12}.XXXXXX")
+readonly SOURCE_BUNDLE_DIR
+SOURCE_BUNDLE="$SOURCE_BUNDLE_DIR/source.bundle"
+readonly SOURCE_BUNDLE
+cleanup_source_bundle() {
+	rm -rf -- "$SOURCE_BUNDLE_DIR"
+}
+trap cleanup_source_bundle EXIT
+
 ARTIFACT_DIR=$(mktemp -d "$ARTIFACT_PARENT/.staging-${COMMIT:0:12}.XXXXXX")
 preserve_failed_staging() {
-	local result=$?
+	local result=$1
 	if [[ $result -ne 0 && -n "${ARTIFACT_DIR:-}" && -d "$ARTIFACT_DIR" ]]; then
-		printf 'Build attempt failed with exit code %d. Diagnostic staging is retained: %s\n' "$result" "$ARTIFACT_DIR" > "$ARTIFACT_DIR/failure.log"
+		if ! printf 'Build attempt failed with exit code %d. Diagnostic staging is retained: %s\n' "$result" "$ARTIFACT_DIR" > "$ARTIFACT_DIR/failure.log"; then
+			printf 'warning: could not write diagnostic failure log: %s\n' "$ARTIFACT_DIR/failure.log" >&2
+		fi
 		printf 'Diagnostic staging retained: %s\n' "$ARTIFACT_DIR" >&2
 	fi
 }
-trap preserve_failed_staging EXIT
 
 REMOTE_WORKTREE="${WINDOWS_WORKTREE_ROOT%/}/${COMMIT}-${RUN_ID}"
 readonly REMOTE_WORKTREE
+REMOTE_BUNDLE="${WINDOWS_WORKTREE_ROOT%/}/.${COMMIT}-${RUN_ID}.bundle"
+readonly REMOTE_BUNDLE
+REMOTE_BUNDLE_UPLOADED=false
+
+cleanup_remote_bundle() {
+	local cleanup_script
+	cleanup_script=$(cat <<EOF
+\$ErrorActionPreference = 'Stop'
+\$bundle = '$(ps_quote "$REMOTE_BUNDLE")'
+if (Test-Path -LiteralPath \$bundle) { Remove-Item -LiteralPath \$bundle -Force }
+EOF
+)
+	run_remote_powershell "$cleanup_script"
+}
+
+cleanup_on_exit() {
+	local result=$?
+	trap - EXIT
+	if [[ "$REMOTE_BUNDLE_UPLOADED" == true ]] && ! cleanup_remote_bundle; then
+		printf 'warning: could not remove remote source bundle: %s\n' "$REMOTE_BUNDLE" >&2
+	fi
+	preserve_failed_staging "$result"
+	cleanup_source_bundle
+	exit "$result"
+}
+trap cleanup_on_exit EXIT
+
+[[ "$(git rev-parse --is-shallow-repository)" == false ]] || \
+	fail 'refusing to build from a shallow clone; fetch complete history first'
+git bundle create "$SOURCE_BUNDLE" "$REMOTE_REF"
+remote_prepare_script=$(cat <<EOF
+\$ErrorActionPreference = 'Stop'
+New-Item -ItemType Directory -Path '$(ps_quote "$WINDOWS_WORKTREE_ROOT")' -Force | Out-Null
+EOF
+)
+run_remote_powershell "$remote_prepare_script"
+REMOTE_BUNDLE_UPLOADED=true
+remote_upload "$SOURCE_BUNDLE" "$REMOTE_BUNDLE"
 remote_setup_script=$(cat <<EOF
 \$ErrorActionPreference = 'Stop'
 \$repo = '$(ps_quote "$WINDOWS_REPO")'
 \$worktree = '$(ps_quote "$REMOTE_WORKTREE")'
+\$bundle = '$(ps_quote "$REMOTE_BUNDLE")'
 \$commit = '$(ps_quote "$COMMIT")'
 \$branch = '$(ps_quote "$BRANCH")'
 \$remoteRef = '$(ps_quote "$REMOTE_REF")'
 if (-not (Test-Path -LiteralPath \$repo -PathType Container)) { throw "Windows repository is missing: \$repo" }
 if (Test-Path -LiteralPath \$worktree) { throw "refusing to reuse existing builder worktree: \$worktree" }
+if (-not (Test-Path -LiteralPath \$bundle -PathType Leaf)) { throw "source bundle is missing: \$bundle" }
 & git -C \$repo status --porcelain | ForEach-Object { throw "refusing to alter non-clean Windows checkout \${repo}: \$_" }
-& git -C \$repo fetch --no-tags origin \$remoteRef
+& git -C \$repo fetch --no-tags \$bundle \$remoteRef
 if (\$LASTEXITCODE -ne 0) { throw 'git fetch failed' }
 \$fetched = (& git -C \$repo rev-parse FETCH_HEAD).Trim()
 if (\$fetched -ne \$commit) { throw "fetched \$remoteRef is \$fetched, expected \$commit" }
@@ -194,8 +245,10 @@ cleanup_remote_worktree() {
 \$ErrorActionPreference = 'Stop'
 \$repo = '$(ps_quote "$WINDOWS_REPO")'
 \$worktree = '$(ps_quote "$REMOTE_WORKTREE")'
+\$bundle = '$(ps_quote "$REMOTE_BUNDLE")'
 & git -C \$repo worktree remove --force \$worktree
 if (\$LASTEXITCODE -ne 0) { throw "could not remove builder worktree: \$worktree" }
+if (Test-Path -LiteralPath \$bundle) { Remove-Item -LiteralPath \$bundle -Force }
 EOF
 )
 	run_remote_powershell "$cleanup_script"
@@ -230,6 +283,7 @@ remote_copy "${REMOTE_PACKAGE//\\//\/}"
 verify_hash "$ARTIFACT_DIR/$REMOTE_PACKAGE_NAME" "$(metadata_value ostc3_package_sha256)"
 
 cleanup_remote_worktree
+REMOTE_BUNDLE_UPLOADED=false
 printf 'source_commit=%s\n' "$COMMIT" > "$ARTIFACT_DIR/.verified"
 mv -- "$ARTIFACT_DIR" "$FINAL_ARTIFACT_DIR"
 printf 'Verified Windows build artefacts: %s\n' "$FINAL_ARTIFACT_DIR"
