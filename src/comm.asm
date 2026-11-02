@@ -1267,10 +1267,6 @@ comm_write_sp:
 	movlw	0x1A						; compute SP index from option index...
 	subwf	lo,W						; ...making WREG         point to cbar value
 
-	bnz		comm_write_sp_exec			; selected SP is 2...5 -> execute write
-	tstfsz	up							; SP1: change depth = 0 ?
-	bra		comm_command_error			; NO - show error message and back to command loop
-
 comm_write_sp_exec:
 	movff	hi,PLUSW0					; set cbar value
 	addlw	.5							; increment WREG by 5 to point to change depth

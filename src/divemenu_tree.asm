@@ -32,6 +32,10 @@
 
 	extern	diveloop_menu_exit
 
+ IFDEF _ccr_pscr
+	extern	option_autosp_check
+ ENDIF
+
  IFDEF _cave_mode
 	extern	cavemode_turndive_check
 	extern	cavemode_waypoint_set_check
@@ -598,6 +602,9 @@ do_switch_sp:
 ; Call Function - switch to Auto-SP (CCR)
 ;
 do_switch_auto:
+	call	option_autosp_check			; validate the Auto-SP ladder (WREG = 0: valid)
+	tstfsz	WREG						; ladder valid?
+	bra		do_exit_divemode_menu		; NO  - do not switch, keep current setpoint mode
 	movff	opt_setpoint_cbar+0,char_I_const_ppO2	; selected 1st setpoint
 	bcf		warn_det_sensors_lost		; clear fallback condition
 	movlw	.2							; switch to auto SP
