@@ -147,12 +147,15 @@ readonly SOURCE_BUNDLE
 cleanup_source_bundle() {
 	rm -rf -- "$SOURCE_BUNDLE_DIR"
 }
+trap cleanup_source_bundle EXIT
 
 ARTIFACT_DIR=$(mktemp -d "$ARTIFACT_PARENT/.staging-${COMMIT:0:12}.XXXXXX")
 preserve_failed_staging() {
 	local result=$1
 	if [[ $result -ne 0 && -n "${ARTIFACT_DIR:-}" && -d "$ARTIFACT_DIR" ]]; then
-		printf 'Build attempt failed with exit code %d. Diagnostic staging is retained: %s\n' "$result" "$ARTIFACT_DIR" > "$ARTIFACT_DIR/failure.log"
+		if ! printf 'Build attempt failed with exit code %d. Diagnostic staging is retained: %s\n' "$result" "$ARTIFACT_DIR" > "$ARTIFACT_DIR/failure.log"; then
+			printf 'warning: could not write diagnostic failure log: %s\n' "$ARTIFACT_DIR/failure.log" >&2
+		fi
 		printf 'Diagnostic staging retained: %s\n' "$ARTIFACT_DIR" >&2
 	fi
 }
