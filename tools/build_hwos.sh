@@ -140,9 +140,12 @@ if [[ -e "$FINAL_ARTIFACT_DIR" ]]; then
 	printf 'Preserved incomplete artefacts for diagnosis: %s\n' "$FAILED_ARTIFACT_DIR" >&2
 fi
 
-SOURCE_BUNDLE=$(mktemp "${TMPDIR:-/tmp}/hwos-${COMMIT:0:12}.XXXXXX.bundle")
+SOURCE_BUNDLE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/hwos-${COMMIT:0:12}.XXXXXX")
+readonly SOURCE_BUNDLE_DIR
+SOURCE_BUNDLE="$SOURCE_BUNDLE_DIR/source.bundle"
+readonly SOURCE_BUNDLE
 cleanup_source_bundle() {
-	rm -f -- "$SOURCE_BUNDLE"
+	rm -rf -- "$SOURCE_BUNDLE_DIR"
 }
 
 ARTIFACT_DIR=$(mktemp -d "$ARTIFACT_PARENT/.staging-${COMMIT:0:12}.XXXXXX")
@@ -153,7 +156,6 @@ preserve_failed_staging() {
 		printf 'Diagnostic staging retained: %s\n' "$ARTIFACT_DIR" >&2
 	fi
 }
-trap preserve_failed_staging EXIT
 
 REMOTE_WORKTREE="${WINDOWS_WORKTREE_ROOT%/}/${COMMIT}-${RUN_ID}"
 readonly REMOTE_WORKTREE
@@ -165,7 +167,8 @@ cleanup_remote_bundle() {
 	local cleanup_script
 	cleanup_script=$(cat <<EOF
 \$ErrorActionPreference = 'Stop'
-Remove-Item -LiteralPath '$(ps_quote "$REMOTE_BUNDLE")' -Force -ErrorAction SilentlyContinue
+\$bundle = '$(ps_quote "$REMOTE_BUNDLE")'
+if (Test-Path -LiteralPath \$bundle) { Remove-Item -LiteralPath \$bundle -Force }
 EOF
 )
 	run_remote_powershell "$cleanup_script"
@@ -183,6 +186,8 @@ cleanup_on_exit() {
 }
 trap cleanup_on_exit EXIT
 
+[[ "$(git rev-parse --is-shallow-repository)" == false ]] || \
+	fail 'refusing to build from a shallow clone; fetch complete history first'
 git bundle create "$SOURCE_BUNDLE" "$REMOTE_REF"
 remote_prepare_script=$(cat <<EOF
 \$ErrorActionPreference = 'Stop'
@@ -190,8 +195,8 @@ New-Item -ItemType Directory -Path '$(ps_quote "$WINDOWS_WORKTREE_ROOT")' -Force
 EOF
 )
 run_remote_powershell "$remote_prepare_script"
-remote_upload "$SOURCE_BUNDLE" "$REMOTE_BUNDLE"
 REMOTE_BUNDLE_UPLOADED=true
+remote_upload "$SOURCE_BUNDLE" "$REMOTE_BUNDLE"
 remote_setup_script=$(cat <<EOF
 \$ErrorActionPreference = 'Stop'
 \$repo = '$(ps_quote "$WINDOWS_REPO")'
@@ -240,7 +245,7 @@ cleanup_remote_worktree() {
 \$bundle = '$(ps_quote "$REMOTE_BUNDLE")'
 & git -C \$repo worktree remove --force \$worktree
 if (\$LASTEXITCODE -ne 0) { throw "could not remove builder worktree: \$worktree" }
-Remove-Item -LiteralPath \$bundle -Force -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath \$bundle) { Remove-Item -LiteralPath \$bundle -Force }
 EOF
 )
 	run_remote_powershell "$cleanup_script"
