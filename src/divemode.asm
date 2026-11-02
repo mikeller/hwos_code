@@ -35,6 +35,10 @@
 	extern	init_recording_params
 	extern	option_check_and_store_all
 
+ IFDEF _ccr_pscr
+	extern	option_autosp_check
+ ENDIF
+
  IFDEF _compass
 	extern	TFT_dive_compass_heading
  ENDIF
@@ -3326,6 +3330,18 @@ diveloop_boot:
 
 	; make working copy of opt_ccr_mode
 	movff	opt_ccr_mode,dive_ccr_mode	; copy option setting
+
+ IFDEF _ccr_pscr
+	; Surface settings may select Auto-SP without running the option
+	; cross-checks first. Do not start with an invalid ladder.
+	movf	dive_ccr_mode,W
+	xorlw	.2							; Auto-SP selected?
+	bnz		diveloop_boot_autosp_done			; NO  - mode is usable
+	call	option_autosp_check					; validate the Auto-SP ladder
+	tstfsz	WREG							; ladder valid?
+	clrf	dive_ccr_mode						; NO  - fail safe: Fixed SP
+diveloop_boot_autosp_done:
+ ENDIF
 
 
  IFDEF _min_depth_option
