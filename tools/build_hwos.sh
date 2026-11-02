@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the current pushed hwOS commit on the authorised Windows C18 builder.
+# Build the current committed hwOS state on the authorised Windows C18 builder.
 #
 # This script never pushes. It creates a detached, per-commit worktree on the
 # builder, invokes tools/build_hwos.ps1 there, verifies copied artefacts against
@@ -60,6 +60,12 @@ remote_copy_dir() {
 	scp -pr -- "${WINDOWS_BUILDER}:${remote_path}" "$ARTIFACT_DIR/"
 }
 
+remote_upload() {
+	local local_path=$1
+	local remote_path=$2
+	scp -p -- "$local_path" "${WINDOWS_BUILDER}:${remote_path}"
+}
+
 metadata_value() {
 	local key=$1
 	local info_file=${2:-"$ARTIFACT_DIR/build-info.txt"}
@@ -108,14 +114,11 @@ artifact_set_is_verified() {
 }
 
 cd "$ROOT_DIR"
-[[ -z "$(git status --porcelain)" ]] || fail 'refusing to build uncommitted local changes; commit and push them first'
+[[ -z "$(git status --porcelain)" ]] || fail 'refusing to build uncommitted local changes; commit them first'
 
-BRANCH=$(git symbolic-ref --quiet --short HEAD) || fail 'refusing to build a detached HEAD; check out the pushed branch to build'
+BRANCH=$(git symbolic-ref --quiet --short HEAD) || fail 'refusing to build a detached HEAD; check out a branch to build'
 COMMIT=$(git rev-parse HEAD)
 REMOTE_REF="refs/heads/$BRANCH"
-REMOTE_COMMIT=$(git ls-remote --exit-code "$GIT_REMOTE" "$REMOTE_REF" | awk '{print $1}') || \
-	fail "branch '$BRANCH' is not available from remote '$GIT_REMOTE'; push it before building"
-[[ "$REMOTE_COMMIT" == "$COMMIT" ]] || fail "local $BRANCH ($COMMIT) does not match $GIT_REMOTE/$BRANCH ($REMOTE_COMMIT); push the exact commit before building"
 SAFE_BRANCH=$(printf '%s' "$BRANCH" | sed 's/[^A-Za-z0-9._-]\+/-/g')
 [[ -n "$SAFE_BRANCH" ]] || fail "cannot derive a safe package name from branch: $BRANCH"
 PACKAGE_NAME="hwos_ostc3_${SAFE_BRANCH}_${COMMIT:0:12}_firmware.hex"
@@ -129,6 +132,12 @@ ARTIFACT_PARENT=$(dirname -- "$FINAL_ARTIFACT_DIR")
 mkdir -p "$ARTIFACT_PARENT"
 
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$-$RANDOM"
+SOURCE_BUNDLE=$(mktemp "${TMPDIR:-/tmp}/hwos-${COMMIT:0:12}.XXXXXX.bundle")
+cleanup_source_bundle() {
+	rm -f -- "$SOURCE_BUNDLE"
+}
+trap cleanup_source_bundle EXIT
+git bundle create "$SOURCE_BUNDLE" "$REMOTE_REF"
 if [[ -e "$FINAL_ARTIFACT_DIR" ]]; then
 	if artifact_set_is_verified "$FINAL_ARTIFACT_DIR" "$COMMIT" "$BRANCH" "$PACKAGE_NAME"; then
 		printf 'Verified Windows build artefacts already exist: %s\n' "$FINAL_ARTIFACT_DIR"
@@ -151,17 +160,22 @@ trap preserve_failed_staging EXIT
 
 REMOTE_WORKTREE="${WINDOWS_WORKTREE_ROOT%/}/${COMMIT}-${RUN_ID}"
 readonly REMOTE_WORKTREE
+REMOTE_BUNDLE="${WINDOWS_WORKTREE_ROOT%/}/.${COMMIT}-${RUN_ID}.bundle"
+readonly REMOTE_BUNDLE
+remote_upload "$SOURCE_BUNDLE" "$REMOTE_BUNDLE"
 remote_setup_script=$(cat <<EOF
 \$ErrorActionPreference = 'Stop'
 \$repo = '$(ps_quote "$WINDOWS_REPO")'
 \$worktree = '$(ps_quote "$REMOTE_WORKTREE")'
+\$bundle = '$(ps_quote "$REMOTE_BUNDLE")'
 \$commit = '$(ps_quote "$COMMIT")'
 \$branch = '$(ps_quote "$BRANCH")'
 \$remoteRef = '$(ps_quote "$REMOTE_REF")'
 if (-not (Test-Path -LiteralPath \$repo -PathType Container)) { throw "Windows repository is missing: \$repo" }
 if (Test-Path -LiteralPath \$worktree) { throw "refusing to reuse existing builder worktree: \$worktree" }
+if (-not (Test-Path -LiteralPath \$bundle -PathType Leaf)) { throw "source bundle is missing: \$bundle" }
 & git -C \$repo status --porcelain | ForEach-Object { throw "refusing to alter non-clean Windows checkout \${repo}: \$_" }
-& git -C \$repo fetch --no-tags origin \$remoteRef
+& git -C \$repo fetch --no-tags \$bundle \$remoteRef
 if (\$LASTEXITCODE -ne 0) { throw 'git fetch failed' }
 \$fetched = (& git -C \$repo rev-parse FETCH_HEAD).Trim()
 if (\$fetched -ne \$commit) { throw "fetched \$remoteRef is \$fetched, expected \$commit" }
@@ -194,8 +208,10 @@ cleanup_remote_worktree() {
 \$ErrorActionPreference = 'Stop'
 \$repo = '$(ps_quote "$WINDOWS_REPO")'
 \$worktree = '$(ps_quote "$REMOTE_WORKTREE")'
+\$bundle = '$(ps_quote "$REMOTE_BUNDLE")'
 & git -C \$repo worktree remove --force \$worktree
 if (\$LASTEXITCODE -ne 0) { throw "could not remove builder worktree: \$worktree" }
+Remove-Item -LiteralPath \$bundle -Force -ErrorAction SilentlyContinue
 EOF
 )
 	run_remote_powershell "$cleanup_script"

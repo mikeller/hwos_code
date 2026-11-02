@@ -79,8 +79,8 @@ but this repository has no licence grant for them. Do not redistribute them or
 publish a branch containing them unless the copyright holders have authorised
 that distribution.
 
-The default package name follows the underscore-separated OSTC4 Makefile naming
-style and is derived from the Git worktree:
+The default package name identifies the legacy OSTC 3 package format and is
+derived from the Git worktree:
 
 ```text
 build/hwos_ostc3_<sanitised-branch>_<12-char-changeset>_firmware.hex
@@ -214,16 +214,18 @@ certainty, until it has been.
 
 ## Linux orchestration of the Windows build
 
-`make build` and `tools/build_hwos.sh` build the currently checked-out commit
+`make build` and `tools/build_hwos.sh` build the currently checked-out committed
+state
 on the authorised Windows C18 builder, then copy verified artefacts back to the
 local checkout. They do not attempt to run C18 on Linux.
 
-The local worktree must be clean, on a branch, and exactly match the branch at
-`origin`; the script refuses uncommitted or unpushed commits rather than
-silently building different source. It creates an isolated detached Windows Git
-worktree for that commit, runs the canonical PowerShell script, copies the
-HEX files, linker map, `build-info.txt`, and the `build/obj/` diagnostics
-directory (the retained MPASM/mcc18 `.err`/`.lst` files) into:
+The local worktree must be clean and on a branch. The script creates a temporary
+Git bundle for that exact branch tip and sends it to the builder, so a locally
+committed firmware change can be built without being pushed. It creates an
+isolated detached Windows Git worktree from that bundle, runs the canonical
+PowerShell script, copies the HEX files, linker map, `build-info.txt`, and the
+`build/obj/` diagnostics directory (the retained MPASM/mcc18 `.err`/`.lst`
+files) into:
 
 ```sh
 build/windows/<full-commit-id>/
@@ -272,28 +274,19 @@ WINDOWS_BUILDER=windows-builder-alias make build
 environment overrides for an alternate local configuration, Git remote, or
 artefact retention location.
 
-The remote checkout must have an `origin` that can fetch the same pushed branch
-and the Windows host must have PowerShell, Git, C18 v3.42, SRecord, and SSH/SCP
+The Windows host must have PowerShell, Git, C18 v3.42, SRecord, and SSH/SCP
 access. The orchestration script never pushes, flashes, uploads, or opens a PR.
+It removes the temporary bundle after a successful copy; a failed build retains
+the remote worktree for diagnosis as before.
 
 ## Explicit OSTC3 installation
 
 `make install` is intentionally separate from `make` and `make build`. It uses
 the local `subsurface-downloader`, modelled on OSTC4's firmware-install
-workflow, only after it has built or reused the verified package for the exact
-current pushed commit and found an annotated release-validation tag for the
-exact target model and commit. It never enables `--force-update-firmware`.
-
-The required tag is named
-`validated/<normalised-vendor>-<normalised-product>/<full-commit-id>`. For the
-default downloader selection this is
-`validated/heinrichs-weikamp-ostc-3/<full-commit-id>`. A release maintainer may
-create and publish that annotated tag only after the exact commit has completed
-the target-model hardware and recovery validation procedure. The installer
-checks the annotated tag and its peeled commit directly on `origin` (or the
-explicit `GIT_REMOTE`), not against local tags. Normal branch builds have no
-such tag and the installer rejects them before it builds or invokes the
-downloader.
+workflow, only after it has built or reused the hash-verified OSTC 3-family
+package for the exact current committed source state. It never enables
+`--force-update-firmware` and does not require a release-validation tag: this
+path is for installing a current test build.
 
 The target has no device default until a local configuration supplies one. Copy
 the tracked template to the ignored `local.mk` and set an exact Bluetooth
@@ -312,10 +305,12 @@ make install \
 ```
 
 The command rejects an empty or automatic device selector, an uncommitted or
-detached source worktree, a missing or mismatched annotated release-validation
-tag, missing provenance metadata, an unexpected package name, or a package hash
-mismatch before invoking the downloader. The installer is not run by normal
-builds and is not exercised by this repository's validation.
+detached source worktree, missing or mismatched provenance metadata, an
+unexpected legacy OSTC 3 package name, or a firmware/package hash mismatch
+before invoking the downloader. The default downloader selection is Heinrichs
+Weikamp / OSTC 3; set `DC_PRODUCT` explicitly only for a compatible legacy
+OSTC 3, OSTC 3+, or related-device downloader target. The installer is not run
+by normal builds.
 
 | File | Purpose |
 | --- | --- |
@@ -327,10 +322,11 @@ builds and is not exercised by this repository's validation.
 
 `make clean` removes only `build/`.
 
-Before uploading, keep the source commit and `build-info.txt` with the HEX and
-confirm the target hardware and bootloader accept this firmware. A successful
-build proves only that C18 linked the image. It does not validate device
-behaviour and this script never uploads firmware.
+Before installing, keep the source commit and `build-info.txt` with the package
+and confirm the target hardware and bootloader accept this firmware. A
+successful build proves only that C18 linked and the authorised packer accepted
+the image. It does not validate device behaviour or make the test firmware safe
+for diving.
 
 ## Cloud CI assessment
 

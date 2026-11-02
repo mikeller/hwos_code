@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Install a verified OSTC3 package using Subsurface.
+# Install a verified legacy OSTC 3-family package using Subsurface.
 # This is deliberately invoked only by `make install`, never by `make`.
 set -euo pipefail
 
 ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 readonly ROOT_DIR
-readonly GIT_REMOTE=${GIT_REMOTE:-origin}
 
 fail() {
 	printf 'error: %s\n' "$*" >&2
@@ -32,20 +31,6 @@ cd "$ROOT_DIR"
 [[ -z "$(git status --porcelain)" ]] || fail 'refusing to install from a worktree with uncommitted changes'
 BRANCH=$(git symbolic-ref --quiet --short HEAD) || fail 'refusing to install from a detached HEAD'
 COMMIT=$(git rev-parse HEAD)
-VALIDATION_MODEL=$(printf '%s' "$DC_VENDOR-$DC_PRODUCT" | LC_ALL=C tr '[:upper:] ' '[:lower:]-' | LC_ALL=C tr -cs 'a-z0-9._-' '-')
-VALIDATION_MODEL=${VALIDATION_MODEL#-}
-VALIDATION_MODEL=${VALIDATION_MODEL%-}
-[[ -n "$VALIDATION_MODEL" ]] || fail 'cannot derive a release-validation model name'
-VALIDATION_TAG="validated/$VALIDATION_MODEL/$COMMIT"
-REMOTE_TAGS=$(git ls-remote --tags --exit-code "$GIT_REMOTE" \
-	"refs/tags/$VALIDATION_TAG" "refs/tags/$VALIDATION_TAG^{}") || \
-	fail "missing published annotated release-validation tag: $VALIDATION_TAG"
-REMOTE_TAG_OBJECT=$(awk -v tag="refs/tags/$VALIDATION_TAG" '$2 == tag { print $1; exit }' <<<"$REMOTE_TAGS")
-REMOTE_TAG_COMMIT=$(awk -v tag="refs/tags/$VALIDATION_TAG^{}" '$2 == tag { print $1; exit }' <<<"$REMOTE_TAGS")
-[[ -n "$REMOTE_TAG_OBJECT" && -n "$REMOTE_TAG_COMMIT" && "$REMOTE_TAG_OBJECT" != "$REMOTE_TAG_COMMIT" ]] || \
-	fail "published release-validation tag is not annotated: $VALIDATION_TAG"
-[[ "$REMOTE_TAG_COMMIT" == "$COMMIT" ]] || \
-	fail "published release-validation tag does not identify the current commit: $VALIDATION_TAG"
 INSTALLER_PATH=$(command -v "$FIRMWARE_INSTALLER") || fail "subsurface-downloader was not found: $FIRMWARE_INSTALLER"
 SAFE_BRANCH=$(printf '%s' "$BRANCH" | sed 's/[^A-Za-z0-9._-]\+/-/g')
 [[ -n "$SAFE_BRANCH" ]] || fail "cannot derive a safe package name from branch: $BRANCH"
@@ -55,8 +40,8 @@ if [[ "$FINAL_ARTIFACT_DIR" != /* ]]; then
 	FINAL_ARTIFACT_DIR="$ROOT_DIR/$FINAL_ARTIFACT_DIR"
 fi
 
-# This verifies that the exact current pushed commit is built, or reuses its
-# already verified package. It never flashes or uploads.
+# This builds the exact current committed source state, or reuses its already
+# verified package. It never flashes or uploads.
 "$ROOT_DIR/tools/build_hwos.sh"
 
 BUILD_INFO="$FINAL_ARTIFACT_DIR/build-info.txt"
@@ -82,7 +67,7 @@ EXPECTED_HASH=$(metadata_value ostc3_package_sha256 "$BUILD_INFO")
 ACTUAL_HASH=$(sha256sum "$PACKAGE" | awk '{print $1}')
 [[ "$ACTUAL_HASH" == "$EXPECTED_HASH" ]] || fail "package SHA-256 mismatch: expected $EXPECTED_HASH, got $ACTUAL_HASH"
 
-printf 'Installing verified OSTC3 package for %s/%s on explicit device %s\n' "$DC_VENDOR" "$DC_PRODUCT" "$DEVICE"
+printf 'Installing verified legacy OSTC 3-family package for %s/%s on explicit device %s\n' "$DC_VENDOR" "$DC_PRODUCT" "$DEVICE"
 exec "$INSTALLER_PATH" \
 	--update-firmware \
 	--dc-vendor="$DC_VENDOR" \

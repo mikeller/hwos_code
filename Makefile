@@ -1,4 +1,4 @@
-.PHONY: build install clean check host-check
+.PHONY: build install clean check host-check test
 
 FIRMWARE_INSTALLER ?= subsurface-downloader
 DC_VENDOR ?= Heinrichs Weikamp
@@ -10,7 +10,7 @@ DEVICE ?=
 # this local default.
 -include local.mk
 
-# Builds the checked-out, pushed commit on the configured Windows C18 builder.
+# Builds the checked-out, committed firmware state on the configured Windows C18 builder.
 # Copy tools/build_hwos.remote.conf.example to the ignored .conf file first.
 build:
 	./tools/build_hwos.sh
@@ -25,6 +25,9 @@ install:
 
 clean:
 	rm -rf build
+
+test:
+	./tests/test_install_hwos.sh
 
 # --- Host-only sanity build, no licence required -------------------------
 #
