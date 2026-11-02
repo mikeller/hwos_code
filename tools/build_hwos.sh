@@ -8,8 +8,6 @@ set -euo pipefail
 
 ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 readonly ROOT_DIR
-readonly GIT_REMOTE=${GIT_REMOTE:-origin}
-
 fail() {
 	printf 'error: %s\n' "$*" >&2
 	exit 1
@@ -132,12 +130,6 @@ ARTIFACT_PARENT=$(dirname -- "$FINAL_ARTIFACT_DIR")
 mkdir -p "$ARTIFACT_PARENT"
 
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$-$RANDOM"
-SOURCE_BUNDLE=$(mktemp "${TMPDIR:-/tmp}/hwos-${COMMIT:0:12}.XXXXXX.bundle")
-cleanup_source_bundle() {
-	rm -f -- "$SOURCE_BUNDLE"
-}
-trap cleanup_source_bundle EXIT
-git bundle create "$SOURCE_BUNDLE" "$REMOTE_REF"
 if [[ -e "$FINAL_ARTIFACT_DIR" ]]; then
 	if artifact_set_is_verified "$FINAL_ARTIFACT_DIR" "$COMMIT" "$BRANCH" "$PACKAGE_NAME"; then
 		printf 'Verified Windows build artefacts already exist: %s\n' "$FINAL_ARTIFACT_DIR"
@@ -148,9 +140,14 @@ if [[ -e "$FINAL_ARTIFACT_DIR" ]]; then
 	printf 'Preserved incomplete artefacts for diagnosis: %s\n' "$FAILED_ARTIFACT_DIR" >&2
 fi
 
+SOURCE_BUNDLE=$(mktemp "${TMPDIR:-/tmp}/hwos-${COMMIT:0:12}.XXXXXX.bundle")
+cleanup_source_bundle() {
+	rm -f -- "$SOURCE_BUNDLE"
+}
+
 ARTIFACT_DIR=$(mktemp -d "$ARTIFACT_PARENT/.staging-${COMMIT:0:12}.XXXXXX")
 preserve_failed_staging() {
-	local result=$?
+	local result=$1
 	if [[ $result -ne 0 && -n "${ARTIFACT_DIR:-}" && -d "$ARTIFACT_DIR" ]]; then
 		printf 'Build attempt failed with exit code %d. Diagnostic staging is retained: %s\n' "$result" "$ARTIFACT_DIR" > "$ARTIFACT_DIR/failure.log"
 		printf 'Diagnostic staging retained: %s\n' "$ARTIFACT_DIR" >&2
@@ -162,7 +159,39 @@ REMOTE_WORKTREE="${WINDOWS_WORKTREE_ROOT%/}/${COMMIT}-${RUN_ID}"
 readonly REMOTE_WORKTREE
 REMOTE_BUNDLE="${WINDOWS_WORKTREE_ROOT%/}/.${COMMIT}-${RUN_ID}.bundle"
 readonly REMOTE_BUNDLE
+REMOTE_BUNDLE_UPLOADED=false
+
+cleanup_remote_bundle() {
+	local cleanup_script
+	cleanup_script=$(cat <<EOF
+\$ErrorActionPreference = 'Stop'
+Remove-Item -LiteralPath '$(ps_quote "$REMOTE_BUNDLE")' -Force -ErrorAction SilentlyContinue
+EOF
+)
+	run_remote_powershell "$cleanup_script"
+}
+
+cleanup_on_exit() {
+	local result=$?
+	trap - EXIT
+	if [[ "$REMOTE_BUNDLE_UPLOADED" == true ]] && ! cleanup_remote_bundle; then
+		printf 'warning: could not remove remote source bundle: %s\n' "$REMOTE_BUNDLE" >&2
+	fi
+	preserve_failed_staging "$result"
+	cleanup_source_bundle
+	exit "$result"
+}
+trap cleanup_on_exit EXIT
+
+git bundle create "$SOURCE_BUNDLE" "$REMOTE_REF"
+remote_prepare_script=$(cat <<EOF
+\$ErrorActionPreference = 'Stop'
+New-Item -ItemType Directory -Path '$(ps_quote "$WINDOWS_WORKTREE_ROOT")' -Force | Out-Null
+EOF
+)
+run_remote_powershell "$remote_prepare_script"
 remote_upload "$SOURCE_BUNDLE" "$REMOTE_BUNDLE"
+REMOTE_BUNDLE_UPLOADED=true
 remote_setup_script=$(cat <<EOF
 \$ErrorActionPreference = 'Stop'
 \$repo = '$(ps_quote "$WINDOWS_REPO")'
@@ -246,6 +275,7 @@ remote_copy "${REMOTE_PACKAGE//\\//\/}"
 verify_hash "$ARTIFACT_DIR/$REMOTE_PACKAGE_NAME" "$(metadata_value ostc3_package_sha256)"
 
 cleanup_remote_worktree
+REMOTE_BUNDLE_UPLOADED=false
 printf 'source_commit=%s\n' "$COMMIT" > "$ARTIFACT_DIR/.verified"
 mv -- "$ARTIFACT_DIR" "$FINAL_ARTIFACT_DIR"
 printf 'Verified Windows build artefacts: %s\n' "$FINAL_ARTIFACT_DIR"

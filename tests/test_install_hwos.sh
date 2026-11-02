@@ -60,6 +60,9 @@ DOWNLOADER_ARGS="$TEMP_DIR/downloader-args" \
 		DEVICE=AA:BB:CC:DD:EE:FF \
 		FIRMWARE_INSTALLER="$TEMP_DIR/mock-downloader" > /dev/null
 
+if grep -Fx -- '--force-update-firmware' "$TEMP_DIR/downloader-args" >/dev/null; then
+	fail 'unexpected force-update-firmware argument'
+fi
 grep -Fx -- '--update-firmware' "$TEMP_DIR/downloader-args" >/dev/null || fail 'missing update-firmware argument'
 grep -Fx -- '--dc-vendor=Heinrichs Weikamp' "$TEMP_DIR/downloader-args" >/dev/null || fail 'missing legacy vendor argument'
 grep -Fx -- '--dc-product=OSTC 3' "$TEMP_DIR/downloader-args" >/dev/null || fail 'missing legacy OSTC 3 product argument'

@@ -270,9 +270,9 @@ without editing it:
 WINDOWS_BUILDER=windows-builder-alias make build
 ```
 
-`REMOTE_BUILD_CONFIG`, `GIT_REMOTE`, and `ARTIFACT_DIR` are also optional
-environment overrides for an alternate local configuration, Git remote, or
-artefact retention location.
+`REMOTE_BUILD_CONFIG` and `ARTIFACT_DIR` are also optional
+environment overrides for an alternate local configuration or artefact
+retention location.
 
 The Windows host must have PowerShell, Git, C18 v3.42, SRecord, and SSH/SCP
 access. The orchestration script never pushes, flashes, uploads, or opens a PR.
